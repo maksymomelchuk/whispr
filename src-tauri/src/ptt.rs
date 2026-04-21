@@ -1,11 +1,23 @@
 use crate::state::{AppState, ModifierState};
+use core_foundation::base::TCFType;
 use core_foundation::runloop::{kCFRunLoopCommonModes, CFRunLoop};
 use core_graphics::event::{
     CGEventFlags, CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement,
     CGEventType, EventField,
 };
-use std::sync::Mutex;
+use std::os::raw::c_void;
+use std::sync::atomic::{AtomicPtr, Ordering};
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
+
+// core-graphics keeps CGEventTapEnable private, but we need to call it from
+// inside the tap's own callback (the only place we learn the system has
+// disabled the tap). Redeclare the symbol — it resolves at link time against
+// the CoreGraphics framework the crate already links.
+#[link(name = "CoreGraphics", kind = "framework")]
+extern "C" {
+    fn CGEventTapEnable(tap: *mut c_void, enable: bool);
+}
 
 /// Per-modifier press state. The CGEventFlags bitmask on each event is the
 /// authoritative view of modifier-family state (alt / meta / ctrl / shift),
@@ -186,6 +198,10 @@ pub fn start(app: AppHandle, state: AppState) {
         println!("Starting CGEventTap keyboard listener…");
 
         let mod_state = Mutex::new(ModKeyState::default());
+        // Shared handle to the tap's mach port so the callback can re-enable
+        // itself. Populated after CGEventTap::new returns.
+        let tap_port: Arc<AtomicPtr<c_void>> = Arc::new(AtomicPtr::new(std::ptr::null_mut()));
+        let tap_port_cb = tap_port.clone();
 
         let tap_result = CGEventTap::new(
             CGEventTapLocation::HID,
@@ -197,6 +213,23 @@ pub fn start(app: AppHandle, state: AppState) {
                 CGEventType::FlagsChanged,
             ],
             move |_proxy, event_type, event| {
+                // macOS disables the tap out-of-band when the callback runs
+                // too slowly OR when secure input (password fields, etc.)
+                // takes over. Re-enable immediately and drop the event —
+                // these don't carry a keycode so the parsing below would
+                // misinterpret them.
+                if matches!(
+                    event_type,
+                    CGEventType::TapDisabledByTimeout | CGEventType::TapDisabledByUserInput
+                ) {
+                    eprintln!("CGEventTap disabled ({event_type:?}); re-enabling");
+                    let port = tap_port_cb.load(Ordering::Acquire);
+                    if !port.is_null() {
+                        unsafe { CGEventTapEnable(port, true) };
+                    }
+                    return None;
+                }
+
                 let keycode =
                     event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE) as u16;
 
@@ -286,6 +319,15 @@ pub fn start(app: AppHandle, state: AppState) {
                 return;
             }
         };
+
+        // Publish the mach-port pointer so the callback can re-enable the
+        // tap after a system-initiated disable. Safe: the tap (and therefore
+        // the mach port) outlives the callback — both live until the
+        // runloop exits, which only happens when this thread tears down.
+        tap_port.store(
+            tap.mach_port.as_concrete_TypeRef() as *mut c_void,
+            Ordering::Release,
+        );
 
         // Attach the tap to a fresh CFRunLoop on this thread and run it.
         // This is the piece rdev gets wrong on modern macOS — it must happen
