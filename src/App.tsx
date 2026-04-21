@@ -4,6 +4,7 @@ import { ShortcutField } from './components/ShortcutField'
 import { ShortcutRecorder } from './components/ShortcutRecorder'
 import { getSettings, setShortcut as persistShortcut } from './lib/api'
 import { usePtt } from './hooks/usePtt'
+import { useAudioCapture } from './hooks/useAudioCapture'
 import type { Settings, Shortcut } from './lib/types'
 import './App.css'
 
@@ -11,7 +12,21 @@ function App() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [recording, setRecording] = useState(false)
-  const { isHeld } = usePtt()
+
+  const { start: startCapture, stop: stopCapture } = useAudioCapture({
+    onCaptured: ({ blob, bytes, mimeType }) => {
+      console.log('[audio] captured', {
+        mimeType,
+        blobSize: blob.size,
+        bytes: bytes.length,
+      })
+    },
+    onError: (err) => console.error('[audio] capture error', err),
+  })
+  const { isHeld } = usePtt({
+    onPressed: startCapture,
+    onReleased: stopCapture,
+  })
 
   useEffect(() => {
     getSettings()
