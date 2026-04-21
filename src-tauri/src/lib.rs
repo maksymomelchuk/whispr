@@ -3,6 +3,7 @@ mod config;
 mod permissions;
 mod ptt;
 mod state;
+mod transcription;
 
 use state::AppState;
 use tauri::Manager;
@@ -30,6 +31,7 @@ pub fn run() {
             commands::set_api_key,
             commands::set_shortcut,
             commands::open_accessibility_settings,
+            transcription::transcribe,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

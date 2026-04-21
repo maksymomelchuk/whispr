@@ -9,6 +9,9 @@ export const setApiKey = (apiKey: string) =>
 export const setShortcut = (shortcut: Shortcut) =>
   invoke<void>('set_shortcut', { shortcut })
 
+export const transcribe = (audio: Uint8Array) =>
+  invoke<string>('transcribe', { audio: Array.from(audio) })
+
 const MOD_MAP: Record<string, string> = {
   Meta: '⌘',
   Control: '⌃',
