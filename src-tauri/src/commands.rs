@@ -1,0 +1,40 @@
+use crate::config::{self, Settings, Shortcut};
+use crate::permissions;
+use crate::state::AppState;
+use tauri::{AppHandle, State};
+
+#[tauri::command]
+pub fn get_settings(app: AppHandle) -> Settings {
+    config::load(&app)
+}
+
+#[tauri::command]
+pub fn set_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
+    let mut settings = config::load(&app);
+    settings.api_key = if api_key.is_empty() {
+        None
+    } else {
+        Some(api_key)
+    };
+    config::save(&app, &settings)
+}
+
+#[tauri::command]
+pub fn set_shortcut(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    shortcut: Shortcut,
+) -> Result<(), String> {
+    let mut settings = config::load(&app);
+    settings.shortcut = shortcut.clone();
+    config::save(&app, &settings)?;
+    // Live-update the listener's view of the shortcut so the change takes
+    // effect immediately — no app restart needed.
+    *state.shortcut.lock().unwrap() = shortcut;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_accessibility_settings() {
+    permissions::open_accessibility_settings();
+}
