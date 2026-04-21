@@ -1,5 +1,6 @@
 mod commands;
 mod config;
+mod paste;
 mod permissions;
 mod ptt;
 mod state;
@@ -32,6 +33,7 @@ pub fn run() {
             commands::set_shortcut,
             commands::open_accessibility_settings,
             transcription::transcribe,
+            paste::paste_text,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

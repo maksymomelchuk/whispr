@@ -12,6 +12,8 @@ export const setShortcut = (shortcut: Shortcut) =>
 export const transcribe = (audio: Uint8Array) =>
   invoke<string>('transcribe', { audio: Array.from(audio) })
 
+export const pasteText = (text: string) => invoke<void>('paste_text', { text })
+
 const MOD_MAP: Record<string, string> = {
   Meta: '⌘',
   Control: '⌃',

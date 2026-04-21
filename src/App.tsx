@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react'
 import { ApiKeyField } from './components/ApiKeyField'
 import { ShortcutField } from './components/ShortcutField'
 import { ShortcutRecorder } from './components/ShortcutRecorder'
-import { getSettings, setShortcut as persistShortcut, transcribe } from './lib/api'
+import {
+  getSettings,
+  setShortcut as persistShortcut,
+  transcribe,
+  pasteText,
+} from './lib/api'
 import { usePtt } from './hooks/usePtt'
 import { useAudioCapture } from './hooks/useAudioCapture'
 import type { Settings, Shortcut } from './lib/types'
@@ -23,6 +28,9 @@ function App() {
       try {
         const transcript = await transcribe(bytes)
         console.log('[transcribe] result', JSON.stringify(transcript))
+        if (transcript) {
+          await pasteText(transcript)
+        }
       } catch (err) {
         console.error('[transcribe] failed', err)
       }
