@@ -236,23 +236,38 @@ pub fn start(app: AppHandle, state: AppState) {
                 };
 
                 let shortcut = state.shortcut.lock().unwrap().clone();
-                if code != shortcut.key {
-                    return None;
-                }
 
-                let modifiers_ok = if is_modifier_code(&shortcut.key) {
-                    true
-                } else {
-                    state.modifiers.lock().unwrap().matches(&shortcut.modifiers)
-                };
-                if !modifiers_ok {
+                // Press requires the exact shortcut (key + modifiers) to be
+                // held. Release is permissive: if PTT is active, any part of
+                // the shortcut going up ends the session. Without this, a
+                // user releasing the modifier a tick before the key would
+                // leave PTT stuck because the modifier-match check fails at
+                // the moment of the key's KeyUp.
+                let is_shortcut_key = code == shortcut.key;
+                let is_required_modifier =
+                    shortcut.modifiers.iter().any(|m| match m.as_str() {
+                        "Meta" => matches!(code, "MetaLeft" | "MetaRight"),
+                        "Control" => matches!(code, "ControlLeft" | "ControlRight"),
+                        "Alt" => matches!(code, "AltLeft" | "AltRight"),
+                        "Shift" => matches!(code, "ShiftLeft" | "ShiftRight"),
+                        _ => false,
+                    });
+                if !is_shortcut_key && !is_required_modifier {
                     return None;
                 }
 
                 let mut active = state.ptt_active.lock().unwrap();
-                if is_press && !*active {
-                    *active = true;
-                    let _ = app.emit("ptt-pressed", ());
+
+                if is_press && !*active && is_shortcut_key {
+                    let modifiers_ok = if is_modifier_code(&shortcut.key) {
+                        true
+                    } else {
+                        state.modifiers.lock().unwrap().matches(&shortcut.modifiers)
+                    };
+                    if modifiers_ok {
+                        *active = true;
+                        let _ = app.emit("ptt-pressed", ());
+                    }
                 } else if !is_press && *active {
                     *active = false;
                     let _ = app.emit("ptt-released", ());
