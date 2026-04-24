@@ -93,7 +93,7 @@ function App() {
     <main className="app">
       <header className="app-header">
         <div className="header-row">
-          <h1>Wispr Tauri</h1>
+          <h1>Whispr</h1>
           <div className={`ptt-indicator ${isHeld ? "active" : ""}`}>
             {isHeld ? "● Recording" : "○ Idle"}
           </div>

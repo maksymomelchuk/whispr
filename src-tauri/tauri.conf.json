@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Wispr Tauri",
+  "productName": "Whispr",
   "version": "0.1.0",
-  "identifier": "com.wispr-tauri.app",
+  "identifier": "com.whispr.app",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "Wispr Tauri",
+        "title": "Whispr",
         "width": 560,
         "height": 520,
         "minWidth": 480,

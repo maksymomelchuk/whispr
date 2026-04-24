@@ -1,4 +1,4 @@
-# Wispr Tauri
+# Whispr
 
 A push-to-talk dictation app. Hold a shortcut, speak, release — the
 transcription is typed into whatever app has focus. Audio is sent to
@@ -44,8 +44,8 @@ The app bundle is produced under `src-tauri/target/release/bundle/`.
 
 ## Where things live
 
-- **Settings** — `~/Library/Application Support/com.wispr-tauri.app/settings.json` (0600)
-- **History** — `~/Library/Application Support/com.wispr-tauri.app/history.json` (0600)
+- **Settings** — `~/Library/Application Support/com.whispr.app/settings.json` (0600)
+- **History** — `~/Library/Application Support/com.whispr.app/history.json` (0600)
 
 The Deepgram API key is stored in the settings file on disk; it is never
 returned to the webview over IPC.

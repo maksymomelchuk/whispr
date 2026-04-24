@@ -20,7 +20,7 @@ pub fn create(app: &AppHandle) -> Result<(), String> {
         OVERLAY_LABEL,
         WebviewUrl::App("index.html".into()),
     )
-    .title("Wispr Overlay")
+    .title("Whispr Overlay")
     .inner_size(OVERLAY_WIDTH, OVERLAY_HEIGHT)
     .resizable(false)
     .decorations(false)

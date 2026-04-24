@@ -57,7 +57,7 @@ pub fn run() {
             #[cfg(not(target_os = "macos"))]
             {
                 eprintln!(
-                    "[wispr-tauri] push-to-talk / audio capture / paste are not yet implemented \
+                    "[whispr] push-to-talk / audio capture / paste are not yet implemented \
                      on this platform; UI will run but dictation is disabled."
                 );
             }
