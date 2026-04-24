@@ -8,6 +8,7 @@ import { ReplacementsField } from "./components/ReplacementsField";
 import { ShortcutField } from "./components/ShortcutField";
 import { ShortcutRecorder } from "./components/ShortcutRecorder";
 import { TranscriptionField } from "./components/TranscriptionField";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { getSettings, setShortcut as persistShortcut } from "./lib/api";
 import type {
   DeepgramSettings,
@@ -161,6 +162,8 @@ function App() {
           {toast}
         </div>
       )}
+
+      <UpdateBanner />
     </main>
   );
 }

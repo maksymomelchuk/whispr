@@ -1,0 +1,79 @@
+name: Release
+
+# Cut a release by pushing a semver tag:
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# The job builds a macOS universal binary (Intel + Apple Silicon), uploads
+# the .dmg / .app.tar.gz to a new GitHub Release, and publishes latest.json
+# so existing installs pick up the update.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Whispr ${{ github.ref_name }}"
+          releaseBody: |
+            ## Installation (macOS, unsigned build)
+
+            1. Download the `.dmg`, drag Whispr into Applications.
+            2. First launch: **right-click → Open** (Gatekeeper will complain
+               about an "unidentified developer" — that's expected for this
+               unsigned build). Subsequent launches go directly.
+            3. Grant **Accessibility** permission when prompted (required for
+               the push-to-talk listener and keystroke injection).
+
+            Auto-updates will handle future releases without the right-click
+            dance — the already-trusted app writes its own update in place.
+
+            ## What's in this release
+
+            _See commits since the previous tag._
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          args: --target universal-apple-darwin

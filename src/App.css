@@ -884,3 +884,56 @@ button.primary:hover:not(:disabled) {
   color: #7f1d1d;
   border-color: #fecaca;
 }
+
+.update-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  max-width: 420px;
+  padding: 8px 8px 8px 14px;
+  border-radius: 999px;
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  color: #1e1b4b;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  font-size: 12px;
+  z-index: 1000;
+}
+
+.update-banner.err {
+  border-color: #fecaca;
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+
+.update-banner button.primary {
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  background: #0a84ff;
+  color: #ffffff;
+  border-color: #0a84ff;
+}
+
+.update-banner button.primary:hover:not(:disabled) {
+  background: #0b74e5;
+  border-color: #0b74e5;
+}
+
+@media (prefers-color-scheme: dark) {
+  .update-banner {
+    background: #1e1b4b;
+    border-color: #3730a3;
+    color: #c7d2fe;
+  }
+
+  .update-banner.err {
+    background: #2a1515;
+    border-color: #7f1d1d;
+    color: #fca5a5;
+  }
+}
