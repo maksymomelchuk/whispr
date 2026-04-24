@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <!-- Near-black gradient matching the overlay pill's rgb(15,15,15) fill,
+         with a whisper of vertical depth. -->
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a1a1a" />
+      <stop offset="1" stop-color="#080808" />
+    </linearGradient>
+
+    <!-- Soft top-left sheen to hint at the pill's backdrop-blur glass. -->
+    <radialGradient id="gloss" cx="0.3" cy="0.1" r="0.75">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.08" />
+      <stop offset="0.7" stop-color="#ffffff" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Squircle background -->
+  <rect width="1024" height="1024" rx="224" fill="url(#bg)" />
+
+  <!-- Glass sheen -->
+  <rect width="1024" height="1024" rx="224" fill="url(#gloss)" />
+
+  <!-- Hairline inner stroke echoing the pill's 1px white border -->
+  <rect
+    x="3"
+    y="3"
+    width="1018"
+    height="1018"
+    rx="221"
+    fill="none"
+    stroke="#ffffff"
+    stroke-opacity="0.1"
+    stroke-width="4"
+  />
+
+  <!-- 5 white capsule bars, same rhythm as the overlay waveform -->
+  <g fill="#ffffff">
+    <rect x="192" y="412" width="96" height="200" rx="48" />
+    <rect x="328" y="322" width="96" height="380" rx="48" />
+    <rect x="464" y="222" width="96" height="580" rx="48" />
+    <rect x="600" y="322" width="96" height="380" rx="48" />
+    <rect x="736" y="412" width="96" height="200" rx="48" />
+  </g>
+</svg>
