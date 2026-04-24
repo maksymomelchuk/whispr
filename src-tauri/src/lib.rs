@@ -3,9 +3,11 @@ mod config;
 mod paste;
 mod permissions;
 mod ptt;
+mod recorder;
 mod state;
 mod transcription;
 
+use recorder::Recorder;
 use state::AppState;
 use tauri::Manager;
 
@@ -23,7 +25,8 @@ pub fn run() {
             let app_state = AppState::default();
             *app_state.shortcut.lock().unwrap() = settings.shortcut;
 
-            ptt::start(app.handle().clone(), app_state.clone());
+            let recorder = Recorder::spawn();
+            ptt::start(app.handle().clone(), app_state.clone(), recorder);
             app.manage(app_state);
             Ok(())
         })
@@ -32,8 +35,6 @@ pub fn run() {
             commands::set_api_key,
             commands::set_shortcut,
             commands::open_accessibility_settings,
-            transcription::transcribe,
-            paste::paste_text,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

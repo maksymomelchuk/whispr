@@ -1,4 +1,6 @@
+use crate::recorder::Recorder;
 use crate::state::{AppState, ModifierState};
+use crate::{paste, transcription};
 use core_foundation::base::TCFType;
 use core_foundation::runloop::{kCFRunLoopCommonModes, CFRunLoop};
 use core_graphics::event::{
@@ -193,7 +195,44 @@ fn is_modifier_code(code: &str) -> bool {
     )
 }
 
-pub fn start(app: AppHandle, state: AppState) {
+/// Stop recording, transcribe, paste — all off the CGEventTap callback so the
+/// tap keeps servicing keystrokes. The stop call blocks on the audio thread
+/// (stream teardown + WAV encode) so we hop through spawn_blocking before
+/// handing off to the async transcribe request.
+fn spawn_pipeline(app: AppHandle, recorder: Recorder) {
+    tauri::async_runtime::spawn(async move {
+        let bytes = match tauri::async_runtime::spawn_blocking(move || recorder.stop()).await {
+            Ok(Ok(b)) => b,
+            Ok(Err(e)) => {
+                eprintln!("[pipeline] recorder stop failed: {e}");
+                return;
+            }
+            Err(e) => {
+                eprintln!("[pipeline] spawn_blocking join error: {e}");
+                return;
+            }
+        };
+        println!("[pipeline] WAV size = {} bytes", bytes.len());
+
+        let transcript = match transcription::transcribe(app.clone(), bytes).await {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("[pipeline] transcription failed: {e}");
+                return;
+            }
+        };
+        if transcript.is_empty() {
+            println!("[pipeline] empty transcript, nothing to paste");
+            return;
+        }
+
+        if let Err(e) = paste::paste_text(transcript) {
+            eprintln!("[pipeline] paste failed: {e}");
+        }
+    });
+}
+
+pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
     std::thread::spawn(move || {
         println!("Starting CGEventTap keyboard listener…");
 
@@ -299,11 +338,15 @@ pub fn start(app: AppHandle, state: AppState) {
                     };
                     if modifiers_ok {
                         *active = true;
+                        println!("[ptt] pressed");
+                        recorder.start();
                         let _ = app.emit("ptt-pressed", ());
                     }
                 } else if !is_press && *active {
                     *active = false;
+                    println!("[ptt] released");
                     let _ = app.emit("ptt-released", ());
+                    spawn_pipeline(app.clone(), recorder.clone());
                 }
 
                 None

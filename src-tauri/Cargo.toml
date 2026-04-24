@@ -29,4 +29,6 @@ arboard = "3"
 macos-accessibility-client = "0.0.1"
 core-foundation = "0.10"
 core-graphics = "0.24"
+cpal = "0.15"
+hound = "3.5"
 

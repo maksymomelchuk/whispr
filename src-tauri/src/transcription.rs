@@ -1,12 +1,12 @@
 use crate::config;
 use tauri::AppHandle;
 
-const DEEPGRAM_ENDPOINT: &str =
-    "https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&language=multi";
+const DEEPGRAM_ENDPOINT: &str = "https://api.deepgram.com/v1/listen?model=nova-3&language=en";
 
-#[tauri::command]
 pub async fn transcribe(app: AppHandle, audio: Vec<u8>) -> Result<String, String> {
+    println!("[transcribe] invoked, audio bytes={}", audio.len());
     if audio.is_empty() {
+        println!("[transcribe] empty audio, returning early");
         return Ok(String::new());
     }
 
@@ -20,7 +20,7 @@ pub async fn transcribe(app: AppHandle, audio: Vec<u8>) -> Result<String, String
     let res = client
         .post(DEEPGRAM_ENDPOINT)
         .header("Authorization", format!("Token {key}"))
-        .header("Content-Type", "audio/webm")
+        .header("Content-Type", "audio/wav")
         .body(audio)
         .send()
         .await
@@ -41,6 +41,8 @@ pub async fn transcribe(app: AppHandle, audio: Vec<u8>) -> Result<String, String
         .as_str()
         .unwrap_or("")
         .trim();
+
+    println!("[transcribe] got transcript len={}", transcript.len());
 
     Ok(if transcript.is_empty() {
         String::new()
