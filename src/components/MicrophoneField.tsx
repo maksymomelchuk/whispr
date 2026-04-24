@@ -78,6 +78,7 @@ export function MicrophoneField({
   const togglePauseMedia = async () => {
     const next = !pauseEnabled;
     setPauseEnabled(next);
+    setSaveError(null);
     try {
       await persistPauseMediaOnRecord(next);
       onPauseMediaSaved(next);
@@ -96,8 +97,13 @@ export function MicrophoneField({
   return (
     <section className="card">
       <h2>Audio</h2>
-      <div className="row">
+
+      <div className="field">
+        <label className="field-label" htmlFor="mic-device">
+          Input device
+        </label>
         <select
+          id="mic-device"
           className="mic-select"
           value={value}
           disabled={loadState !== "ready" || status === "saving"}
@@ -114,16 +120,17 @@ export function MicrophoneField({
           ) : null}
         </select>
       </div>
-      <label className="option-row">
+
+      <label className="toggle-row">
+        <span className="toggle-row-label">Pause media while recording</span>
         <input
           type="checkbox"
+          role="switch"
           checked={pauseEnabled}
           onChange={togglePauseMedia}
         />
-        <div className="option-text">
-          <div className="option-label">Pause media while recording</div>
-        </div>
       </label>
+
       {loadState === "loading" && (
         <div className="status">Enumerating devices…</div>
       )}

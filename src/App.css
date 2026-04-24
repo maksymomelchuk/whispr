@@ -294,6 +294,126 @@ input[type="text"] {
   }
 }
 
+/* Labeled field: small caption over its control, ~6px gap. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.card > h2 + .field {
+  margin-top: 10px;
+}
+
+.field-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: #6b6b6b;
+  letter-spacing: 0.2px;
+}
+
+/* Toggle row: text label on the left, switch on the right. */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.card > .field + .toggle-row,
+.card > .toggle-row + .toggle-row {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #eaeaea;
+}
+
+.toggle-row-label {
+  font-size: 13px;
+  color: #0f0f0f;
+  user-select: none;
+}
+
+/* Switch built on input[type=checkbox role=switch]. Keyboard- and
+   screen-reader-native; appearance:none gives us a clean canvas. */
+.toggle-row input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 32px;
+  height: 18px;
+  margin: 0;
+  border-radius: 999px;
+  background: #d1d5db;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 180ms ease-out;
+}
+
+.toggle-row input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 180ms ease-out;
+}
+
+.toggle-row input[type="checkbox"]:checked {
+  background: #0a84ff;
+}
+
+.toggle-row input[type="checkbox"]:checked::after {
+  transform: translateX(14px);
+}
+
+.toggle-row input[type="checkbox"]:focus-visible {
+  outline: 2px solid #0a84ff;
+  outline-offset: 2px;
+}
+
+.toggle-row input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (hover: hover) {
+  .toggle-row:hover input[type="checkbox"]:not(:checked):not(:disabled) {
+    background: #b8bfc9;
+  }
+  .toggle-row:hover input[type="checkbox"]:checked:not(:disabled) {
+    background: #0077ee;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .field-label {
+    color: #a0a0a0;
+  }
+  .toggle-row-label {
+    color: #f6f6f6;
+  }
+  .card > .field + .toggle-row,
+  .card > .toggle-row + .toggle-row {
+    border-top-color: #2a2a2a;
+  }
+  .toggle-row input[type="checkbox"] {
+    background: #3a3a3a;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toggle-row input[type="checkbox"],
+  .toggle-row input[type="checkbox"]::after {
+    transition: none;
+  }
+}
+
 input:focus {
   border-color: #0a84ff;
 }
