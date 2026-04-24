@@ -1,80 +1,84 @@
-import { useEffect, useState } from 'react'
-import { listen } from '@tauri-apps/api/event'
-import { ApiKeyField } from './components/ApiKeyField'
-import { HistoryTab } from './components/HistoryTab'
-import { MicrophoneField } from './components/MicrophoneField'
-import { ReplacementsField } from './components/ReplacementsField'
-import { ShortcutField } from './components/ShortcutField'
-import { ShortcutRecorder } from './components/ShortcutRecorder'
-import { TranscriptionField } from './components/TranscriptionField'
-import { getSettings, setShortcut as persistShortcut } from './lib/api'
-import { usePtt } from './hooks/usePtt'
+import { listen } from "@tauri-apps/api/event";
+import { useEffect, useState } from "react";
+
+import { ApiKeyField } from "./components/ApiKeyField";
+import { HistoryTab } from "./components/HistoryTab";
+import { MicrophoneField } from "./components/MicrophoneField";
+import { ReplacementsField } from "./components/ReplacementsField";
+import { ShortcutField } from "./components/ShortcutField";
+import { ShortcutRecorder } from "./components/ShortcutRecorder";
+import { TranscriptionField } from "./components/TranscriptionField";
+import { usePtt } from "./hooks/usePtt";
+import { getSettings, setShortcut as persistShortcut } from "./lib/api";
 import type {
   DeepgramSettings,
   Replacement,
   Settings,
   Shortcut,
-} from './lib/types'
-import './App.css'
+} from "./lib/types";
 
-type TabId = 'general' | 'shortcut' | 'transcription' | 'history'
+import "./App.css";
+
+type TabId = "general" | "shortcut" | "transcription" | "history";
 
 const TABS: { id: TabId; label: string }[] = [
-  { id: 'general', label: 'General' },
-  { id: 'shortcut', label: 'Shortcut' },
-  { id: 'transcription', label: 'Transcription' },
-  { id: 'history', label: 'History' },
-]
+  { id: "general", label: "General" },
+  { id: "shortcut", label: "Shortcut" },
+  { id: "transcription", label: "Transcription" },
+  { id: "history", label: "History" },
+];
 
 function App() {
-  const [settings, setSettings] = useState<Settings | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [recording, setRecording] = useState(false)
-  const [activeTab, setActiveTab] = useState<TabId>('general')
-  const [toast, setToast] = useState<string | null>(null)
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabId>("general");
+  const [toast, setToast] = useState<string | null>(null);
 
-  const { isHeld } = usePtt()
+  const { isHeld } = usePtt();
 
   useEffect(() => {
     getSettings()
       .then(setSettings)
-      .catch((e) => setLoadError(String(e)))
-  }, [])
+      .catch((e) => setLoadError(String(e)));
+  }, []);
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined
-    listen<string>('transcription-error', (e) => {
-      setToast(e.payload || 'Transcription failed')
+    let unlisten: (() => void) | undefined;
+    listen<string>("transcription-error", (e) => {
+      setToast(e.payload || "Transcription failed");
     })
       .then((un) => {
-        unlisten = un
+        unlisten = un;
       })
-      .catch((err) => console.error('listen(transcription-error) failed', err))
-    return () => unlisten?.()
-  }, [])
+      .catch((err) => console.error("listen(transcription-error) failed", err));
+    return () => unlisten?.();
+  }, []);
 
   useEffect(() => {
-    if (!toast) return
-    const t = setTimeout(() => setToast(null), 5000)
-    return () => clearTimeout(t)
-  }, [toast])
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const handleShortcutSave = async (shortcut: Shortcut) => {
     try {
-      await persistShortcut(shortcut)
-      setSettings((s) => (s ? { ...s, shortcut } : s))
-      setRecording(false)
+      await persistShortcut(shortcut);
+      setSettings((s) => (s ? { ...s, shortcut } : s));
+      setRecording(false);
     } catch (e) {
-      console.error('Failed to save shortcut', e)
+      console.error("Failed to save shortcut", e);
     }
-  }
+  };
 
   if (loadError) {
     return (
       <main className="app">
-        <div className="card err-card">Failed to load settings: {loadError}</div>
+        <div className="card err-card">
+          Failed to load settings: {loadError}
+        </div>
       </main>
-    )
+    );
   }
 
   if (!settings) {
@@ -82,7 +86,7 @@ function App() {
       <main className="app">
         <div className="loading">Loading…</div>
       </main>
-    )
+    );
   }
 
   return (
@@ -90,8 +94,8 @@ function App() {
       <header className="app-header">
         <div className="header-row">
           <h1>Wispr Tauri</h1>
-          <div className={`ptt-indicator ${isHeld ? 'active' : ''}`}>
-            {isHeld ? '● Recording' : '○ Idle'}
+          <div className={`ptt-indicator ${isHeld ? "active" : ""}`}>
+            {isHeld ? "● Recording" : "○ Idle"}
           </div>
         </div>
       </header>
@@ -102,7 +106,7 @@ function App() {
             key={tab.id}
             role="tab"
             aria-selected={activeTab === tab.id}
-            className={`tab ${activeTab === tab.id ? 'active' : ''}`}
+            className={`tab ${activeTab === tab.id ? "active" : ""}`}
             onClick={() => setActiveTab(tab.id)}
           >
             {tab.label}
@@ -111,7 +115,7 @@ function App() {
       </nav>
 
       <div className="tab-panel">
-        {activeTab === 'general' && (
+        {activeTab === "general" && (
           <>
             <ApiKeyField
               isConfigured={settings.api_key_configured}
@@ -129,13 +133,13 @@ function App() {
             />
           </>
         )}
-        {activeTab === 'shortcut' && (
+        {activeTab === "shortcut" && (
           <ShortcutField
             shortcut={settings.shortcut}
             onStartRecord={() => setRecording(true)}
           />
         )}
-        {activeTab === 'transcription' && (
+        {activeTab === "transcription" && (
           <>
             <TranscriptionField
               initial={settings.deepgram}
@@ -153,7 +157,7 @@ function App() {
             />
           </>
         )}
-        {activeTab === 'history' && <HistoryTab />}
+        {activeTab === "history" && <HistoryTab />}
       </div>
 
       {recording && (
@@ -170,7 +174,7 @@ function App() {
         </div>
       )}
     </main>
-  )
+  );
 }
 
-export default App
+export default App;

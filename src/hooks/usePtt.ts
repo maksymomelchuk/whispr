@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
-import { listen } from '@tauri-apps/api/event'
+import { listen } from "@tauri-apps/api/event";
+import { useEffect, useRef, useState } from "react";
 
 interface UsePttOptions {
-  onPressed?: () => void
-  onReleased?: () => void
+  onPressed?: () => void;
+  onReleased?: () => void;
 }
 
 /**
@@ -15,42 +15,42 @@ interface UsePttOptions {
  * doesn't reinstall the underlying Tauri listeners on every render.
  */
 export function usePtt({ onPressed, onReleased }: UsePttOptions = {}) {
-  const onPressedRef = useRef(onPressed)
-  const onReleasedRef = useRef(onReleased)
-  onPressedRef.current = onPressed
-  onReleasedRef.current = onReleased
+  const onPressedRef = useRef(onPressed);
+  const onReleasedRef = useRef(onReleased);
+  onPressedRef.current = onPressed;
+  onReleasedRef.current = onReleased;
 
-  const [isHeld, setIsHeld] = useState(false)
+  const [isHeld, setIsHeld] = useState(false);
 
   useEffect(() => {
-    let cancelled = false
-    const unlisteners: Array<() => void> = []
+    let cancelled = false;
+    const unlisteners: Array<() => void> = [];
 
     const attach = async () => {
-      const unP = await listen('ptt-pressed', () => {
-        setIsHeld(true)
-        onPressedRef.current?.()
-      })
-      const unR = await listen('ptt-released', () => {
-        setIsHeld(false)
-        onReleasedRef.current?.()
-      })
+      const unP = await listen("ptt-pressed", () => {
+        setIsHeld(true);
+        onPressedRef.current?.();
+      });
+      const unR = await listen("ptt-released", () => {
+        setIsHeld(false);
+        onReleasedRef.current?.();
+      });
       // If the component unmounted before subscriptions resolved, tear them
       // down immediately instead of leaking.
       if (cancelled) {
-        unP()
-        unR()
-        return
+        unP();
+        unR();
+        return;
       }
-      unlisteners.push(unP, unR)
-    }
-    attach()
+      unlisteners.push(unP, unR);
+    };
+    attach();
 
     return () => {
-      cancelled = true
-      unlisteners.forEach((un) => un())
-    }
-  }, [])
+      cancelled = true;
+      unlisteners.forEach((un) => un());
+    };
+  }, []);
 
-  return { isHeld }
+  return { isHeld };
 }

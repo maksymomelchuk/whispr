@@ -28,7 +28,7 @@ pnpm tauri dev
 On first launch macOS will prompt for **Accessibility** permission — this is
 required to tap global key events (for the push-to-talk shortcut) and to
 inject the transcribed text as keystrokes. You can manage this later under
-*System Settings → Privacy & Security → Accessibility*.
+_System Settings → Privacy & Security → Accessibility_.
 
 You also need a Deepgram API key. Get one from
 [console.deepgram.com](https://console.deepgram.com) and paste it into the

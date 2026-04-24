@@ -1,0 +1,11 @@
+node_modules
+dist
+dist-ssr
+
+# Lockfiles
+pnpm-lock.yaml
+
+# Rust build output (not Prettier-formatted anyway, but belt-and-braces)
+src-tauri/target
+src-tauri/gen
+src-tauri/Cargo.lock

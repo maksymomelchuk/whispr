@@ -1,4 +1,4 @@
-import './OverlayApp.css'
+import "./OverlayApp.css";
 
 export function OverlayApp() {
   return (
@@ -13,5 +13,5 @@ export function OverlayApp() {
         </div>
       </div>
     </div>
-  )
+  );
 }

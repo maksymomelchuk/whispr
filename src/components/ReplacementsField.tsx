@@ -1,71 +1,81 @@
-import { useEffect, useState } from 'react'
-import { setReplacements as persistReplacements } from '../lib/api'
-import type { Replacement } from '../lib/types'
-import { CollapsibleCard } from './CollapsibleCard'
+import { useEffect, useState } from "react";
+
+import { setReplacements as persistReplacements } from "../lib/api";
+import type { Replacement } from "../lib/types";
+import { CollapsibleCard } from "./CollapsibleCard";
 
 interface Props {
-  initial: Replacement[]
-  onSaved: (replacements: Replacement[]) => void
-  defaultOpen?: boolean
+  initial: Replacement[];
+  onSaved: (replacements: Replacement[]) => void;
+  defaultOpen?: boolean;
 }
 
-type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 const same = (a: Replacement[], b: Replacement[]) =>
   a.length === b.length &&
-  a.every((r, i) => r.from === b[i].from && r.to === b[i].to)
+  a.every((r, i) => r.from === b[i].from && r.to === b[i].to);
 
-export function ReplacementsField({ initial, onSaved, defaultOpen = true }: Props) {
-  const [rows, setRows] = useState<Replacement[]>(initial)
-  const [status, setStatus] = useState<SaveStatus>('idle')
-  const [error, setError] = useState<string | null>(null)
+export function ReplacementsField({
+  initial,
+  onSaved,
+  defaultOpen = true,
+}: Props) {
+  const [rows, setRows] = useState<Replacement[]>(initial);
+  const [status, setStatus] = useState<SaveStatus>("idle");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setRows(initial)
-  }, [initial])
+    setRows(initial);
+  }, [initial]);
 
   useEffect(() => {
-    if (status !== 'saved') return
-    const t = setTimeout(() => setStatus('idle'), 1500)
-    return () => clearTimeout(t)
-  }, [status])
+    if (status !== "saved") return;
+    const t = setTimeout(() => setStatus("idle"), 1500);
+    return () => clearTimeout(t);
+  }, [status]);
 
   const updateRow = (index: number, patch: Partial<Replacement>) =>
     setRows((prev) =>
       prev.map((r, i) => (i === index ? { ...r, ...patch } : r)),
-    )
+    );
 
   const removeRow = (index: number) =>
-    setRows((prev) => prev.filter((_, i) => i !== index))
+    setRows((prev) => prev.filter((_, i) => i !== index));
 
-  const addRow = () => setRows((prev) => [...prev, { from: '', to: '' }])
+  const addRow = () => setRows((prev) => [...prev, { from: "", to: "" }]);
 
   const handleSave = async () => {
     const cleaned = rows
       .map((r) => ({ from: r.from.trim(), to: r.to }))
-      .filter((r) => r.from.length > 0)
-    setStatus('saving')
-    setError(null)
+      .filter((r) => r.from.length > 0);
+    setStatus("saving");
+    setError(null);
     try {
-      await persistReplacements(cleaned)
-      setRows(cleaned)
-      onSaved(cleaned)
-      setStatus('saved')
+      await persistReplacements(cleaned);
+      setRows(cleaned);
+      onSaved(cleaned);
+      setStatus("saved");
     } catch (e) {
-      setStatus('error')
-      setError(String(e))
+      setStatus("error");
+      setError(String(e));
     }
-  }
+  };
 
-  const dirty = !same(rows, initial)
+  const dirty = !same(rows, initial);
 
   return (
-    <CollapsibleCard title="Voice Replacements" defaultOpen={defaultOpen} dirty={dirty}>
+    <CollapsibleCard
+      title="Voice Replacements"
+      defaultOpen={defaultOpen}
+      dirty={dirty}
+    >
       <p className="hint">
-        Spoken words on the left become the text on the right. Punctuation
-        like <span className="mono">.</span> <span className="mono">/</span>{' '}
+        Spoken words on the left become the text on the right. Punctuation like{" "}
+        <span className="mono">.</span> <span className="mono">/</span>{" "}
         <span className="mono">-</span> is spaced intelligently — saying
-        &ldquo;test dot ts&rdquo; produces <span className="mono">test.ts</span>.
+        &ldquo;test dot ts&rdquo; produces <span className="mono">test.ts</span>
+        .
       </p>
       <div className="replacements-list">
         {rows.map((row, i) => (
@@ -103,13 +113,13 @@ export function ReplacementsField({ initial, onSaved, defaultOpen = true }: Prop
         <button
           className="primary"
           onClick={handleSave}
-          disabled={!dirty || status === 'saving'}
+          disabled={!dirty || status === "saving"}
         >
-          {status === 'saving' ? 'Saving…' : 'Save'}
+          {status === "saving" ? "Saving…" : "Save"}
         </button>
       </div>
-      {status === 'saved' && <div className="status ok">Saved</div>}
-      {status === 'error' && <div className="status err">{error}</div>}
+      {status === "saved" && <div className="status ok">Saved</div>}
+      {status === "error" && <div className="status err">{error}</div>}
     </CollapsibleCard>
-  )
+  );
 }

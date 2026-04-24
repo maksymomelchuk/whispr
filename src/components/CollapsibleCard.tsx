@@ -1,10 +1,10 @@
-import { useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from "react";
 
 interface Props {
-  title: string
-  defaultOpen?: boolean
-  dirty?: boolean
-  children: ReactNode
+  title: string;
+  defaultOpen?: boolean;
+  dirty?: boolean;
+  children: ReactNode;
 }
 
 export function CollapsibleCard({
@@ -13,10 +13,10 @@ export function CollapsibleCard({
   dirty = false,
   children,
 }: Props) {
-  const [open, setOpen] = useState(defaultOpen)
+  const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <section className={`card collapsible-card ${open ? 'open' : 'closed'}`}>
+    <section className={`card collapsible-card ${open ? "open" : "closed"}`}>
       <button
         type="button"
         className="collapsible-header"
@@ -24,7 +24,7 @@ export function CollapsibleCard({
         onClick={() => setOpen((v) => !v)}
       >
         <svg
-          className={`chevron ${open ? 'open' : ''}`}
+          className={`chevron ${open ? "open" : ""}`}
           viewBox="0 0 12 12"
           width="10"
           height="10"
@@ -50,5 +50,5 @@ export function CollapsibleCard({
         </div>
       </div>
     </section>
-  )
+  );
 }
