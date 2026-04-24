@@ -1,5 +1,6 @@
 use crate::config::{self, DeepgramSettings, Replacement, Settings, Shortcut};
 use crate::permissions;
+use crate::recorder::Recorder;
 use crate::state::AppState;
 use tauri::{AppHandle, State};
 
@@ -52,6 +53,24 @@ pub fn set_deepgram_settings(
     let mut settings = config::load(&app);
     settings.deepgram = deepgram;
     config::save(&app, &settings)
+}
+
+#[tauri::command]
+pub fn list_input_devices() -> Vec<String> {
+    Recorder::list_input_devices()
+}
+
+#[tauri::command]
+pub fn set_input_device(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    device: Option<String>,
+) -> Result<(), String> {
+    let mut settings = config::load(&app);
+    settings.input_device = device.clone();
+    config::save(&app, &settings)?;
+    *state.input_device.lock().unwrap() = device;
+    Ok(())
 }
 
 #[tauri::command]

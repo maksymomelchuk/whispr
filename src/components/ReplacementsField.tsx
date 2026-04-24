@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { setReplacements as persistReplacements } from '../lib/api'
 import type { Replacement } from '../lib/types'
+import { CollapsibleCard } from './CollapsibleCard'
 
 interface Props {
   initial: Replacement[]
   onSaved: (replacements: Replacement[]) => void
+  defaultOpen?: boolean
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
@@ -13,7 +15,7 @@ const same = (a: Replacement[], b: Replacement[]) =>
   a.length === b.length &&
   a.every((r, i) => r.from === b[i].from && r.to === b[i].to)
 
-export function ReplacementsField({ initial, onSaved }: Props) {
+export function ReplacementsField({ initial, onSaved, defaultOpen = true }: Props) {
   const [rows, setRows] = useState<Replacement[]>(initial)
   const [status, setStatus] = useState<SaveStatus>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -58,8 +60,7 @@ export function ReplacementsField({ initial, onSaved }: Props) {
   const dirty = !same(rows, initial)
 
   return (
-    <section className="card">
-      <h2>Voice Replacements</h2>
+    <CollapsibleCard title="Voice Replacements" defaultOpen={defaultOpen} dirty={dirty}>
       <p className="hint">
         Spoken words on the left become the text on the right. Punctuation
         like <span className="mono">.</span> <span className="mono">/</span>{' '}
@@ -109,6 +110,6 @@ export function ReplacementsField({ initial, onSaved }: Props) {
       </div>
       {status === 'saved' && <div className="status ok">Saved</div>}
       {status === 'error' && <div className="status err">{error}</div>}
-    </section>
+    </CollapsibleCard>
   )
 }

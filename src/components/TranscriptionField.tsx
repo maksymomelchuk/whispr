@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { setDeepgramSettings as persistDeepgramSettings } from '../lib/api'
 import type { DeepgramSettings } from '../lib/types'
+import { CollapsibleCard } from './CollapsibleCard'
 
 interface Props {
   initial: DeepgramSettings
   onSaved: (deepgram: DeepgramSettings) => void
+  defaultOpen?: boolean
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
@@ -52,7 +54,7 @@ const same = (a: DeepgramSettings, b: DeepgramSettings) =>
   a.keyterms.length === b.keyterms.length &&
   a.keyterms.every((k, i) => k === b.keyterms[i])
 
-export function TranscriptionField({ initial, onSaved }: Props) {
+export function TranscriptionField({ initial, onSaved, defaultOpen = false }: Props) {
   const [state, setState] = useState<DeepgramSettings>(initial)
   const [status, setStatus] = useState<SaveStatus>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -110,8 +112,7 @@ export function TranscriptionField({ initial, onSaved }: Props) {
   const dirty = !same(state, initial)
 
   return (
-    <section className="card">
-      <h2>Transcription</h2>
+    <CollapsibleCard title="Deepgram" defaultOpen={defaultOpen} dirty={dirty}>
       <p className="hint">
         Deepgram nova-3 options. Defaults are off; enable what you need.
       </p>
@@ -200,6 +201,6 @@ export function TranscriptionField({ initial, onSaved }: Props) {
       </div>
       {status === 'saved' && <div className="status ok">Saved</div>}
       {status === 'error' && <div className="status err">{error}</div>}
-    </section>
+    </CollapsibleCard>
   )
 }

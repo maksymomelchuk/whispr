@@ -21,4 +21,5 @@ export interface Settings {
   shortcut: Shortcut
   replacements: Replacement[]
   deepgram: DeepgramSettings
+  input_device: string | null
 }

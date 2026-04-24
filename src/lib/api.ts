@@ -20,6 +20,12 @@ export const setReplacements = (replacements: Replacement[]) =>
 export const setDeepgramSettings = (deepgram: DeepgramSettings) =>
   invoke<void>('set_deepgram_settings', { deepgram })
 
+export const listInputDevices = () =>
+  invoke<string[]>('list_input_devices')
+
+export const setInputDevice = (device: string | null) =>
+  invoke<void>('set_input_device', { device })
+
 const MOD_MAP: Record<string, string> = {
   Meta: '⌘',
   Control: '⌃',

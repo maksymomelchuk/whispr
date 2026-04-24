@@ -25,6 +25,7 @@ pub fn run() {
             let settings = config::load(&app.handle());
             let app_state = AppState::default();
             *app_state.shortcut.lock().unwrap() = settings.shortcut;
+            *app_state.input_device.lock().unwrap() = settings.input_device;
 
             let recorder = Recorder::spawn();
             ptt::start(app.handle().clone(), app_state.clone(), recorder);
@@ -40,6 +41,8 @@ pub fn run() {
             commands::set_shortcut,
             commands::set_replacements,
             commands::set_deepgram_settings,
+            commands::list_input_devices,
+            commands::set_input_device,
             commands::open_accessibility_settings,
         ])
         .run(tauri::generate_context!())

@@ -1,16 +1,38 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{SampleFormat, Stream};
+use cpal::{Device, Host, SampleFormat, Stream};
 use std::io::Cursor;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
+
+/// Look up the saved input device by name. If the saved device no longer
+/// exists (unplugged, renamed), warn and fall back to the system default so
+/// recording still works.
+fn resolve_device(host: &Host, preferred: Option<&str>) -> Option<Device> {
+    if let Some(name) = preferred {
+        match host.input_devices() {
+            Ok(iter) => {
+                for d in iter {
+                    if d.name().ok().as_deref() == Some(name) {
+                        return Some(d);
+                    }
+                }
+                eprintln!(
+                    "[recorder] saved input device {name:?} not found; falling back to default"
+                );
+            }
+            Err(e) => eprintln!("[recorder] input_devices enumeration failed: {e}"),
+        }
+    }
+    host.default_input_device()
+}
 
 /// cpal::Stream is !Send on macOS (CoreAudio), so we can't store it in shared
 /// state or tear it down from an arbitrary thread. Instead we pin a single
 /// long-lived audio thread that owns every stream, and send commands over an
 /// mpsc channel. Callers hand back a oneshot reply channel for Stop.
 enum Cmd {
-    Start,
+    Start(Option<String>),
     Stop(mpsc::Sender<Result<Vec<u8>, String>>),
 }
 
@@ -26,9 +48,24 @@ impl Recorder {
         Self { tx }
     }
 
-    pub fn start(&self) {
-        if let Err(e) = self.tx.send(Cmd::Start) {
+    /// `device` is the saved preference. None (or an unknown name) falls back
+    /// to the system default input.
+    pub fn start(&self, device: Option<String>) {
+        if let Err(e) = self.tx.send(Cmd::Start(device)) {
             eprintln!("[recorder] send Start failed: {e}");
+        }
+    }
+
+    /// Enumerate current input devices by name. Called from the UI thread
+    /// on demand.
+    pub fn list_input_devices() -> Vec<String> {
+        let host = cpal::default_host();
+        match host.input_devices() {
+            Ok(iter) => iter.filter_map(|d| d.name().ok()).collect(),
+            Err(e) => {
+                eprintln!("[recorder] input_devices enumeration failed: {e}");
+                Vec::new()
+            }
         }
     }
 
@@ -51,12 +88,12 @@ fn audio_thread(rx: mpsc::Receiver<Cmd>) {
 
     while let Ok(cmd) = rx.recv() {
         match cmd {
-            Cmd::Start => {
+            Cmd::Start(device) => {
                 if session.is_some() {
                     eprintln!("[recorder] Start ignored: already recording");
                     continue;
                 }
-                match Session::start() {
+                match Session::start(device.as_deref()) {
                     Ok(s) => {
                         println!(
                             "[recorder] started ({} Hz, {} ch)",
@@ -86,11 +123,10 @@ struct Session {
 }
 
 impl Session {
-    fn start() -> Result<Self, String> {
+    fn start(preferred: Option<&str>) -> Result<Self, String> {
         let host = cpal::default_host();
-        let device = host
-            .default_input_device()
-            .ok_or_else(|| "no default input device".to_string())?;
+        let device = resolve_device(&host, preferred)
+            .ok_or_else(|| "no input device available".to_string())?;
         let supported = device
             .default_input_config()
             .map_err(|e| format!("default_input_config: {e}"))?;

@@ -86,6 +86,8 @@ pub struct Settings {
     pub replacements: Vec<Replacement>,
     #[serde(default)]
     pub deepgram: DeepgramSettings,
+    #[serde(default)]
+    pub input_device: Option<String>,
 }
 
 impl Default for Settings {
@@ -95,6 +97,7 @@ impl Default for Settings {
             shortcut: Shortcut::default(),
             replacements: default_replacements(),
             deepgram: DeepgramSettings::default(),
+            input_device: None,
         }
     }
 }

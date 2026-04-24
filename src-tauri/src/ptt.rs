@@ -339,7 +339,8 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                     if modifiers_ok {
                         *active = true;
                         println!("[ptt] pressed");
-                        recorder.start();
+                        let device = state.input_device.lock().unwrap().clone();
+                        recorder.start(device);
                         overlay::show(&app);
                         let _ = app.emit("ptt-pressed", ());
                     }

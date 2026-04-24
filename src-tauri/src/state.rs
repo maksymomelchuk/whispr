@@ -30,4 +30,5 @@ pub struct AppState {
     pub shortcut: Arc<Mutex<Shortcut>>,
     pub modifiers: Arc<Mutex<ModifierState>>,
     pub ptt_active: Arc<Mutex<bool>>,
+    pub input_device: Arc<Mutex<Option<String>>>,
 }

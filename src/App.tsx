@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ApiKeyField } from './components/ApiKeyField'
+import { MicrophoneField } from './components/MicrophoneField'
 import { ReplacementsField } from './components/ReplacementsField'
 import { ShortcutField } from './components/ShortcutField'
 import { ShortcutRecorder } from './components/ShortcutRecorder'
@@ -14,13 +15,12 @@ import type {
 } from './lib/types'
 import './App.css'
 
-type TabId = 'general' | 'shortcut' | 'transcription' | 'replacements'
+type TabId = 'general' | 'shortcut' | 'transcription'
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'general', label: 'General' },
   { id: 'shortcut', label: 'Shortcut' },
   { id: 'transcription', label: 'Transcription' },
-  { id: 'replacements', label: 'Replacements' },
 ]
 
 function App() {
@@ -90,7 +90,15 @@ function App() {
 
       <div className="tab-panel">
         {activeTab === 'general' && (
-          <ApiKeyField initialValue={settings.api_key ?? ''} />
+          <>
+            <ApiKeyField initialValue={settings.api_key ?? ''} />
+            <MicrophoneField
+              initial={settings.input_device}
+              onSaved={(input_device) =>
+                setSettings((s) => (s ? { ...s, input_device } : s))
+              }
+            />
+          </>
         )}
         {activeTab === 'shortcut' && (
           <ShortcutField
@@ -99,20 +107,22 @@ function App() {
           />
         )}
         {activeTab === 'transcription' && (
-          <TranscriptionField
-            initial={settings.deepgram}
-            onSaved={(deepgram: DeepgramSettings) =>
-              setSettings((s) => (s ? { ...s, deepgram } : s))
-            }
-          />
-        )}
-        {activeTab === 'replacements' && (
-          <ReplacementsField
-            initial={settings.replacements}
-            onSaved={(replacements: Replacement[]) =>
-              setSettings((s) => (s ? { ...s, replacements } : s))
-            }
-          />
+          <>
+            <TranscriptionField
+              initial={settings.deepgram}
+              defaultOpen={false}
+              onSaved={(deepgram: DeepgramSettings) =>
+                setSettings((s) => (s ? { ...s, deepgram } : s))
+              }
+            />
+            <ReplacementsField
+              initial={settings.replacements}
+              defaultOpen={false}
+              onSaved={(replacements: Replacement[]) =>
+                setSettings((s) => (s ? { ...s, replacements } : s))
+              }
+            />
+          </>
         )}
       </div>
 
