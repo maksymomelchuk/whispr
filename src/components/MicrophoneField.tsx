@@ -3,11 +3,14 @@ import { useEffect, useState } from "react";
 import {
   listInputDevices,
   setInputDevice as persistInputDevice,
+  setPauseMediaOnRecord as persistPauseMediaOnRecord,
 } from "../lib/api";
 
 interface Props {
   initial: string | null;
   onSaved: (device: string | null) => void;
+  pauseMedia: boolean;
+  onPauseMediaSaved: (enabled: boolean) => void;
 }
 
 type LoadState = "loading" | "ready" | "error";
@@ -15,13 +18,19 @@ type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 const SYSTEM_DEFAULT = "";
 
-export function MicrophoneField({ initial, onSaved }: Props) {
+export function MicrophoneField({
+  initial,
+  onSaved,
+  pauseMedia,
+  onPauseMediaSaved,
+}: Props) {
   const [devices, setDevices] = useState<string[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [value, setValue] = useState<string>(initial ?? SYSTEM_DEFAULT);
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pauseEnabled, setPauseEnabled] = useState(pauseMedia);
 
   useEffect(() => {
     listInputDevices()
@@ -38,6 +47,10 @@ export function MicrophoneField({ initial, onSaved }: Props) {
   useEffect(() => {
     setValue(initial ?? SYSTEM_DEFAULT);
   }, [initial]);
+
+  useEffect(() => {
+    setPauseEnabled(pauseMedia);
+  }, [pauseMedia]);
 
   useEffect(() => {
     if (status !== "saved") return;
@@ -62,6 +75,18 @@ export function MicrophoneField({ initial, onSaved }: Props) {
     }
   };
 
+  const togglePauseMedia = async () => {
+    const next = !pauseEnabled;
+    setPauseEnabled(next);
+    try {
+      await persistPauseMediaOnRecord(next);
+      onPauseMediaSaved(next);
+    } catch (e) {
+      setPauseEnabled(!next);
+      setSaveError(String(e));
+    }
+  };
+
   const missing =
     loadState === "ready" &&
     initial !== null &&
@@ -70,11 +95,7 @@ export function MicrophoneField({ initial, onSaved }: Props) {
 
   return (
     <section className="card">
-      <h2>Microphone</h2>
-      <p className="hint">
-        Pick the input device used for recording. System default follows
-        whatever macOS currently considers the active input.
-      </p>
+      <h2>Audio</h2>
       <div className="row">
         <select
           className="mic-select"
@@ -93,6 +114,16 @@ export function MicrophoneField({ initial, onSaved }: Props) {
           ) : null}
         </select>
       </div>
+      <label className="option-row">
+        <input
+          type="checkbox"
+          checked={pauseEnabled}
+          onChange={togglePauseMedia}
+        />
+        <div className="option-text">
+          <div className="option-label">Pause media while recording</div>
+        </div>
+      </label>
       {loadState === "loading" && (
         <div className="status">Enumerating devices…</div>
       )}
