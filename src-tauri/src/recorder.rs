@@ -1,4 +1,3 @@
-use crate::debug_log;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Host, SampleFormat, Stream};
 use std::io::Cursor;
@@ -96,11 +95,6 @@ fn audio_thread(rx: mpsc::Receiver<Cmd>) {
                 }
                 match Session::start(device.as_deref()) {
                     Ok(s) => {
-                        debug_log!(
-                            "[recorder] started ({} Hz, {} ch)",
-                            s.sample_rate,
-                            s.channels
-                        );
                         session = Some(s);
                     }
                     Err(e) => eprintln!("[recorder] Start failed: {e}"),
@@ -190,11 +184,6 @@ impl Session {
                 .samples
                 .lock()
                 .map_err(|_| "samples mutex poisoned".to_string())?,
-        );
-        debug_log!(
-            "[recorder] captured {} samples ({:.2}s)",
-            samples.len(),
-            samples.len() as f32 / (sample_rate as f32 * channels as f32)
         );
         encode_wav(&samples, sample_rate, channels)
     }

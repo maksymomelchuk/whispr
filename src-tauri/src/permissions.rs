@@ -5,10 +5,7 @@ pub fn ensure_accessibility_trust() {
     // Triggers the macOS Accessibility prompt if the current binary isn't
     // already trusted. Safe to call on every launch — it returns the current
     // trust state and only prompts once per (binary, decision) pair.
-    let trusted = accessibility::application_is_trusted_with_prompt();
-    if trusted {
-        println!("Accessibility: granted");
-    } else {
+    if !accessibility::application_is_trusted_with_prompt() {
         eprintln!(
             "Accessibility: NOT granted. The PTT listener will run but receive no keys."
         );

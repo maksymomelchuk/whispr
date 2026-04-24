@@ -1,14 +1,3 @@
-/// Chatty lifecycle / hot-path log. Becomes a no-op in release builds so we
-/// don't write user content (transcripts, keystroke metadata) to stdout in
-/// shipped binaries. Use `eprintln!` directly for genuine error reporting.
-#[macro_export]
-macro_rules! debug_log {
-    ($($arg:tt)*) => {{
-        #[cfg(debug_assertions)]
-        { println!($($arg)*); }
-    }};
-}
-
 mod commands;
 mod config;
 mod history;

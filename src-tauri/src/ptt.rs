@@ -1,4 +1,3 @@
-use crate::debug_log;
 use crate::recorder::Recorder;
 use crate::state::{AppState, ModifierState};
 use crate::{history, media, overlay, paste, transcription};
@@ -246,7 +245,6 @@ fn spawn_pipeline(app: AppHandle, recorder: Recorder) {
                 return;
             }
         };
-        debug_log!("[pipeline] WAV size = {} bytes", bytes.len());
 
         let transcript = match transcription::transcribe(app.clone(), bytes).await {
             Ok(t) => t,
@@ -259,7 +257,6 @@ fn spawn_pipeline(app: AppHandle, recorder: Recorder) {
             }
         };
         if transcript.is_empty() {
-            debug_log!("[pipeline] empty transcript, nothing to paste");
             return;
         }
 
@@ -279,7 +276,6 @@ fn spawn_pipeline(app: AppHandle, recorder: Recorder) {
 
 pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
     std::thread::spawn(move || {
-        debug_log!("Starting CGEventTap keyboard listener…");
 
         let mod_state = Mutex::new(ModKeyState::default());
         // Shared handle to the tap's mach port so the callback can re-enable
@@ -383,7 +379,6 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                     };
                     if modifiers_ok {
                         *active = true;
-                        debug_log!("[ptt] pressed");
                         let device = state.input_device.lock().unwrap().clone();
                         recorder.start(device);
                         overlay::show(&app);
@@ -392,7 +387,6 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                     }
                 } else if !is_press && *active {
                     *active = false;
-                    debug_log!("[ptt] released");
                     overlay::hide(&app);
                     let _ = app.emit("ptt-released", ());
                     maybe_resume_media(&state);
@@ -432,7 +426,6 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
             };
             CFRunLoop::get_current().add_source(&loop_source, kCFRunLoopCommonModes);
             tap.enable();
-            debug_log!("CGEventTap enabled; entering run loop");
             CFRunLoop::run_current();
         }
     });
