@@ -27,6 +27,9 @@ export const listInputDevices = () => invoke<string[]>("list_input_devices");
 export const setInputDevice = (device: string | null) =>
   invoke<void>("set_input_device", { device });
 
+export const setPauseMediaOnRecord = (enabled: boolean) =>
+  invoke<void>("set_pause_media_on_record", { enabled });
+
 export const getHistory = () => invoke<HistoryEntry[]>("get_history");
 
 export const clearHistory = () => invoke<void>("clear_history");

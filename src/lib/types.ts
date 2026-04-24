@@ -22,6 +22,7 @@ export interface Settings {
   replacements: Replacement[];
   deepgram: DeepgramSettings;
   input_device: string | null;
+  pause_media_on_record: boolean;
 }
 
 export interface HistoryEntry {

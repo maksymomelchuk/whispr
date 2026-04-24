@@ -20,6 +20,8 @@ mod transcription;
 // cpal, transparent overlay windows via macOSPrivateApi). Cross-platform
 // ports live behind the same module names inside the cfg gates below.
 #[cfg(target_os = "macos")]
+mod media;
+#[cfg(target_os = "macos")]
 mod overlay;
 #[cfg(target_os = "macos")]
 mod paste;
@@ -47,6 +49,8 @@ pub fn run() {
             let app_state = AppState::default();
             *app_state.shortcut.lock().unwrap() = settings.shortcut;
             *app_state.input_device.lock().unwrap() = settings.input_device;
+            *app_state.pause_media_on_record.lock().unwrap() =
+                settings.pause_media_on_record;
 
             #[cfg(target_os = "macos")]
             {
@@ -75,6 +79,7 @@ pub fn run() {
             commands::set_deepgram_settings,
             commands::list_input_devices,
             commands::set_input_device,
+            commands::set_pause_media_on_record,
             commands::get_history,
             commands::clear_history,
             commands::open_accessibility_settings,

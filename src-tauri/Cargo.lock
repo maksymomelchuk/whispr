@@ -5421,10 +5421,12 @@ dependencies = [
 name = "whispr"
 version = "0.1.0"
 dependencies = [
+ "block2",
  "core-foundation 0.10.1",
  "core-graphics 0.24.0",
  "cpal",
  "hound",
+ "libloading 0.8.9",
  "macos-accessibility-client",
  "reqwest 0.12.28",
  "serde",

@@ -1,7 +1,7 @@
 use crate::debug_log;
 use crate::recorder::Recorder;
 use crate::state::{AppState, ModifierState};
-use crate::{history, overlay, paste, transcription};
+use crate::{history, media, overlay, paste, transcription};
 use core_foundation::base::TCFType;
 use core_foundation::runloop::{kCFRunLoopCommonModes, CFRunLoop};
 use core_graphics::event::{
@@ -196,6 +196,39 @@ fn is_modifier_code(code: &str) -> bool {
     )
 }
 
+/// Offload the "pause Now Playing if something is playing" check. is_playing
+/// blocks for up to ~150ms on a MediaRemote async callback; we never want to
+/// stall the CGEventTap for that. Also records whether we actually paused,
+/// so the matching release knows whether to resume.
+fn maybe_pause_media(state: &AppState) {
+    if !*state.pause_media_on_record.lock().unwrap() {
+        *state.did_pause_media.lock().unwrap() = false;
+        return;
+    }
+    let did_pause = state.did_pause_media.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        if media::is_playing() {
+            media::pause();
+            *did_pause.lock().unwrap() = true;
+        } else {
+            *did_pause.lock().unwrap() = false;
+        }
+    });
+}
+
+/// Mirror of maybe_pause_media. Only resumes if the matching press actually
+/// paused something — we never spuriously start music that wasn't playing.
+fn maybe_resume_media(state: &AppState) {
+    let did_pause = state.did_pause_media.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut flag = did_pause.lock().unwrap();
+        if *flag {
+            media::play();
+            *flag = false;
+        }
+    });
+}
+
 /// Stop recording, transcribe, paste — all off the CGEventTap callback so the
 /// tap keeps servicing keystrokes. The stop call blocks on the audio thread
 /// (stream teardown + WAV encode) so we hop through spawn_blocking before
@@ -360,12 +393,14 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                         recorder.start(device);
                         overlay::show(&app);
                         let _ = app.emit("ptt-pressed", ());
+                        maybe_pause_media(&state);
                     }
                 } else if !is_press && *active {
                     *active = false;
                     debug_log!("[ptt] released");
                     overlay::hide(&app);
                     let _ = app.emit("ptt-released", ());
+                    maybe_resume_media(&state);
                     spawn_pipeline(app.clone(), recorder.clone());
                 }
 

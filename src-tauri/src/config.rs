@@ -77,6 +77,10 @@ impl Default for DeepgramSettings {
     }
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     pub api_key: Option<String>,
@@ -88,6 +92,8 @@ pub struct Settings {
     pub deepgram: DeepgramSettings,
     #[serde(default)]
     pub input_device: Option<String>,
+    #[serde(default = "default_true")]
+    pub pause_media_on_record: bool,
 }
 
 impl Default for Settings {
@@ -98,6 +104,7 @@ impl Default for Settings {
             replacements: default_replacements(),
             deepgram: DeepgramSettings::default(),
             input_device: None,
+            pause_media_on_record: true,
         }
     }
 }

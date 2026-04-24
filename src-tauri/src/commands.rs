@@ -15,6 +15,7 @@ pub struct SettingsView {
     pub replacements: Vec<Replacement>,
     pub deepgram: DeepgramSettings,
     pub input_device: Option<String>,
+    pub pause_media_on_record: bool,
 }
 
 #[tauri::command]
@@ -26,6 +27,7 @@ pub fn get_settings(app: AppHandle) -> SettingsView {
         replacements: s.replacements,
         deepgram: s.deepgram,
         input_device: s.input_device,
+        pause_media_on_record: s.pause_media_on_record,
     }
 }
 
@@ -73,6 +75,19 @@ pub fn set_deepgram_settings(
     let mut settings = config::load(&app);
     settings.deepgram = deepgram;
     config::save(&app, &settings)
+}
+
+#[tauri::command]
+pub fn set_pause_media_on_record(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    enabled: bool,
+) -> Result<(), String> {
+    let mut settings = config::load(&app);
+    settings.pause_media_on_record = enabled;
+    config::save(&app, &settings)?;
+    *state.pause_media_on_record.lock().unwrap() = enabled;
+    Ok(())
 }
 
 #[tauri::command]

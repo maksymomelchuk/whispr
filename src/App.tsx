@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ApiKeyField } from "./components/ApiKeyField";
 import { HistoryTab } from "./components/HistoryTab";
 import { MicrophoneField } from "./components/MicrophoneField";
+import { PlaybackField } from "./components/PlaybackField";
 import { ReplacementsField } from "./components/ReplacementsField";
 import { ShortcutField } from "./components/ShortcutField";
 import { ShortcutRecorder } from "./components/ShortcutRecorder";
@@ -118,6 +119,12 @@ function App() {
               initial={settings.input_device}
               onSaved={(input_device) =>
                 setSettings((s) => (s ? { ...s, input_device } : s))
+              }
+            />
+            <PlaybackField
+              initial={settings.pause_media_on_record}
+              onSaved={(pause_media_on_record) =>
+                setSettings((s) => (s ? { ...s, pause_media_on_record } : s))
               }
             />
           </>

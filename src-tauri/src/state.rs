@@ -31,4 +31,9 @@ pub struct AppState {
     pub modifiers: Arc<Mutex<ModifierState>>,
     pub ptt_active: Arc<Mutex<bool>>,
     pub input_device: Arc<Mutex<Option<String>>>,
+    /// User preference: pause the Now Playing app while dictating.
+    pub pause_media_on_record: Arc<Mutex<bool>>,
+    /// Transient: did we actually pause media at the start of the current
+    /// recording? If so, release should resume; otherwise leave it alone.
+    pub did_pause_media: Arc<Mutex<bool>>,
 }
