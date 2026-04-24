@@ -15,9 +15,9 @@
       {
         "title": "Whispr",
         "width": 560,
-        "height": 520,
+        "height": 440,
         "minWidth": 480,
-        "minHeight": 360,
+        "minHeight": 320,
         "resizable": true,
         "minimizable": true,
         "fullscreen": false

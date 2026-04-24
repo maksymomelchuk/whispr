@@ -32,59 +32,9 @@ body {
   margin: 0 auto;
 }
 
-.app-header {
-  padding-bottom: 8px;
-}
-
-.header-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.app-header h1 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.ptt-indicator {
-  font-size: 11px;
-  color: #6b6b6b;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: #f3f4f6;
-  border: 1px solid #e5e5e5;
-  font-family: "SF Mono", Menlo, monospace;
-  white-space: nowrap;
-  transition:
-    background 0.15s,
-    color 0.15s,
-    border-color 0.15s;
-}
-
-.ptt-indicator.active {
-  color: #ffffff;
-  background: #dc2626;
-  border-color: #dc2626;
-}
-
-@media (prefers-color-scheme: dark) {
-  .ptt-indicator {
-    background: #2a2a2a;
-    border-color: #3a3a3a;
-    color: #999;
-  }
-  .ptt-indicator.active {
-    background: #dc2626;
-    border-color: #dc2626;
-    color: #ffffff;
-  }
-}
-
 .tabs {
   display: flex;
+  justify-content: center;
   gap: 2px;
   border-bottom: 1px solid #e5e5e5;
   margin-top: 4px;

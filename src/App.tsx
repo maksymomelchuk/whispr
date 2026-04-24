@@ -8,7 +8,6 @@ import { ReplacementsField } from "./components/ReplacementsField";
 import { ShortcutField } from "./components/ShortcutField";
 import { ShortcutRecorder } from "./components/ShortcutRecorder";
 import { TranscriptionField } from "./components/TranscriptionField";
-import { usePtt } from "./hooks/usePtt";
 import { getSettings, setShortcut as persistShortcut } from "./lib/api";
 import type {
   DeepgramSettings,
@@ -34,8 +33,6 @@ function App() {
   const [recording, setRecording] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("general");
   const [toast, setToast] = useState<string | null>(null);
-
-  const { isHeld } = usePtt();
 
   useEffect(() => {
     getSettings()
@@ -91,15 +88,6 @@ function App() {
 
   return (
     <main className="app">
-      <header className="app-header">
-        <div className="header-row">
-          <h1>Whispr</h1>
-          <div className={`ptt-indicator ${isHeld ? "active" : ""}`}>
-            {isHeld ? "● Recording" : "○ Idle"}
-          </div>
-        </div>
-      </header>
-
       <nav className="tabs" role="tablist">
         {TABS.map((tab) => (
           <button
