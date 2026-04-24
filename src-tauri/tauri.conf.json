@@ -41,7 +41,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "REPLACE_WITH_BASE64_UPDATER_PUBKEY",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFCRUMxRUFFQzdBNERCMDMKUldRRDI2VEhyaDdzRzZjam5PcTVraldsVy85bEJ3UHF4Slg4dVdkSFZjOE5Dak5ETXZqbGlhVU8K",
       "endpoints": [
         "https://github.com/maksymomelchuk/whispr/releases/latest/download/latest.json"
       ]
