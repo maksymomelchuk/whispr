@@ -1,5 +1,6 @@
 mod commands;
 mod config;
+mod overlay;
 mod paste;
 mod permissions;
 mod ptt;
@@ -27,6 +28,9 @@ pub fn run() {
 
             let recorder = Recorder::spawn();
             ptt::start(app.handle().clone(), app_state.clone(), recorder);
+            if let Err(e) = overlay::create(&app.handle()) {
+                eprintln!("Failed to create overlay window: {e}");
+            }
             app.manage(app_state);
             Ok(())
         })

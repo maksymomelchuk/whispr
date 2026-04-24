@@ -1,6 +1,6 @@
 use crate::recorder::Recorder;
 use crate::state::{AppState, ModifierState};
-use crate::{paste, transcription};
+use crate::{overlay, paste, transcription};
 use core_foundation::base::TCFType;
 use core_foundation::runloop::{kCFRunLoopCommonModes, CFRunLoop};
 use core_graphics::event::{
@@ -340,11 +340,13 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                         *active = true;
                         println!("[ptt] pressed");
                         recorder.start();
+                        overlay::show(&app);
                         let _ = app.emit("ptt-pressed", ());
                     }
                 } else if !is_press && *active {
                     *active = false;
                     println!("[ptt] released");
+                    overlay::hide(&app);
                     let _ = app.emit("ptt-released", ());
                     spawn_pipeline(app.clone(), recorder.clone());
                 }
