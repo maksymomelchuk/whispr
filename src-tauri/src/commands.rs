@@ -1,4 +1,5 @@
 use crate::config::{self, DeepgramSettings, Replacement, Settings, Shortcut};
+use crate::history::{self, HistoryEntry};
 use crate::permissions;
 use crate::recorder::Recorder;
 use crate::state::AppState;
@@ -71,6 +72,16 @@ pub fn set_input_device(
     config::save(&app, &settings)?;
     *state.input_device.lock().unwrap() = device;
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_history(app: AppHandle) -> Vec<HistoryEntry> {
+    history::load(&app)
+}
+
+#[tauri::command]
+pub fn clear_history(app: AppHandle) -> Result<(), String> {
+    history::clear(&app)
 }
 
 #[tauri::command]

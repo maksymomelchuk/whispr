@@ -1,5 +1,6 @@
 mod commands;
 mod config;
+mod history;
 mod overlay;
 mod paste;
 mod permissions;
@@ -43,6 +44,8 @@ pub fn run() {
             commands::set_deepgram_settings,
             commands::list_input_devices,
             commands::set_input_device,
+            commands::get_history,
+            commands::clear_history,
             commands::open_accessibility_settings,
         ])
         .run(tauri::generate_context!())

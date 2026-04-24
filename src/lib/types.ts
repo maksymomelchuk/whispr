@@ -23,3 +23,8 @@ export interface Settings {
   deepgram: DeepgramSettings
   input_device: string | null
 }
+
+export interface HistoryEntry {
+  text: string
+  timestamp: number
+}

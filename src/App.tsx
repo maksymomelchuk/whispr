@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ApiKeyField } from './components/ApiKeyField'
+import { HistoryTab } from './components/HistoryTab'
 import { MicrophoneField } from './components/MicrophoneField'
 import { ReplacementsField } from './components/ReplacementsField'
 import { ShortcutField } from './components/ShortcutField'
@@ -15,12 +16,13 @@ import type {
 } from './lib/types'
 import './App.css'
 
-type TabId = 'general' | 'shortcut' | 'transcription'
+type TabId = 'general' | 'shortcut' | 'transcription' | 'history'
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'general', label: 'General' },
   { id: 'shortcut', label: 'Shortcut' },
   { id: 'transcription', label: 'Transcription' },
+  { id: 'history', label: 'History' },
 ]
 
 function App() {
@@ -124,6 +126,7 @@ function App() {
             />
           </>
         )}
+        {activeTab === 'history' && <HistoryTab />}
       </div>
 
       {recording && (

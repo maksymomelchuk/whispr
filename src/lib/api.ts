@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import type {
   DeepgramSettings,
+  HistoryEntry,
   Replacement,
   Settings,
   Shortcut,
@@ -25,6 +26,10 @@ export const listInputDevices = () =>
 
 export const setInputDevice = (device: string | null) =>
   invoke<void>('set_input_device', { device })
+
+export const getHistory = () => invoke<HistoryEntry[]>('get_history')
+
+export const clearHistory = () => invoke<void>('clear_history')
 
 const MOD_MAP: Record<string, string> = {
   Meta: '⌘',

@@ -1,6 +1,6 @@
 use crate::recorder::Recorder;
 use crate::state::{AppState, ModifierState};
-use crate::{overlay, paste, transcription};
+use crate::{history, overlay, paste, transcription};
 use core_foundation::base::TCFType;
 use core_foundation::runloop::{kCFRunLoopCommonModes, CFRunLoop};
 use core_graphics::event::{
@@ -224,6 +224,13 @@ fn spawn_pipeline(app: AppHandle, recorder: Recorder) {
         if transcript.is_empty() {
             println!("[pipeline] empty transcript, nothing to paste");
             return;
+        }
+
+        match history::append(&app, &transcript) {
+            Ok(_) => {
+                let _ = app.emit("history-updated", ());
+            }
+            Err(e) => eprintln!("[pipeline] history append failed: {e}"),
         }
 
         if let Err(e) = paste::paste_text(transcript) {
