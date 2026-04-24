@@ -207,11 +207,9 @@ fn is_modifier_code(code: &str) -> bool {
 /// thread, even though send_command is usually nearly instant.
 fn maybe_pause_media(state: &AppState) {
     if !*state.pause_media_on_record.lock().unwrap() {
-        debug_log!("[ptt] pause_media_on_record off, skipping");
         *state.did_pause_media.lock().unwrap() = false;
         return;
     }
-    debug_log!("[ptt] scheduling media pause");
     *state.did_pause_media.lock().unwrap() = true;
     tauri::async_runtime::spawn_blocking(|| media::pause());
 }

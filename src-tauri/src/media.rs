@@ -6,7 +6,6 @@
 //! macOS that removes or renames it degrades to a silent no-op (no crashes,
 //! no false failures — the feature just stops working).
 
-use crate::debug_log;
 use libloading::Library;
 use std::ffi::c_void;
 use std::sync::OnceLock;
@@ -24,29 +23,20 @@ fn lib() -> Option<&'static Library> {
         .as_ref()
 }
 
-fn send_command(cmd: u32) -> bool {
-    let Some(l) = lib() else {
-        debug_log!("[media] MediaRemote not loaded, skipping cmd {cmd}");
-        return false;
-    };
+fn send_command(cmd: u32) {
+    let Some(l) = lib() else { return };
     type SendFn = unsafe extern "C" fn(u32, *const c_void) -> bool;
     unsafe {
-        match l.get::<SendFn>(b"MRMediaRemoteSendCommand") {
-            Ok(f) => f(cmd, std::ptr::null()),
-            Err(e) => {
-                debug_log!("[media] MRMediaRemoteSendCommand lookup failed: {e}");
-                false
-            }
+        if let Ok(f) = l.get::<SendFn>(b"MRMediaRemoteSendCommand") {
+            let _ = f(cmd, std::ptr::null());
         }
     }
 }
 
 pub fn pause() {
-    let ok = send_command(CMD_PAUSE);
-    debug_log!("[media] pause sent (ok={ok})");
+    send_command(CMD_PAUSE);
 }
 
 pub fn play() {
-    let ok = send_command(CMD_PLAY);
-    debug_log!("[media] play sent (ok={ok})");
+    send_command(CMD_PLAY);
 }
