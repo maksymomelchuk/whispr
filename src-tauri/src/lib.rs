@@ -4,6 +4,7 @@ mod history;
 mod permissions;
 mod state;
 mod transcription;
+mod tray;
 
 // Modules that wrap macOS-only APIs (CGEventTap, CGEventPost, CoreAudio via
 // cpal, transparent overlay windows via macOSPrivateApi). Cross-platform
@@ -20,7 +21,9 @@ mod ptt;
 mod recorder;
 
 use state::AppState;
-use tauri::Manager;
+use tauri::{Manager, WindowEvent};
+
+const MAIN_LABEL: &str = "main";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -28,7 +31,30 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .on_window_event(|window, event| {
+            // The settings window's red X should hide the app rather than
+            // destroy the instance — the tray icon re-shows the same
+            // window in place. Cmd+Q still routes through the default
+            // macOS menu (app.exit), which does not trigger this event.
+            if window.label() == MAIN_LABEL {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .setup(|app| {
+            // Run as a menu bar app: no Dock icon, no Cmd+Tab entry. Set at
+            // runtime rather than relying solely on Info.plist's LSUIElement
+            // because `tauri dev` launches the raw binary and never reads
+            // the bundle plist.
+            #[cfg(target_os = "macos")]
+            {
+                let _ = app.set_activation_policy(
+                    tauri::ActivationPolicy::Accessory,
+                );
+            }
+
             // Triggers the macOS Accessibility prompt on first launch so the
             // user isn't left wondering why PTT silently does nothing. No-op
             // on other platforms.
@@ -48,6 +74,17 @@ pub fn run() {
                 if let Err(e) = overlay::create(&app.handle()) {
                     eprintln!("Failed to create overlay window: {e}");
                 }
+            }
+
+            if let Err(e) = tray::setup(app.handle()) {
+                eprintln!("Failed to create tray icon: {e}");
+            }
+
+            // LSUIElement apps don't foreground themselves on launch, so
+            // the settings window can render behind whatever the user was
+            // doing. Explicitly focus it.
+            if let Some(window) = app.get_webview_window(MAIN_LABEL) {
+                let _ = window.set_focus();
             }
             #[cfg(not(target_os = "macos"))]
             {
