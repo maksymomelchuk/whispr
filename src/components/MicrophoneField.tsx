@@ -122,7 +122,7 @@ export function MicrophoneField({
       </div>
 
       <label className="toggle-row">
-        <span className="toggle-row-label">Pause media while recording</span>
+        <span className="toggle-row-label">Mute system audio while recording</span>
         <input
           type="checkbox"
           role="switch"

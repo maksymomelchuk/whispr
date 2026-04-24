@@ -195,32 +195,27 @@ fn is_modifier_code(code: &str) -> bool {
     )
 }
 
-/// Pause Now Playing when the user starts dictating. We deliberately do NOT
-/// gate on `media::is_playing()` first: MediaRemote's "is playing" query is
-/// unreliable for browser-based players (Chromium's MediaSession registration
-/// is flaky), so gating would silently skip the very cases the user wants
-/// handled. Tradeoff: if nothing is playing, the subsequent resume may start
-/// whatever was last queued — acceptable since the user explicitly opted in.
-///
-/// Runs in spawn_blocking so the MediaRemote call can't stall the CGEventTap
-/// thread, even though send_command is usually nearly instant.
+/// Mute system audio output when the user starts dictating. Runs in
+/// spawn_blocking because we shell out to osascript, which can take tens of
+/// milliseconds — too long to block the CGEventTap callback.
 fn maybe_pause_media(state: &AppState) {
     if !*state.pause_media_on_record.lock().unwrap() {
         *state.did_pause_media.lock().unwrap() = false;
         return;
     }
     *state.did_pause_media.lock().unwrap() = true;
-    tauri::async_runtime::spawn_blocking(|| media::pause());
+    tauri::async_runtime::spawn_blocking(media::mute_output);
 }
 
-/// Mirror of maybe_pause_media. Resumes if we sent a pause for this session.
+/// Mirror of maybe_pause_media. Unmutes only if this session was the one
+/// that applied the mute.
 fn maybe_resume_media(state: &AppState) {
     let mut flag = state.did_pause_media.lock().unwrap();
     if !*flag {
         return;
     }
     *flag = false;
-    tauri::async_runtime::spawn_blocking(|| media::play());
+    tauri::async_runtime::spawn_blocking(media::unmute_output);
 }
 
 /// Stop recording, transcribe, paste — all off the CGEventTap callback so the

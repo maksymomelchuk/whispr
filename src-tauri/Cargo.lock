@@ -5474,7 +5474,6 @@ dependencies = [
  "core-graphics 0.24.0",
  "cpal",
  "hound",
- "libloading 0.8.9",
  "macos-accessibility-client",
  "reqwest 0.12.28",
  "serde",

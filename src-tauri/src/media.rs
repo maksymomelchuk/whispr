@@ -1,42 +1,35 @@
-//! Minimal shim over Apple's private `MediaRemote.framework`.
+//! System-audio mute helpers.
 //!
-//! Lets us send play/pause commands to the current "Now Playing" app —
-//! the same underlying mechanism behind the macOS media keys and tools
-//! like BetterTouchTool. We dlopen the framework at runtime, so a future
-//! macOS that removes or renames it degrades to a silent no-op (no crashes,
-//! no false failures — the feature just stops working).
+//! We toggle the macOS output-mute state instead of sending Now Playing
+//! pause/play commands. The mute approach is app-agnostic (works for
+//! browser-based players, Spotify, YouTube, Discord, anything producing
+//! audio) and — crucially — doesn't get the "paused media gets un-paused
+//! on release" wrong, because we never touch playback state. If nothing
+//! was playing, mute/unmute are audibly no-ops; if something was playing,
+//! it's silenced during the recording and returns at the same spot.
+//!
+//! Tradeoff vs. a true pause: playback keeps advancing while we dictate,
+//! so a long session eats into the song. That matches the `Handy` open-
+//! source dictation app's behavior and avoids all the MediaRemote query
+//! gating, TCC prompts, and Obj-C block plumbing we'd otherwise need for
+//! real pause/resume with accurate state detection.
 
-use libloading::Library;
-use std::ffi::c_void;
-use std::sync::OnceLock;
+use std::process::Command;
 
-const MEDIAREMOTE_PATH: &str =
-    "/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote";
-
-// MRMediaRemoteCommand enum (integer-tagged in the header).
-const CMD_PLAY: u32 = 0;
-const CMD_PAUSE: u32 = 1;
-
-fn lib() -> Option<&'static Library> {
-    static LIB: OnceLock<Option<Library>> = OnceLock::new();
-    LIB.get_or_init(|| unsafe { Library::new(MEDIAREMOTE_PATH).ok() })
-        .as_ref()
+fn set_output_muted(muted: bool) {
+    let script = format!(
+        "set volume output muted {}",
+        if muted { "true" } else { "false" }
+    );
+    // Fire-and-forget. osascript prints to stderr on failure, which is fine;
+    // nothing we can do to recover if the user's system lacks osascript.
+    let _ = Command::new("osascript").args(["-e", &script]).output();
 }
 
-fn send_command(cmd: u32) {
-    let Some(l) = lib() else { return };
-    type SendFn = unsafe extern "C" fn(u32, *const c_void) -> bool;
-    unsafe {
-        if let Ok(f) = l.get::<SendFn>(b"MRMediaRemoteSendCommand") {
-            let _ = f(cmd, std::ptr::null());
-        }
-    }
+pub fn mute_output() {
+    set_output_muted(true);
 }
 
-pub fn pause() {
-    send_command(CMD_PAUSE);
-}
-
-pub fn play() {
-    send_command(CMD_PLAY);
+pub fn unmute_output() {
+    set_output_muted(false);
 }
