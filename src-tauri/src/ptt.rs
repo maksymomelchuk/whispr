@@ -196,37 +196,34 @@ fn is_modifier_code(code: &str) -> bool {
     )
 }
 
-/// Offload the "pause Now Playing if something is playing" check. is_playing
-/// blocks for up to ~150ms on a MediaRemote async callback; we never want to
-/// stall the CGEventTap for that. Also records whether we actually paused,
-/// so the matching release knows whether to resume.
+/// Pause Now Playing when the user starts dictating. We deliberately do NOT
+/// gate on `media::is_playing()` first: MediaRemote's "is playing" query is
+/// unreliable for browser-based players (Chromium's MediaSession registration
+/// is flaky), so gating would silently skip the very cases the user wants
+/// handled. Tradeoff: if nothing is playing, the subsequent resume may start
+/// whatever was last queued — acceptable since the user explicitly opted in.
+///
+/// Runs in spawn_blocking so the MediaRemote call can't stall the CGEventTap
+/// thread, even though send_command is usually nearly instant.
 fn maybe_pause_media(state: &AppState) {
     if !*state.pause_media_on_record.lock().unwrap() {
+        debug_log!("[ptt] pause_media_on_record off, skipping");
         *state.did_pause_media.lock().unwrap() = false;
         return;
     }
-    let did_pause = state.did_pause_media.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        if media::is_playing() {
-            media::pause();
-            *did_pause.lock().unwrap() = true;
-        } else {
-            *did_pause.lock().unwrap() = false;
-        }
-    });
+    debug_log!("[ptt] scheduling media pause");
+    *state.did_pause_media.lock().unwrap() = true;
+    tauri::async_runtime::spawn_blocking(|| media::pause());
 }
 
-/// Mirror of maybe_pause_media. Only resumes if the matching press actually
-/// paused something — we never spuriously start music that wasn't playing.
+/// Mirror of maybe_pause_media. Resumes if we sent a pause for this session.
 fn maybe_resume_media(state: &AppState) {
-    let did_pause = state.did_pause_media.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let mut flag = did_pause.lock().unwrap();
-        if *flag {
-            media::play();
-            *flag = false;
-        }
-    });
+    let mut flag = state.did_pause_media.lock().unwrap();
+    if !*flag {
+        return;
+    }
+    *flag = false;
+    tauri::async_runtime::spawn_blocking(|| media::play());
 }
 
 /// Stop recording, transcribe, paste — all off the CGEventTap callback so the

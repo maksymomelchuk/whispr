@@ -32,5 +32,4 @@ core-graphics = "0.24"
 cpal = "0.15"
 hound = "3.5"
 libloading = "0.8"
-block2 = "0.6"
 
