@@ -1,8 +1,9 @@
-/* Override the main app's body background so the transparent window actually
-   reads as transparent. Loaded after App.css via main.tsx's import order. */
-html,
-body,
-:root {
+/* Scope all overlay-window overrides with :has(.overlay-root) — this
+   stylesheet is loaded in the main window too (main.tsx statically imports
+   OverlayApp for label-based routing), so unscoped rules would break the
+   main settings window (e.g. disabling its scroll). */
+html:has(.overlay-root),
+body:has(.overlay-root) {
   background: transparent !important;
   background-color: transparent !important;
   margin: 0;
