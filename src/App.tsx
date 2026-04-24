@@ -2,6 +2,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 
 import { ApiKeyField } from "./components/ApiKeyField";
+import { AppearanceField } from "./components/AppearanceField";
 import { HistoryTab } from "./components/HistoryTab";
 import { MicrophoneField } from "./components/MicrophoneField";
 import { ReplacementsField } from "./components/ReplacementsField";
@@ -9,6 +10,7 @@ import { ShortcutField } from "./components/ShortcutField";
 import { ShortcutRecorder } from "./components/ShortcutRecorder";
 import { TranscriptionField } from "./components/TranscriptionField";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { useTheme } from "./hooks/useTheme";
 import { getSettings, setShortcut as persistShortcut } from "./lib/api";
 import type {
   DeepgramSettings,
@@ -34,6 +36,8 @@ function App() {
   const [recording, setRecording] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("general");
   const [toast, setToast] = useState<string | null>(null);
+  const { preference: themePreference, setPreference: setThemePreference } =
+    useTheme();
 
   useEffect(() => {
     getSettings()
@@ -123,6 +127,10 @@ function App() {
               onPauseMediaSaved={(pause_media_on_record) =>
                 setSettings((s) => (s ? { ...s, pause_media_on_record } : s))
               }
+            />
+            <AppearanceField
+              preference={themePreference}
+              onChange={setThemePreference}
             />
           </>
         )}
