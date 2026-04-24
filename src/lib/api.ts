@@ -1,5 +1,10 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { Settings, Shortcut } from './types'
+import type {
+  DeepgramSettings,
+  Replacement,
+  Settings,
+  Shortcut,
+} from './types'
 
 export const getSettings = () => invoke<Settings>('get_settings')
 
@@ -8,6 +13,12 @@ export const setApiKey = (apiKey: string) =>
 
 export const setShortcut = (shortcut: Shortcut) =>
   invoke<void>('set_shortcut', { shortcut })
+
+export const setReplacements = (replacements: Replacement[]) =>
+  invoke<void>('set_replacements', { replacements })
+
+export const setDeepgramSettings = (deepgram: DeepgramSettings) =>
+  invoke<void>('set_deepgram_settings', { deepgram })
 
 const MOD_MAP: Record<string, string> = {
   Meta: '⌘',

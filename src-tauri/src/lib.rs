@@ -34,6 +34,8 @@ pub fn run() {
             commands::get_settings,
             commands::set_api_key,
             commands::set_shortcut,
+            commands::set_replacements,
+            commands::set_deepgram_settings,
             commands::open_accessibility_settings,
         ])
         .run(tauri::generate_context!())

@@ -13,9 +13,11 @@
     "windows": [
       {
         "title": "Wispr Tauri",
-        "width": 520,
-        "height": 420,
-        "resizable": false,
+        "width": 560,
+        "height": 520,
+        "minWidth": 480,
+        "minHeight": 360,
+        "resizable": true,
         "minimizable": true,
         "fullscreen": false
       }

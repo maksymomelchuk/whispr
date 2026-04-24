@@ -1,4 +1,4 @@
-use crate::config::{self, Settings, Shortcut};
+use crate::config::{self, DeepgramSettings, Replacement, Settings, Shortcut};
 use crate::permissions;
 use crate::state::AppState;
 use tauri::{AppHandle, State};
@@ -32,6 +32,26 @@ pub fn set_shortcut(
     // effect immediately — no app restart needed.
     *state.shortcut.lock().unwrap() = shortcut;
     Ok(())
+}
+
+#[tauri::command]
+pub fn set_replacements(
+    app: AppHandle,
+    replacements: Vec<Replacement>,
+) -> Result<(), String> {
+    let mut settings = config::load(&app);
+    settings.replacements = replacements;
+    config::save(&app, &settings)
+}
+
+#[tauri::command]
+pub fn set_deepgram_settings(
+    app: AppHandle,
+    deepgram: DeepgramSettings,
+) -> Result<(), String> {
+    let mut settings = config::load(&app);
+    settings.deepgram = deepgram;
+    config::save(&app, &settings)
 }
 
 #[tauri::command]

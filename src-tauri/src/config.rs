@@ -20,11 +20,83 @@ impl Default for Shortcut {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Replacement {
+    pub from: String,
+    pub to: String,
+}
+
+pub fn default_replacements() -> Vec<Replacement> {
+    [
+        ("dot", "."),
+        ("slash", "/"),
+        ("dash", "-"),
+        ("underscore", "_"),
+        ("at", "@"),
+        ("comma", ","),
+        ("colon", ":"),
+        ("semicolon", ";"),
+        ("question mark", "?"),
+        ("exclamation mark", "!"),
+    ]
+    .into_iter()
+    .map(|(from, to)| Replacement {
+        from: from.to_string(),
+        to: to.to_string(),
+    })
+    .collect()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeepgramSettings {
+    #[serde(default = "default_language")]
+    pub language: String,
+    #[serde(default)]
+    pub smart_format: bool,
+    #[serde(default)]
+    pub dictation: bool,
+    #[serde(default)]
+    pub numerals: bool,
+    #[serde(default)]
+    pub keyterms: Vec<String>,
+}
+
+fn default_language() -> String {
+    "en".to_string()
+}
+
+impl Default for DeepgramSettings {
+    fn default() -> Self {
+        Self {
+            language: default_language(),
+            smart_format: false,
+            dictation: false,
+            numerals: false,
+            keyterms: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     pub api_key: Option<String>,
     #[serde(default)]
     pub shortcut: Shortcut,
+    #[serde(default = "default_replacements")]
+    pub replacements: Vec<Replacement>,
+    #[serde(default)]
+    pub deepgram: DeepgramSettings,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            api_key: None,
+            shortcut: Shortcut::default(),
+            replacements: default_replacements(),
+            deepgram: DeepgramSettings::default(),
+        }
+    }
 }
 
 fn settings_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {

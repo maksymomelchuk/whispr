@@ -3,7 +3,22 @@ export interface Shortcut {
   modifiers: string[]
 }
 
+export interface Replacement {
+  from: string
+  to: string
+}
+
+export interface DeepgramSettings {
+  language: string
+  smart_format: boolean
+  dictation: boolean
+  numerals: boolean
+  keyterms: string[]
+}
+
 export interface Settings {
   api_key: string | null
   shortcut: Shortcut
+  replacements: Replacement[]
+  deepgram: DeepgramSettings
 }
