@@ -1,3 +1,4 @@
+use crate::debug_log;
 use core_graphics::event::{CGEvent, CGEventFlags, CGEventTapLocation};
 use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 use std::thread;
@@ -72,14 +73,14 @@ fn post_unicode(chunk: &str) -> Result<(), String> {
 }
 
 pub fn paste_text(text: String) -> Result<(), String> {
-    println!("[paste] invoked, len={}", text.len());
+    debug_log!("[paste] invoked, len={}", text.len());
     if text.is_empty() {
         return Ok(());
     }
 
     thread::spawn(move || {
         wait_for_modifier_release();
-        println!("[paste] typing");
+        debug_log!("[paste] typing");
 
         // chunk by characters, not bytes — arbitrary UTF-8 byte splits would
         // corrupt multi-byte sequences when converted to UTF-16 downstream.

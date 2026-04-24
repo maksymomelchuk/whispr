@@ -905,4 +905,31 @@ button.primary:hover:not(:disabled) {
     background: #2a1515;
     border-color: #7f1d1d;
   }
+
+  .toast.err {
+    background: #2a1515;
+    color: #fca5a5;
+    border-color: #7f1d1d;
+  }
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  max-width: 420px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  font-size: 13px;
+  z-index: 1000;
+}
+
+.toast.err {
+  background: #fee2e2;
+  color: #7f1d1d;
+  border-color: #fecaca;
 }

@@ -63,7 +63,6 @@ export function ShortcutRecorder({ initial, onSave, onCancel }: Props) {
       window.removeEventListener('keydown', handleKeyDown, { capture: true })
   }, [handleKeyDown])
 
-  const preview = captured ?? initial
   const hasChanges = captured !== null
 
   return (

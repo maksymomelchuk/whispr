@@ -1,4 +1,5 @@
 use crate::config::{self, DeepgramSettings, Replacement};
+use crate::debug_log;
 use tauri::AppHandle;
 
 const DEEPGRAM_ENDPOINT: &str = "https://api.deepgram.com/v1/listen";
@@ -95,9 +96,9 @@ fn apply_replacements(text: &str, replacements: &[Replacement]) -> String {
 }
 
 pub async fn transcribe(app: AppHandle, audio: Vec<u8>) -> Result<String, String> {
-    println!("[transcribe] invoked, audio bytes={}", audio.len());
+    debug_log!("[transcribe] invoked, audio bytes={}", audio.len());
     if audio.is_empty() {
-        println!("[transcribe] empty audio, returning early");
+        debug_log!("[transcribe] empty audio, returning early");
         return Ok(String::new());
     }
 
@@ -108,7 +109,7 @@ pub async fn transcribe(app: AppHandle, audio: Vec<u8>) -> Result<String, String
         .ok_or_else(|| "API key not configured".to_string())?;
 
     let query = build_query(&settings.deepgram);
-    println!("[transcribe] query params: {query:?}");
+    debug_log!("[transcribe] query params: {query:?}");
 
     let client = reqwest::Client::new();
     let res = client
@@ -137,14 +138,15 @@ pub async fn transcribe(app: AppHandle, audio: Vec<u8>) -> Result<String, String
         .unwrap_or("")
         .trim();
 
-    println!("[transcribe] got transcript len={}", transcript.len());
+    debug_log!("[transcribe] got transcript len={}", transcript.len());
 
     if transcript.is_empty() {
         return Ok(String::new());
     }
 
     let replaced = apply_replacements(transcript, &settings.replacements);
-    println!("[transcribe] after replacements: {replaced:?}");
+    // Note: logs full user-dictated content — debug-only on purpose.
+    debug_log!("[transcribe] after replacements: {replaced:?}");
 
     // Trailing space so back-to-back dictations concatenate cleanly.
     Ok(format!("{replaced} "))

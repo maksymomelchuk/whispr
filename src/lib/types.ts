@@ -17,7 +17,7 @@ export interface DeepgramSettings {
 }
 
 export interface Settings {
-  api_key: string | null
+  api_key_configured: boolean
   shortcut: Shortcut
   replacements: Replacement[]
   deepgram: DeepgramSettings

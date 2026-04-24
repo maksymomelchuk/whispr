@@ -1,3 +1,4 @@
+use crate::debug_log;
 use crate::recorder::Recorder;
 use crate::state::{AppState, ModifierState};
 use crate::{history, overlay, paste, transcription};
@@ -205,24 +206,32 @@ fn spawn_pipeline(app: AppHandle, recorder: Recorder) {
             Ok(Ok(b)) => b,
             Ok(Err(e)) => {
                 eprintln!("[pipeline] recorder stop failed: {e}");
+                let _ = app.emit("transcription-error", format!("Recording failed: {e}"));
                 return;
             }
             Err(e) => {
                 eprintln!("[pipeline] spawn_blocking join error: {e}");
+                let _ = app.emit(
+                    "transcription-error",
+                    format!("Recording thread crashed: {e}"),
+                );
                 return;
             }
         };
-        println!("[pipeline] WAV size = {} bytes", bytes.len());
+        debug_log!("[pipeline] WAV size = {} bytes", bytes.len());
 
         let transcript = match transcription::transcribe(app.clone(), bytes).await {
             Ok(t) => t,
             Err(e) => {
                 eprintln!("[pipeline] transcription failed: {e}");
+                // Surface to the frontend so the user actually sees the failure
+                // instead of silently wondering why nothing got typed.
+                let _ = app.emit("transcription-error", e);
                 return;
             }
         };
         if transcript.is_empty() {
-            println!("[pipeline] empty transcript, nothing to paste");
+            debug_log!("[pipeline] empty transcript, nothing to paste");
             return;
         }
 
@@ -235,13 +244,14 @@ fn spawn_pipeline(app: AppHandle, recorder: Recorder) {
 
         if let Err(e) = paste::paste_text(transcript) {
             eprintln!("[pipeline] paste failed: {e}");
+            let _ = app.emit("transcription-error", format!("Paste failed: {e}"));
         }
     });
 }
 
 pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
     std::thread::spawn(move || {
-        println!("Starting CGEventTap keyboard listener…");
+        debug_log!("Starting CGEventTap keyboard listener…");
 
         let mod_state = Mutex::new(ModKeyState::default());
         // Shared handle to the tap's mach port so the callback can re-enable
@@ -345,7 +355,7 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                     };
                     if modifiers_ok {
                         *active = true;
-                        println!("[ptt] pressed");
+                        debug_log!("[ptt] pressed");
                         let device = state.input_device.lock().unwrap().clone();
                         recorder.start(device);
                         overlay::show(&app);
@@ -353,7 +363,7 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                     }
                 } else if !is_press && *active {
                     *active = false;
-                    println!("[ptt] released");
+                    debug_log!("[ptt] released");
                     overlay::hide(&app);
                     let _ = app.emit("ptt-released", ());
                     spawn_pipeline(app.clone(), recorder.clone());
@@ -392,7 +402,7 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
             };
             CFRunLoop::get_current().add_source(&loop_source, kCFRunLoopCommonModes);
             tap.enable();
-            println!("CGEventTap enabled; entering run loop");
+            debug_log!("CGEventTap enabled; entering run loop");
             CFRunLoop::run_current();
         }
     });

@@ -132,5 +132,13 @@ pub fn save(app: &tauri::AppHandle, settings: &Settings) -> Result<(), String> {
     let path = settings_path(app)?;
     let json =
         serde_json::to_string_pretty(settings).map_err(|e| format!("Serialize error: {e}"))?;
-    fs::write(&path, json).map_err(|e| format!("Failed to write {path:?}: {e}"))
+    fs::write(&path, json).map_err(|e| format!("Failed to write {path:?}: {e}"))?;
+    // Defense-in-depth: the Deepgram API key lives in this file. Tighten to
+    // user-only read/write even though the parent dir is already 0700 on macOS.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
 }

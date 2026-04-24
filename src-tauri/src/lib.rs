@@ -1,15 +1,33 @@
+/// Chatty lifecycle / hot-path log. Becomes a no-op in release builds so we
+/// don't write user content (transcripts, keystroke metadata) to stdout in
+/// shipped binaries. Use `eprintln!` directly for genuine error reporting.
+#[macro_export]
+macro_rules! debug_log {
+    ($($arg:tt)*) => {{
+        #[cfg(debug_assertions)]
+        { println!($($arg)*); }
+    }};
+}
+
 mod commands;
 mod config;
 mod history;
-mod overlay;
-mod paste;
 mod permissions;
-mod ptt;
-mod recorder;
 mod state;
 mod transcription;
 
-use recorder::Recorder;
+// Modules that wrap macOS-only APIs (CGEventTap, CGEventPost, CoreAudio via
+// cpal, transparent overlay windows via macOSPrivateApi). Cross-platform
+// ports live behind the same module names inside the cfg gates below.
+#[cfg(target_os = "macos")]
+mod overlay;
+#[cfg(target_os = "macos")]
+mod paste;
+#[cfg(target_os = "macos")]
+mod ptt;
+#[cfg(target_os = "macos")]
+mod recorder;
+
 use state::AppState;
 use tauri::Manager;
 
@@ -18,9 +36,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            // Must be called before rdev/device_query; triggers the macOS
-            // Accessibility prompt on first launch so the user isn't left
-            // wondering why PTT silently does nothing.
+            // Triggers the macOS Accessibility prompt on first launch so the
+            // user isn't left wondering why PTT silently does nothing. No-op
+            // on other platforms.
             permissions::ensure_accessibility_trust();
 
             let settings = config::load(&app.handle());
@@ -28,11 +46,22 @@ pub fn run() {
             *app_state.shortcut.lock().unwrap() = settings.shortcut;
             *app_state.input_device.lock().unwrap() = settings.input_device;
 
-            let recorder = Recorder::spawn();
-            ptt::start(app.handle().clone(), app_state.clone(), recorder);
-            if let Err(e) = overlay::create(&app.handle()) {
-                eprintln!("Failed to create overlay window: {e}");
+            #[cfg(target_os = "macos")]
+            {
+                let recorder = recorder::Recorder::spawn();
+                ptt::start(app.handle().clone(), app_state.clone(), recorder);
+                if let Err(e) = overlay::create(&app.handle()) {
+                    eprintln!("Failed to create overlay window: {e}");
+                }
             }
+            #[cfg(not(target_os = "macos"))]
+            {
+                eprintln!(
+                    "[wispr-tauri] push-to-talk / audio capture / paste are not yet implemented \
+                     on this platform; UI will run but dictation is disabled."
+                );
+            }
+
             app.manage(app_state);
             Ok(())
         })

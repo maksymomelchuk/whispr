@@ -24,7 +24,7 @@ impl ModifierState {
 }
 
 /// Tauri-managed state. All fields are Arcs so cloning is cheap and the
-/// rdev listener thread and the command handlers share the same data.
+/// CGEventTap listener thread and the command handlers share the same data.
 #[derive(Clone, Default)]
 pub struct AppState {
     pub shortcut: Arc<Mutex<Shortcut>>,

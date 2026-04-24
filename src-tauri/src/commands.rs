@@ -1,13 +1,32 @@
-use crate::config::{self, DeepgramSettings, Replacement, Settings, Shortcut};
+use crate::config::{self, DeepgramSettings, Replacement, Shortcut};
 use crate::history::{self, HistoryEntry};
 use crate::permissions;
-use crate::recorder::Recorder;
 use crate::state::AppState;
+use serde::Serialize;
 use tauri::{AppHandle, State};
 
+/// Public projection of Settings for the webview. Omits the Deepgram API key
+/// so a webview XSS (e.g., via a future supply-chain compromise) cannot read
+/// it back over IPC. The key is write-only from the frontend's perspective.
+#[derive(Debug, Clone, Serialize)]
+pub struct SettingsView {
+    pub api_key_configured: bool,
+    pub shortcut: Shortcut,
+    pub replacements: Vec<Replacement>,
+    pub deepgram: DeepgramSettings,
+    pub input_device: Option<String>,
+}
+
 #[tauri::command]
-pub fn get_settings(app: AppHandle) -> Settings {
-    config::load(&app)
+pub fn get_settings(app: AppHandle) -> SettingsView {
+    let s = config::load(&app);
+    SettingsView {
+        api_key_configured: s.api_key.as_deref().is_some_and(|k| !k.is_empty()),
+        shortcut: s.shortcut,
+        replacements: s.replacements,
+        deepgram: s.deepgram,
+        input_device: s.input_device,
+    }
 }
 
 #[tauri::command]
@@ -58,7 +77,14 @@ pub fn set_deepgram_settings(
 
 #[tauri::command]
 pub fn list_input_devices() -> Vec<String> {
-    Recorder::list_input_devices()
+    #[cfg(target_os = "macos")]
+    {
+        crate::recorder::Recorder::list_input_devices()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Vec::new()
+    }
 }
 
 #[tauri::command]

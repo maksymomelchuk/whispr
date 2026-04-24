@@ -42,7 +42,15 @@ pub fn load(app: &tauri::AppHandle) -> Vec<HistoryEntry> {
 fn save(app: &tauri::AppHandle, entries: &[HistoryEntry]) -> Result<(), String> {
     let path = history_path(app)?;
     let json = serde_json::to_string_pretty(entries).map_err(|e| format!("serialize: {e}"))?;
-    fs::write(&path, json).map_err(|e| format!("write {path:?}: {e}"))
+    fs::write(&path, json).map_err(|e| format!("write {path:?}: {e}"))?;
+    // Transcripts may include anything the user dictated — passwords, PII,
+    // secrets. Lock the file to the owning user.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
 }
 
 /// Prepend a new entry (newest-first) and trim to MAX_ENTRIES. Trailing

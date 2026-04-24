@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { listen } from '@tauri-apps/api/event'
 import { ApiKeyField } from './components/ApiKeyField'
 import { HistoryTab } from './components/HistoryTab'
 import { MicrophoneField } from './components/MicrophoneField'
@@ -30,6 +31,7 @@ function App() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [recording, setRecording] = useState(false)
   const [activeTab, setActiveTab] = useState<TabId>('general')
+  const [toast, setToast] = useState<string | null>(null)
 
   const { isHeld } = usePtt()
 
@@ -38,6 +40,24 @@ function App() {
       .then(setSettings)
       .catch((e) => setLoadError(String(e)))
   }, [])
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined
+    listen<string>('transcription-error', (e) => {
+      setToast(e.payload || 'Transcription failed')
+    })
+      .then((un) => {
+        unlisten = un
+      })
+      .catch((err) => console.error('listen(transcription-error) failed', err))
+    return () => unlisten?.()
+  }, [])
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 5000)
+    return () => clearTimeout(t)
+  }, [toast])
 
   const handleShortcutSave = async (shortcut: Shortcut) => {
     try {
@@ -93,7 +113,14 @@ function App() {
       <div className="tab-panel">
         {activeTab === 'general' && (
           <>
-            <ApiKeyField initialValue={settings.api_key ?? ''} />
+            <ApiKeyField
+              isConfigured={settings.api_key_configured}
+              onSaved={(configured) =>
+                setSettings((s) =>
+                  s ? { ...s, api_key_configured: configured } : s,
+                )
+              }
+            />
             <MicrophoneField
               initial={settings.input_device}
               onSaved={(input_device) =>
@@ -135,6 +162,12 @@ function App() {
           onSave={handleShortcutSave}
           onCancel={() => setRecording(false)}
         />
+      )}
+
+      {toast && (
+        <div className="toast err" role="alert" onClick={() => setToast(null)}>
+          {toast}
+        </div>
       )}
     </main>
   )
