@@ -1,6 +1,6 @@
 use crate::recorder::Recorder;
 use crate::state::{AppState, ModifierState};
-use crate::{history, media, overlay, paste, transcription};
+use crate::{history, media, overlay, paste, transcription_stream};
 use core_foundation::base::TCFType;
 use core_foundation::runloop::{kCFRunLoopCommonModes, CFRunLoop};
 use core_graphics::event::{
@@ -11,6 +11,8 @@ use std::os::raw::c_void;
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
+
+const TRANSCRIPTION_ERROR_EVENT: &str = "transcription-error";
 
 // core-graphics keeps CGEventTapEnable private, but we need to call it from
 // inside the tap's own callback (the only place we learn the system has
@@ -218,36 +220,44 @@ fn maybe_resume_media(state: &AppState) {
     tauri::async_runtime::spawn_blocking(media::unmute_output);
 }
 
-/// Stop recording, transcribe, paste — all off the CGEventTap callback so the
-/// tap keeps servicing keystrokes. The stop call blocks on the audio thread
-/// (stream teardown + WAV encode) so we hop through spawn_blocking before
-/// handing off to the async transcribe request.
-fn spawn_pipeline(app: AppHandle, recorder: Recorder) {
+/// Open a Deepgram Live WebSocket and stream PCM frames to it as they arrive
+/// from cpal. Returning means the recorder has been torn down and Deepgram
+/// has flushed final results — at which point we paste and update history.
+///
+/// Spawned synchronously on PTT press so the WS handshake overlaps with the
+/// user's first words. Release just calls `recorder.stop()`; closing the
+/// chunk channel is what tells this task we're done.
+fn spawn_session(app: AppHandle, recorder: Recorder, device: Option<String>) {
     tauri::async_runtime::spawn(async move {
-        let bytes = match tauri::async_runtime::spawn_blocking(move || recorder.stop()).await {
-            Ok(Ok(b)) => b,
+        let (chunk_tx, chunk_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (format_tx, format_rx) = tokio::sync::oneshot::channel();
+        recorder.start(device, chunk_tx, format_tx);
+
+        let format = match format_rx.await {
+            Ok(Ok(f)) => f,
             Ok(Err(e)) => {
-                eprintln!("[pipeline] recorder stop failed: {e}");
-                let _ = app.emit("transcription-error", format!("Recording failed: {e}"));
+                eprintln!("[pipeline] recorder start failed: {e}");
+                let _ = app.emit(TRANSCRIPTION_ERROR_EVENT, format!("Recording failed: {e}"));
                 return;
             }
-            Err(e) => {
-                eprintln!("[pipeline] spawn_blocking join error: {e}");
+            Err(_) => {
+                eprintln!("[pipeline] recorder dropped format channel");
                 let _ = app.emit(
-                    "transcription-error",
-                    format!("Recording thread crashed: {e}"),
+                    TRANSCRIPTION_ERROR_EVENT,
+                    "Recording thread crashed".to_string(),
                 );
                 return;
             }
         };
 
-        let transcript = match transcription::transcribe(app.clone(), bytes).await {
+        let transcript = match transcription_stream::run(app.clone(), format, chunk_rx).await {
             Ok(t) => t,
             Err(e) => {
-                eprintln!("[pipeline] transcription failed: {e}");
-                // Surface to the frontend so the user actually sees the failure
-                // instead of silently wondering why nothing got typed.
-                let _ = app.emit("transcription-error", e);
+                eprintln!("[pipeline] streaming transcription failed: {e}");
+                // Stop the recorder if it's still running so a WS error
+                // doesn't leak a live cpal stream.
+                recorder.stop();
+                let _ = app.emit(TRANSCRIPTION_ERROR_EVENT, e);
                 return;
             }
         };
@@ -264,7 +274,7 @@ fn spawn_pipeline(app: AppHandle, recorder: Recorder) {
 
         if let Err(e) = paste::paste_text(transcript) {
             eprintln!("[pipeline] paste failed: {e}");
-            let _ = app.emit("transcription-error", format!("Paste failed: {e}"));
+            let _ = app.emit(TRANSCRIPTION_ERROR_EVENT, format!("Paste failed: {e}"));
         }
     });
 }
@@ -375,7 +385,9 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                     if modifiers_ok {
                         *active = true;
                         let device = state.input_device.lock().unwrap().clone();
-                        recorder.start(device);
+                        // Spawn up front so the WS handshake overlaps with
+                        // capture rather than waiting for PTT release.
+                        spawn_session(app.clone(), recorder.clone(), device);
                         overlay::show(&app);
                         let _ = app.emit("ptt-pressed", ());
                         maybe_pause_media(&state);
@@ -385,7 +397,7 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                     overlay::hide(&app);
                     let _ = app.emit("ptt-released", ());
                     maybe_resume_media(&state);
-                    spawn_pipeline(app.clone(), recorder.clone());
+                    recorder.stop();
                 }
 
                 None

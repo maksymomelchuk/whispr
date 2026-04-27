@@ -3,8 +3,10 @@ mod config;
 mod history;
 mod permissions;
 mod state;
-mod transcription;
 mod tray;
+
+#[cfg(target_os = "macos")]
+mod transcription_stream;
 
 // Modules that wrap macOS-only APIs (CGEventTap, CGEventPost, CoreAudio via
 // cpal, transparent overlay windows via macOSPrivateApi). Cross-platform

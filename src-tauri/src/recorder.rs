@@ -1,9 +1,8 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Host, SampleFormat, Stream};
-use std::io::Cursor;
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
 use std::thread;
+use tokio::sync::{mpsc as tokio_mpsc, oneshot};
 
 /// Look up the saved input device by name. If the saved device no longer
 /// exists (unplugged, renamed), warn and fall back to the system default so
@@ -27,13 +26,23 @@ fn resolve_device(host: &Host, preferred: Option<&str>) -> Option<Device> {
     host.default_input_device()
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct AudioFormat {
+    pub sample_rate: u32,
+    pub channels: u16,
+}
+
 /// cpal::Stream is !Send on macOS (CoreAudio), so we can't store it in shared
 /// state or tear it down from an arbitrary thread. Instead we pin a single
 /// long-lived audio thread that owns every stream, and send commands over an
-/// mpsc channel. Callers hand back a oneshot reply channel for Stop.
+/// mpsc channel.
 enum Cmd {
-    Start(Option<String>),
-    Stop(mpsc::Sender<Result<Vec<u8>, String>>),
+    Start {
+        device: Option<String>,
+        chunk_tx: tokio_mpsc::UnboundedSender<Vec<i16>>,
+        format_tx: oneshot::Sender<Result<AudioFormat, String>>,
+    },
+    Stop,
 }
 
 #[derive(Clone)]
@@ -48,11 +57,29 @@ impl Recorder {
         Self { tx }
     }
 
-    /// `device` is the saved preference. None (or an unknown name) falls back
-    /// to the system default input.
-    pub fn start(&self, device: Option<String>) {
-        if let Err(e) = self.tx.send(Cmd::Start(device)) {
+    /// `format_tx` resolves once the cpal stream is live (or with an error
+    /// if setup fails). `stop` drops the stream, which drops `chunk_tx` —
+    /// consumers must treat the channel close as end-of-stream.
+    pub fn start(
+        &self,
+        device: Option<String>,
+        chunk_tx: tokio_mpsc::UnboundedSender<Vec<i16>>,
+        format_tx: oneshot::Sender<Result<AudioFormat, String>>,
+    ) {
+        if let Err(e) = self.tx.send(Cmd::Start {
+            device,
+            chunk_tx,
+            format_tx,
+        }) {
             eprintln!("[recorder] send Start failed: {e}");
+        }
+    }
+
+    /// Tear down the active capture. Fire-and-forget: end-of-stream is
+    /// signaled to the consumer via the chunk channel closing.
+    pub fn stop(&self) {
+        if let Err(e) = self.tx.send(Cmd::Stop) {
+            eprintln!("[recorder] send Stop failed: {e}");
         }
     }
 
@@ -68,19 +95,6 @@ impl Recorder {
             }
         }
     }
-
-    /// Blocks until the audio thread has torn down the stream and encoded the
-    /// captured samples to WAV. Call this from a blocking task — not from a
-    /// tokio runtime thread directly.
-    pub fn stop(&self) -> Result<Vec<u8>, String> {
-        let (reply_tx, reply_rx) = mpsc::channel();
-        self.tx
-            .send(Cmd::Stop(reply_tx))
-            .map_err(|e| format!("send Stop: {e}"))?;
-        reply_rx
-            .recv()
-            .map_err(|e| format!("recv Stop reply: {e}"))?
-    }
 }
 
 fn audio_thread(rx: mpsc::Receiver<Cmd>) {
@@ -88,24 +102,30 @@ fn audio_thread(rx: mpsc::Receiver<Cmd>) {
 
     while let Ok(cmd) = rx.recv() {
         match cmd {
-            Cmd::Start(device) => {
+            Cmd::Start {
+                device,
+                chunk_tx,
+                format_tx,
+            } => {
                 if session.is_some() {
                     eprintln!("[recorder] Start ignored: already recording");
+                    let _ = format_tx.send(Err("already recording".into()));
                     continue;
                 }
-                match Session::start(device.as_deref()) {
-                    Ok(s) => {
+                match Session::start(device.as_deref(), chunk_tx) {
+                    Ok((s, format)) => {
+                        let _ = format_tx.send(Ok(format));
                         session = Some(s);
                     }
-                    Err(e) => eprintln!("[recorder] Start failed: {e}"),
+                    Err(e) => {
+                        let _ = format_tx.send(Err(e));
+                    }
                 }
             }
-            Cmd::Stop(reply) => {
-                let result = match session.take() {
-                    Some(s) => s.finish(),
-                    None => Err("Stop with no active session".to_string()),
-                };
-                let _ = reply.send(result);
+            Cmd::Stop => {
+                // Tail samples racing teardown either lose their write or
+                // land just before the drop — accepted.
+                session = None;
             }
         }
     }
@@ -113,13 +133,13 @@ fn audio_thread(rx: mpsc::Receiver<Cmd>) {
 
 struct Session {
     _stream: Stream,
-    samples: Arc<Mutex<Vec<i16>>>,
-    sample_rate: u32,
-    channels: u16,
 }
 
 impl Session {
-    fn start(preferred: Option<&str>) -> Result<Self, String> {
+    fn start(
+        preferred: Option<&str>,
+        chunk_tx: tokio_mpsc::UnboundedSender<Vec<i16>>,
+    ) -> Result<(Self, AudioFormat), String> {
         let host = cpal::default_host();
         let device = resolve_device(&host, preferred)
             .ok_or_else(|| "no input device available".to_string())?;
@@ -132,19 +152,17 @@ impl Session {
         let format = supported.sample_format();
         let config: cpal::StreamConfig = supported.into();
 
-        let samples: Arc<Mutex<Vec<i16>>> = Arc::new(Mutex::new(Vec::new()));
-        let samples_cb = samples.clone();
         let err_cb = |e| eprintln!("[recorder] stream error: {e}");
 
         let stream = match format {
             SampleFormat::F32 => device.build_input_stream(
                 &config,
                 move |data: &[f32], _| {
-                    let mut buf = samples_cb.lock().unwrap();
-                    buf.extend(
-                        data.iter()
-                            .map(|&s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16),
-                    );
+                    let chunk: Vec<i16> = data
+                        .iter()
+                        .map(|&s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
+                        .collect();
+                    let _ = chunk_tx.send(chunk);
                 },
                 err_cb,
                 None,
@@ -152,8 +170,7 @@ impl Session {
             SampleFormat::I16 => device.build_input_stream(
                 &config,
                 move |data: &[i16], _| {
-                    let mut buf = samples_cb.lock().unwrap();
-                    buf.extend_from_slice(data);
+                    let _ = chunk_tx.send(data.to_vec());
                 },
                 err_cb,
                 None,
@@ -164,48 +181,12 @@ impl Session {
 
         stream.play().map_err(|e| format!("stream.play: {e}"))?;
 
-        Ok(Self {
-            _stream: stream,
-            samples,
-            sample_rate,
-            channels,
-        })
+        Ok((
+            Self { _stream: stream },
+            AudioFormat {
+                sample_rate,
+                channels,
+            },
+        ))
     }
-
-    /// Dropping `_stream` stops the cpal input. Any tail callbacks racing
-    /// teardown will find the mutex locked or lose their writes — we accept
-    /// a few ms of trailing audio loss.
-    fn finish(self) -> Result<Vec<u8>, String> {
-        let sample_rate = self.sample_rate;
-        let channels = self.channels;
-        drop(self._stream);
-        let samples = std::mem::take(
-            &mut *self
-                .samples
-                .lock()
-                .map_err(|_| "samples mutex poisoned".to_string())?,
-        );
-        encode_wav(&samples, sample_rate, channels)
-    }
-}
-
-fn encode_wav(samples: &[i16], sample_rate: u32, channels: u16) -> Result<Vec<u8>, String> {
-    let spec = hound::WavSpec {
-        channels,
-        sample_rate,
-        bits_per_sample: 16,
-        sample_format: hound::SampleFormat::Int,
-    };
-    let mut cursor = Cursor::new(Vec::new());
-    {
-        let mut writer =
-            hound::WavWriter::new(&mut cursor, spec).map_err(|e| format!("wav writer: {e}"))?;
-        for &s in samples {
-            writer
-                .write_sample(s)
-                .map_err(|e| format!("wav write: {e}"))?;
-        }
-        writer.finalize().map_err(|e| format!("wav finalize: {e}"))?;
-    }
-    Ok(cursor.into_inner())
 }
