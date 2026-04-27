@@ -8,6 +8,7 @@ import { MicrophoneField } from "./components/MicrophoneField";
 import { ReplacementsField } from "./components/ReplacementsField";
 import { ShortcutField } from "./components/ShortcutField";
 import { ShortcutRecorder } from "./components/ShortcutRecorder";
+import { StatsTab } from "./components/StatsTab";
 import { TranscriptionField } from "./components/TranscriptionField";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { useTheme } from "./hooks/useTheme";
@@ -21,13 +22,19 @@ import type {
 
 import "./App.css";
 
-type TabId = "general" | "shortcut" | "transcription" | "history";
+type TabId =
+  | "general"
+  | "shortcut"
+  | "transcription"
+  | "history"
+  | "stats";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "general", label: "General" },
   { id: "shortcut", label: "Shortcut" },
   { id: "transcription", label: "Transcription" },
   { id: "history", label: "History" },
+  { id: "stats", label: "Stats" },
 ];
 
 function App() {
@@ -158,7 +165,15 @@ function App() {
             />
           </>
         )}
-        {activeTab === "history" && <HistoryTab />}
+        {activeTab === "history" && (
+          <HistoryTab
+            historyLimit={settings.history_limit}
+            onHistoryLimitChange={(history_limit) =>
+              setSettings((s) => (s ? { ...s, history_limit } : s))
+            }
+          />
+        )}
+        {activeTab === "stats" && <StatsTab />}
       </div>
 
       {recording && (

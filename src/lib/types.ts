@@ -16,6 +16,9 @@ export interface DeepgramSettings {
   keyterms: string[];
 }
 
+/// `null` = unlimited, `0` = off, `n` = keep last n.
+export type HistoryLimit = number | null;
+
 export interface Settings {
   api_key_configured: boolean;
   shortcut: Shortcut;
@@ -23,9 +26,17 @@ export interface Settings {
   deepgram: DeepgramSettings;
   input_device: string | null;
   pause_media_on_record: boolean;
+  history_limit: HistoryLimit;
 }
 
 export interface HistoryEntry {
   text: string;
   timestamp: number;
+}
+
+export interface StatsRow {
+  date: string;
+  words: number;
+  dictations: number;
+  total_seconds: number;
 }

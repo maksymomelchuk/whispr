@@ -1,9 +1,10 @@
 use crate::config::{self, DeepgramSettings, Replacement, Shortcut};
-use crate::history::{self, HistoryEntry};
+use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::permissions;
 use crate::state::AppState;
+use crate::stats::{self, StatsRow, STATS_UPDATED_EVENT};
 use serde::Serialize;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 
 /// Public projection of Settings for the webview. Omits the Deepgram API key
 /// so a webview XSS (e.g., via a future supply-chain compromise) cannot read
@@ -16,6 +17,7 @@ pub struct SettingsView {
     pub deepgram: DeepgramSettings,
     pub input_device: Option<String>,
     pub pause_media_on_record: bool,
+    pub history_limit: Option<usize>,
 }
 
 #[tauri::command]
@@ -28,6 +30,7 @@ pub fn get_settings(app: AppHandle) -> SettingsView {
         deepgram: s.deepgram,
         input_device: s.input_device,
         pause_media_on_record: s.pause_media_on_record,
+        history_limit: s.history_limit,
     }
 }
 
@@ -123,6 +126,28 @@ pub fn get_history(app: AppHandle) -> Vec<HistoryEntry> {
 #[tauri::command]
 pub fn clear_history(app: AppHandle) -> Result<(), String> {
     history::clear(&app)
+}
+
+#[tauri::command]
+pub fn set_history_limit(app: AppHandle, limit: Option<usize>) -> Result<(), String> {
+    let mut settings = config::load(&app);
+    settings.history_limit = limit;
+    config::save(&app, &settings)?;
+    history::enforce_limit(&app, limit)?;
+    let _ = app.emit(HISTORY_UPDATED_EVENT, ());
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_stats(app: AppHandle) -> Vec<StatsRow> {
+    stats::load(&app)
+}
+
+#[tauri::command]
+pub fn clear_stats(app: AppHandle) -> Result<(), String> {
+    stats::clear(&app)?;
+    let _ = app.emit(STATS_UPDATED_EVENT, ());
+    Ok(())
 }
 
 #[tauri::command]

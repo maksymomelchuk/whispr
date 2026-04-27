@@ -81,6 +81,11 @@ fn default_true() -> bool {
     true
 }
 
+/// `None` = unlimited, `Some(0)` = off (no history kept), `Some(n)` = keep n.
+fn default_history_limit() -> Option<usize> {
+    Some(5)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     pub api_key: Option<String>,
@@ -94,6 +99,8 @@ pub struct Settings {
     pub input_device: Option<String>,
     #[serde(default = "default_true")]
     pub pause_media_on_record: bool,
+    #[serde(default = "default_history_limit")]
+    pub history_limit: Option<usize>,
 }
 
 impl Default for Settings {
@@ -105,6 +112,7 @@ impl Default for Settings {
             deepgram: DeepgramSettings::default(),
             input_device: None,
             pause_media_on_record: true,
+            history_limit: default_history_limit(),
         }
     }
 }

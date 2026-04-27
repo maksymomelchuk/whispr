@@ -2,7 +2,7 @@ use crate::config::{self, Replacement};
 use crate::recorder::AudioFormat;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::AppHandle;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
@@ -19,12 +19,15 @@ const FINAL_RESULTS_TIMEOUT: Duration = Duration::from_secs(3);
 /// Open a Deepgram Live WebSocket, forward `chunks` as PCM frames until the
 /// channel closes (recorder torn down by PTT release), then ask Deepgram for
 /// final results and return the concatenated transcript with replacements
-/// applied.
+/// applied. The returned `Duration` is the time from session start to chunk
+/// channel close — the user-perceived speaking duration, excluding the
+/// post-close final-results drain.
 pub async fn run(
     app: AppHandle,
     format: AudioFormat,
     mut chunks: UnboundedReceiver<Vec<i16>>,
-) -> Result<String, String> {
+) -> Result<(String, Duration), String> {
+    let speak_start = Instant::now();
     let settings = config::load(&app);
     let key = settings
         .api_key
@@ -82,6 +85,7 @@ pub async fn run(
             }
         }
     }
+    let speak_duration = speak_start.elapsed();
 
     // Phase 2: ask Deepgram to flush, then drain remaining finals with a
     // bounded timeout so a stuck server can't block the paste.
@@ -114,10 +118,10 @@ pub async fn run(
     let raw = transcript_pieces.join(" ");
     let trimmed = raw.trim();
     if trimmed.is_empty() {
-        return Ok(String::new());
+        return Ok((String::new(), speak_duration));
     }
     let replaced = apply_replacements(trimmed, &settings.replacements);
-    Ok(format!("{replaced} "))
+    Ok((format!("{replaced} "), speak_duration))
 }
 
 fn build_ws_url(dg: &config::DeepgramSettings, format: AudioFormat) -> Result<Url, String> {

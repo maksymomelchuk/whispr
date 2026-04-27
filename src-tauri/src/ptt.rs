@@ -1,6 +1,7 @@
+use crate::history::{self, HISTORY_UPDATED_EVENT};
 use crate::recorder::Recorder;
 use crate::state::{AppState, ModifierState};
-use crate::{history, media, overlay, paste, transcription_stream};
+use crate::{media, overlay, paste, stats, transcription_stream};
 use core_foundation::base::TCFType;
 use core_foundation::runloop::{kCFRunLoopCommonModes, CFRunLoop};
 use core_graphics::event::{
@@ -250,31 +251,42 @@ fn spawn_session(app: AppHandle, recorder: Recorder, device: Option<String>) {
             }
         };
 
-        let transcript = match transcription_stream::run(app.clone(), format, chunk_rx).await {
-            Ok(t) => t,
-            Err(e) => {
-                eprintln!("[pipeline] streaming transcription failed: {e}");
-                // Stop the recorder if it's still running so a WS error
-                // doesn't leak a live cpal stream.
-                recorder.stop();
-                let _ = app.emit(TRANSCRIPTION_ERROR_EVENT, e);
-                return;
-            }
-        };
+        let (transcript, speak_duration) =
+            match transcription_stream::run(app.clone(), format, chunk_rx).await {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("[pipeline] streaming transcription failed: {e}");
+                    // Stop the recorder if it's still running so a WS error
+                    // doesn't leak a live cpal stream.
+                    recorder.stop();
+                    let _ = app.emit(TRANSCRIPTION_ERROR_EVENT, e);
+                    return;
+                }
+            };
         if transcript.is_empty() {
             return;
         }
 
-        match history::append(&app, &transcript) {
-            Ok(_) => {
-                let _ = app.emit("history-updated", ());
-            }
-            Err(e) => eprintln!("[pipeline] history append failed: {e}"),
-        }
+        let words = transcript.split_whitespace().count() as u64;
+        let seconds = speak_duration.as_secs() as u32;
+        // Keep a copy for the on-disk records — paste_text consumes the String.
+        let transcript_for_history = transcript.clone();
 
+        // Kick off paste first so the user sees text while the file I/O for
+        // stats and history runs concurrently. paste_text spawns its own
+        // worker thread and returns immediately.
         if let Err(e) = paste::paste_text(transcript) {
             eprintln!("[pipeline] paste failed: {e}");
             let _ = app.emit(TRANSCRIPTION_ERROR_EVENT, format!("Paste failed: {e}"));
+        }
+
+        stats::record(&app, words, seconds);
+
+        match history::append(&app, &transcript_for_history) {
+            Ok(_) => {
+                let _ = app.emit(HISTORY_UPDATED_EVENT, ());
+            }
+            Err(e) => eprintln!("[pipeline] history append failed: {e}"),
         }
     });
 }

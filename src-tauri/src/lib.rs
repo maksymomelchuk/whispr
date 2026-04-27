@@ -3,6 +3,7 @@ mod config;
 mod history;
 mod permissions;
 mod state;
+mod stats;
 mod tray;
 
 #[cfg(target_os = "macos")]
@@ -110,6 +111,9 @@ pub fn run() {
             commands::set_pause_media_on_record,
             commands::get_history,
             commands::clear_history,
+            commands::set_history_limit,
+            commands::get_stats,
+            commands::clear_stats,
             commands::open_accessibility_settings,
         ])
         .run(tauri::generate_context!())

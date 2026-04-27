@@ -697,7 +697,8 @@ button:disabled {
   color: var(--text-secondary);
 }
 
-.history-clear {
+.history-clear,
+.stats-clear {
   font-size: 12px;
   font-weight: 500;
   padding: 6px 10px;
@@ -713,22 +714,74 @@ button:disabled {
     border-color 150ms ease;
 }
 
-.history-clear:hover:not(:disabled) {
+.history-clear:hover:not(:disabled),
+.stats-clear:hover:not(:disabled) {
   color: var(--danger);
   background: var(--danger-hover-bg);
 }
 
-.history-clear.confirm {
+.history-clear.confirm,
+.stats-clear.confirm {
   color: var(--danger);
   border-color: var(--danger-border);
   background: var(--danger-bg);
 }
 
-:root.theme-dark .history-clear.confirm {
+:root.theme-dark .history-clear.confirm,
+:root.theme-dark .stats-clear.confirm {
   color: var(--danger-soft-text);
 }
 
-.history-clear:focus-visible {
+.history-clear:focus-visible,
+.stats-clear:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.history-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.history-limit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.history-limit-label {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.history-limit-select {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 26px 5px 10px;
+  border: 1px solid var(--border);
+  background-color: var(--bg-elevated);
+  color: var(--text);
+  border-radius: 6px;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M1 1l4 4 4-4'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+.history-limit-select:hover {
+  border-color: var(--border-strong, var(--border));
+  background-color: var(--bg-subtle);
+}
+
+.history-limit-select:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
@@ -741,6 +794,133 @@ button:disabled {
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
+}
+
+.stats {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.stats-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px;
+}
+
+.stats-title {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.stats-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.stats-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.stats-row {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stats-row + .stats-row {
+  border-top: 1px solid var(--border-divider);
+}
+
+.stats-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stats-row-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.stats-wpm {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-wpm-num {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1;
+}
+
+.stats-wpm-unit {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+}
+
+.stats-row-detail {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.stats-metric {
+  white-space: nowrap;
+}
+
+.stats-dot {
+  color: var(--text-tertiary);
+  user-select: none;
+}
+
+.stats-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 24px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.stats-empty-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.stats-empty-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  max-width: 280px;
 }
 
 .history-item {
@@ -843,6 +1023,7 @@ button:disabled {
 
 @media (prefers-reduced-motion: reduce) {
   .history-clear,
+  .stats-clear,
   .history-copy {
     transition: none;
   }

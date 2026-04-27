@@ -1,3 +1,4 @@
+use crate::config;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -5,7 +6,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 
 const HISTORY_FILE: &str = "history.json";
-const MAX_ENTRIES: usize = 50;
+
+pub const HISTORY_UPDATED_EVENT: &str = "history-updated";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryEntry {
@@ -53,13 +55,20 @@ fn save(app: &tauri::AppHandle, entries: &[HistoryEntry]) -> Result<(), String> 
     Ok(())
 }
 
-/// Prepend a new entry (newest-first) and trim to MAX_ENTRIES. Trailing
-/// whitespace from the dictation pipeline is stripped before persisting —
-/// the pasted text keeps its space but history reads cleaner without it.
+/// Prepend a new entry (newest-first) and trim to the configured history
+/// limit. Trailing whitespace from the dictation pipeline is stripped before
+/// persisting — the pasted text keeps its space but history reads cleaner
+/// without it.
 pub fn append(app: &tauri::AppHandle, text: &str) -> Result<Vec<HistoryEntry>, String> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
         return Ok(load(app));
+    }
+
+    let limit = config::load(app).history_limit;
+    if matches!(limit, Some(0)) {
+        // Off — drop the entry on the floor.
+        return Ok(Vec::new());
     }
 
     let timestamp = SystemTime::now()
@@ -75,11 +84,31 @@ pub fn append(app: &tauri::AppHandle, text: &str) -> Result<Vec<HistoryEntry>, S
             timestamp,
         },
     );
-    entries.truncate(MAX_ENTRIES);
+    if let Some(max) = limit {
+        entries.truncate(max);
+    }
     save(app, &entries)?;
     Ok(entries)
 }
 
 pub fn clear(app: &tauri::AppHandle) -> Result<(), String> {
     save(app, &[])
+}
+
+/// Apply the limit to the existing on-disk history. Used when the user
+/// changes the limit setting so the change takes effect immediately rather
+/// than waiting for the next dictation.
+pub fn enforce_limit(app: &tauri::AppHandle, limit: Option<usize>) -> Result<(), String> {
+    match limit {
+        Some(0) => clear(app),
+        Some(n) => {
+            let mut entries = load(app);
+            if entries.len() > n {
+                entries.truncate(n);
+                save(app, &entries)?;
+            }
+            Ok(())
+        }
+        None => Ok(()),
+    }
 }

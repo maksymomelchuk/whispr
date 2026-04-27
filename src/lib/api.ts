@@ -3,9 +3,11 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   DeepgramSettings,
   HistoryEntry,
+  HistoryLimit,
   Replacement,
   Settings,
   Shortcut,
+  StatsRow,
 } from "./types";
 
 export const getSettings = () => invoke<Settings>("get_settings");
@@ -33,6 +35,13 @@ export const setPauseMediaOnRecord = (enabled: boolean) =>
 export const getHistory = () => invoke<HistoryEntry[]>("get_history");
 
 export const clearHistory = () => invoke<void>("clear_history");
+
+export const setHistoryLimit = (limit: HistoryLimit) =>
+  invoke<void>("set_history_limit", { limit });
+
+export const getStats = () => invoke<StatsRow[]>("get_stats");
+
+export const clearStats = () => invoke<void>("clear_stats");
 
 const MOD_MAP: Record<string, string> = {
   Meta: "⌘",

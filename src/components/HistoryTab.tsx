@@ -1,8 +1,41 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 
-import { getHistory, clearHistory as persistClearHistory } from "../lib/api";
-import type { HistoryEntry } from "../lib/types";
+import { useConfirmAction } from "../hooks/useConfirmAction";
+import {
+  clearHistory as persistClearHistory,
+  getHistory,
+  setHistoryLimit as persistHistoryLimit,
+} from "../lib/api";
+import type { HistoryEntry, HistoryLimit } from "../lib/types";
+
+const LIMIT_OPTIONS: { label: string; value: string }[] = [
+  { label: "Off", value: "0" },
+  { label: "5", value: "5" },
+  { label: "10", value: "10" },
+  { label: "25", value: "25" },
+  { label: "50", value: "50" },
+  { label: "100", value: "100" },
+  { label: "Unlimited", value: "unlimited" },
+];
+
+const limitToOptionValue = (l: HistoryLimit): string =>
+  l === null ? "unlimited" : String(l);
+
+const optionValueToLimit = (v: string): HistoryLimit =>
+  v === "unlimited" ? null : Number(v);
+
+const limitHint = (l: HistoryLimit, count: number): string => {
+  if (l === 0) return "History is off. Recent dictations are not saved.";
+  if (l === null)
+    return `${count} ${count === 1 ? "entry" : "entries"} stored locally. No limit.`;
+  return `${count} of up to ${l} ${l === 1 ? "entry" : "entries"} stored locally.`;
+};
+
+interface HistoryTabProps {
+  historyLimit: HistoryLimit;
+  onHistoryLimitChange: (limit: HistoryLimit) => void;
+}
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -55,13 +88,35 @@ function useClock(intervalMs = 30_000): number {
   return now;
 }
 
-export function HistoryTab() {
+export function HistoryTab({
+  historyLimit,
+  onHistoryLimitChange,
+}: HistoryTabProps) {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [confirmingClear, setConfirmingClear] = useState(false);
-  const confirmTimeout = useRef<number | null>(null);
   const now = useClock();
+
+  const { confirming: confirmingClear, trigger: handleClear } = useConfirmAction(
+    async () => {
+      try {
+        await persistClearHistory();
+        setEntries([]);
+      } catch (e) {
+        console.error("clear history failed", e);
+      }
+    },
+  );
+
+  const handleLimitChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const next = optionValueToLimit(e.target.value);
+    try {
+      await persistHistoryLimit(next);
+      onHistoryLimitChange(next);
+    } catch (err) {
+      console.error("set history limit failed", err);
+    }
+  };
 
   const refresh = () => {
     getHistory()
@@ -91,30 +146,6 @@ export function HistoryTab() {
     };
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (confirmTimeout.current) window.clearTimeout(confirmTimeout.current);
-    };
-  }, []);
-
-  const handleClear = async () => {
-    if (!confirmingClear) {
-      setConfirmingClear(true);
-      confirmTimeout.current = window.setTimeout(() => {
-        setConfirmingClear(false);
-      }, 3000);
-      return;
-    }
-    if (confirmTimeout.current) window.clearTimeout(confirmTimeout.current);
-    setConfirmingClear(false);
-    try {
-      await persistClearHistory();
-      setEntries([]);
-    } catch (e) {
-      console.error("clear history failed", e);
-    }
-  };
-
   if (loadState === "loading") {
     return <div className="loading">Loading…</div>;
   }
@@ -127,31 +158,46 @@ export function HistoryTab() {
     );
   }
 
+  const isOff = historyLimit === 0;
+
   return (
     <section className="history">
       <div className="history-header">
         <div>
           <h2 className="history-title">Recent transcriptions</h2>
           <p className="hint history-hint">
-            The last {entries.length}{" "}
-            {entries.length === 1 ? "entry" : "entries"} stored locally. Up to
-            50 are kept.
+            {limitHint(historyLimit, entries.length)}
           </p>
         </div>
-        {entries.length > 0 && (
-          <button
-            type="button"
-            className={`history-clear ${confirmingClear ? "confirm" : ""}`}
-            onClick={handleClear}
-          >
-            {confirmingClear ? "Click to confirm" : "Clear all"}
-          </button>
-        )}
+        <div className="history-actions">
+          <label className="history-limit">
+            <span className="history-limit-label">Keep last</span>
+            <select
+              className="history-limit-select"
+              value={limitToOptionValue(historyLimit)}
+              onChange={handleLimitChange}
+            >
+              {LIMIT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {entries.length > 0 && (
+            <button
+              type="button"
+              className={`history-clear ${confirmingClear ? "confirm" : ""}`}
+              onClick={handleClear}
+            >
+              {confirmingClear ? "Click to confirm" : "Clear all"}
+            </button>
+          )}
+        </div>
       </div>
 
-      {entries.length === 0 ? (
-        <EmptyState />
-      ) : (
+      {entries.length === 0 && (isOff ? <DisabledState /> : <EmptyState />)}
+      {entries.length > 0 && (
         <ul className="history-list">
           {entries.map((entry, i) => (
             <HistoryItem
@@ -186,6 +232,31 @@ function EmptyState() {
       <div className="history-empty-title">No transcriptions yet</div>
       <div className="history-empty-hint">
         Hold your shortcut and speak — transcripts will appear here.
+      </div>
+    </div>
+  );
+}
+
+function DisabledState() {
+  return (
+    <div className="history-empty">
+      <svg
+        width="32"
+        height="32"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path d="M5.5 5.5l13 13" />
+      </svg>
+      <div className="history-empty-title">History is disabled</div>
+      <div className="history-empty-hint">
+        Pick a Keep last value above to start saving transcripts again.
       </div>
     </div>
   );
