@@ -1,3 +1,4 @@
+use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
 use crate::config::{self, DeepgramSettings, Replacement, Shortcut};
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::permissions;
@@ -6,15 +7,17 @@ use crate::stats::{self, StatsRow, STATS_UPDATED_EVENT};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
-/// Public projection of Settings for the webview. Omits the Deepgram API key
-/// so a webview XSS (e.g., via a future supply-chain compromise) cannot read
-/// it back over IPC. The key is write-only from the frontend's perspective.
+/// Public projection of Settings for the webview. Omits both API keys so a
+/// webview XSS (e.g., via a future supply-chain compromise) cannot read them
+/// back over IPC. Keys are write-only from the frontend's perspective.
 #[derive(Debug, Clone, Serialize)]
 pub struct SettingsView {
     pub api_key_configured: bool,
     pub shortcut: Shortcut,
     pub replacements: Vec<Replacement>,
     pub deepgram: DeepgramSettings,
+    pub ai_cleanup_enabled: bool,
+    pub ai_cleanup_key_configured: bool,
     pub input_device: Option<String>,
     pub pause_media_on_record: bool,
     pub history_limit: Option<usize>,
@@ -28,6 +31,12 @@ pub fn get_settings(app: AppHandle) -> SettingsView {
         shortcut: s.shortcut,
         replacements: s.replacements,
         deepgram: s.deepgram,
+        ai_cleanup_enabled: s.ai_cleanup.enabled,
+        ai_cleanup_key_configured: s
+            .ai_cleanup
+            .anthropic_api_key
+            .as_deref()
+            .is_some_and(|k| !k.is_empty()),
         input_device: s.input_device,
         pause_media_on_record: s.pause_media_on_record,
         history_limit: s.history_limit,
@@ -77,6 +86,24 @@ pub fn set_deepgram_settings(
 ) -> Result<(), String> {
     let mut settings = config::load(&app);
     settings.deepgram = deepgram;
+    config::save(&app, &settings)
+}
+
+#[tauri::command]
+pub fn set_ai_cleanup_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut settings = config::load(&app);
+    settings.ai_cleanup.enabled = enabled;
+    config::save(&app, &settings)
+}
+
+#[tauri::command]
+pub fn set_anthropic_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
+    let mut settings = config::load(&app);
+    settings.ai_cleanup.anthropic_api_key = if api_key.is_empty() {
+        None
+    } else {
+        Some(api_key)
+    };
     config::save(&app, &settings)
 }
 
@@ -146,8 +173,15 @@ pub fn get_stats(app: AppHandle) -> Vec<StatsRow> {
 #[tauri::command]
 pub fn clear_stats(app: AppHandle) -> Result<(), String> {
     stats::clear(&app)?;
+    cleanup_stats::clear(&app)?;
     let _ = app.emit(STATS_UPDATED_EVENT, ());
+    let _ = app.emit(CLEANUP_STATS_UPDATED_EVENT, ());
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_cleanup_stats(app: AppHandle) -> CleanupStats {
+    cleanup_stats::load(&app)
 }
 
 #[tauri::command]

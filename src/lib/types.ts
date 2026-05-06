@@ -24,6 +24,8 @@ export interface Settings {
   shortcut: Shortcut;
   replacements: Replacement[];
   deepgram: DeepgramSettings;
+  ai_cleanup_enabled: boolean;
+  ai_cleanup_key_configured: boolean;
   input_device: string | null;
   pause_media_on_record: boolean;
   history_limit: HistoryLimit;
@@ -39,4 +41,22 @@ export interface StatsRow {
   words: number;
   dictations: number;
   total_seconds: number;
+}
+
+export interface PeriodCounter {
+  /// "YYYY-MM-DD" for today, "YYYY-MM" for the month counter.
+  period: string;
+  input_tokens: number;
+  output_tokens: number;
+}
+
+export interface TotalCounter {
+  input_tokens: number;
+  output_tokens: number;
+}
+
+export interface CleanupStats {
+  today: PeriodCounter;
+  month: PeriodCounter;
+  overall: TotalCounter;
 }

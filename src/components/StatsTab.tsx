@@ -2,8 +2,12 @@ import { listen } from "@tauri-apps/api/event";
 import { useEffect, useMemo, useState } from "react";
 
 import { useConfirmAction } from "../hooks/useConfirmAction";
-import { clearStats as persistClearStats, getStats } from "../lib/api";
-import type { StatsRow } from "../lib/types";
+import {
+  clearStats as persistClearStats,
+  getCleanupStats,
+  getStats,
+} from "../lib/api";
+import type { CleanupStats, StatsRow } from "../lib/types";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -76,8 +80,32 @@ function formatWpm(words: number, seconds: number): string {
   return String(Math.round((words / seconds) * 60));
 }
 
+// Anthropic Claude Haiku 4.5 standard rates as of 2026-01.
+const HAIKU_INPUT_PER_MTOK_USD = 1;
+const HAIKU_OUTPUT_PER_MTOK_USD = 5;
+
+function estimateCostUsd(input: number, output: number): number {
+  return (
+    (input * HAIKU_INPUT_PER_MTOK_USD + output * HAIKU_OUTPUT_PER_MTOK_USD) /
+    1_000_000
+  );
+}
+
+function formatCost(cost: number): string {
+  if (cost <= 0) return "$0";
+  if (cost < 0.01) return "<$0.01";
+  return `$${cost.toFixed(2)}`;
+}
+
+interface CleanupRowSpec {
+  label: string;
+  input: number;
+  output: number;
+}
+
 export function StatsTab() {
   const [rows, setRows] = useState<StatsRow[]>([]);
+  const [cleanup, setCleanup] = useState<CleanupStats | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -86,11 +114,33 @@ export function StatsTab() {
     [rows],
   );
 
+  const cleanupRows: CleanupRowSpec[] = useMemo(() => {
+    if (!cleanup) return [];
+    return [
+      {
+        label: "Today",
+        input: cleanup.today.input_tokens,
+        output: cleanup.today.output_tokens,
+      },
+      {
+        label: "This month",
+        input: cleanup.month.input_tokens,
+        output: cleanup.month.output_tokens,
+      },
+      {
+        label: "Overall",
+        input: cleanup.overall.input_tokens,
+        output: cleanup.overall.output_tokens,
+      },
+    ];
+  }, [cleanup]);
+
   const { confirming: confirmingClear, trigger: handleClear } = useConfirmAction(
     async () => {
       try {
         await persistClearStats();
         setRows([]);
+        setCleanup(null);
       } catch (e) {
         console.error("clear stats failed", e);
       }
@@ -98,9 +148,10 @@ export function StatsTab() {
   );
 
   const refresh = () => {
-    getStats()
-      .then((list) => {
+    Promise.all([getStats(), getCleanupStats()])
+      .then(([list, cs]) => {
         setRows(list);
+        setCleanup(cs);
         setLoadState("ready");
       })
       .catch((e) => {
@@ -114,14 +165,17 @@ export function StatsTab() {
   }, []);
 
   useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    listen("stats-updated", () => refresh())
-      .then((u) => {
-        unlisten = u;
-      })
-      .catch((e) => console.error("stats-updated listen failed", e));
+    const unsubs: (() => void)[] = [];
+    let cancelled = false;
+    const attach = (event: string) =>
+      listen(event, () => refresh())
+        .then((u) => (cancelled ? u() : unsubs.push(u)))
+        .catch((e) => console.error(`${event} listen failed`, e));
+    attach("stats-updated");
+    attach("cleanup-stats-updated");
     return () => {
-      unlisten?.();
+      cancelled = true;
+      unsubs.forEach((u) => u());
     };
   }, []);
 
@@ -192,6 +246,47 @@ export function StatsTab() {
             </li>
           ))}
         </ul>
+      )}
+
+      {cleanup &&
+        (cleanup.overall.input_tokens > 0 ||
+          cleanup.overall.output_tokens > 0) && (
+        <>
+          <div className="stats-header">
+            <div>
+              <h2 className="stats-title">AI Cleanup</h2>
+              <p className="hint stats-hint">
+                Anthropic Claude Haiku 4.5 token usage and estimated cost.
+              </p>
+            </div>
+          </div>
+          <ul className="stats-list">
+            {cleanupRows.map((row) => (
+              <li key={row.label} className="stats-row">
+                <div className="stats-row-head">
+                  <span className="stats-row-label">{row.label}</span>
+                  <span className="stats-wpm">
+                    <span className="stats-wpm-num">
+                      {formatCost(estimateCostUsd(row.input, row.output))}
+                    </span>
+                    <span className="stats-wpm-unit">est.</span>
+                  </span>
+                </div>
+                <div className="stats-row-detail">
+                  <span className="stats-metric">
+                    {formatCount(row.input)} input
+                  </span>
+                  <span className="stats-dot" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="stats-metric">
+                    {formatCount(row.output)} output
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </section>
   );

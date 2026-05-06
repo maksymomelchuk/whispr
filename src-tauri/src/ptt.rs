@@ -1,7 +1,11 @@
 use crate::history::{self, HISTORY_UPDATED_EVENT};
 use crate::recorder::Recorder;
 use crate::state::{AppState, ModifierState};
-use crate::{media, overlay, paste, stats, transcription_stream};
+use crate::{
+    cleanup, cleanup_stats, config, media, overlay, paste, stats, transcription_stream,
+};
+use std::process::Command;
+use std::time::Duration;
 use core_foundation::base::TCFType;
 use core_foundation::runloop::{kCFRunLoopCommonModes, CFRunLoop};
 use core_graphics::event::{
@@ -11,9 +15,40 @@ use core_graphics::event::{
 use std::os::raw::c_void;
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 const TRANSCRIPTION_ERROR_EVENT: &str = "transcription-error";
+const PTT_PRESSED_EVENT: &str = "ptt-pressed";
+const PTT_RELEASED_EVENT: &str = "ptt-released";
+const PTT_THINKING_EVENT: &str = "ptt-thinking";
+
+/// Below either threshold the LLM cleanup is skipped — short utterances
+/// have no fillers worth removing.
+const CLEANUP_MIN_WORDS: usize = 9;
+const CLEANUP_MIN_DURATION: Duration = Duration::from_secs(3);
+
+/// The `transcription-error` event drives an in-app toast, but the toast
+/// is only visible once the main window is on screen — show it explicitly.
+fn notify_error(app: &AppHandle, message: impl Into<String>) {
+    let message = message.into();
+    eprintln!("[notify] {message}");
+    let _ = app.emit(TRANSCRIPTION_ERROR_EVENT, &message);
+
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let escaped = message.replace('\\', "\\\\").replace('"', "\\\"");
+        let script =
+            format!(r#"display notification "{escaped}" with title "Whispr""#);
+        if let Err(e) = Command::new("osascript").args(["-e", &script]).output() {
+            eprintln!("[notify] osascript failed: {e}");
+        }
+    }
+}
 
 // core-graphics keeps CGEventTapEnable private, but we need to call it from
 // inside the tap's own callback (the only place we learn the system has
@@ -221,74 +256,118 @@ fn maybe_resume_media(state: &AppState) {
     tauri::async_runtime::spawn_blocking(media::unmute_output);
 }
 
-/// Open a Deepgram Live WebSocket and stream PCM frames to it as they arrive
-/// from cpal. Returning means the recorder has been torn down and Deepgram
-/// has flushed final results — at which point we paste and update history.
-///
-/// Spawned synchronously on PTT press so the WS handshake overlaps with the
-/// user's first words. Release just calls `recorder.stop()`; closing the
-/// chunk channel is what tells this task we're done.
+/// Spawned synchronously on PTT press so the Deepgram WS handshake overlaps
+/// with the user's first words. Release closes the chunk channel; this task
+/// drains STT, runs optional LLM cleanup, pastes, and only then hides the
+/// overlay so it bridges the post-release processing.
 fn spawn_session(app: AppHandle, recorder: Recorder, device: Option<String>) {
     tauri::async_runtime::spawn(async move {
-        let (chunk_tx, chunk_rx) = tokio::sync::mpsc::unbounded_channel();
-        let (format_tx, format_rx) = tokio::sync::oneshot::channel();
-        recorder.start(device, chunk_tx, format_tx);
+        let result = run_session(&app, recorder, device).await;
+        if let Err(e) = result {
+            eprintln!("[pipeline] {e}");
+            notify_error(&app, e);
+        }
+        overlay::hide(&app);
+    });
+}
 
-        let format = match format_rx.await {
-            Ok(Ok(f)) => f,
-            Ok(Err(e)) => {
-                eprintln!("[pipeline] recorder start failed: {e}");
-                let _ = app.emit(TRANSCRIPTION_ERROR_EVENT, format!("Recording failed: {e}"));
-                return;
-            }
-            Err(_) => {
-                eprintln!("[pipeline] recorder dropped format channel");
-                let _ = app.emit(
-                    TRANSCRIPTION_ERROR_EVENT,
-                    "Recording thread crashed".to_string(),
-                );
-                return;
+async fn run_session(
+    app: &AppHandle,
+    recorder: Recorder,
+    device: Option<String>,
+) -> Result<(), String> {
+    let (chunk_tx, chunk_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (format_tx, format_rx) = tokio::sync::oneshot::channel();
+    recorder.start(device, chunk_tx, format_tx);
+
+    let format = match format_rx.await {
+        Ok(Ok(f)) => f,
+        Ok(Err(e)) => return Err(format!("Recording failed: {e}")),
+        Err(_) => return Err("Recording thread crashed".to_string()),
+    };
+
+    let (transcript, speak_duration) =
+        match transcription_stream::run(app.clone(), format, chunk_rx).await {
+            Ok(r) => r,
+            Err(e) => {
+                // Stop the recorder if it's still running so a WS error
+                // doesn't leak a live cpal stream.
+                recorder.stop();
+                return Err(e);
             }
         };
+    if transcript.is_empty() {
+        return Ok(());
+    }
 
-        let (transcript, speak_duration) =
-            match transcription_stream::run(app.clone(), format, chunk_rx).await {
-                Ok(r) => r,
-                Err(e) => {
-                    eprintln!("[pipeline] streaming transcription failed: {e}");
-                    // Stop the recorder if it's still running so a WS error
-                    // doesn't leak a live cpal stream.
-                    recorder.stop();
-                    let _ = app.emit(TRANSCRIPTION_ERROR_EVENT, e);
-                    return;
-                }
-            };
-        if transcript.is_empty() {
-            return;
+    let final_text = maybe_cleanup(app, &transcript, speak_duration).await;
+
+    let words = final_text.split_whitespace().count() as u64;
+    let seconds = speak_duration.as_secs() as u32;
+    // Keep a copy for the on-disk records — paste_text consumes the String.
+    let history_entry = final_text.clone();
+
+    // Kick off paste first so the user sees text while the file I/O for
+    // stats and history runs concurrently. paste_text spawns its own
+    // worker thread and returns immediately.
+    if let Err(e) = paste::paste_text(final_text) {
+        eprintln!("[pipeline] paste failed: {e}");
+        notify_error(app, format!("Paste failed: {e}"));
+    }
+
+    stats::record(app, words, seconds);
+
+    match history::append(app, &history_entry) {
+        Ok(_) => {
+            let _ = app.emit(HISTORY_UPDATED_EVENT, ());
         }
+        Err(e) => eprintln!("[pipeline] history append failed: {e}"),
+    }
+    Ok(())
+}
 
-        let words = transcript.split_whitespace().count() as u64;
-        let seconds = speak_duration.as_secs() as u32;
-        // Keep a copy for the on-disk records — paste_text consumes the String.
-        let transcript_for_history = transcript.clone();
+/// Run the LLM cleanup pass when enabled, configured, and the utterance is
+/// long enough to warrant it. On any failure (timeout, network, bad key) the
+/// raw transcript is returned and a toast is emitted — the user never loses
+/// a dictation just because cleanup couldn't run.
+async fn maybe_cleanup(app: &AppHandle, transcript: &str, speak_duration: Duration) -> String {
+    let settings = config::load(app);
+    let cleanup_settings = &settings.ai_cleanup;
 
-        // Kick off paste first so the user sees text while the file I/O for
-        // stats and history runs concurrently. paste_text spawns its own
-        // worker thread and returns immediately.
-        if let Err(e) = paste::paste_text(transcript) {
-            eprintln!("[pipeline] paste failed: {e}");
-            let _ = app.emit(TRANSCRIPTION_ERROR_EVENT, format!("Paste failed: {e}"));
+    if !cleanup_settings.enabled {
+        return transcript.to_string();
+    }
+
+    let key = match cleanup_settings.anthropic_api_key.as_deref() {
+        Some(k) if !k.is_empty() => k,
+        _ => {
+            // Toggle is on but key is missing/empty — paste raw and nudge.
+            notify_error(
+                app,
+                "AI cleanup is enabled but Anthropic API key is not set.",
+            );
+            return transcript.to_string();
         }
+    };
 
-        stats::record(&app, words, seconds);
+    let words = transcript.split_whitespace().count();
+    if words < CLEANUP_MIN_WORDS || speak_duration < CLEANUP_MIN_DURATION {
+        return transcript.to_string();
+    }
 
-        match history::append(&app, &transcript_for_history) {
-            Ok(_) => {
-                let _ = app.emit(HISTORY_UPDATED_EVENT, ());
-            }
-            Err(e) => eprintln!("[pipeline] history append failed: {e}"),
+    let _ = app.emit(PTT_THINKING_EVENT, ());
+
+    match cleanup::run(transcript, key).await {
+        Ok((cleaned, usage)) => {
+            cleanup_stats::record(app, usage.input_tokens, usage.output_tokens);
+            cleaned
         }
-    });
+        Err(e) => {
+            eprintln!("[pipeline] cleanup failed: {e}");
+            notify_error(app, format!("AI cleanup unavailable: {e}"));
+            transcript.to_string()
+        }
+    }
 }
 
 pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
@@ -401,13 +480,15 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                         // capture rather than waiting for PTT release.
                         spawn_session(app.clone(), recorder.clone(), device);
                         overlay::show(&app);
-                        let _ = app.emit("ptt-pressed", ());
+                        let _ = app.emit(PTT_PRESSED_EVENT, ());
                         maybe_pause_media(&state);
                     }
                 } else if !is_press && *active {
                     *active = false;
-                    overlay::hide(&app);
-                    let _ = app.emit("ptt-released", ());
+                    // Overlay stays visible — spawn_session hides it after
+                    // paste so the "still processing" state bridges STT
+                    // drain and any LLM cleanup pass.
+                    let _ = app.emit(PTT_RELEASED_EVENT, ());
                     maybe_resume_media(&state);
                     recorder.stop();
                 }

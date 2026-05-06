@@ -1,6 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 
+import { AiCleanupField } from "./components/AiCleanupField";
 import { ApiKeyField } from "./components/ApiKeyField";
 import { AppearanceField } from "./components/AppearanceField";
 import { HistoryTab } from "./components/HistoryTab";
@@ -154,6 +155,20 @@ function App() {
               defaultOpen={false}
               onSaved={(deepgram: DeepgramSettings) =>
                 setSettings((s) => (s ? { ...s, deepgram } : s))
+              }
+            />
+            <AiCleanupField
+              enabled={settings.ai_cleanup_enabled}
+              keyConfigured={settings.ai_cleanup_key_configured}
+              onEnabledChange={(ai_cleanup_enabled) =>
+                setSettings((s) =>
+                  s ? { ...s, ai_cleanup_enabled } : s,
+                )
+              }
+              onKeyConfiguredChange={(ai_cleanup_key_configured) =>
+                setSettings((s) =>
+                  s ? { ...s, ai_cleanup_key_configured } : s,
+                )
               }
             />
             <ReplacementsField

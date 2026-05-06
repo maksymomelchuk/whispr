@@ -7,6 +7,10 @@ mod stats;
 mod tray;
 
 #[cfg(target_os = "macos")]
+mod cleanup;
+#[cfg(target_os = "macos")]
+mod cleanup_stats;
+#[cfg(target_os = "macos")]
 mod transcription_stream;
 
 // Modules that wrap macOS-only APIs (CGEventTap, CGEventPost, CoreAudio via
@@ -106,6 +110,8 @@ pub fn run() {
             commands::set_shortcut,
             commands::set_replacements,
             commands::set_deepgram_settings,
+            commands::set_ai_cleanup_enabled,
+            commands::set_anthropic_api_key,
             commands::list_input_devices,
             commands::set_input_device,
             commands::set_pause_media_on_record,
@@ -114,6 +120,7 @@ pub fn run() {
             commands::set_history_limit,
             commands::get_stats,
             commands::clear_stats,
+            commands::get_cleanup_stats,
             commands::open_accessibility_settings,
         ])
         .run(tauri::generate_context!())

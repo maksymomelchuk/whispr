@@ -77,6 +77,14 @@ impl Default for DeepgramSettings {
     }
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AiCleanupSettings {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub anthropic_api_key: Option<String>,
+}
+
 fn default_true() -> bool {
     true
 }
@@ -96,6 +104,8 @@ pub struct Settings {
     #[serde(default)]
     pub deepgram: DeepgramSettings,
     #[serde(default)]
+    pub ai_cleanup: AiCleanupSettings,
+    #[serde(default)]
     pub input_device: Option<String>,
     #[serde(default = "default_true")]
     pub pause_media_on_record: bool,
@@ -110,6 +120,7 @@ impl Default for Settings {
             shortcut: Shortcut::default(),
             replacements: default_replacements(),
             deepgram: DeepgramSettings::default(),
+            ai_cleanup: AiCleanupSettings::default(),
             input_device: None,
             pause_media_on_record: true,
             history_limit: default_history_limit(),

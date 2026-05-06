@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type {
+  CleanupStats,
   DeepgramSettings,
   HistoryEntry,
   HistoryLimit,
@@ -24,6 +25,12 @@ export const setReplacements = (replacements: Replacement[]) =>
 export const setDeepgramSettings = (deepgram: DeepgramSettings) =>
   invoke<void>("set_deepgram_settings", { deepgram });
 
+export const setAiCleanupEnabled = (enabled: boolean) =>
+  invoke<void>("set_ai_cleanup_enabled", { enabled });
+
+export const setAnthropicApiKey = (apiKey: string) =>
+  invoke<void>("set_anthropic_api_key", { apiKey });
+
 export const listInputDevices = () => invoke<string[]>("list_input_devices");
 
 export const setInputDevice = (device: string | null) =>
@@ -42,6 +49,8 @@ export const setHistoryLimit = (limit: HistoryLimit) =>
 export const getStats = () => invoke<StatsRow[]>("get_stats");
 
 export const clearStats = () => invoke<void>("clear_stats");
+
+export const getCleanupStats = () => invoke<CleanupStats>("get_cleanup_stats");
 
 const MOD_MAP: Record<string, string> = {
   Meta: "⌘",
