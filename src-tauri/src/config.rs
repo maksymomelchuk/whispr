@@ -111,6 +111,8 @@ pub struct Settings {
     pub pause_media_on_record: bool,
     #[serde(default = "default_history_limit")]
     pub history_limit: Option<usize>,
+    #[serde(default)]
+    pub show_in_dock: bool,
 }
 
 impl Default for Settings {
@@ -124,6 +126,7 @@ impl Default for Settings {
             input_device: None,
             pause_media_on_record: true,
             history_limit: default_history_limit(),
+            show_in_dock: false,
         }
     }
 }

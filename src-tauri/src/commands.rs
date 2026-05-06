@@ -21,6 +21,7 @@ pub struct SettingsView {
     pub input_device: Option<String>,
     pub pause_media_on_record: bool,
     pub history_limit: Option<usize>,
+    pub show_in_dock: bool,
 }
 
 #[tauri::command]
@@ -40,6 +41,7 @@ pub fn get_settings(app: AppHandle) -> SettingsView {
         input_device: s.input_device,
         pause_media_on_record: s.pause_media_on_record,
         history_limit: s.history_limit,
+        show_in_dock: s.show_in_dock,
     }
 }
 
@@ -117,6 +119,25 @@ pub fn set_pause_media_on_record(
     settings.pause_media_on_record = enabled;
     config::save(&app, &settings)?;
     *state.pause_media_on_record.lock().unwrap() = enabled;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_show_in_dock(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut settings = config::load(&app);
+    settings.show_in_dock = enabled;
+    config::save(&app, &settings)?;
+    #[cfg(target_os = "macos")]
+    {
+        use tauri::ActivationPolicy;
+        let policy = if enabled {
+            ActivationPolicy::Regular
+        } else {
+            ActivationPolicy::Accessory
+        };
+        app.set_activation_policy(policy)
+            .map_err(|e| format!("Failed to update activation policy: {e}"))?;
+    }
     Ok(())
 }
 

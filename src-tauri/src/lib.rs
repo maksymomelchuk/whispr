@@ -51,15 +51,19 @@ pub fn run() {
             }
         })
         .setup(|app| {
-            // Run as a menu bar app: no Dock icon, no Cmd+Tab entry. Set at
-            // runtime rather than relying solely on Info.plist's LSUIElement
-            // because `tauri dev` launches the raw binary and never reads
-            // the bundle plist.
+            // Run as a menu bar app by default: no Dock icon, no Cmd+Tab
+            // entry. The user can opt back into a regular app presence via
+            // the settings toggle. Set at runtime rather than relying solely
+            // on Info.plist's LSUIElement because `tauri dev` launches the
+            // raw binary and never reads the bundle plist.
             #[cfg(target_os = "macos")]
             {
-                let _ = app.set_activation_policy(
-                    tauri::ActivationPolicy::Accessory,
-                );
+                let policy = if config::load(&app.handle()).show_in_dock {
+                    tauri::ActivationPolicy::Regular
+                } else {
+                    tauri::ActivationPolicy::Accessory
+                };
+                let _ = app.set_activation_policy(policy);
             }
 
             // Triggers the macOS Accessibility prompt on first launch so the
@@ -115,6 +119,7 @@ pub fn run() {
             commands::list_input_devices,
             commands::set_input_device,
             commands::set_pause_media_on_record,
+            commands::set_show_in_dock,
             commands::get_history,
             commands::clear_history,
             commands::set_history_limit,

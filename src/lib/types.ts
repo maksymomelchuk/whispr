@@ -29,6 +29,7 @@ export interface Settings {
   input_device: string | null;
   pause_media_on_record: boolean;
   history_limit: HistoryLimit;
+  show_in_dock: boolean;
 }
 
 export interface HistoryEntry {

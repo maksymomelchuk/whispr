@@ -139,6 +139,10 @@ function App() {
             <AppearanceField
               preference={themePreference}
               onChange={setThemePreference}
+              showInDock={settings.show_in_dock}
+              onShowInDockChange={(show_in_dock) =>
+                setSettings((s) => (s ? { ...s, show_in_dock } : s))
+              }
             />
           </>
         )}

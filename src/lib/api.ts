@@ -39,6 +39,9 @@ export const setInputDevice = (device: string | null) =>
 export const setPauseMediaOnRecord = (enabled: boolean) =>
   invoke<void>("set_pause_media_on_record", { enabled });
 
+export const setShowInDock = (enabled: boolean) =>
+  invoke<void>("set_show_in_dock", { enabled });
+
 export const getHistory = () => invoke<HistoryEntry[]>("get_history");
 
 export const clearHistory = () => invoke<void>("clear_history");
