@@ -32,7 +32,7 @@ pub fn default_replacements() -> Vec<Replacement> {
         ("slash", "/"),
         ("dash", "-"),
         ("underscore", "_"),
-        ("at", "@"),
+        ("at sign", "@"),
         ("comma", ","),
         ("colon", ":"),
         ("semicolon", ";"),
