@@ -14,10 +14,9 @@ const ANTHROPIC_URL: &str = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 const MODEL: &str = "claude-haiku-4-5";
 const MAX_TOKENS: u32 = 1024;
-/// Hard ceiling on the LLM round-trip. The pipeline pastes the raw transcript
-/// if we hit this, so the user never waits more than ~2s end-to-end before
-/// seeing text.
-const TIMEOUT: Duration = Duration::from_millis(1500);
+/// Hard ceiling on the LLM round-trip. Past this the pipeline pastes the
+/// raw transcript so a slow Anthropic response never strands the user.
+const TIMEOUT: Duration = Duration::from_millis(4000);
 
 const SYSTEM_PROMPT: &str = r#"You clean up a raw speech-to-text transcript from a developer's dictation.
 

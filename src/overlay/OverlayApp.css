@@ -107,3 +107,20 @@ body:has(.overlay-root) {
     opacity: 1;
   }
 }
+
+/* Rotates in 12 discrete steps so the brightest tick "chases" around the
+   wheel rather than smoothly spinning. */
+.overlay-spinner {
+  display: block;
+  flex-shrink: 0;
+  margin-left: 8px;
+  color: #b6c8ff;
+  transform-origin: 50% 50%;
+  animation: overlay-spinner-rotate 1s steps(12, end) infinite;
+}
+
+@keyframes overlay-spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
