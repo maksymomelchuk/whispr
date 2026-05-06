@@ -16,7 +16,7 @@
         "label": "main",
         "title": "Whispr",
         "width": 560,
-        "height": 440,
+        "height": 600,
         "minWidth": 480,
         "minHeight": 320,
         "resizable": true,
