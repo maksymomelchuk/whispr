@@ -33,6 +33,21 @@ function formatSeconds(ms: number): string {
   return Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(2);
 }
 
+const MODE_COPY: Record<
+  CleanupAuthMode,
+  { fieldLabel: string; placeholderEmpty: string; placeholderReplace: string }
+> = {
+  api_key: {
+    fieldLabel: "Anthropic API Key",
+    placeholderEmpty: "sk-ant-…",
+    placeholderReplace: "Enter new key to replace…",
+  },
+  oauth: {
+    fieldLabel: "Claude Code OAuth Token",
+    placeholderEmpty: "sk-ant-oat…",
+    placeholderReplace: "Enter new token to replace…",
+  },
+};
 
 export function AiCleanupField({
   enabled,
@@ -168,16 +183,10 @@ export function AiCleanupField({
   const configured =
     authMode === "api_key" ? apiKeyConfigured : oauthTokenConfigured;
   const showWarning = enabled && !configured;
-  const placeholder =
-    authMode === "api_key"
-      ? configured
-        ? "Enter new key to replace…"
-        : "sk-ant-…"
-      : configured
-        ? "Enter new token to replace…"
-        : "sk-ant-oat…";
-  const fieldLabel =
-    authMode === "api_key" ? "Anthropic API Key" : "Claude Code OAuth Token";
+  const copy = MODE_COPY[authMode];
+  const placeholder = configured
+    ? copy.placeholderReplace
+    : copy.placeholderEmpty;
 
   return (
     <CollapsibleCard title="AI Cleanup" defaultOpen={defaultOpen}>
@@ -190,14 +199,7 @@ export function AiCleanupField({
             onChange={handleToggle}
           />
           <div className="option-text">
-            <div
-              className="option-label"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
+            <div className="option-label label-with-info">
               Enable AI post-processing
               <InfoTip text="Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Adds ~500ms." />
             </div>
@@ -219,14 +221,7 @@ export function AiCleanupField({
                   onChange={() => handleAuthModeChange("api_key")}
                 />
                 <div className="option-text">
-                  <div
-                    className="option-label"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                  >
+                  <div className="option-label label-with-info">
                     Anthropic API Key
                     <InfoTip text="Pay-as-you-go via console.anthropic.com." />
                   </div>
@@ -241,14 +236,7 @@ export function AiCleanupField({
                   onChange={() => handleAuthModeChange("oauth")}
                 />
                 <div className="option-text">
-                  <div
-                    className="option-label"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                  >
+                  <div className="option-label label-with-info">
                     Claude Code OAuth token (experimental)
                     <InfoTip text="Uses your Claude subscription. Mint with `claude setup-token`." />
                   </div>
@@ -263,7 +251,7 @@ export function AiCleanupField({
               style={{ alignItems: "baseline", gap: 8 }}
             >
               <label className="field-label" style={{ margin: 0 }}>
-                {fieldLabel}
+                {copy.fieldLabel}
               </label>
               {configured ? (
                 <span className="status ok">Configured</span>
@@ -306,10 +294,7 @@ export function AiCleanupField({
           </div>
 
           <div className="field-group">
-            <div
-              className="row"
-              style={{ alignItems: "baseline", gap: 6 }}
-            >
+            <div className="label-with-info" style={{ marginBottom: 0 }}>
               <label className="field-label" style={{ margin: 0 }}>
                 Trigger thresholds
               </label>

@@ -11,22 +11,23 @@ interface InfoTipProps {
   ariaLabel?: string;
 }
 
+interface Pos {
+  top: number;
+  left: number;
+  placement: "top" | "bottom";
+}
+
 const TOOLTIP_GAP = 6;
 const TOOLTIP_MARGIN = 8;
 
-/// Hover/focus tooltip badge. The bubble is rendered via portal so it
-/// escapes any `overflow: hidden` ancestor (collapsible card body, etc).
-/// We swallow click + mousedown so placing one inside a `<label>` doesn't
-/// trigger the wrapped radio/checkbox.
+/// Hover/focus tooltip. Portaled so it escapes `overflow: hidden`
+/// ancestors. Click + mousedown are swallowed because the badge often
+/// sits inside a `<label>` whose wrapped input would otherwise toggle.
 export function InfoTip({ text, ariaLabel }: InfoTipProps) {
   const triggerRef = useRef<HTMLSpanElement | null>(null);
   const bubbleRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{
-    top: number;
-    left: number;
-    placement: "top" | "bottom";
-  } | null>(null);
+  const [pos, setPos] = useState<Pos | null>(null);
 
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current;
@@ -38,7 +39,6 @@ export function InfoTip({ text, ariaLabel }: InfoTipProps) {
     const vh = window.innerHeight;
     const triggerCenter = tr.left + tr.width / 2;
 
-    // Prefer above, fall back to below if there's not enough room.
     let placement: "top" | "bottom" = "top";
     let top = tr.top - br.height - TOOLTIP_GAP;
     if (top < TOOLTIP_MARGIN) {
@@ -55,18 +55,35 @@ export function InfoTip({ text, ariaLabel }: InfoTipProps) {
       vw - br.width - TOOLTIP_MARGIN,
     );
 
-    setPos({ top, left, placement });
+    // Bail out on identical positions so scroll on an unrelated ancestor
+    // doesn't trigger a no-op re-render of the portaled bubble.
+    setPos((prev) =>
+      prev &&
+      prev.top === top &&
+      prev.left === left &&
+      prev.placement === placement
+        ? prev
+        : { top, left, placement },
+    );
   }, []);
 
   useLayoutEffect(() => {
     if (!open) return;
     updatePosition();
-    const onScroll = () => updatePosition();
-    window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onScroll);
+    let raf: number | null = null;
+    const schedule = () => {
+      if (raf !== null) return;
+      raf = requestAnimationFrame(() => {
+        raf = null;
+        updatePosition();
+      });
+    };
+    window.addEventListener("scroll", schedule, true);
+    window.addEventListener("resize", schedule);
     return () => {
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onScroll);
+      if (raf !== null) cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", schedule, true);
+      window.removeEventListener("resize", schedule);
     };
   }, [open, updatePosition]);
 

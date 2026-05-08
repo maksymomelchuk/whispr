@@ -195,9 +195,7 @@ export function StatsTab() {
   return (
     <section className="stats">
       <div className="stats-header">
-        <div
-          style={{ display: "flex", alignItems: "center", gap: 8 }}
-        >
+        <div className="label-with-info">
           <h2 className="stats-title">Dictation stats</h2>
           <InfoTip text="Words dictated and your effective words per minute." />
         </div>

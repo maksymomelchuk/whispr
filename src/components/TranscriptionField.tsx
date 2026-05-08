@@ -126,10 +126,7 @@ export function TranscriptionField({
       info="Deepgram nova-3 options. Defaults are off; enable what you need."
     >
       <div className="field-group">
-        <div
-          className="row"
-          style={{ alignItems: "center", gap: 6, marginBottom: 4 }}
-        >
+        <div className="label-with-info" style={{ marginBottom: 4 }}>
           <label className="field-label" style={{ margin: 0 }}>
             Language
           </label>
@@ -154,14 +151,7 @@ export function TranscriptionField({
               onChange={() => toggle(opt.key)}
             />
             <div className="option-text">
-              <div
-                className="option-label"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
+              <div className="option-label label-with-info">
                 {opt.label}
                 <InfoTip text={opt.description} />
               </div>
@@ -174,14 +164,7 @@ export function TranscriptionField({
 
         <div className="option-row keyterms-option">
           <div className="option-text">
-            <div
-              className="option-label"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
+            <div className="option-label label-with-info">
               Keyterm Prompting
               <InfoTip text="Boosts recognition of important words or phrases, like names, product terms, or jargon. Up to 100 keyterms per request." />
             </div>

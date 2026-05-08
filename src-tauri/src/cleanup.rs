@@ -119,36 +119,42 @@ fn http_client() -> &'static reqwest::Client {
     CLIENT.get_or_init(reqwest::Client::new)
 }
 
+/// Keep API-key users' system block as a single entry so the existing
+/// prompt-cache key is preserved across upgrades.
+fn system_for(credential: &Credential<'_>) -> &'static Value {
+    static API_KEY: OnceLock<Value> = OnceLock::new();
+    static OAUTH: OnceLock<Value> = OnceLock::new();
+    match credential {
+        Credential::ApiKey(_) => API_KEY.get_or_init(|| {
+            serde_json::json!([
+                {
+                    "type": "text",
+                    "text": SYSTEM_PROMPT,
+                    "cache_control": {"type": "ephemeral"}
+                }
+            ])
+        }),
+        Credential::OauthToken(_) => OAUTH.get_or_init(|| {
+            serde_json::json!([
+                { "type": "text", "text": CLAUDE_CODE_IDENTITY },
+                {
+                    "type": "text",
+                    "text": SYSTEM_PROMPT,
+                    "cache_control": {"type": "ephemeral"}
+                }
+            ])
+        }),
+    }
+}
+
 async fn call(
     transcript: &str,
     credential: Credential<'_>,
 ) -> Result<(String, Usage), String> {
-    // OAuth requires the Claude Code identity as the first system block; API
-    // keys don't, but they accept it harmlessly, so this could be unified.
-    // We keep them separate so an API-key user's cache stays a single block —
-    // splitting it would cost a cache miss on the first call after upgrade.
-    let system = match credential {
-        Credential::ApiKey(_) => serde_json::json!([
-            {
-                "type": "text",
-                "text": SYSTEM_PROMPT,
-                "cache_control": {"type": "ephemeral"}
-            }
-        ]),
-        Credential::OauthToken(_) => serde_json::json!([
-            { "type": "text", "text": CLAUDE_CODE_IDENTITY },
-            {
-                "type": "text",
-                "text": SYSTEM_PROMPT,
-                "cache_control": {"type": "ephemeral"}
-            }
-        ]),
-    };
-
     let body = serde_json::json!({
         "model": MODEL,
         "max_tokens": MAX_TOKENS,
-        "system": system,
+        "system": system_for(&credential),
         "messages": [
             {
                 "role": "user",
@@ -157,15 +163,13 @@ async fn call(
         ]
     });
 
-    let mut req = http_client()
+    let req = http_client()
         .post(ANTHROPIC_URL)
         .header("anthropic-version", ANTHROPIC_VERSION)
         .header("content-type", "application/json");
-    req = match credential {
+    let req = match credential {
         Credential::ApiKey(k) => req.header("x-api-key", k),
-        Credential::OauthToken(t) => req
-            .header("authorization", format!("Bearer {t}"))
-            .header("anthropic-beta", OAUTH_BETA),
+        Credential::OauthToken(t) => req.bearer_auth(t).header("anthropic-beta", OAUTH_BETA),
     };
 
     let resp = req

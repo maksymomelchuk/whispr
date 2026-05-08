@@ -203,6 +203,25 @@ pub fn load(app: &tauri::AppHandle) -> Settings {
     }
 }
 
+/// Convenience for the many `load → mutate → save` setter commands.
+pub fn update<F: FnOnce(&mut Settings)>(
+    app: &tauri::AppHandle,
+    f: F,
+) -> Result<(), String> {
+    let mut settings = load(app);
+    f(&mut settings);
+    save(app, &settings)
+}
+
+/// Empty strings come from cleared inputs and should be persisted as `None`.
+pub fn non_empty(s: String) -> Option<String> {
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
 pub fn save(app: &tauri::AppHandle, settings: &Settings) -> Result<(), String> {
     let path = settings_path(app)?;
     let json =

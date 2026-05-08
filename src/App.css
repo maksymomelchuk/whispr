@@ -202,6 +202,13 @@ body {
   margin-top: 0;
 }
 
+/* Inline label + InfoTip (or other small adornment) on a single line. */
+.label-with-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .card h2 {
   margin: 0 0 4px;
   font-size: 13px;
