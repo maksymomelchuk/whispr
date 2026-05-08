@@ -191,6 +191,17 @@ body {
   padding: 16px;
 }
 
+.card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.card-title-row .status {
+  margin-top: 0;
+}
+
 .card h2 {
   margin: 0 0 4px;
   font-size: 13px;
@@ -202,11 +213,25 @@ body {
   overflow: hidden;
 }
 
+.collapsible-header-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.collapsible-info {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+}
+
 .collapsible-header {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
+  flex: 1;
   background: transparent;
   border: none;
   border-radius: 0;
@@ -313,7 +338,8 @@ body {
 }
 
 input[type="password"],
-input[type="text"] {
+input[type="text"],
+input[type="number"] {
   flex: 1;
   border: 1px solid var(--border-strong);
   border-radius: 6px;
@@ -327,6 +353,7 @@ input[type="text"] {
 }
 
 :root.theme-dark input[type="password"],
+:root.theme-dark input[type="number"],
 :root.theme-dark input[type="text"] {
   background: var(--bg);
 }
@@ -1081,6 +1108,42 @@ button:disabled {
   font-size: 11px;
   color: var(--text-tertiary);
   text-align: center;
+}
+
+.info-tip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-tertiary);
+  background: var(--bg-elevated);
+  cursor: help;
+  user-select: none;
+  outline: none;
+}
+
+.info-tip-bubble {
+  position: fixed;
+  width: max-content;
+  max-width: min(260px, calc(100vw - 32px));
+  white-space: normal;
+  text-align: left;
+  padding: 6px 9px;
+  border-radius: 5px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.35;
+  pointer-events: none;
+  z-index: 1000;
 }
 
 .modal-actions {

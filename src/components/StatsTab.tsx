@@ -8,6 +8,7 @@ import {
   getStats,
 } from "../lib/api";
 import type { CleanupStats, StatsRow } from "../lib/types";
+import { InfoTip } from "./InfoTip";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -194,11 +195,11 @@ export function StatsTab() {
   return (
     <section className="stats">
       <div className="stats-header">
-        <div>
+        <div
+          style={{ display: "flex", alignItems: "center", gap: 8 }}
+        >
           <h2 className="stats-title">Dictation stats</h2>
-          <p className="hint stats-hint">
-            Words dictated and your effective words per minute.
-          </p>
+          <InfoTip text="Words dictated and your effective words per minute." />
         </div>
         {hasAny && (
           <button
@@ -253,11 +254,11 @@ export function StatsTab() {
           cleanup.overall.output_tokens > 0) && (
         <>
           <div className="stats-header">
-            <div>
+            <div
+              style={{ display: "flex", alignItems: "center", gap: 8 }}
+            >
               <h2 className="stats-title">AI Cleanup</h2>
-              <p className="hint stats-hint">
-                Anthropic Claude Haiku 4.5 token usage and estimated cost.
-              </p>
+              <InfoTip text="Anthropic Claude Haiku 4.5 token usage and estimated cost." />
             </div>
           </div>
           <ul className="stats-list">

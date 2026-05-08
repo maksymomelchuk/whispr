@@ -77,12 +77,58 @@ impl Default for DeepgramSettings {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CleanupAuthMode {
+    #[default]
+    ApiKey,
+    Oauth,
+}
+
+pub const DEFAULT_CLEANUP_MIN_WORDS: usize = 9;
+pub const DEFAULT_CLEANUP_MIN_DURATION_MS: u64 = 3000;
+
+fn default_cleanup_min_words() -> usize {
+    DEFAULT_CLEANUP_MIN_WORDS
+}
+
+fn default_cleanup_min_duration_ms() -> u64 {
+    DEFAULT_CLEANUP_MIN_DURATION_MS
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiCleanupSettings {
     #[serde(default)]
     pub enabled: bool,
     #[serde(default)]
+    pub auth_mode: CleanupAuthMode,
+    #[serde(default)]
     pub anthropic_api_key: Option<String>,
+    /// Long-lived `sk-ant-oat…` token from `claude setup-token`. Sent as
+    /// `Authorization: Bearer` against the OAuth-gated Messages endpoint —
+    /// outside Anthropic's recommended path; see README for caveats.
+    #[serde(default)]
+    pub anthropic_oauth_token: Option<String>,
+    /// Minimum word count at which cleanup runs. Below this, dictations paste
+    /// raw to preserve snappiness for short utterances.
+    #[serde(default = "default_cleanup_min_words")]
+    pub min_words: usize,
+    /// Minimum spoken duration (ms) at which cleanup runs.
+    #[serde(default = "default_cleanup_min_duration_ms")]
+    pub min_duration_ms: u64,
+}
+
+impl Default for AiCleanupSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            auth_mode: CleanupAuthMode::default(),
+            anthropic_api_key: None,
+            anthropic_oauth_token: None,
+            min_words: DEFAULT_CLEANUP_MIN_WORDS,
+            min_duration_ms: DEFAULT_CLEANUP_MIN_DURATION_MS,
+        }
+    }
 }
 
 fn default_true() -> bool {

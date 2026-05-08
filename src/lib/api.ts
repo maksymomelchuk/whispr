@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type {
+  CleanupAuthMode,
   CleanupStats,
   DeepgramSettings,
   HistoryEntry,
@@ -30,6 +31,21 @@ export const setAiCleanupEnabled = (enabled: boolean) =>
 
 export const setAnthropicApiKey = (apiKey: string) =>
   invoke<void>("set_anthropic_api_key", { apiKey });
+
+export const setAnthropicOauthToken = (token: string) =>
+  invoke<void>("set_anthropic_oauth_token", { token });
+
+export const setCleanupAuthMode = (mode: CleanupAuthMode) =>
+  invoke<void>("set_cleanup_auth_mode", { mode });
+
+export const setCleanupThresholds = (
+  minWords: number,
+  minDurationMs: number,
+) =>
+  invoke<void>("set_cleanup_thresholds", {
+    minWords,
+    minDurationMs,
+  });
 
 export const listInputDevices = () => invoke<string[]>("list_input_devices");
 

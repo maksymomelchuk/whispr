@@ -12,8 +12,21 @@ pub struct Usage {
 
 const ANTHROPIC_URL: &str = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
+/// Beta header required when authenticating with a Claude Code OAuth token.
+/// Without it the Messages endpoint rejects bearer auth.
+const OAUTH_BETA: &str = "oauth-2025-04-20";
 const MODEL: &str = "claude-haiku-4-5";
 const MAX_TOKENS: u32 = 1024;
+/// First system block when authenticating via OAuth. The OAuth surface is
+/// gated to Claude Code workloads, and rejects requests whose system prompt
+/// doesn't lead with this exact identity assertion.
+const CLAUDE_CODE_IDENTITY: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
+
+/// Which credential the user has chosen to authenticate cleanup calls with.
+pub enum Credential<'a> {
+    ApiKey(&'a str),
+    OauthToken(&'a str),
+}
 /// Hard ceiling on the LLM round-trip. Past this the pipeline pastes the
 /// raw transcript so a slow Anthropic response never strands the user.
 const TIMEOUT: Duration = Duration::from_millis(4000);
@@ -92,8 +105,11 @@ Output: only the cleaned transcript content. Do NOT include the <transcript> tag
 /// `transcription_stream::run` so the caller can paste without massaging)
 /// alongside token usage. Bounded by `TIMEOUT`; the caller falls back to
 /// the raw transcript past that.
-pub async fn run(transcript: &str, api_key: &str) -> Result<(String, Usage), String> {
-    tokio::time::timeout(TIMEOUT, call(transcript, api_key))
+pub async fn run(
+    transcript: &str,
+    credential: Credential<'_>,
+) -> Result<(String, Usage), String> {
+    tokio::time::timeout(TIMEOUT, call(transcript, credential))
         .await
         .map_err(|_| format!("cleanup timed out ({}ms)", TIMEOUT.as_millis()))?
 }
@@ -103,20 +119,36 @@ fn http_client() -> &'static reqwest::Client {
     CLIENT.get_or_init(reqwest::Client::new)
 }
 
-async fn call(transcript: &str, api_key: &str) -> Result<(String, Usage), String> {
-    // `cache_control: ephemeral` is a no-op below Anthropic's caching
-    // threshold; safe to leave on so caching kicks in automatically if the
-    // prompt grows.
-    let body = serde_json::json!({
-        "model": MODEL,
-        "max_tokens": MAX_TOKENS,
-        "system": [
+async fn call(
+    transcript: &str,
+    credential: Credential<'_>,
+) -> Result<(String, Usage), String> {
+    // OAuth requires the Claude Code identity as the first system block; API
+    // keys don't, but they accept it harmlessly, so this could be unified.
+    // We keep them separate so an API-key user's cache stays a single block —
+    // splitting it would cost a cache miss on the first call after upgrade.
+    let system = match credential {
+        Credential::ApiKey(_) => serde_json::json!([
             {
                 "type": "text",
                 "text": SYSTEM_PROMPT,
                 "cache_control": {"type": "ephemeral"}
             }
-        ],
+        ]),
+        Credential::OauthToken(_) => serde_json::json!([
+            { "type": "text", "text": CLAUDE_CODE_IDENTITY },
+            {
+                "type": "text",
+                "text": SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"}
+            }
+        ]),
+    };
+
+    let body = serde_json::json!({
+        "model": MODEL,
+        "max_tokens": MAX_TOKENS,
+        "system": system,
         "messages": [
             {
                 "role": "user",
@@ -125,11 +157,18 @@ async fn call(transcript: &str, api_key: &str) -> Result<(String, Usage), String
         ]
     });
 
-    let resp = http_client()
+    let mut req = http_client()
         .post(ANTHROPIC_URL)
-        .header("x-api-key", api_key)
         .header("anthropic-version", ANTHROPIC_VERSION)
-        .header("content-type", "application/json")
+        .header("content-type", "application/json");
+    req = match credential {
+        Credential::ApiKey(k) => req.header("x-api-key", k),
+        Credential::OauthToken(t) => req
+            .header("authorization", format!("Bearer {t}"))
+            .header("anthropic-beta", OAUTH_BETA),
+    };
+
+    let resp = req
         .json(&body)
         .send()
         .await

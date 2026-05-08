@@ -69,14 +69,8 @@ export function ReplacementsField({
       title="Voice Replacements"
       defaultOpen={defaultOpen}
       dirty={dirty}
+      info='Spoken words on the left become the text on the right. Punctuation like ". / -" is spaced intelligently — saying "test dot ts" produces "test.ts".'
     >
-      <p className="hint">
-        Spoken words on the left become the text on the right. Punctuation like{" "}
-        <span className="mono">.</span> <span className="mono">/</span>{" "}
-        <span className="mono">-</span> is spaced intelligently — saying
-        &ldquo;test dot ts&rdquo; produces <span className="mono">test.ts</span>
-        .
-      </p>
       <div className="replacements-list">
         {rows.map((row, i) => (
           <div key={i} className="replacement-row">

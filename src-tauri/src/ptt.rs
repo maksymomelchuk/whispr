@@ -22,11 +22,6 @@ const PTT_PRESSED_EVENT: &str = "ptt-pressed";
 const PTT_RELEASED_EVENT: &str = "ptt-released";
 const PTT_THINKING_EVENT: &str = "ptt-thinking";
 
-/// Below either threshold the LLM cleanup is skipped — short utterances
-/// have no fillers worth removing.
-const CLEANUP_MIN_WORDS: usize = 9;
-const CLEANUP_MIN_DURATION: Duration = Duration::from_secs(3);
-
 /// The `transcription-error` event drives an in-app toast, but the toast
 /// is only visible once the main window is on screen — show it explicitly.
 fn notify_error(app: &AppHandle, message: impl Into<String>) {
@@ -338,26 +333,40 @@ async fn maybe_cleanup(app: &AppHandle, transcript: &str, speak_duration: Durati
         return transcript.to_string();
     }
 
-    let key = match cleanup_settings.anthropic_api_key.as_deref() {
-        Some(k) if !k.is_empty() => k,
-        _ => {
-            // Toggle is on but key is missing/empty — paste raw and nudge.
-            notify_error(
-                app,
-                "AI cleanup is enabled but Anthropic API key is not set.",
-            );
-            return transcript.to_string();
+    let credential = match cleanup_settings.auth_mode {
+        config::CleanupAuthMode::ApiKey => match cleanup_settings.anthropic_api_key.as_deref() {
+            Some(k) if !k.is_empty() => cleanup::Credential::ApiKey(k),
+            _ => {
+                notify_error(
+                    app,
+                    "AI cleanup is enabled but Anthropic API key is not set.",
+                );
+                return transcript.to_string();
+            }
+        },
+        config::CleanupAuthMode::Oauth => {
+            match cleanup_settings.anthropic_oauth_token.as_deref() {
+                Some(t) if !t.is_empty() => cleanup::Credential::OauthToken(t),
+                _ => {
+                    notify_error(
+                        app,
+                        "AI cleanup is set to OAuth but no Claude Code token is configured.",
+                    );
+                    return transcript.to_string();
+                }
+            }
         }
     };
 
     let words = transcript.split_whitespace().count();
-    if words < CLEANUP_MIN_WORDS || speak_duration < CLEANUP_MIN_DURATION {
+    let min_duration = Duration::from_millis(cleanup_settings.min_duration_ms);
+    if words < cleanup_settings.min_words || speak_duration < min_duration {
         return transcript.to_string();
     }
 
     let _ = app.emit(PTT_THINKING_EVENT, ());
 
-    match cleanup::run(transcript, key).await {
+    match cleanup::run(transcript, credential).await {
         Ok((cleaned, usage)) => {
             cleanup_stats::record(app, usage.input_tokens, usage.output_tokens);
             cleaned

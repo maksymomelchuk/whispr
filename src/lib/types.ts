@@ -19,13 +19,19 @@ export interface DeepgramSettings {
 /// `null` = unlimited, `0` = off, `n` = keep last n.
 export type HistoryLimit = number | null;
 
+export type CleanupAuthMode = "api_key" | "oauth";
+
 export interface Settings {
   api_key_configured: boolean;
   shortcut: Shortcut;
   replacements: Replacement[];
   deepgram: DeepgramSettings;
   ai_cleanup_enabled: boolean;
+  ai_cleanup_auth_mode: CleanupAuthMode;
   ai_cleanup_key_configured: boolean;
+  ai_cleanup_oauth_token_configured: boolean;
+  ai_cleanup_min_words: number;
+  ai_cleanup_min_duration_ms: number;
   input_device: string | null;
   pause_media_on_record: boolean;
   history_limit: HistoryLimit;

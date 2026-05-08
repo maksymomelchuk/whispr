@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { setDeepgramSettings as persistDeepgramSettings } from "../lib/api";
 import type { DeepgramSettings } from "../lib/types";
 import { CollapsibleCard } from "./CollapsibleCard";
+import { InfoTip } from "./InfoTip";
 
 interface Props {
   initial: DeepgramSettings;
@@ -118,13 +119,22 @@ export function TranscriptionField({
   const dirty = !same(state, initial);
 
   return (
-    <CollapsibleCard title="Deepgram" defaultOpen={defaultOpen} dirty={dirty}>
-      <p className="hint">
-        Deepgram nova-3 options. Defaults are off; enable what you need.
-      </p>
-
+    <CollapsibleCard
+      title="Deepgram"
+      defaultOpen={defaultOpen}
+      dirty={dirty}
+      info="Deepgram nova-3 options. Defaults are off; enable what you need."
+    >
       <div className="field-group">
-        <label className="field-label">Language</label>
+        <div
+          className="row"
+          style={{ alignItems: "center", gap: 6, marginBottom: 4 }}
+        >
+          <label className="field-label" style={{ margin: 0 }}>
+            Language
+          </label>
+          <InfoTip text="Language code (e.g. en, multi, es, de)." />
+        </div>
         <input
           type="text"
           value={state.language}
@@ -133,11 +143,6 @@ export function TranscriptionField({
           autoComplete="off"
           onChange={(e) => setLanguage(e.target.value)}
         />
-        <p className="hint-sm left">
-          Language code (e.g. <span className="mono">en</span>,{" "}
-          <span className="mono">multi</span>, <span className="mono">es</span>,{" "}
-          <span className="mono">de</span>).
-        </p>
       </div>
 
       <div className="options-list">
@@ -149,24 +154,38 @@ export function TranscriptionField({
               onChange={() => toggle(opt.key)}
             />
             <div className="option-text">
-              <div className="option-label">{opt.label}</div>
+              <div
+                className="option-label"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                {opt.label}
+                <InfoTip text={opt.description} />
+              </div>
               <div className="option-param mono">
                 {opt.param}={String(state[opt.key])}
               </div>
-              <div className="option-description">{opt.description}</div>
             </div>
           </label>
         ))}
 
         <div className="option-row keyterms-option">
           <div className="option-text">
-            <div className="option-label">Keyterm Prompting</div>
-            <div className="option-param mono">keyterm=TERM_OR_PHRASE</div>
-            <div className="option-description">
-              Boosts recognition of important words or phrases, like names,
-              product terms, or jargon. The model pays extra attention to these;
-              you can include up to 100 keyterms per request.
+            <div
+              className="option-label"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              Keyterm Prompting
+              <InfoTip text="Boosts recognition of important words or phrases, like names, product terms, or jargon. Up to 100 keyterms per request." />
             </div>
+            <div className="option-param mono">keyterm=TERM_OR_PHRASE</div>
             <div className="keyterms-list">
               {state.keyterms.map((kt, i) => (
                 <div key={i} className="replacement-row">

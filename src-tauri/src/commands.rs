@@ -1,5 +1,5 @@
 use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
-use crate::config::{self, DeepgramSettings, Replacement, Shortcut};
+use crate::config::{self, CleanupAuthMode, DeepgramSettings, Replacement, Shortcut};
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::permissions;
 use crate::state::AppState;
@@ -17,7 +17,11 @@ pub struct SettingsView {
     pub replacements: Vec<Replacement>,
     pub deepgram: DeepgramSettings,
     pub ai_cleanup_enabled: bool,
+    pub ai_cleanup_auth_mode: CleanupAuthMode,
     pub ai_cleanup_key_configured: bool,
+    pub ai_cleanup_oauth_token_configured: bool,
+    pub ai_cleanup_min_words: usize,
+    pub ai_cleanup_min_duration_ms: u64,
     pub input_device: Option<String>,
     pub pause_media_on_record: bool,
     pub history_limit: Option<usize>,
@@ -33,11 +37,19 @@ pub fn get_settings(app: AppHandle) -> SettingsView {
         replacements: s.replacements,
         deepgram: s.deepgram,
         ai_cleanup_enabled: s.ai_cleanup.enabled,
+        ai_cleanup_auth_mode: s.ai_cleanup.auth_mode,
         ai_cleanup_key_configured: s
             .ai_cleanup
             .anthropic_api_key
             .as_deref()
             .is_some_and(|k| !k.is_empty()),
+        ai_cleanup_oauth_token_configured: s
+            .ai_cleanup
+            .anthropic_oauth_token
+            .as_deref()
+            .is_some_and(|t| !t.is_empty()),
+        ai_cleanup_min_words: s.ai_cleanup.min_words,
+        ai_cleanup_min_duration_ms: s.ai_cleanup.min_duration_ms,
         input_device: s.input_device,
         pause_media_on_record: s.pause_media_on_record,
         history_limit: s.history_limit,
@@ -106,6 +118,36 @@ pub fn set_anthropic_api_key(app: AppHandle, api_key: String) -> Result<(), Stri
     } else {
         Some(api_key)
     };
+    config::save(&app, &settings)
+}
+
+#[tauri::command]
+pub fn set_anthropic_oauth_token(app: AppHandle, token: String) -> Result<(), String> {
+    let mut settings = config::load(&app);
+    settings.ai_cleanup.anthropic_oauth_token = if token.is_empty() {
+        None
+    } else {
+        Some(token)
+    };
+    config::save(&app, &settings)
+}
+
+#[tauri::command]
+pub fn set_cleanup_auth_mode(app: AppHandle, mode: CleanupAuthMode) -> Result<(), String> {
+    let mut settings = config::load(&app);
+    settings.ai_cleanup.auth_mode = mode;
+    config::save(&app, &settings)
+}
+
+#[tauri::command]
+pub fn set_cleanup_thresholds(
+    app: AppHandle,
+    min_words: usize,
+    min_duration_ms: u64,
+) -> Result<(), String> {
+    let mut settings = config::load(&app);
+    settings.ai_cleanup.min_words = min_words;
+    settings.ai_cleanup.min_duration_ms = min_duration_ms;
     config::save(&app, &settings)
 }
 

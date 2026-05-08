@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { setApiKey as persistApiKey } from "../lib/api";
+import { InfoTip } from "./InfoTip";
 
 interface Props {
   isConfigured: boolean;
@@ -53,19 +54,15 @@ export function ApiKeyField({ isConfigured, onSaved }: Props) {
 
   return (
     <section className="card">
-      <h2>Deepgram API Key</h2>
-      <p className="hint">
-        Required to transcribe audio. Paste your key from{" "}
-        <span className="mono">console.deepgram.com</span>.
-      </p>
-      <p className="hint-sm">
-        Status:{" "}
+      <div className="card-title-row">
+        <h2 style={{ margin: 0 }}>Deepgram API Key</h2>
+        <InfoTip text="Required to transcribe audio. Paste your key from console.deepgram.com." />
         {isConfigured ? (
           <span className="status ok">Configured</span>
         ) : (
           <span className="status err">Not set</span>
         )}
-      </p>
+      </div>
       <div className="row">
         <input
           type="password"

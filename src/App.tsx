@@ -163,15 +163,43 @@ function App() {
             />
             <AiCleanupField
               enabled={settings.ai_cleanup_enabled}
-              keyConfigured={settings.ai_cleanup_key_configured}
+              authMode={settings.ai_cleanup_auth_mode}
+              apiKeyConfigured={settings.ai_cleanup_key_configured}
+              oauthTokenConfigured={settings.ai_cleanup_oauth_token_configured}
               onEnabledChange={(ai_cleanup_enabled) =>
+                setSettings((s) => (s ? { ...s, ai_cleanup_enabled } : s))
+              }
+              onAuthModeChange={(ai_cleanup_auth_mode) =>
                 setSettings((s) =>
-                  s ? { ...s, ai_cleanup_enabled } : s,
+                  s ? { ...s, ai_cleanup_auth_mode } : s,
                 )
               }
-              onKeyConfiguredChange={(ai_cleanup_key_configured) =>
+              onApiKeyConfiguredChange={(ai_cleanup_key_configured) =>
                 setSettings((s) =>
                   s ? { ...s, ai_cleanup_key_configured } : s,
+                )
+              }
+              onOauthTokenConfiguredChange={(
+                ai_cleanup_oauth_token_configured,
+              ) =>
+                setSettings((s) =>
+                  s ? { ...s, ai_cleanup_oauth_token_configured } : s,
+                )
+              }
+              minWords={settings.ai_cleanup_min_words}
+              minDurationMs={settings.ai_cleanup_min_duration_ms}
+              onThresholdsChange={(
+                ai_cleanup_min_words,
+                ai_cleanup_min_duration_ms,
+              ) =>
+                setSettings((s) =>
+                  s
+                    ? {
+                        ...s,
+                        ai_cleanup_min_words,
+                        ai_cleanup_min_duration_ms,
+                      }
+                    : s,
                 )
               }
             />
