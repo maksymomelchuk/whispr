@@ -1,6 +1,6 @@
 [package]
 name = "whispr"
-version = "0.9.0"
+version = "1.0.0"
 description = "Push-to-talk dictation app for macOS, powered by Deepgram"
 edition = "2021"
 
