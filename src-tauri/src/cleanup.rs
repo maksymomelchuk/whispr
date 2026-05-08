@@ -29,7 +29,7 @@ pub enum Credential<'a> {
 }
 /// Hard ceiling on the LLM round-trip. Past this the pipeline pastes the
 /// raw transcript so a slow Anthropic response never strands the user.
-const TIMEOUT: Duration = Duration::from_millis(4000);
+const TIMEOUT: Duration = Duration::from_millis(5000);
 
 const SYSTEM_PROMPT: &str = r#"You clean up a raw speech-to-text transcript from a developer's dictation.
 
@@ -101,6 +101,26 @@ Output: We persist the userId and the auth token in localStorage.
 
 Output: only the cleaned transcript content. Do NOT include the <transcript> tags. No quotes, no preamble like "Here is the cleaned transcript:", no questions, no acknowledgments."#;
 
+#[derive(Debug)]
+pub enum CleanupError {
+    Timeout,
+    /// User must fix key/OAuth; caller focuses main window.
+    Credential(String),
+    /// Caller pastes raw silently.
+    Transient(String),
+}
+
+impl std::fmt::Display for CleanupError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CleanupError::Timeout => {
+                write!(f, "cleanup timed out ({}ms)", TIMEOUT.as_millis())
+            }
+            CleanupError::Credential(msg) | CleanupError::Transient(msg) => f.write_str(msg),
+        }
+    }
+}
+
 /// Returns the cleaned transcript with a trailing space (matches
 /// `transcription_stream::run` so the caller can paste without massaging)
 /// alongside token usage. Bounded by `TIMEOUT`; the caller falls back to
@@ -108,10 +128,11 @@ Output: only the cleaned transcript content. Do NOT include the <transcript> tag
 pub async fn run(
     transcript: &str,
     credential: Credential<'_>,
-) -> Result<(String, Usage), String> {
-    tokio::time::timeout(TIMEOUT, call(transcript, credential))
-        .await
-        .map_err(|_| format!("cleanup timed out ({}ms)", TIMEOUT.as_millis()))?
+) -> Result<(String, Usage), CleanupError> {
+    match tokio::time::timeout(TIMEOUT, call(transcript, credential)).await {
+        Ok(result) => result,
+        Err(_) => Err(CleanupError::Timeout),
+    }
 }
 
 fn http_client() -> &'static reqwest::Client {
@@ -150,7 +171,7 @@ fn system_for(credential: &Credential<'_>) -> &'static Value {
 async fn call(
     transcript: &str,
     credential: Credential<'_>,
-) -> Result<(String, Usage), String> {
+) -> Result<(String, Usage), CleanupError> {
     let body = serde_json::json!({
         "model": MODEL,
         "max_tokens": MAX_TOKENS,
@@ -176,7 +197,7 @@ async fn call(
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("cleanup request failed: {e}"))?;
+        .map_err(|e| CleanupError::Transient(format!("cleanup request failed: {e}")))?;
 
     let status = resp.status();
     if !status.is_success() {
@@ -188,21 +209,31 @@ async fn call(
                 let snippet: String = body.chars().take(200).collect();
                 format!("HTTP {status}: {snippet}")
             });
-        return Err(message);
+        return Err(if status == reqwest::StatusCode::UNAUTHORIZED
+            || status == reqwest::StatusCode::FORBIDDEN
+        {
+            CleanupError::Credential(message)
+        } else {
+            CleanupError::Transient(message)
+        });
     }
 
     let v: Value = resp
         .json()
         .await
-        .map_err(|e| format!("cleanup response parse failed: {e}"))?;
+        .map_err(|e| CleanupError::Transient(format!("cleanup response parse failed: {e}")))?;
 
     let cleaned = v["content"][0]["text"]
         .as_str()
-        .ok_or_else(|| "cleanup response missing content[0].text".to_string())?
+        .ok_or_else(|| {
+            CleanupError::Transient("cleanup response missing content[0].text".to_string())
+        })?
         .trim();
 
     if cleaned.is_empty() {
-        return Err("cleanup returned empty text".to_string());
+        return Err(CleanupError::Transient(
+            "cleanup returned empty text".to_string(),
+        ));
     }
 
     let usage = parse_usage(&v["usage"]);

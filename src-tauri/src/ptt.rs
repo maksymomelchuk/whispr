@@ -21,12 +21,22 @@ const TRANSCRIPTION_ERROR_EVENT: &str = "transcription-error";
 const PTT_PRESSED_EVENT: &str = "ptt-pressed";
 const PTT_RELEASED_EVENT: &str = "ptt-released";
 const PTT_THINKING_EVENT: &str = "ptt-thinking";
+const PTT_ERROR_EVENT: &str = "ptt-error";
 
-/// The `transcription-error` event drives an in-app toast, but the toast
-/// is only visible once the main window is on screen — show it explicitly.
+const ERROR_FLASH: Duration = Duration::from_millis(800);
+
+/// No window focus — caller still owns the target app's focus for paste.
+fn notify_silent(app: &AppHandle, message: impl Into<String>) {
+    let message = message.into();
+    eprintln!("[notify silent] {message}");
+    let _ = app.emit(TRANSCRIPTION_ERROR_EVENT, &message);
+    macos_notification(&message);
+}
+
+/// Pops main window. Only safe after any pending paste has gone out.
 fn notify_error(app: &AppHandle, message: impl Into<String>) {
     let message = message.into();
-    eprintln!("[notify] {message}");
+    eprintln!("[notify focus] {message}");
     let _ = app.emit(TRANSCRIPTION_ERROR_EVENT, &message);
 
     if let Some(window) = app.get_webview_window("main") {
@@ -34,15 +44,28 @@ fn notify_error(app: &AppHandle, message: impl Into<String>) {
         let _ = window.set_focus();
     }
 
-    #[cfg(target_os = "macos")]
-    {
-        let escaped = message.replace('\\', "\\\\").replace('"', "\\\"");
-        let script =
-            format!(r#"display notification "{escaped}" with title "Whispr""#);
+    macos_notification(&message);
+}
+
+/// osascript blocks 50–200ms — keep off the runtime worker.
+#[cfg(target_os = "macos")]
+fn macos_notification(message: &str) {
+    let escaped = message.replace('\\', "\\\\").replace('"', "\\\"");
+    let script = format!(r#"display notification "{escaped}" with title "Whispr""#);
+    tauri::async_runtime::spawn_blocking(move || {
         if let Err(e) = Command::new("osascript").args(["-e", &script]).output() {
             eprintln!("[notify] osascript failed: {e}");
         }
-    }
+    });
+}
+#[cfg(not(target_os = "macos"))]
+fn macos_notification(_message: &str) {}
+
+/// `Flash` paints the overlay red briefly; `Focus` raises the main window.
+enum Notice {
+    None,
+    Flash(String),
+    Focus(String),
 }
 
 // core-graphics keeps CGEventTapEnable private, but we need to call it from
@@ -295,20 +318,15 @@ async fn run_session(
         return Ok(());
     }
 
-    let final_text = maybe_cleanup(app, &transcript, speak_duration).await;
+    let (final_text, notice) = maybe_cleanup(app, &transcript, speak_duration).await;
 
     let words = final_text.split_whitespace().count() as u64;
     let seconds = speak_duration.as_secs() as u32;
-    // Keep a copy for the on-disk records — paste_text consumes the String.
     let history_entry = final_text.clone();
 
-    // Kick off paste first so the user sees text while the file I/O for
-    // stats and history runs concurrently. paste_text spawns its own
-    // worker thread and returns immediately.
-    if let Err(e) = paste::paste_text(final_text) {
-        eprintln!("[pipeline] paste failed: {e}");
-        notify_error(app, format!("Paste failed: {e}"));
-    }
+    // paste_handle must complete before any notify_error: set_focus()
+    // during the modifier-release wait would steal focus mid-paste.
+    let paste_handle = paste::paste_text(final_text);
 
     stats::record(app, words, seconds);
 
@@ -318,41 +336,59 @@ async fn run_session(
         }
         Err(e) => eprintln!("[pipeline] history append failed: {e}"),
     }
+
+    if let Err(e) = paste_handle.await {
+        eprintln!("[pipeline] paste worker failed: {e}");
+        notify_error(app, format!("Paste failed: {e}"));
+    }
+
+    match notice {
+        Notice::None => {}
+        Notice::Flash(message) => {
+            notify_silent(app, message);
+            tokio::time::sleep(ERROR_FLASH).await;
+        }
+        Notice::Focus(message) => notify_error(app, message),
+    }
+
     Ok(())
 }
 
-/// Run the LLM cleanup pass when enabled, configured, and the utterance is
-/// long enough to warrant it. On any failure (timeout, network, bad key) the
-/// raw transcript is returned and a toast is emitted — the user never loses
-/// a dictation just because cleanup couldn't run.
-async fn maybe_cleanup(app: &AppHandle, transcript: &str, speak_duration: Duration) -> String {
+async fn maybe_cleanup(
+    app: &AppHandle,
+    transcript: &str,
+    speak_duration: Duration,
+) -> (String, Notice) {
     let settings = config::load(app);
     let cleanup_settings = &settings.ai_cleanup;
 
     if !cleanup_settings.enabled {
-        return transcript.to_string();
+        return (transcript.to_string(), Notice::None);
     }
 
     let credential = match cleanup_settings.auth_mode {
         config::CleanupAuthMode::ApiKey => match cleanup_settings.anthropic_api_key.as_deref() {
             Some(k) if !k.is_empty() => cleanup::Credential::ApiKey(k),
             _ => {
-                notify_error(
-                    app,
-                    "AI cleanup is enabled but Anthropic API key is not set.",
+                return (
+                    transcript.to_string(),
+                    Notice::Focus(
+                        "AI cleanup is enabled but Anthropic API key is not set.".to_string(),
+                    ),
                 );
-                return transcript.to_string();
             }
         },
         config::CleanupAuthMode::Oauth => {
             match cleanup_settings.anthropic_oauth_token.as_deref() {
                 Some(t) if !t.is_empty() => cleanup::Credential::OauthToken(t),
                 _ => {
-                    notify_error(
-                        app,
-                        "AI cleanup is set to OAuth but no Claude Code token is configured.",
+                    return (
+                        transcript.to_string(),
+                        Notice::Focus(
+                            "AI cleanup is set to OAuth but no Claude Code token is configured."
+                                .to_string(),
+                        ),
                     );
-                    return transcript.to_string();
                 }
             }
         }
@@ -361,7 +397,7 @@ async fn maybe_cleanup(app: &AppHandle, transcript: &str, speak_duration: Durati
     let words = transcript.split_whitespace().count();
     let min_duration = Duration::from_millis(cleanup_settings.min_duration_ms);
     if words < cleanup_settings.min_words || speak_duration < min_duration {
-        return transcript.to_string();
+        return (transcript.to_string(), Notice::None);
     }
 
     let _ = app.emit(PTT_THINKING_EVENT, ());
@@ -369,12 +405,18 @@ async fn maybe_cleanup(app: &AppHandle, transcript: &str, speak_duration: Durati
     match cleanup::run(transcript, credential).await {
         Ok((cleaned, usage)) => {
             cleanup_stats::record(app, usage.input_tokens, usage.output_tokens);
-            cleaned
+            (cleaned, Notice::None)
         }
-        Err(e) => {
-            eprintln!("[pipeline] cleanup failed: {e}");
-            notify_error(app, format!("AI cleanup unavailable: {e}"));
-            transcript.to_string()
+        Err(err) => {
+            let message = format!("AI cleanup unavailable: {err}");
+            let notice = match err {
+                cleanup::CleanupError::Credential(_) => Notice::Focus(message),
+                cleanup::CleanupError::Timeout | cleanup::CleanupError::Transient(_) => {
+                    let _ = app.emit(PTT_ERROR_EVENT, ());
+                    Notice::Flash(message)
+                }
+            };
+            (transcript.to_string(), notice)
         }
     }
 }

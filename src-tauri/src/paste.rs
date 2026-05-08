@@ -2,6 +2,7 @@ use core_graphics::event::{CGEvent, CGEventFlags, CGEventTapLocation};
 use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 use std::thread;
 use std::time::{Duration, Instant};
+use tauri::async_runtime::{self, JoinHandle};
 
 // core-graphics doesn't expose CGEventSourceFlagsState. Redeclare the symbol
 // against the framework the crate already links — used to wait out any
@@ -19,6 +20,10 @@ const CHUNK_SIZE: usize = 20;
 /// Breathing room between chunks so busy receivers don't coalesce or drop
 /// adjacent events.
 const INTER_CHUNK_DELAY: Duration = Duration::from_millis(2);
+/// CGEvent::post queues asynchronously at the HID layer; hold long enough
+/// for queued events to land in the target app before the caller raises a
+/// window.
+const DRAIN_DELAY: Duration = Duration::from_millis(80);
 /// Upper bound on how long we'll stall waiting for the user to finish
 /// releasing their PTT modifiers. Better to type with stale modifiers than
 /// hang forever if something is genuinely held.
@@ -71,12 +76,13 @@ fn post_unicode(chunk: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub fn paste_text(text: String) -> Result<(), String> {
-    if text.is_empty() {
-        return Ok(());
-    }
-
-    thread::spawn(move || {
+/// Caller must await before raising any window — set_focus() during
+/// wait_for_modifier_release (up to 250ms) lands keystrokes in Whispr.
+pub fn paste_text(text: String) -> JoinHandle<()> {
+    async_runtime::spawn_blocking(move || {
+        if text.is_empty() {
+            return;
+        }
         wait_for_modifier_release();
 
         // chunk by characters, not bytes — arbitrary UTF-8 byte splits would
@@ -90,7 +96,6 @@ pub fn paste_text(text: String) -> Result<(), String> {
             }
             thread::sleep(INTER_CHUNK_DELAY);
         }
-    });
-
-    Ok(())
+        thread::sleep(DRAIN_DELAY);
+    })
 }
