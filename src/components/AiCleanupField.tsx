@@ -237,7 +237,7 @@ export function AiCleanupField({
                 />
                 <div className="option-text">
                   <div className="option-label label-with-info">
-                    Claude Code OAuth token (experimental)
+                    Claude Code OAuth token
                     <InfoTip text="Uses your Claude subscription. Mint with `claude setup-token`." />
                   </div>
                 </div>
