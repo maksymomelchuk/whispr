@@ -1,4 +1,4 @@
-use crate::history::{self, HISTORY_UPDATED_EVENT};
+use crate::history::{self, CleanupStatus, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::recorder::Recorder;
 use crate::state::{AppState, ModifierState};
 use crate::{
@@ -304,7 +304,7 @@ async fn run_session(
         Err(_) => return Err("Recording thread crashed".to_string()),
     };
 
-    let (transcript, speak_duration) =
+    let (raw_text, speak_duration) =
         match transcription_stream::run(app.clone(), format, chunk_rx).await {
             Ok(r) => r,
             Err(e) => {
@@ -314,23 +314,36 @@ async fn run_session(
                 return Err(e);
             }
         };
-    if transcript.is_empty() {
+    if raw_text.is_empty() {
         return Ok(());
     }
 
-    let (final_text, notice) = maybe_cleanup(app, &transcript, speak_duration).await;
+    let settings = config::load(app);
+    let replaced_text =
+        transcription_stream::apply_replacements(&raw_text, &settings.replacements);
+
+    let (final_text, cleanup_status, notice) =
+        maybe_cleanup(app, &settings, &replaced_text, speak_duration).await;
 
     let words = final_text.split_whitespace().count() as u64;
     let seconds = speak_duration.as_secs() as u32;
-    let history_entry = final_text.clone();
+
+    let entry = HistoryEntry {
+        timestamp: history::now_unix_seconds(),
+        speak_duration_ms: speak_duration.as_millis() as u64,
+        raw_text,
+        replaced_text,
+        final_text: final_text.clone(),
+        cleanup_status,
+    };
 
     // paste_handle must complete before any notify_error: set_focus()
     // during the modifier-release wait would steal focus mid-paste.
-    let paste_handle = paste::paste_text(final_text);
+    let paste_handle = paste::paste_text(format!("{final_text} "));
 
     stats::record(app, words, seconds);
 
-    match history::append(app, &history_entry) {
+    match history::append(app, entry) {
         Ok(_) => {
             let _ = app.emit(HISTORY_UPDATED_EVENT, ());
         }
@@ -356,14 +369,14 @@ async fn run_session(
 
 async fn maybe_cleanup(
     app: &AppHandle,
+    settings: &config::Settings,
     transcript: &str,
     speak_duration: Duration,
-) -> (String, Notice) {
-    let settings = config::load(app);
+) -> (String, CleanupStatus, Notice) {
     let cleanup_settings = &settings.ai_cleanup;
 
     if !cleanup_settings.enabled {
-        return (transcript.to_string(), Notice::None);
+        return (transcript.to_string(), CleanupStatus::Disabled, Notice::None);
     }
 
     let credential = match cleanup_settings.auth_mode {
@@ -372,6 +385,7 @@ async fn maybe_cleanup(
             _ => {
                 return (
                     transcript.to_string(),
+                    CleanupStatus::NoCredential,
                     Notice::Focus(
                         "AI cleanup is enabled but Anthropic API key is not set.".to_string(),
                     ),
@@ -384,6 +398,7 @@ async fn maybe_cleanup(
                 _ => {
                     return (
                         transcript.to_string(),
+                        CleanupStatus::NoCredential,
                         Notice::Focus(
                             "AI cleanup is set to OAuth but no Claude Code token is configured."
                                 .to_string(),
@@ -395,9 +410,20 @@ async fn maybe_cleanup(
     };
 
     let words = transcript.split_whitespace().count();
+    if words < cleanup_settings.min_words {
+        return (
+            transcript.to_string(),
+            CleanupStatus::SkippedBelowMinWords,
+            Notice::None,
+        );
+    }
     let min_duration = Duration::from_millis(cleanup_settings.min_duration_ms);
-    if words < cleanup_settings.min_words || speak_duration < min_duration {
-        return (transcript.to_string(), Notice::None);
+    if speak_duration < min_duration {
+        return (
+            transcript.to_string(),
+            CleanupStatus::SkippedBelowMinDuration,
+            Notice::None,
+        );
     }
 
     let _ = app.emit(PTT_THINKING_EVENT, ());
@@ -405,18 +431,24 @@ async fn maybe_cleanup(
     match cleanup::run(transcript, credential).await {
         Ok((cleaned, usage)) => {
             cleanup_stats::record(app, usage.input_tokens, usage.output_tokens);
-            (cleaned, Notice::None)
+            (cleaned, CleanupStatus::Ran, Notice::None)
         }
         Err(err) => {
             let message = format!("AI cleanup unavailable: {err}");
-            let notice = match err {
-                cleanup::CleanupError::Credential(_) => Notice::Focus(message),
-                cleanup::CleanupError::Timeout | cleanup::CleanupError::Transient(_) => {
+            let (status, notice) = match err {
+                cleanup::CleanupError::Credential(m) => {
+                    (CleanupStatus::FailedCredential(m), Notice::Focus(message))
+                }
+                cleanup::CleanupError::Timeout => {
                     let _ = app.emit(PTT_ERROR_EVENT, ());
-                    Notice::Flash(message)
+                    (CleanupStatus::FailedTimeout, Notice::Flash(message))
+                }
+                cleanup::CleanupError::Transient(m) => {
+                    let _ = app.emit(PTT_ERROR_EVENT, ());
+                    (CleanupStatus::FailedTransient(m), Notice::Flash(message))
                 }
             };
-            (transcript.to_string(), notice)
+            (transcript.to_string(), status, notice)
         }
     }
 }

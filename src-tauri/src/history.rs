@@ -9,10 +9,29 @@ const HISTORY_FILE: &str = "history.json";
 
 pub const HISTORY_UPDATED_EVENT: &str = "history-updated";
 
+/// Outcome of the optional Anthropic cleanup step. Persisted so the History
+/// tab can distinguish ran-with-no-change from skipped/failed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "message", rename_all = "snake_case")]
+pub enum CleanupStatus {
+    Disabled,
+    SkippedBelowMinWords,
+    SkippedBelowMinDuration,
+    NoCredential,
+    Ran,
+    FailedTimeout,
+    FailedTransient(String),
+    FailedCredential(String),
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryEntry {
-    pub text: String,
     pub timestamp: i64,
+    pub speak_duration_ms: u64,
+    pub raw_text: String,
+    pub replaced_text: String,
+    pub final_text: String,
+    pub cleanup_status: CleanupStatus,
 }
 
 fn history_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -34,7 +53,7 @@ pub fn load(app: &tauri::AppHandle) -> Vec<HistoryEntry> {
     };
     match fs::read_to_string(&path) {
         Ok(contents) => serde_json::from_str(&contents).unwrap_or_else(|e| {
-            eprintln!("[history] parse error on {path:?}, starting fresh: {e}");
+            eprintln!("[history] dropping incompatible history at {path:?}: {e}");
             Vec::new()
         }),
         Err(_) => Vec::new(),
@@ -56,34 +75,15 @@ fn save(app: &tauri::AppHandle, entries: &[HistoryEntry]) -> Result<(), String> 
 }
 
 /// Prepend a new entry (newest-first) and trim to the configured history
-/// limit. Trailing whitespace from the dictation pipeline is stripped before
-/// persisting — the pasted text keeps its space but history reads cleaner
-/// without it.
-pub fn append(app: &tauri::AppHandle, text: &str) -> Result<Vec<HistoryEntry>, String> {
-    let trimmed = text.trim();
-    if trimmed.is_empty() {
-        return Ok(load(app));
-    }
-
+/// limit.
+pub fn append(app: &tauri::AppHandle, entry: HistoryEntry) -> Result<Vec<HistoryEntry>, String> {
     let limit = config::load(app).history_limit;
     if matches!(limit, Some(0)) {
-        // Off — drop the entry on the floor.
         return Ok(Vec::new());
     }
 
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
-
     let mut entries = load(app);
-    entries.insert(
-        0,
-        HistoryEntry {
-            text: trimmed.to_string(),
-            timestamp,
-        },
-    );
+    entries.insert(0, entry);
     if let Some(max) = limit {
         entries.truncate(max);
     }
@@ -111,4 +111,11 @@ pub fn enforce_limit(app: &tauri::AppHandle, limit: Option<usize>) -> Result<(),
         }
         None => Ok(()),
     }
+}
+
+pub fn now_unix_seconds() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }

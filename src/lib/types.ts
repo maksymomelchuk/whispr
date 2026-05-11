@@ -38,9 +38,23 @@ export interface Settings {
   show_in_dock: boolean;
 }
 
+export type CleanupStatus =
+  | { kind: "disabled" }
+  | { kind: "skipped_below_min_words" }
+  | { kind: "skipped_below_min_duration" }
+  | { kind: "no_credential" }
+  | { kind: "ran" }
+  | { kind: "failed_timeout" }
+  | { kind: "failed_transient"; message: string }
+  | { kind: "failed_credential"; message: string };
+
 export interface HistoryEntry {
-  text: string;
   timestamp: number;
+  speak_duration_ms: number;
+  raw_text: string;
+  replaced_text: string;
+  final_text: string;
+  cleanup_status: CleanupStatus;
 }
 
 export interface StatsRow {

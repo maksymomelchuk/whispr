@@ -18,10 +18,11 @@ const FINAL_RESULTS_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// Open a Deepgram Live WebSocket, forward `chunks` as PCM frames until the
 /// channel closes (recorder torn down by PTT release), then ask Deepgram for
-/// final results and return the concatenated transcript with replacements
-/// applied. The returned `Duration` is the time from session start to chunk
-/// channel close — the user-perceived speaking duration, excluding the
-/// post-close final-results drain.
+/// final results and return the concatenated raw transcript. The returned
+/// `Duration` is the time from session start to chunk channel close — the
+/// user-perceived speaking duration, excluding the post-close final-results
+/// drain. Replacements are applied by the caller so each pipeline stage is
+/// observable for the history trace.
 pub async fn run(
     app: AppHandle,
     format: AudioFormat,
@@ -116,12 +117,7 @@ pub async fn run(
     .await;
 
     let raw = transcript_pieces.join(" ");
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return Ok((String::new(), speak_duration));
-    }
-    let replaced = apply_replacements(trimmed, &settings.replacements);
-    Ok((format!("{replaced} "), speak_duration))
+    Ok((raw.trim().to_string(), speak_duration))
 }
 
 fn build_ws_url(dg: &config::DeepgramSettings, format: AudioFormat) -> Result<Url, String> {
@@ -195,7 +191,7 @@ const CLING_LEFT: &[char] = &[',', ';', ':', '?', '!'];
 /// with a spaced version of `to`, and finally collapse spacing for compact
 /// and cling-left punctuation. The outer loop re-runs replacements until
 /// stable so chains like "dash dash help" fully resolve to "--help".
-fn apply_replacements(text: &str, replacements: &[Replacement]) -> String {
+pub fn apply_replacements(text: &str, replacements: &[Replacement]) -> String {
     if replacements.is_empty() {
         return text.to_string();
     }

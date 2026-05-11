@@ -7,7 +7,7 @@ import {
   getHistory,
   setHistoryLimit as persistHistoryLimit,
 } from "../lib/api";
-import type { HistoryEntry, HistoryLimit } from "../lib/types";
+import type { CleanupStatus, HistoryEntry, HistoryLimit } from "../lib/types";
 
 const LIMIT_OPTIONS: { label: string; value: string }[] = [
   { label: "Off", value: "0" },
@@ -267,26 +267,111 @@ interface ItemProps {
   now: number;
 }
 
-function HistoryItem({ entry, now }: ItemProps) {
+type Tone = "neutral" | "warn" | "error";
+interface CleanupBadge {
+  label: string;
+  tone: Tone;
+}
+interface StageNote {
+  text: string;
+  tone: "info" | "error";
+}
+interface CleanupView {
+  badge: CleanupBadge | null;
+  note: (textChanged: boolean) => StageNote | null;
+}
+
+function cleanupView(status: CleanupStatus): CleanupView {
+  switch (status.kind) {
+    case "disabled":
+      return {
+        badge: null,
+        note: () => ({ text: "Cleanup is disabled.", tone: "info" }),
+      };
+    case "ran":
+      return {
+        badge: null,
+        note: (changed) =>
+          changed
+            ? null
+            : { text: "Cleanup ran — no edits needed.", tone: "info" },
+      };
+    case "skipped_below_min_words":
+      return {
+        badge: { label: "cleanup skipped: too short", tone: "neutral" },
+        note: () => ({
+          text: "Skipped: below minimum word count.",
+          tone: "info",
+        }),
+      };
+    case "skipped_below_min_duration":
+      return {
+        badge: { label: "cleanup skipped: too brief", tone: "neutral" },
+        note: () => ({
+          text: "Skipped: below minimum duration.",
+          tone: "info",
+        }),
+      };
+    case "no_credential":
+      return {
+        badge: { label: "cleanup unconfigured", tone: "warn" },
+        note: () => ({
+          text: "Skipped: no credential configured.",
+          tone: "error",
+        }),
+      };
+    case "failed_timeout":
+      return {
+        badge: { label: "cleanup failed: timeout", tone: "error" },
+        note: () => ({ text: "Failed: request timed out.", tone: "error" }),
+      };
+    case "failed_transient":
+      return {
+        badge: { label: "cleanup failed", tone: "error" },
+        note: () => ({ text: `Failed: ${status.message}`, tone: "error" }),
+      };
+    case "failed_credential":
+      return {
+        badge: { label: "cleanup auth error", tone: "error" },
+        note: () => ({ text: `Auth error: ${status.message}`, tone: "error" }),
+      };
+  }
+}
+
+function formatHeldDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const s = ms / 1000;
+  return s < 10 ? `${s.toFixed(1)}s` : `${Math.round(s)}s`;
+}
+
+function useCopyFlash(): { copied: boolean; flash: (text: string) => void } {
   const [copied, setCopied] = useState(false);
-  const copyTimeout = useRef<number | null>(null);
+  const timeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
-      if (copyTimeout.current) window.clearTimeout(copyTimeout.current);
+      if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
     };
   }, []);
 
-  const handleCopy = async () => {
+  const flash = async (text: string) => {
     try {
-      await navigator.clipboard.writeText(entry.text);
+      await navigator.clipboard.writeText(text);
       setCopied(true);
-      if (copyTimeout.current) window.clearTimeout(copyTimeout.current);
-      copyTimeout.current = window.setTimeout(() => setCopied(false), 1200);
+      if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = window.setTimeout(() => setCopied(false), 1200);
     } catch (e) {
       console.error("copy failed", e);
     }
   };
+
+  return { copied, flash };
+}
+
+function HistoryItem({ entry, now }: ItemProps) {
+  const [traceOpen, setTraceOpen] = useState(false);
+  const { copied, flash } = useCopyFlash();
+  const view = cleanupView(entry.cleanup_status);
 
   return (
     <li className="history-item">
@@ -297,19 +382,103 @@ function HistoryItem({ entry, now }: ItemProps) {
         >
           {formatRelative(entry.timestamp, now)}
         </time>
+        {view.badge && (
+          <span className={`history-badge tone-${view.badge.tone}`}>
+            {view.badge.label}
+          </span>
+        )}
         <button
           type="button"
           className={`history-copy ${copied ? "copied" : ""}`}
           aria-label="Copy transcript"
           aria-live="polite"
-          onClick={handleCopy}
+          onClick={() => flash(entry.final_text)}
         >
           <span className="history-copy-label" aria-hidden="true">
             {copied ? "Copied" : "Copy"}
           </span>
         </button>
       </div>
-      <div className="history-text">{entry.text}</div>
+      <div className="history-text">{entry.final_text}</div>
+      <button
+        type="button"
+        className="history-trace-toggle"
+        aria-expanded={traceOpen}
+        onClick={() => setTraceOpen((o) => !o)}
+      >
+        {traceOpen ? "Hide trace" : "Show trace"}
+      </button>
+      {traceOpen && <HistoryTrace entry={entry} cleanupNote={view.note} />}
     </li>
+  );
+}
+
+interface TraceProps {
+  entry: HistoryEntry;
+  cleanupNote: (textChanged: boolean) => StageNote | null;
+}
+
+function HistoryTrace({ entry, cleanupNote }: TraceProps) {
+  const cleanupTextChanged = entry.final_text !== entry.replaced_text;
+  return (
+    <div className="history-trace">
+      <Stage label="Deepgram" text={entry.raw_text} />
+      <Stage
+        label="Replacements"
+        text={entry.replaced_text}
+        previousText={entry.raw_text}
+      />
+      <Stage
+        label="AI cleanup"
+        text={entry.final_text}
+        note={cleanupNote(cleanupTextChanged)}
+      />
+      <div className="history-trace-meta">
+        Held PTT for {formatHeldDuration(entry.speak_duration_ms)}
+      </div>
+    </div>
+  );
+}
+
+interface StageProps {
+  label: string;
+  text: string;
+  previousText?: string;
+  note?: StageNote | null;
+}
+
+function Stage({ label, text, previousText, note }: StageProps) {
+  const { copied, flash } = useCopyFlash();
+  const unchanged = previousText !== undefined && previousText === text;
+  return (
+    <div className="history-stage">
+      <div className="history-stage-head">
+        <span className="history-stage-label">{label}</span>
+        {!unchanged && text.length > 0 && (
+          <button
+            type="button"
+            className={`history-stage-copy ${copied ? "copied" : ""}`}
+            aria-label={`Copy ${label} output`}
+            onClick={() => flash(text)}
+          >
+            {copied ? "Copied" : "Copy"}
+          </button>
+        )}
+      </div>
+      {unchanged ? (
+        <div className="history-stage-unchanged">(no change)</div>
+      ) : (
+        <div className="history-stage-text">
+          {text.length === 0 ? (
+            <span className="history-stage-empty">(empty)</span>
+          ) : (
+            text
+          )}
+        </div>
+      )}
+      {note && (
+        <div className={`history-stage-note tone-${note.tone}`}>{note.text}</div>
+      )}
+    </div>
   );
 }

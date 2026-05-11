@@ -121,10 +121,10 @@ impl std::fmt::Display for CleanupError {
     }
 }
 
-/// Returns the cleaned transcript with a trailing space (matches
-/// `transcription_stream::run` so the caller can paste without massaging)
-/// alongside token usage. Bounded by `TIMEOUT`; the caller falls back to
-/// the raw transcript past that.
+/// Returns the cleaned transcript (trimmed, no trailing space) alongside
+/// token usage. Bounded by `TIMEOUT`; the caller falls back to the raw
+/// transcript past that. The paste pipeline adds its own trailing space at
+/// the paste call site so each history stage stays in a canonical form.
 pub async fn run(
     transcript: &str,
     credential: Credential<'_>,
@@ -237,7 +237,7 @@ async fn call(
     }
 
     let usage = parse_usage(&v["usage"]);
-    Ok((format!("{cleaned} "), usage))
+    Ok((cleaned.to_string(), usage))
 }
 
 /// Sums the three input-token variants (`input_tokens`,
