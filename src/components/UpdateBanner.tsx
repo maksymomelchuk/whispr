@@ -24,7 +24,10 @@ export function UpdateBanner() {
   const { version } = state.update;
   return (
     <div className="update-banner" role="status">
-      <span>Update available (v{version})</span>
+      <span>
+        Update available (
+        <span className="update-banner-version">v{version}</span>)
+      </span>
       <button className="primary" onClick={installAndRestart}>
         Install &amp; restart
       </button>

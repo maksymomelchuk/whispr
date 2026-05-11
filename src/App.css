@@ -1351,8 +1351,9 @@ button.primary:hover:not(:disabled) {
   left: 50%;
   bottom: 24px;
   transform: translateX(-50%);
-  max-width: 420px;
-  padding: 8px 8px 8px 14px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 4px 4px 4px 14px;
   border-radius: 999px;
   border: 1px solid var(--banner-border);
   background: var(--banner-bg);
@@ -1360,9 +1361,15 @@ button.primary:hover:not(:disabled) {
   display: flex;
   align-items: center;
   gap: 10px;
+  white-space: nowrap;
   box-shadow: var(--shadow-banner);
   font-size: 12px;
   z-index: 1000;
+  animation: update-banner-in 220ms ease-out;
+}
+
+.update-banner > * {
+  flex-shrink: 0;
 }
 
 .update-banner.err {
@@ -1371,10 +1378,38 @@ button.primary:hover:not(:disabled) {
   color: var(--danger-soft-text);
 }
 
+.update-banner-version {
+  font-variant-numeric: tabular-nums;
+}
+
 .update-banner button.primary {
   border-radius: 999px;
-  padding: 4px 12px;
+  padding: 5px 14px;
   font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.update-banner button.primary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@keyframes update-banner-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-banner {
+    animation: none;
+  }
 }
 
 /* Segmented control used for the theme picker. */
