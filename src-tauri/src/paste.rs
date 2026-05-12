@@ -23,7 +23,7 @@ const INTER_CHUNK_DELAY: Duration = Duration::from_millis(2);
 /// CGEvent::post queues asynchronously at the HID layer; hold long enough
 /// for queued events to land in the target app before the caller raises a
 /// window.
-const DRAIN_DELAY: Duration = Duration::from_millis(80);
+const DRAIN_DELAY: Duration = Duration::from_millis(20);
 /// Upper bound on how long we'll stall waiting for the user to finish
 /// releasing their PTT modifiers. Better to type with stale modifiers than
 /// hang forever if something is genuinely held.
