@@ -123,6 +123,7 @@ pub fn run() {
             commands::set_input_device,
             commands::set_pause_media_on_record,
             commands::set_show_in_dock,
+            commands::set_show_live_preview,
             commands::get_history,
             commands::clear_history,
             commands::set_history_limit,

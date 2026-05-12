@@ -3,11 +3,12 @@ use tauri::{
 };
 
 const OVERLAY_LABEL: &str = "overlay";
-/// Logical size in points — the window's physical pixel size is this times
-/// the monitor scale factor.
-const OVERLAY_WIDTH: f64 = 110.0;
-const OVERLAY_HEIGHT: f64 = 32.0;
-/// Distance from the bottom edge of the primary monitor, in logical points.
+/// Logical points (multiplied by monitor scale for physical pixels). The
+/// inner pill collapses via CSS, so the slack here stays click-through.
+const OVERLAY_WIDTH: f64 = 640.0;
+const OVERLAY_HEIGHT: f64 = 120.0;
+/// Distance from monitor bottom to window bottom — the pill anchors to the
+/// window bottom in CSS so this also fixes the pill's resting position.
 const BOTTOM_MARGIN: f64 = 28.0;
 
 pub fn create(app: &AppHandle) -> Result<(), String> {

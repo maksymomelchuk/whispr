@@ -26,6 +26,7 @@ pub struct SettingsView {
     pub pause_media_on_record: bool,
     pub history_limit: Option<usize>,
     pub show_in_dock: bool,
+    pub show_live_preview: bool,
 }
 
 #[tauri::command]
@@ -54,6 +55,7 @@ pub fn get_settings(app: AppHandle) -> SettingsView {
         pause_media_on_record: s.pause_media_on_record,
         history_limit: s.history_limit,
         show_in_dock: s.show_in_dock,
+        show_live_preview: s.show_live_preview,
     }
 }
 
@@ -136,6 +138,11 @@ pub fn set_pause_media_on_record(
     config::update(&app, |s| s.pause_media_on_record = enabled)?;
     *state.pause_media_on_record.lock().unwrap() = enabled;
     Ok(())
+}
+
+#[tauri::command]
+pub fn set_show_live_preview(app: AppHandle, enabled: bool) -> Result<(), String> {
+    config::update(&app, |s| s.show_live_preview = enabled)
 }
 
 #[tauri::command]

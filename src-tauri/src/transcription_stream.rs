@@ -3,7 +3,7 @@ use crate::recorder::AudioFormat;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 use std::time::{Duration, Instant};
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::protocol::Message;
@@ -15,6 +15,11 @@ const DEEPGRAM_WS_BASE: &str = "wss://api.deepgram.com/v1/listen";
 /// we send `CloseStream`. The server typically responds within a few hundred
 /// ms; we cap it so a hung WS never blocks the paste indefinitely.
 const FINAL_RESULTS_TIMEOUT: Duration = Duration::from_secs(3);
+
+const TRANSCRIPT_PARTIAL_EVENT: &str = "transcript-partial";
+/// Bounds the overlay rerender rate — Deepgram interims arrive faster than
+/// React can usefully repaint, and `compose_preview` is non-trivial.
+const PARTIAL_THROTTLE: Duration = Duration::from_millis(100);
 
 /// Open a Deepgram Live WebSocket, forward `chunks` as PCM frames until the
 /// channel closes (recorder torn down by PTT release), then ask Deepgram for
@@ -35,6 +40,8 @@ pub async fn run(
         .clone()
         .filter(|k| !k.is_empty())
         .ok_or_else(|| "API key not configured".to_string())?;
+    let show_live_preview = settings.show_live_preview;
+    let replacements = settings.replacements.clone();
 
     let url = build_ws_url(&settings.deepgram, format)?;
     let mut req = url
@@ -54,6 +61,9 @@ pub async fn run(
     let (mut sink, mut stream) = ws.split();
 
     let mut transcript_pieces: Vec<String> = Vec::new();
+    let mut current_interim: String = String::new();
+    let mut last_emitted: String = String::new();
+    let mut last_emit: Option<Instant> = None;
 
     // Phase 1: forward audio while it's still flowing. Process server
     // messages opportunistically so the WS receive buffer doesn't pile up.
@@ -74,9 +84,31 @@ pub async fn run(
                 let msg = msg.map_err(|e| format!("Deepgram WS recv failed: {e}"))?;
                 match msg {
                     Message::Text(t) => {
-                        if let Some(piece) = extract_final_transcript(&t) {
-                            if !piece.is_empty() {
-                                transcript_pieces.push(piece);
+                        if let Some((is_final, piece)) = extract_transcript_message(&t) {
+                            if is_final {
+                                if !piece.is_empty() {
+                                    transcript_pieces.push(piece);
+                                }
+                                current_interim.clear();
+                            } else {
+                                current_interim = piece;
+                            }
+                            if show_live_preview {
+                                let now = Instant::now();
+                                let throttled = last_emit
+                                    .is_some_and(|prev| now.duration_since(prev) < PARTIAL_THROTTLE);
+                                if !throttled {
+                                    let preview = compose_preview(
+                                        &transcript_pieces,
+                                        &current_interim,
+                                        &replacements,
+                                    );
+                                    if preview != last_emitted {
+                                        let _ = app.emit(TRANSCRIPT_PARTIAL_EVENT, &preview);
+                                        last_emit = Some(now);
+                                        last_emitted = preview;
+                                    }
+                                }
                             }
                         }
                     }
@@ -89,7 +121,9 @@ pub async fn run(
     let speak_duration = speak_start.elapsed();
 
     // Phase 2: ask Deepgram to flush, then drain remaining finals with a
-    // bounded timeout so a stuck server can't block the paste.
+    // bounded timeout so a stuck server can't block the paste. Partial
+    // emission is deliberately skipped — the overlay holds the last
+    // preview until we have the final.
     let close_msg = serde_json::json!({"type": "CloseStream"}).to_string();
     if let Err(e) = sink.send(Message::Text(close_msg)).await {
         eprintln!("[stream] CloseStream send failed: {e}");
@@ -99,7 +133,7 @@ pub async fn run(
         while let Some(msg) = stream.next().await {
             match msg {
                 Ok(Message::Text(t)) => {
-                    if let Some(piece) = extract_final_transcript(&t) {
+                    if let Some((true, piece)) = extract_transcript_message(&t) {
                         if !piece.is_empty() {
                             transcript_pieces.push(piece);
                         }
@@ -117,7 +151,31 @@ pub async fn run(
     .await;
 
     let raw = transcript_pieces.join(" ");
-    Ok((raw.trim().to_string(), speak_duration))
+    let raw = raw.trim().to_string();
+
+    if show_live_preview && !raw.is_empty() {
+        let final_preview = apply_replacements(&raw, &replacements);
+        if final_preview != last_emitted {
+            let _ = app.emit(TRANSCRIPT_PARTIAL_EVENT, &final_preview);
+        }
+    }
+
+    Ok((raw, speak_duration))
+}
+
+fn compose_preview(
+    finals: &[String],
+    interim: &str,
+    replacements: &[Replacement],
+) -> String {
+    let mut preview = finals.join(" ");
+    if !interim.is_empty() {
+        if !preview.is_empty() {
+            preview.push(' ');
+        }
+        preview.push_str(interim);
+    }
+    apply_replacements(&preview, replacements)
 }
 
 fn build_ws_url(dg: &config::DeepgramSettings, format: AudioFormat) -> Result<Url, String> {
@@ -153,21 +211,16 @@ fn build_ws_url(dg: &config::DeepgramSettings, format: AudioFormat) -> Result<Ur
     Ok(url)
 }
 
-/// Pull the transcript out of a Deepgram Live `Results` message, but only
-/// when `is_final` is true. Interim results would otherwise stack on top of
-/// the final ones, duplicating speech.
-fn extract_final_transcript(text: &str) -> Option<String> {
+fn extract_transcript_message(text: &str) -> Option<(bool, String)> {
     let v: Value = serde_json::from_str(text).ok()?;
     if v.get("type").and_then(|x| x.as_str()) != Some("Results") {
         return None;
     }
-    if !v.get("is_final").and_then(|x| x.as_bool()).unwrap_or(false) {
-        return None;
-    }
+    let is_final = v.get("is_final").and_then(|x| x.as_bool()).unwrap_or(false);
     let t = v["channel"]["alternatives"][0]["transcript"]
         .as_str()?
         .trim();
-    Some(t.to_string())
+    Some((is_final, t.to_string()))
 }
 
 fn pcm_bytes(samples: &[i16]) -> Vec<u8> {

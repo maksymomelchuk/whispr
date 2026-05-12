@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
-
-import { setShowInDock as persistShowInDock } from "../lib/api";
+import {
+  setShowInDock as persistShowInDock,
+  setShowLivePreview as persistShowLivePreview,
+} from "../lib/api";
+import { usePersistedToggle } from "../hooks/usePersistedToggle";
 import type { ThemePreference } from "../hooks/useTheme";
 
 interface Props {
@@ -8,6 +10,8 @@ interface Props {
   onChange: (next: ThemePreference) => void;
   showInDock: boolean;
   onShowInDockChange: (next: boolean) => void;
+  showLivePreview: boolean;
+  onShowLivePreviewChange: (next: boolean) => void;
 }
 
 const OPTIONS: { value: ThemePreference; label: string }[] = [
@@ -21,26 +25,20 @@ export function AppearanceField({
   onChange,
   showInDock,
   onShowInDockChange,
+  showLivePreview,
+  onShowLivePreviewChange,
 }: Props) {
-  const [dockEnabled, setDockEnabled] = useState(showInDock);
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setDockEnabled(showInDock);
-  }, [showInDock]);
-
-  const toggleDock = async () => {
-    const next = !dockEnabled;
-    setDockEnabled(next);
-    setSaveError(null);
-    try {
-      await persistShowInDock(next);
-      onShowInDockChange(next);
-    } catch (e) {
-      setDockEnabled(!next);
-      setSaveError(String(e));
-    }
-  };
+  const dock = usePersistedToggle(
+    showInDock,
+    persistShowInDock,
+    onShowInDockChange,
+  );
+  const preview = usePersistedToggle(
+    showLivePreview,
+    persistShowLivePreview,
+    onShowLivePreviewChange,
+  );
+  const saveError = dock.error ?? preview.error;
 
   return (
     <section className="card">
@@ -77,8 +75,18 @@ export function AppearanceField({
         <input
           type="checkbox"
           role="switch"
-          checked={dockEnabled}
-          onChange={toggleDock}
+          checked={dock.enabled}
+          onChange={dock.toggle}
+        />
+      </label>
+
+      <label className="toggle-row">
+        <span className="toggle-row-label">Show live preview while dictating</span>
+        <input
+          type="checkbox"
+          role="switch"
+          checked={preview.enabled}
+          onChange={preview.toggle}
         />
       </label>
 

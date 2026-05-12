@@ -36,6 +36,7 @@ export interface Settings {
   pause_media_on_record: boolean;
   history_limit: HistoryLimit;
   show_in_dock: boolean;
+  show_live_preview: boolean;
 }
 
 export type CleanupStatus =

@@ -143,6 +143,10 @@ function App() {
               onShowInDockChange={(show_in_dock) =>
                 setSettings((s) => (s ? { ...s, show_in_dock } : s))
               }
+              showLivePreview={settings.show_live_preview}
+              onShowLivePreviewChange={(show_live_preview) =>
+                setSettings((s) => (s ? { ...s, show_live_preview } : s))
+              }
             />
           </>
         )}

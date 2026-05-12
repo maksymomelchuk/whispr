@@ -58,6 +58,9 @@ export const setPauseMediaOnRecord = (enabled: boolean) =>
 export const setShowInDock = (enabled: boolean) =>
   invoke<void>("set_show_in_dock", { enabled });
 
+export const setShowLivePreview = (enabled: boolean) =>
+  invoke<void>("set_show_live_preview", { enabled });
+
 export const getHistory = () => invoke<HistoryEntry[]>("get_history");
 
 export const clearHistory = () => invoke<void>("clear_history");
