@@ -76,6 +76,24 @@ fn post_unicode(chunk: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Pick the chunk end: hard cap at CHUNK_SIZE, but back up to the last
+/// whitespace within the chunk so boundaries land between words. Receivers
+/// that occasionally inject a space at the boundary then drop it where a
+/// space already belongs. Only a chunk containing no whitespace at all
+/// (e.g. a long URL) falls back to the hard split.
+fn next_chunk_end(chars: &[char], start: usize) -> usize {
+    let hard_end = (start + CHUNK_SIZE).min(chars.len());
+    if hard_end == chars.len() {
+        return hard_end;
+    }
+    for i in ((start + 1)..hard_end).rev() {
+        if chars[i - 1].is_whitespace() {
+            return i;
+        }
+    }
+    hard_end
+}
+
 /// Caller must await before raising any window — set_focus() during
 /// wait_for_modifier_release (up to 250ms) lands keystrokes in Whispr.
 pub fn paste_text(text: String) -> JoinHandle<()> {
@@ -88,12 +106,15 @@ pub fn paste_text(text: String) -> JoinHandle<()> {
         // chunk by characters, not bytes — arbitrary UTF-8 byte splits would
         // corrupt multi-byte sequences when converted to UTF-16 downstream.
         let chars: Vec<char> = text.chars().collect();
-        for window in chars.chunks(CHUNK_SIZE) {
-            let chunk: String = window.iter().collect();
+        let mut start = 0;
+        while start < chars.len() {
+            let end = next_chunk_end(&chars, start);
+            let chunk: String = chars[start..end].iter().collect();
             if let Err(e) = post_unicode(&chunk) {
                 eprintln!("[paste] post_unicode failed: {e}");
                 break;
             }
+            start = end;
             thread::sleep(INTER_CHUNK_DELAY);
         }
         thread::sleep(DRAIN_DELAY);
