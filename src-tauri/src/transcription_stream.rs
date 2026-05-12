@@ -20,6 +20,10 @@ const TRANSCRIPT_PARTIAL_EVENT: &str = "transcript-partial";
 /// Bounds the overlay rerender rate — Deepgram interims arrive faster than
 /// React can usefully repaint, and `compose_preview` is non-trivial.
 const PARTIAL_THROTTLE: Duration = Duration::from_millis(100);
+const AUDIO_LEVEL_EVENT: &str = "audio-level";
+/// 30 Hz is smooth enough for the wave; cpal callbacks fire 2–4× faster on
+/// most input configs and would otherwise flood the IPC channel.
+const LEVEL_THROTTLE: Duration = Duration::from_millis(33);
 
 /// Open a Deepgram Live WebSocket, forward `chunks` as PCM frames until the
 /// channel closes (recorder torn down by PTT release), then ask Deepgram for
@@ -64,6 +68,8 @@ pub async fn run(
     let mut current_interim: String = String::new();
     let mut last_emitted: String = String::new();
     let mut last_emit: Option<Instant> = None;
+    let mut smoothed_level: f32 = 0.0;
+    let mut last_level_emit: Option<Instant> = None;
 
     // Phase 1: forward audio while it's still flowing. Process server
     // messages opportunistically so the WS receive buffer doesn't pile up.
@@ -72,8 +78,21 @@ pub async fn run(
             maybe_chunk = chunks.recv() => {
                 match maybe_chunk {
                     Some(chunk) => {
+                        let raw_level = compute_level(&chunk);
                         if let Err(e) = sink.send(Message::Binary(pcm_bytes(&chunk))).await {
                             return Err(format!("Deepgram WS send failed: {e}"));
+                        }
+                        // Asymmetric EMA: fast attack so vowels punch, slow
+                        // decay so the wave doesn't snap to silent between
+                        // syllables.
+                        let k = if raw_level > smoothed_level { 0.6 } else { 0.25 };
+                        smoothed_level = smoothed_level + (raw_level - smoothed_level) * k;
+                        let now = Instant::now();
+                        if last_level_emit
+                            .map_or(true, |t| now.duration_since(t) >= LEVEL_THROTTLE)
+                        {
+                            let _ = app.emit(AUDIO_LEVEL_EVENT, smoothed_level);
+                            last_level_emit = Some(now);
                         }
                     }
                     None => break, // recorder torn down → end of audio
@@ -119,6 +138,9 @@ pub async fn run(
         }
     }
     let speak_duration = speak_start.elapsed();
+    // Settle the wave to flat — the pill stays up through "thinking" and
+    // we don't want it dancing on the last cached level.
+    let _ = app.emit(AUDIO_LEVEL_EVENT, 0.0f32);
 
     // Phase 2: ask Deepgram to flush, then drain remaining finals with a
     // bounded timeout so a stuck server can't block the paste. Partial
@@ -221,6 +243,25 @@ fn extract_transcript_message(text: &str) -> Option<(bool, String)> {
         .as_str()?
         .trim();
     Some((is_final, t.to_string()))
+}
+
+/// dB range maps perceived loudness — linear RMS leaves quiet mics barely
+/// visible. FLOOR_DB clamps room tone to zero so the bars stay flat in
+/// silence.
+fn compute_level(chunk: &[i16]) -> f32 {
+    if chunk.is_empty() {
+        return 0.0;
+    }
+    let sum_sq: f64 = chunk.iter().map(|&s| (s as f64).powi(2)).sum();
+    let rms = (sum_sq / chunk.len() as f64).sqrt() / i16::MAX as f64;
+    if rms <= 0.0 {
+        return 0.0;
+    }
+    const FLOOR_DB: f64 = -40.0;
+    const CEIL_DB: f64 = -10.0;
+    let db = 20.0 * rms.log10();
+    let n = ((db - FLOOR_DB) / (CEIL_DB - FLOOR_DB)).clamp(0.0, 1.0);
+    n as f32
 }
 
 fn pcm_bytes(samples: &[i16]) -> Vec<u8> {

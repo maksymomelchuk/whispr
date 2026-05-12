@@ -2,7 +2,7 @@ use crate::history::{self, CleanupStatus, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::recorder::Recorder;
 use crate::state::{AppState, ModifierState};
 use crate::{
-    cleanup, cleanup_stats, config, media, overlay, paste, stats, transcription_stream,
+    cleanup, cleanup_stats, config, media, overlay, paste, stats, target_app, transcription_stream,
 };
 use std::process::Command;
 use std::time::Duration;
@@ -559,6 +559,10 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                     if modifiers_ok {
                         *active = true;
                         let device = state.input_device.lock().unwrap().clone();
+                        // Capture frontmost app before overlay::show so the
+                        // worker's frontmostApplication() lookup can't race
+                        // any window-server bookkeeping that show() triggers.
+                        target_app::capture(app.clone());
                         // Spawn up front so the WS handshake overlaps with
                         // capture rather than waiting for PTT release.
                         spawn_session(app.clone(), recorder.clone(), device);

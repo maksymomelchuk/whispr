@@ -1,9 +1,15 @@
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import "./OverlayApp.css";
 
 type Mode = "recording" | "thinking" | "error";
+
+type TargetApp = {
+  bundleId: string;
+  name: string;
+  iconDataUrl: string;
+};
 
 const SPINNER_TICKS = 12;
 // On overflow we slice to the tail and prepend an ellipsis so the newest
@@ -57,17 +63,15 @@ function ErrorIcon() {
   );
 }
 
-function Waveform() {
-  return (
-    <div className="overlay-wave" aria-hidden="true">
-      <span className="overlay-bar" />
-      <span className="overlay-bar" />
-      <span className="overlay-bar" />
-      <span className="overlay-bar" />
-      <span className="overlay-bar" />
-    </div>
-  );
-}
+const Waveform = ({ levelRef }: { levelRef: React.RefObject<HTMLDivElement | null> }) => (
+  <div ref={levelRef} className="overlay-wave" aria-hidden="true">
+    <span className="overlay-bar" />
+    <span className="overlay-bar" />
+    <span className="overlay-bar" />
+    <span className="overlay-bar" />
+    <span className="overlay-bar" />
+  </div>
+);
 
 function formatElapsed(seconds: number) {
   const total = Math.max(0, seconds);
@@ -82,6 +86,14 @@ export function OverlayApp() {
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [ready, setReady] = useState(false);
+  const [target, setTarget] = useState<TargetApp | null>(null);
+  const waveRef = useRef<HTMLDivElement>(null);
+
+  // Imperative write so 30 Hz mic frames don't churn React state.
+  const applyLevel = (level: number) => {
+    const node = waveRef.current;
+    if (node) node.style.setProperty("--overlay-level", level.toFixed(3));
+  };
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setReady(true));
@@ -108,6 +120,14 @@ export function OverlayApp() {
         setElapsedSec(0);
         setMode("recording");
         setPartial("");
+        setTarget(null);
+        applyLevel(0);
+      }),
+      listen<TargetApp>("target-app", (e) => {
+        if (e.payload) setTarget(e.payload);
+      }),
+      listen<number>("audio-level", (e) => {
+        applyLevel(typeof e.payload === "number" ? e.payload : 0);
       }),
       listen("ptt-thinking", () => {
         setMode("thinking");
@@ -147,8 +167,22 @@ export function OverlayApp() {
       >
         {showPreview && <div className="overlay-partial">{displayText}</div>}
         <div className="overlay-pill-footer">
-          <span className="overlay-timer">{formatElapsed(elapsedSec)}</span>
-          {mode === "recording" && <Waveform />}
+          <div className="overlay-pill-leading">
+            <div className="overlay-target-icon-slot">
+              {target && (
+                <img
+                  key={target.bundleId}
+                  className="overlay-target-icon"
+                  src={target.iconDataUrl}
+                  alt=""
+                  title={target.name}
+                  draggable={false}
+                />
+              )}
+            </div>
+            <span className="overlay-timer">{formatElapsed(elapsedSec)}</span>
+          </div>
+          {mode === "recording" && <Waveform levelRef={waveRef} />}
           {mode === "thinking" && <Spinner />}
           {mode === "error" && <ErrorIcon />}
         </div>

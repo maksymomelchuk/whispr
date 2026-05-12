@@ -64,6 +64,43 @@ body:has(.overlay-root) {
   min-height: 22px;
 }
 
+.overlay-pill-leading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Fixed 16×16 slot — kept in the layout even before the icon resolves so the
+   timer doesn't jump rightward when the async capture lands. */
+.overlay-target-icon-slot {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.overlay-target-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  display: block;
+  -webkit-user-drag: none;
+  user-select: none;
+  pointer-events: none;
+  animation: overlay-icon-in 200ms ease-out;
+}
+
+@keyframes overlay-icon-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .overlay-timer {
   font-family:
     -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
@@ -106,17 +143,21 @@ body:has(.overlay-root) {
 }
 
 .overlay-wave {
+  --overlay-level: 0;
   display: flex;
   align-items: center;
   gap: 3px;
   height: 16px;
 }
 
+/* When --overlay-level is 0, the keyframe peak collapses to the resting
+   height and the bars sit flat even though the animation still runs. */
 .overlay-bar {
   display: block;
   width: 3px;
   border-radius: 2px;
   background: #ffffff;
+  height: 6px;
   animation: overlay-wave 1s ease-in-out infinite;
 }
 
@@ -139,10 +180,10 @@ body:has(.overlay-root) {
 @keyframes overlay-wave {
   0%,
   100% {
-    height: 3px;
+    height: 6px;
   }
   50% {
-    height: 14px;
+    height: calc(6px + var(--overlay-level, 0) * 10px);
   }
 }
 
@@ -172,7 +213,8 @@ body:has(.overlay-root) {
   .overlay-pill {
     transition: none;
   }
-  .overlay-partial {
+  .overlay-partial,
+  .overlay-target-icon {
     animation: none;
   }
   .overlay-spinner {

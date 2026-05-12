@@ -26,6 +26,8 @@ mod paste;
 mod ptt;
 #[cfg(target_os = "macos")]
 mod recorder;
+#[cfg(target_os = "macos")]
+mod target_app;
 
 use state::AppState;
 use tauri::{Manager, WindowEvent};
