@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "sandcastle": "npx tsx .sandcastle/main.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
