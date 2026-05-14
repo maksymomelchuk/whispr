@@ -1,10 +1,9 @@
 //! 16 kHz mono FLAC encoder for Groq's `/openai/v1/audio/transcriptions` ingest.
 //!
-//! Pure module: takes interleaved i16 PCM at cpal's native rate/channel count,
-//! downmixes to mono, resamples to 16 kHz, and emits a complete FLAC byte
-//! stream. Whisper is not sensitive to high-frequency content, so linear
-//! interpolation is sufficient for v1. Upgrade path if quality issues surface:
-//! swap the resampler for `rubato`.
+//! Takes interleaved i16 PCM at an arbitrary input rate and channel count,
+//! downmixes to mono, resamples to 16 kHz via linear interpolation, and emits
+//! a complete FLAC byte stream. Whisper tolerates the high-frequency aliasing
+//! of linear interpolation; if quality issues surface, swap in `rubato`.
 
 use flacenc::component::BitRepr;
 use flacenc::error::Verify;
