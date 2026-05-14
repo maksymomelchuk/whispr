@@ -1,16 +1,26 @@
 import { useEffect, useState } from "react";
 
-import { setApiKey as persistApiKey } from "../lib/api";
 import { InfoTip } from "./InfoTip";
 
 interface Props {
+  title: string;
+  info: string;
+  placeholder?: string;
   isConfigured: boolean;
+  persist: (apiKey: string) => Promise<void>;
   onSaved: (configured: boolean) => void;
 }
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
-export function ApiKeyField({ isConfigured, onSaved }: Props) {
+export function ApiKeyField({
+  title,
+  info,
+  placeholder,
+  isConfigured,
+  persist,
+  onSaved,
+}: Props) {
   const [value, setValue] = useState("");
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +36,7 @@ export function ApiKeyField({ isConfigured, onSaved }: Props) {
     setError(null);
     try {
       const trimmed = value.trim();
-      await persistApiKey(trimmed);
+      await persist(trimmed);
       setValue("");
       onSaved(trimmed.length > 0);
       setStatus("saved");
@@ -40,7 +50,7 @@ export function ApiKeyField({ isConfigured, onSaved }: Props) {
     setStatus("saving");
     setError(null);
     try {
-      await persistApiKey("");
+      await persist("");
       setValue("");
       onSaved(false);
       setStatus("saved");
@@ -51,12 +61,15 @@ export function ApiKeyField({ isConfigured, onSaved }: Props) {
   };
 
   const dirty = value.trim().length > 0;
+  const inputPlaceholder = isConfigured
+    ? "Enter new key to replace…"
+    : (placeholder ?? "");
 
   return (
     <section className="card">
       <div className="card-title-row">
-        <h2 style={{ margin: 0 }}>Deepgram API Key</h2>
-        <InfoTip text="Required to transcribe audio. Paste your key from console.deepgram.com." />
+        <h2 style={{ margin: 0 }}>{title}</h2>
+        <InfoTip text={info} />
         {isConfigured ? (
           <span className="status ok">Configured</span>
         ) : (
@@ -68,7 +81,7 @@ export function ApiKeyField({ isConfigured, onSaved }: Props) {
           type="password"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder={isConfigured ? "Enter new key to replace…" : "dg_..."}
+          placeholder={inputPlaceholder}
           spellCheck={false}
           autoComplete="off"
         />
