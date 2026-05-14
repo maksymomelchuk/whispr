@@ -39,9 +39,12 @@ pub async fn run(
 ) -> Result<(String, Duration), String> {
     let speak_start = Instant::now();
     let settings = config::load(&app);
+    // Prefer the new per-provider key; fall back to the legacy single-key
+    // field for the brief window before `load`'s migration has re-saved.
     let key = settings
-        .api_key
+        .deepgram_api_key
         .clone()
+        .or_else(|| settings.api_key.clone())
         .filter(|k| !k.is_empty())
         .ok_or_else(|| "API key not configured".to_string())?;
     let show_live_preview = settings.show_live_preview;

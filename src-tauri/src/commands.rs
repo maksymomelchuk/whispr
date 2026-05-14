@@ -32,8 +32,13 @@ pub struct SettingsView {
 #[tauri::command]
 pub fn get_settings(app: AppHandle) -> SettingsView {
     let s = config::load(&app);
+    let api_key_configured = s
+        .deepgram_api_key
+        .as_deref()
+        .or(s.api_key.as_deref())
+        .is_some_and(|k| !k.is_empty());
     SettingsView {
-        api_key_configured: s.api_key.as_deref().is_some_and(|k| !k.is_empty()),
+        api_key_configured,
         shortcut: s.shortcut,
         replacements: s.replacements,
         deepgram: s.deepgram,
@@ -61,7 +66,7 @@ pub fn get_settings(app: AppHandle) -> SettingsView {
 
 #[tauri::command]
 pub fn set_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
-    config::update(&app, |s| s.api_key = config::non_empty(api_key))
+    config::update(&app, |s| s.deepgram_api_key = config::non_empty(api_key))
 }
 
 #[tauri::command]
