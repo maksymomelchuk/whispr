@@ -15,6 +15,12 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
   && apt-get update && apt-get install -y gh \
   && rm -rf /var/lib/apt/lists/*
 
+# Enable corepack so the `packageManager` field in package.json
+# governs which pnpm version is shimmed onto PATH. Must run as root,
+# before the USER switch below, since corepack writes shims to a
+# system bin dir.
+RUN corepack enable
+
 # Build-args for UID/GID alignment: sandcastle docker build-image
 # defaults these to the host user's UID/GID so image-built files
 # and bind-mounted files share an owner without runtime chown.

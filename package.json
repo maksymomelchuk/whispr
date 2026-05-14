@@ -3,11 +3,13 @@
   "private": true,
   "version": "1.3.0",
   "type": "module",
+  "packageManager": "pnpm@10.5.0",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "sandcastle": "npx tsx .sandcastle/main.ts"
