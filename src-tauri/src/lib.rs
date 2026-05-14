@@ -6,6 +6,8 @@ mod config;
 // run, but the binary doesn't warn about dead code.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod groq_audio;
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+mod groq_session_state;
 mod groq_stabilizer;
 mod history;
 mod permissions;

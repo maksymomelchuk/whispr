@@ -16,13 +16,13 @@
 //! "different" and the stable prefix will shrink by one. We accept that
 //! flicker in exchange for not having to ship a real word tokenizer here.
 
-#[allow(dead_code)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 #[derive(Debug, Default)]
 pub struct Stabilizer {
     stable_prefix: Vec<String>,
 }
 
-#[allow(dead_code)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 impl Stabilizer {
     pub fn new() -> Self {
         Self::default()
