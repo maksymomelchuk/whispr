@@ -30,14 +30,6 @@ const LEVEL_THROTTLE: Duration = Duration::from_millis(33);
 pub struct DeepgramSession;
 
 impl TranscriptionSession for DeepgramSession {
-    /// Open a Deepgram Live WebSocket, forward `chunks` as PCM frames until
-    /// the channel closes (recorder torn down by PTT release), then ask
-    /// Deepgram for final results and return the concatenated raw
-    /// transcript. The returned `Duration` is the time from session start
-    /// to chunk channel close — the user-perceived speaking duration,
-    /// excluding the post-close final-results drain. Replacements are
-    /// applied by the caller so each pipeline stage is observable for the
-    /// history trace.
     async fn run(
         self,
         app: AppHandle,
