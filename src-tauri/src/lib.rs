@@ -1,6 +1,6 @@
+mod api_key_validation;
 mod commands;
 mod config;
-#[allow(dead_code)]
 mod groq_audio;
 mod groq_stabilizer;
 mod history;
@@ -123,6 +123,8 @@ pub fn run() {
             commands::set_deepgram_api_key,
             commands::set_groq_api_key,
             commands::set_groq_settings,
+            commands::validate_deepgram_api_key,
+            commands::validate_groq_api_key,
             commands::set_shortcut,
             commands::set_replacements,
             commands::set_deepgram_settings,
