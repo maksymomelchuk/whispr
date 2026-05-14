@@ -10,6 +10,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",
+    "check": "cd src-tauri && cargo build",
+    "test": "cd src-tauri && cargo test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "sandcastle": "npx tsx .sandcastle/main.ts"

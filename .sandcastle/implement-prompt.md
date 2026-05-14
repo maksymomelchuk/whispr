@@ -35,7 +35,7 @@ If applicable, use RGR to complete the task.
 
 # FEEDBACK LOOPS
 
-Before committing, run `npm run typecheck` and `npm run test` to ensure the tests pass.
+Before committing, run `npm run typecheck`, `npm run check`, and `npm run test` to ensure the frontend type-checks, the Rust crate builds, and all tests pass.
 
 # COMMIT
 
