@@ -1,3 +1,4 @@
+use crate::api_key_validation::{self, ApiKeyValidation};
 use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
 use crate::config::{
     self, CleanupAuthMode, DeepgramSettings, GroqSettings, Replacement, Settings, Shortcut,
@@ -101,6 +102,18 @@ pub fn set_groq_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
 #[tauri::command]
 pub fn set_groq_settings(app: AppHandle, groq: GroqSettings) -> Result<(), String> {
     config::update(&app, |s| s.groq = groq)
+}
+
+#[tauri::command]
+pub async fn validate_deepgram_api_key(api_key: String) -> ApiKeyValidation {
+    api_key_validation::validate_deepgram(&api_key).await
+}
+
+#[tauri::command]
+pub async fn validate_groq_api_key(app: AppHandle, api_key: String) -> ApiKeyValidation {
+    let settings = config::load(&app);
+    api_key_validation::validate_groq(&api_key, settings.groq.model, &settings.groq.language)
+        .await
 }
 
 #[tauri::command]

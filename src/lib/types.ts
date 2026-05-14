@@ -30,6 +30,11 @@ export type HistoryLimit = number | null;
 
 export type CleanupAuthMode = "api_key" | "oauth";
 
+export type ApiKeyValidation =
+  | { kind: "valid" }
+  | { kind: "invalid" }
+  | { kind: "error"; message: string };
+
 export interface Settings {
   transcription_provider: TranscriptionProvider;
   deepgram_api_key_configured: boolean;

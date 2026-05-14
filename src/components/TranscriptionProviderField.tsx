@@ -5,6 +5,8 @@ import {
   setGroqApiKey as persistGroqApiKey,
   setGroqSettings as persistGroqSettings,
   setTranscriptionProvider as persistProvider,
+  validateDeepgramApiKey,
+  validateGroqApiKey,
 } from "../lib/api";
 import type {
   DeepgramSettings,
@@ -110,6 +112,7 @@ export function TranscriptionProviderField({
             placeholder="dg_..."
             isConfigured={deepgramApiKeyConfigured}
             persist={persistDeepgramApiKey}
+            validate={validateDeepgramApiKey}
             onSaved={onDeepgramApiKeyConfiguredChange}
           />
           <TranscriptionField
@@ -128,6 +131,7 @@ export function TranscriptionProviderField({
             placeholder="gsk_..."
             isConfigured={groqApiKeyConfigured}
             persist={persistGroqApiKey}
+            validate={validateGroqApiKey}
             onSaved={onGroqApiKeyConfiguredChange}
           />
           <GroqOptions initial={groq} onSaved={onGroqSaved} />

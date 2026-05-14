@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import type { ApiKeyValidation } from "../lib/types";
 import { InfoTip } from "./InfoTip";
 
 interface Props {
@@ -8,10 +9,16 @@ interface Props {
   placeholder?: string;
   isConfigured: boolean;
   persist: (apiKey: string) => Promise<void>;
+  validate?: (apiKey: string) => Promise<ApiKeyValidation>;
   onSaved: (configured: boolean) => void;
 }
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
+
+type ValidationState =
+  | { kind: "idle" }
+  | { kind: "checking" }
+  | { kind: "result"; result: ApiKeyValidation };
 
 export function ApiKeyField({
   title,
@@ -19,11 +26,15 @@ export function ApiKeyField({
   placeholder,
   isConfigured,
   persist,
+  validate,
   onSaved,
 }: Props) {
   const [value, setValue] = useState("");
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [validation, setValidation] = useState<ValidationState>({
+    kind: "idle",
+  });
 
   useEffect(() => {
     if (status !== "saved") return;
@@ -40,6 +51,7 @@ export function ApiKeyField({
       setValue("");
       onSaved(trimmed.length > 0);
       setStatus("saved");
+      setValidation({ kind: "idle" });
     } catch (e) {
       setStatus("error");
       setError(String(e));
@@ -54,9 +66,36 @@ export function ApiKeyField({
       setValue("");
       onSaved(false);
       setStatus("saved");
+      setValidation({ kind: "idle" });
     } catch (e) {
       setStatus("error");
       setError(String(e));
+    }
+  };
+
+  const handleBlur = async () => {
+    if (!validate) return;
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+      setValidation({ kind: "idle" });
+      return;
+    }
+    setValidation({ kind: "checking" });
+    try {
+      const result = await validate(trimmed);
+      setValidation({ kind: "result", result });
+    } catch (e) {
+      setValidation({
+        kind: "result",
+        result: { kind: "error", message: String(e) },
+      });
+    }
+  };
+
+  const handleChange = (next: string) => {
+    setValue(next);
+    if (validation.kind !== "idle") {
+      setValidation({ kind: "idle" });
     }
   };
 
@@ -80,7 +119,8 @@ export function ApiKeyField({
         <input
           type="password"
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => handleChange(e.target.value)}
+          onBlur={handleBlur}
           placeholder={inputPlaceholder}
           spellCheck={false}
           autoComplete="off"
@@ -98,8 +138,31 @@ export function ApiKeyField({
           </button>
         )}
       </div>
+      {renderValidation(validation)}
       {status === "saved" && <div className="status ok">Saved</div>}
       {status === "error" && <div className="status err">{error}</div>}
     </section>
   );
+}
+
+function renderValidation(state: ValidationState) {
+  switch (state.kind) {
+    case "idle":
+      return null;
+    case "checking":
+      return <div className="status">Checking key…</div>;
+    case "result":
+      switch (state.result.kind) {
+        case "valid":
+          return <div className="status ok">Key is valid</div>;
+        case "invalid":
+          return <div className="status err">Invalid API key</div>;
+        case "error":
+          return (
+            <div className="status err">
+              Could not validate key: {state.result.message}
+            </div>
+          );
+      }
+  }
 }
