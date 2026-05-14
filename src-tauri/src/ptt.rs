@@ -1,9 +1,11 @@
+use crate::config::TranscriptionProvider;
+use crate::deepgram_session::DeepgramSession;
 use crate::history::{self, CleanupStatus, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::recorder::Recorder;
+use crate::replacements::apply_replacements;
 use crate::state::{AppState, ModifierState};
-use crate::{
-    cleanup, cleanup_stats, config, media, overlay, paste, stats, target_app, transcription_stream,
-};
+use crate::transcription_session::TranscriptionSession;
+use crate::{cleanup, cleanup_stats, config, media, overlay, paste, stats, target_app};
 use std::process::Command;
 use std::time::Duration;
 use core_foundation::base::TCFType;
@@ -304,23 +306,33 @@ async fn run_session(
         Err(_) => return Err("Recording thread crashed".to_string()),
     };
 
-    let (raw_text, speak_duration) =
-        match transcription_stream::run(app.clone(), format, chunk_rx).await {
-            Ok(r) => r,
-            Err(e) => {
-                // Stop the recorder if it's still running so a WS error
-                // doesn't leak a live cpal stream.
-                recorder.stop();
-                return Err(e);
-            }
-        };
+    let settings = config::load(app);
+    let session_result = match settings.transcription_provider {
+        TranscriptionProvider::Deepgram => {
+            DeepgramSession.run(app.clone(), format, chunk_rx).await
+        }
+        // Surface the gap explicitly. A silent fallback to Deepgram would
+        // hide a misconfigured provider from the user and mask future bugs
+        // once GroqSession lands.
+        TranscriptionProvider::Groq => {
+            Err("Groq transcription provider is not implemented yet".to_string())
+        }
+    };
+
+    let (raw_text, speak_duration) = match session_result {
+        Ok(r) => r,
+        Err(e) => {
+            // Stop the recorder if it's still running so an error doesn't
+            // leak a live cpal stream.
+            recorder.stop();
+            return Err(e);
+        }
+    };
     if raw_text.is_empty() {
         return Ok(());
     }
 
-    let settings = config::load(app);
-    let replaced_text =
-        transcription_stream::apply_replacements(&raw_text, &settings.replacements);
+    let replaced_text = apply_replacements(&raw_text, &settings.replacements);
 
     let (final_text, cleanup_status, notice) =
         maybe_cleanup(app, &settings, &replaced_text, speak_duration).await;

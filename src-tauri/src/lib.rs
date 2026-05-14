@@ -14,7 +14,11 @@ mod cleanup;
 #[cfg(target_os = "macos")]
 mod cleanup_stats;
 #[cfg(target_os = "macos")]
-mod transcription_stream;
+mod deepgram_session;
+#[cfg(target_os = "macos")]
+mod replacements;
+#[cfg(target_os = "macos")]
+mod transcription_session;
 
 // Modules that wrap macOS-only APIs (CGEventTap, CGEventPost, CoreAudio via
 // cpal, transparent overlay windows via macOSPrivateApi). Cross-platform
