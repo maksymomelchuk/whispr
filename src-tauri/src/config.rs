@@ -238,20 +238,15 @@ impl Default for Settings {
 /// - Always clear `api_key` so the field stops appearing in serialized form.
 /// - Never overwrite an existing `deepgram_api_key`.
 fn migrate(s: &mut Settings) -> bool {
-    if s.api_key.is_none() {
+    let Some(legacy) = s.api_key.take() else {
         return false;
-    }
-    let legacy = s.api_key.take();
-    if let Some(value) = legacy {
-        if !value.is_empty() {
-            let has_new = s
-                .deepgram_api_key
-                .as_deref()
-                .is_some_and(|k| !k.is_empty());
-            if !has_new {
-                s.deepgram_api_key = Some(value);
-            }
-        }
+    };
+    let deepgram_already_set = s
+        .deepgram_api_key
+        .as_deref()
+        .is_some_and(|k| !k.is_empty());
+    if !legacy.is_empty() && !deepgram_already_set {
+        s.deepgram_api_key = Some(legacy);
     }
     true
 }
