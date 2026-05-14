@@ -29,6 +29,11 @@ reqwest = { version = "0.12", features = ["json"] }
 futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 url = "2"
 time = { version = "0.3", features = ["local-offset", "formatting", "parsing", "macros"] }
+# Two FLAC crates because each is single-direction: flacenc encodes,
+# claxon decodes. flacenc's default features pull crossbeam/serde/log,
+# which we don't need.
+claxon = "0.4"
+flacenc = { version = "0.5", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 macos-accessibility-client = "0.0.1"

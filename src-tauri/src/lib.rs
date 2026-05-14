@@ -1,5 +1,7 @@
 mod commands;
 mod config;
+#[allow(dead_code)]
+mod groq_audio;
 mod groq_stabilizer;
 mod history;
 mod permissions;
