@@ -138,22 +138,31 @@ export function ApiKeyField({
           </button>
         )}
       </div>
-      {validation.kind === "checking" && (
-        <div className="status">Checking key…</div>
-      )}
-      {validation.kind === "result" && validation.result.kind === "valid" && (
-        <div className="status ok">Key is valid</div>
-      )}
-      {validation.kind === "result" && validation.result.kind === "invalid" && (
-        <div className="status err">Invalid API key</div>
-      )}
-      {validation.kind === "result" && validation.result.kind === "error" && (
-        <div className="status err">
-          Could not validate key: {validation.result.message}
-        </div>
-      )}
+      {renderValidation(validation)}
       {status === "saved" && <div className="status ok">Saved</div>}
       {status === "error" && <div className="status err">{error}</div>}
     </section>
   );
+}
+
+function renderValidation(state: ValidationState) {
+  switch (state.kind) {
+    case "idle":
+      return null;
+    case "checking":
+      return <div className="status">Checking key…</div>;
+    case "result":
+      switch (state.result.kind) {
+        case "valid":
+          return <div className="status ok">Key is valid</div>;
+        case "invalid":
+          return <div className="status err">Invalid API key</div>;
+        case "error":
+          return (
+            <div className="status err">
+              Could not validate key: {state.result.message}
+            </div>
+          );
+      }
+  }
 }
