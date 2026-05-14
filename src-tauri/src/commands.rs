@@ -269,7 +269,7 @@ pub fn open_accessibility_settings() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{GroqModel, GroqSettings, TranscriptionProvider};
+    use crate::config::GroqModel;
 
     #[test]
     fn settings_view_defaults_match_fresh_install() {
@@ -283,61 +283,75 @@ mod tests {
 
     #[test]
     fn settings_view_exposes_independent_per_provider_configured_flags() {
-        let mut s = Settings::default();
-        s.deepgram_api_key = Some("dg-key".to_string());
-        s.groq_api_key = Some("gsk-key".to_string());
-        let view: SettingsView = s.into();
+        let view: SettingsView = Settings {
+            deepgram_api_key: Some("dg-key".to_string()),
+            groq_api_key: Some("gsk-key".to_string()),
+            ..Settings::default()
+        }
+        .into();
         assert!(view.deepgram_api_key_configured);
         assert!(view.groq_api_key_configured);
 
-        let mut s = Settings::default();
-        s.deepgram_api_key = Some("dg-key".to_string());
-        let view: SettingsView = s.into();
+        let view: SettingsView = Settings {
+            deepgram_api_key: Some("dg-key".to_string()),
+            ..Settings::default()
+        }
+        .into();
         assert!(view.deepgram_api_key_configured);
         assert!(!view.groq_api_key_configured);
 
-        let mut s = Settings::default();
-        s.groq_api_key = Some("gsk-key".to_string());
-        let view: SettingsView = s.into();
+        let view: SettingsView = Settings {
+            groq_api_key: Some("gsk-key".to_string()),
+            ..Settings::default()
+        }
+        .into();
         assert!(!view.deepgram_api_key_configured);
         assert!(view.groq_api_key_configured);
     }
 
     #[test]
     fn settings_view_treats_empty_keys_as_not_configured() {
-        let mut s = Settings::default();
-        s.deepgram_api_key = Some(String::new());
-        s.groq_api_key = Some(String::new());
-        let view: SettingsView = s.into();
+        let view: SettingsView = Settings {
+            deepgram_api_key: Some(String::new()),
+            groq_api_key: Some(String::new()),
+            ..Settings::default()
+        }
+        .into();
         assert!(!view.deepgram_api_key_configured);
         assert!(!view.groq_api_key_configured);
     }
 
     #[test]
     fn settings_view_falls_back_to_legacy_api_key_for_deepgram_configured() {
-        let mut s = Settings::default();
-        s.api_key = Some("legacy".to_string());
-        let view: SettingsView = s.into();
+        let view: SettingsView = Settings {
+            api_key: Some("legacy".to_string()),
+            ..Settings::default()
+        }
+        .into();
         assert!(view.deepgram_api_key_configured);
     }
 
     #[test]
     fn settings_view_round_trips_groq_settings() {
-        let mut s = Settings::default();
-        s.groq = GroqSettings {
-            model: GroqModel::WhisperLargeV3,
-            language: "fr".to_string(),
-        };
-        let view: SettingsView = s.into();
+        let view: SettingsView = Settings {
+            groq: GroqSettings {
+                model: GroqModel::WhisperLargeV3,
+                language: "fr".to_string(),
+            },
+            ..Settings::default()
+        }
+        .into();
         assert_eq!(view.groq.model, GroqModel::WhisperLargeV3);
         assert_eq!(view.groq.language, "fr");
     }
 
     #[test]
     fn settings_view_propagates_transcription_provider() {
-        let mut s = Settings::default();
-        s.transcription_provider = TranscriptionProvider::Groq;
-        let view: SettingsView = s.into();
+        let view: SettingsView = Settings {
+            transcription_provider: TranscriptionProvider::Groq,
+            ..Settings::default()
+        }
+        .into();
         assert_eq!(view.transcription_provider, TranscriptionProvider::Groq);
     }
 }
