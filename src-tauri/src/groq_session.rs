@@ -1,11 +1,10 @@
-//! One-shot Groq transcription session (sub-cadence path, no polling).
+//! One-shot Groq transcription session.
 //!
 //! Buffers all captured PCM for the dictation, encodes it to 16 kHz mono
 //! FLAC on chunk-channel close, and POSTs a single multipart request to
-//! Groq's OpenAI-compatible audio transcription endpoint. No
-//! `transcript-partial` events are emitted in this slice — live preview
-//! ships with the polling slice. `audio-level` events mirror the
-//! Deepgram session's cadence so the overlay wave still animates.
+//! Groq's OpenAI-compatible audio transcription endpoint. `audio-level`
+//! events mirror the Deepgram session's cadence so the overlay wave still
+//! animates.
 
 use crate::config::{self, GroqModel};
 use crate::groq_audio::encode_to_flac_16k_mono;
@@ -41,9 +40,9 @@ impl TranscriptionSession for GroqSession {
             .ok_or_else(|| "Groq API key not configured".to_string())?;
         let model = groq_model_api_id(settings.groq.model);
         let language = if settings.groq.language.trim().is_empty() {
-            "en".to_string()
+            "en"
         } else {
-            settings.groq.language.trim().to_string()
+            settings.groq.language.trim()
         };
 
         let mut buffered: Vec<i16> = Vec::new();
@@ -76,7 +75,7 @@ impl TranscriptionSession for GroqSession {
         }
 
         let flac = encode_to_flac_16k_mono(&buffered, format.sample_rate, format.channels)?;
-        let raw = post_to_groq(&key, model, &language, flac).await?;
+        let raw = post_to_groq(&key, model, language, flac).await?;
         Ok((raw, speak_duration))
     }
 }
@@ -129,11 +128,12 @@ fn format_groq_error(status: reqwest::StatusCode, body: &str) -> String {
     let message = serde_json::from_str::<Value>(body)
         .ok()
         .and_then(|v| v["error"]["message"].as_str().map(String::from))
-        .unwrap_or_else(|| {
-            let snippet: String = body.chars().take(200).collect();
-            format!("HTTP {status}: {snippet}")
-        });
-    format!("Groq {status}: {message}")
+        .unwrap_or_else(|| body.chars().take(200).collect());
+    if message.is_empty() {
+        format!("Groq {status}")
+    } else {
+        format!("Groq {status}: {message}")
+    }
 }
 
 fn parse_transcript(body: &str) -> Result<String, String> {
