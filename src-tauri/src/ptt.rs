@@ -1,5 +1,6 @@
 use crate::config::TranscriptionProvider;
 use crate::deepgram_session::DeepgramSession;
+use crate::groq_session::GroqSession;
 use crate::history::{self, CleanupStatus, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::recorder::Recorder;
 use crate::replacements::apply_replacements;
@@ -311,12 +312,7 @@ async fn run_session(
         TranscriptionProvider::Deepgram => {
             DeepgramSession.run(app.clone(), format, chunk_rx).await
         }
-        // Surface the gap explicitly. A silent fallback to Deepgram would
-        // hide a misconfigured provider from the user and mask future bugs
-        // once GroqSession lands.
-        TranscriptionProvider::Groq => {
-            Err("Groq transcription provider is not implemented yet".to_string())
-        }
+        TranscriptionProvider::Groq => GroqSession.run(app.clone(), format, chunk_rx).await,
     };
 
     let (raw_text, speak_duration) = match session_result {

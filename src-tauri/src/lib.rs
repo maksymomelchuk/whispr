@@ -1,6 +1,9 @@
 mod commands;
 mod config;
-#[allow(dead_code)]
+// groq_audio is only used by groq_session (macOS-gated); allow unused
+// items on non-macOS builds so the module still ships and its tests
+// run, but the binary doesn't warn about dead code.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod groq_audio;
 mod groq_stabilizer;
 mod history;
@@ -15,6 +18,8 @@ mod cleanup;
 mod cleanup_stats;
 #[cfg(target_os = "macos")]
 mod deepgram_session;
+#[cfg(target_os = "macos")]
+mod groq_session;
 #[cfg(target_os = "macos")]
 mod replacements;
 #[cfg(target_os = "macos")]
