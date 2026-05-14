@@ -1,0 +1,184 @@
+//! 16 kHz mono FLAC encoder for Groq's `/openai/v1/audio/transcriptions` ingest.
+//!
+//! Pure module: takes interleaved i16 PCM at cpal's native rate/channel count,
+//! downmixes to mono, resamples to 16 kHz, and emits a complete FLAC byte
+//! stream. Whisper is not sensitive to high-frequency content, so linear
+//! interpolation is sufficient for v1. Upgrade path if quality issues surface:
+//! swap the resampler for `rubato`.
+
+use flacenc::component::BitRepr;
+use flacenc::error::Verify;
+
+const TARGET_SAMPLE_RATE: u32 = 16_000;
+
+/// Encode interleaved i16 PCM as a 16 kHz mono FLAC byte buffer.
+///
+/// `samples` is treated as interleaved when `input_channels > 1`. Samples past
+/// the last complete frame are discarded.
+pub fn encode_to_flac_16k_mono(
+    samples: &[i16],
+    input_sample_rate: u32,
+    input_channels: u16,
+) -> Result<Vec<u8>, String> {
+    if input_channels == 0 {
+        return Err("input_channels must be > 0".into());
+    }
+    if input_sample_rate == 0 {
+        return Err("input_sample_rate must be > 0".into());
+    }
+
+    let mono = downmix_to_mono(samples, input_channels);
+    let resampled = resample_linear(&mono, input_sample_rate, TARGET_SAMPLE_RATE);
+    encode_mono_16k(&resampled)
+}
+
+fn downmix_to_mono(interleaved: &[i16], channels: u16) -> Vec<i16> {
+    if channels == 1 {
+        return interleaved.to_vec();
+    }
+    let c = channels as usize;
+    let frames = interleaved.len() / c;
+    let mut out = Vec::with_capacity(frames);
+    for f in 0..frames {
+        let base = f * c;
+        let mut sum: i32 = 0;
+        for ch in 0..c {
+            sum += interleaved[base + ch] as i32;
+        }
+        out.push((sum / c as i32) as i16);
+    }
+    out
+}
+
+fn resample_linear(input: &[i16], in_rate: u32, out_rate: u32) -> Vec<i16> {
+    if input.is_empty() {
+        return Vec::new();
+    }
+    if in_rate == out_rate {
+        return input.to_vec();
+    }
+
+    let in_len = input.len();
+    let out_len = (in_len as u64 * out_rate as u64 / in_rate as u64) as usize;
+    let mut out = Vec::with_capacity(out_len);
+
+    let ratio = in_rate as f64 / out_rate as f64;
+    for j in 0..out_len {
+        let t = j as f64 * ratio;
+        let i = t as usize;
+        let frac = t - i as f64;
+        let s = if i + 1 < in_len {
+            let a = input[i] as f64;
+            let b = input[i + 1] as f64;
+            a + (b - a) * frac
+        } else {
+            input[in_len - 1] as f64
+        };
+        out.push(s.round().clamp(i16::MIN as f64, i16::MAX as f64) as i16);
+    }
+    out
+}
+
+fn encode_mono_16k(samples: &[i16]) -> Result<Vec<u8>, String> {
+    let samples_i32: Vec<i32> = samples.iter().map(|&s| s as i32).collect();
+
+    let config = flacenc::config::Encoder::default()
+        .into_verified()
+        .map_err(|(_, e)| format!("flacenc config: {e:?}"))?;
+
+    let source = flacenc::source::MemSource::from_samples(
+        &samples_i32,
+        1,
+        16,
+        TARGET_SAMPLE_RATE as usize,
+    );
+
+    let stream = flacenc::encode_with_fixed_block_size(&config, source, config.block_size)
+        .map_err(|e| format!("flacenc encode: {e:?}"))?;
+
+    let mut sink = flacenc::bitsink::ByteSink::new();
+    stream
+        .write(&mut sink)
+        .map_err(|e| format!("flacenc write: {e:?}"))?;
+    Ok(sink.as_slice().to_vec())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn synth_sine(freq_hz: f64, sample_rate: u32, channels: u16, secs: f64) -> Vec<i16> {
+        let frames = (sample_rate as f64 * secs) as usize;
+        let mut out = Vec::with_capacity(frames * channels as usize);
+        for i in 0..frames {
+            let t = i as f64 / sample_rate as f64;
+            let v = (t * freq_hz * std::f64::consts::TAU).sin();
+            let s = (v * 30_000.0) as i16;
+            for _ in 0..channels {
+                out.push(s);
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn round_trip_48k_stereo_sine() {
+        let input_rate = 48_000u32;
+        let input_channels = 2u16;
+        let duration_secs = 1.0;
+        let input = synth_sine(440.0, input_rate, input_channels, duration_secs);
+
+        let bytes = encode_to_flac_16k_mono(&input, input_rate, input_channels)
+            .expect("encode succeeds");
+
+        let mut reader = claxon::FlacReader::new(&bytes[..]).expect("FlacReader::new");
+        let info = reader.streaminfo();
+        assert_eq!(info.sample_rate, TARGET_SAMPLE_RATE);
+        assert_eq!(info.channels, 1);
+        assert_eq!(info.bits_per_sample, 16);
+
+        let mut decoded = 0usize;
+        for s in reader.samples() {
+            s.expect("sample decode");
+            decoded += 1;
+        }
+
+        let expected = (TARGET_SAMPLE_RATE as f64 * duration_secs) as usize;
+        let frame_tolerance = info.max_block_size as usize;
+        let diff = decoded.abs_diff(expected);
+        assert!(
+            diff <= frame_tolerance,
+            "decoded {decoded} samples vs expected {expected} (diff {diff}, tolerance {frame_tolerance})"
+        );
+    }
+
+    #[test]
+    fn downmix_averages_stereo() {
+        let interleaved = [100i16, 200, -100, 200, 0, 0];
+        let mono = downmix_to_mono(&interleaved, 2);
+        assert_eq!(mono, vec![150, 50, 0]);
+    }
+
+    #[test]
+    fn resample_passthrough_when_rates_match() {
+        let input: Vec<i16> = (0..100).collect();
+        let out = resample_linear(&input, 16_000, 16_000);
+        assert_eq!(out, input);
+    }
+
+    #[test]
+    fn resample_48k_to_16k_decimates_by_three() {
+        let input: Vec<i16> = (0..48).collect();
+        let out = resample_linear(&input, 48_000, 16_000);
+        assert_eq!(out.len(), 16);
+        assert_eq!(out[0], 0);
+        assert_eq!(out[1], 3);
+        assert_eq!(out[2], 6);
+    }
+
+    #[test]
+    fn rejects_zero_channels() {
+        let r = encode_to_flac_16k_mono(&[0i16; 16], 48_000, 0);
+        assert!(r.is_err());
+    }
+}

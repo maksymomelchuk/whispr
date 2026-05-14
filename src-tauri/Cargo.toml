@@ -29,6 +29,11 @@ reqwest = { version = "0.12", features = ["json"] }
 futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 url = "2"
 time = { version = "0.3", features = ["local-offset", "formatting", "parsing", "macros"] }
+# claxon decodes FLAC for the groq_audio round-trip test; the PRD names it as
+# the encoder, but claxon is decode-only — flacenc supplies the pure-Rust
+# encoder. default-features disabled to avoid pulling crossbeam/serde/log.
+claxon = "0.4"
+flacenc = { version = "0.5", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 macos-accessibility-client = "0.0.1"
