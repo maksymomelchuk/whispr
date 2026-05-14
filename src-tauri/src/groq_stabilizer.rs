@@ -44,21 +44,20 @@ impl Stabilizer {
             .take_while(|(a, b)| a == b)
             .count();
 
+        let output = new_words.join(" ");
+
         // If the previous stable prefix matched the head of the new poll
         // in full, every new word is now confirmed against the prior
         // observation — adopt the new poll as the next stable prefix.
         // Otherwise the polls disagreed mid-prefix; keep only the agreed
         // portion.
         if common == self.stable_prefix.len() {
-            self.stable_prefix = new_words.clone();
+            self.stable_prefix = new_words;
         } else {
             self.stable_prefix.truncate(common);
         }
 
-        // Since stable_prefix is now a prefix of new_words, emitting
-        // stable_prefix + remaining new_words is equivalent to rendering
-        // the new poll's word list.
-        new_words.join(" ")
+        output
     }
 
     #[cfg(test)]
