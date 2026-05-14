@@ -1,5 +1,6 @@
 mod commands;
 mod config;
+mod groq_stabilizer;
 mod history;
 mod permissions;
 mod state;
