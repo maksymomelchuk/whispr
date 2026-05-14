@@ -1,5 +1,8 @@
 use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
-use crate::config::{self, CleanupAuthMode, DeepgramSettings, Replacement, Shortcut};
+use crate::config::{
+    self, CleanupAuthMode, DeepgramSettings, GroqSettings, Replacement, Settings, Shortcut,
+    TranscriptionProvider,
+};
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::permissions;
 use crate::state::AppState;
@@ -12,10 +15,13 @@ use tauri::{AppHandle, Emitter, State};
 /// back over IPC. Keys are write-only from the frontend's perspective.
 #[derive(Debug, Clone, Serialize)]
 pub struct SettingsView {
-    pub api_key_configured: bool,
+    pub transcription_provider: TranscriptionProvider,
+    pub deepgram_api_key_configured: bool,
+    pub groq_api_key_configured: bool,
     pub shortcut: Shortcut,
     pub replacements: Vec<Replacement>,
     pub deepgram: DeepgramSettings,
+    pub groq: GroqSettings,
     pub ai_cleanup_enabled: bool,
     pub ai_cleanup_auth_mode: CleanupAuthMode,
     pub ai_cleanup_key_configured: bool,
@@ -29,44 +35,72 @@ pub struct SettingsView {
     pub show_live_preview: bool,
 }
 
-#[tauri::command]
-pub fn get_settings(app: AppHandle) -> SettingsView {
-    let s = config::load(&app);
-    let api_key_configured = s
-        .deepgram_api_key
-        .as_deref()
-        .or(s.api_key.as_deref())
-        .is_some_and(|k| !k.is_empty());
-    SettingsView {
-        api_key_configured,
-        shortcut: s.shortcut,
-        replacements: s.replacements,
-        deepgram: s.deepgram,
-        ai_cleanup_enabled: s.ai_cleanup.enabled,
-        ai_cleanup_auth_mode: s.ai_cleanup.auth_mode,
-        ai_cleanup_key_configured: s
-            .ai_cleanup
-            .anthropic_api_key
+impl From<Settings> for SettingsView {
+    fn from(s: Settings) -> Self {
+        let deepgram_api_key_configured = s
+            .deepgram_api_key
             .as_deref()
-            .is_some_and(|k| !k.is_empty()),
-        ai_cleanup_oauth_token_configured: s
-            .ai_cleanup
-            .anthropic_oauth_token
-            .as_deref()
-            .is_some_and(|t| !t.is_empty()),
-        ai_cleanup_min_words: s.ai_cleanup.min_words,
-        ai_cleanup_min_duration_ms: s.ai_cleanup.min_duration_ms,
-        input_device: s.input_device,
-        pause_media_on_record: s.pause_media_on_record,
-        history_limit: s.history_limit,
-        show_in_dock: s.show_in_dock,
-        show_live_preview: s.show_live_preview,
+            .or(s.api_key.as_deref())
+            .is_some_and(|k| !k.is_empty());
+        let groq_api_key_configured =
+            s.groq_api_key.as_deref().is_some_and(|k| !k.is_empty());
+        SettingsView {
+            transcription_provider: s.transcription_provider,
+            deepgram_api_key_configured,
+            groq_api_key_configured,
+            shortcut: s.shortcut,
+            replacements: s.replacements,
+            deepgram: s.deepgram,
+            groq: s.groq,
+            ai_cleanup_enabled: s.ai_cleanup.enabled,
+            ai_cleanup_auth_mode: s.ai_cleanup.auth_mode,
+            ai_cleanup_key_configured: s
+                .ai_cleanup
+                .anthropic_api_key
+                .as_deref()
+                .is_some_and(|k| !k.is_empty()),
+            ai_cleanup_oauth_token_configured: s
+                .ai_cleanup
+                .anthropic_oauth_token
+                .as_deref()
+                .is_some_and(|t| !t.is_empty()),
+            ai_cleanup_min_words: s.ai_cleanup.min_words,
+            ai_cleanup_min_duration_ms: s.ai_cleanup.min_duration_ms,
+            input_device: s.input_device,
+            pause_media_on_record: s.pause_media_on_record,
+            history_limit: s.history_limit,
+            show_in_dock: s.show_in_dock,
+            show_live_preview: s.show_live_preview,
+        }
     }
 }
 
 #[tauri::command]
-pub fn set_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
+pub fn get_settings(app: AppHandle) -> SettingsView {
+    config::load(&app).into()
+}
+
+#[tauri::command]
+pub fn set_transcription_provider(
+    app: AppHandle,
+    provider: TranscriptionProvider,
+) -> Result<(), String> {
+    config::update(&app, |s| s.transcription_provider = provider)
+}
+
+#[tauri::command]
+pub fn set_deepgram_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
     config::update(&app, |s| s.deepgram_api_key = config::non_empty(api_key))
+}
+
+#[tauri::command]
+pub fn set_groq_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
+    config::update(&app, |s| s.groq_api_key = config::non_empty(api_key))
+}
+
+#[tauri::command]
+pub fn set_groq_settings(app: AppHandle, groq: GroqSettings) -> Result<(), String> {
+    config::update(&app, |s| s.groq = groq)
 }
 
 #[tauri::command]
@@ -230,4 +264,80 @@ pub fn get_cleanup_stats(app: AppHandle) -> CleanupStats {
 #[tauri::command]
 pub fn open_accessibility_settings() {
     permissions::open_accessibility_settings();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{GroqModel, GroqSettings, TranscriptionProvider};
+
+    #[test]
+    fn settings_view_defaults_match_fresh_install() {
+        let view: SettingsView = Settings::default().into();
+        assert_eq!(view.transcription_provider, TranscriptionProvider::Deepgram);
+        assert!(!view.deepgram_api_key_configured);
+        assert!(!view.groq_api_key_configured);
+        assert_eq!(view.groq.model, GroqModel::WhisperLargeV3Turbo);
+        assert_eq!(view.groq.language, "en");
+    }
+
+    #[test]
+    fn settings_view_exposes_independent_per_provider_configured_flags() {
+        let mut s = Settings::default();
+        s.deepgram_api_key = Some("dg-key".to_string());
+        s.groq_api_key = Some("gsk-key".to_string());
+        let view: SettingsView = s.into();
+        assert!(view.deepgram_api_key_configured);
+        assert!(view.groq_api_key_configured);
+
+        let mut s = Settings::default();
+        s.deepgram_api_key = Some("dg-key".to_string());
+        let view: SettingsView = s.into();
+        assert!(view.deepgram_api_key_configured);
+        assert!(!view.groq_api_key_configured);
+
+        let mut s = Settings::default();
+        s.groq_api_key = Some("gsk-key".to_string());
+        let view: SettingsView = s.into();
+        assert!(!view.deepgram_api_key_configured);
+        assert!(view.groq_api_key_configured);
+    }
+
+    #[test]
+    fn settings_view_treats_empty_keys_as_not_configured() {
+        let mut s = Settings::default();
+        s.deepgram_api_key = Some(String::new());
+        s.groq_api_key = Some(String::new());
+        let view: SettingsView = s.into();
+        assert!(!view.deepgram_api_key_configured);
+        assert!(!view.groq_api_key_configured);
+    }
+
+    #[test]
+    fn settings_view_falls_back_to_legacy_api_key_for_deepgram_configured() {
+        let mut s = Settings::default();
+        s.api_key = Some("legacy".to_string());
+        let view: SettingsView = s.into();
+        assert!(view.deepgram_api_key_configured);
+    }
+
+    #[test]
+    fn settings_view_round_trips_groq_settings() {
+        let mut s = Settings::default();
+        s.groq = GroqSettings {
+            model: GroqModel::WhisperLargeV3,
+            language: "fr".to_string(),
+        };
+        let view: SettingsView = s.into();
+        assert_eq!(view.groq.model, GroqModel::WhisperLargeV3);
+        assert_eq!(view.groq.language, "fr");
+    }
+
+    #[test]
+    fn settings_view_propagates_transcription_provider() {
+        let mut s = Settings::default();
+        s.transcription_provider = TranscriptionProvider::Groq;
+        let view: SettingsView = s.into();
+        assert_eq!(view.transcription_provider, TranscriptionProvider::Groq);
+    }
 }
