@@ -53,12 +53,11 @@ export function MicrophoneField({
   const [devices, setDevices] = useState<string[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [value, setValue] = useState<string>(toSelectValue(initial));
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [pauseEnabled, setPauseEnabled] = useState(pauseMedia);
 
-  const form = useForm({ values: { device: value } });
+  const form = useForm({ values: { device: toSelectValue(initial) } });
 
   useEffect(() => {
     listInputDevices()
@@ -73,10 +72,6 @@ export function MicrophoneField({
   }, []);
 
   useEffect(() => {
-    setValue(toSelectValue(initial));
-  }, [initial]);
-
-  useEffect(() => {
     setPauseEnabled(pauseMedia);
   }, [pauseMedia]);
 
@@ -87,8 +82,8 @@ export function MicrophoneField({
   }, [status]);
 
   const handleChange = async (next: string) => {
-    const previous = value;
-    setValue(next);
+    const previous = form.getValues("device");
+    form.setValue("device", next);
     const payload = fromSelectValue(next);
     setStatus("saving");
     setSaveError(null);
@@ -97,7 +92,7 @@ export function MicrophoneField({
       onSaved(payload);
       setStatus("saved");
     } catch (e) {
-      setValue(previous);
+      form.setValue("device", previous);
       setStatus("error");
       setSaveError(String(e));
     }
