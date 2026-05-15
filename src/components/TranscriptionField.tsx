@@ -1,4 +1,16 @@
 import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+
+import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 
 import { setDeepgramSettings as persistDeepgramSettings } from "../lib/api";
 import type { DeepgramSettings } from "../lib/types";
@@ -10,8 +22,6 @@ interface Props {
   onSaved: (deepgram: DeepgramSettings) => void;
   defaultOpen?: boolean;
 }
-
-type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 type BoolKey = {
   [K in keyof DeepgramSettings]: DeepgramSettings[K] extends boolean
@@ -50,165 +60,181 @@ const BOOL_OPTIONS: BoolOption[] = [
   },
 ];
 
-const same = (a: DeepgramSettings, b: DeepgramSettings) =>
-  a.language === b.language &&
-  a.smart_format === b.smart_format &&
-  a.dictation === b.dictation &&
-  a.numerals === b.numerals &&
-  a.keyterms.length === b.keyterms.length &&
-  a.keyterms.every((k, i) => k === b.keyterms[i]);
-
 export function TranscriptionField({
   initial,
   onSaved,
   defaultOpen = false,
 }: Props) {
-  const [state, setState] = useState<DeepgramSettings>(initial);
-  const [status, setStatus] = useState<SaveStatus>("idle");
-  const [error, setError] = useState<string | null>(null);
+  const form = useForm<DeepgramSettings>({ values: initial });
+
+  const [saving, setSaving] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    setState(initial);
-  }, [initial]);
-
-  useEffect(() => {
-    if (status !== "saved") return;
-    const t = setTimeout(() => setStatus("idle"), 1500);
+    if (!savedOk) return;
+    const t = setTimeout(() => setSavedOk(false), 1500);
     return () => clearTimeout(t);
-  }, [status]);
+  }, [savedOk]);
 
-  const toggle = (key: BoolKey) => setState((s) => ({ ...s, [key]: !s[key] }));
-
-  const setLanguage = (language: string) =>
-    setState((s) => ({ ...s, language }));
+  const keyterms = form.watch("keyterms");
 
   const updateKeyterm = (index: number, value: string) =>
-    setState((s) => ({
-      ...s,
-      keyterms: s.keyterms.map((k, i) => (i === index ? value : k)),
-    }));
+    form.setValue(
+      "keyterms",
+      keyterms.map((k, i) => (i === index ? value : k)),
+      { shouldDirty: true },
+    );
 
   const removeKeyterm = (index: number) =>
-    setState((s) => ({
-      ...s,
-      keyterms: s.keyterms.filter((_, i) => i !== index),
-    }));
+    form.setValue(
+      "keyterms",
+      keyterms.filter((_, i) => i !== index),
+      { shouldDirty: true },
+    );
 
   const addKeyterm = () =>
-    setState((s) => ({ ...s, keyterms: [...s.keyterms, ""] }));
+    form.setValue("keyterms", [...keyterms, ""], { shouldDirty: true });
 
-  const handleSave = async () => {
+  const onSubmit = async (values: DeepgramSettings) => {
     const cleaned: DeepgramSettings = {
-      ...state,
-      language: state.language.trim() || "en",
-      keyterms: state.keyterms.map((k) => k.trim()).filter((k) => k.length > 0),
+      ...values,
+      language: values.language.trim() || "en",
+      keyterms: values.keyterms.map((k) => k.trim()).filter((k) => k.length > 0),
     };
-    setStatus("saving");
-    setError(null);
+    setSaving(true);
+    setSaveError(null);
     try {
       await persistDeepgramSettings(cleaned);
-      setState(cleaned);
       onSaved(cleaned);
-      setStatus("saved");
+      setSavedOk(true);
     } catch (e) {
-      setStatus("error");
-      setError(String(e));
+      setSaveError(String(e));
+    } finally {
+      setSaving(false);
     }
   };
-
-  const dirty = !same(state, initial);
 
   return (
     <CollapsibleCard
       title="Deepgram"
       defaultOpen={defaultOpen}
-      dirty={dirty}
+      dirty={form.formState.isDirty}
       info="Deepgram nova-3 options. Defaults are off; enable what you need."
     >
-      <div className="field-group">
-        <div className="label-with-info" style={{ marginBottom: 4 }}>
-          <label className="field-label" style={{ margin: 0 }}>
-            Language
-          </label>
-          <InfoTip text="Language code (e.g. en, multi, es, de)." />
-        </div>
-        <input
-          type="text"
-          value={state.language}
-          placeholder="en"
-          spellCheck={false}
-          autoComplete="off"
-          onChange={(e) => setLanguage(e.target.value)}
-        />
-      </div>
-
-      <div className="options-list">
-        {BOOL_OPTIONS.map((opt) => (
-          <label key={opt.key} className="option-row">
-            <input
-              type="checkbox"
-              checked={state[opt.key]}
-              onChange={() => toggle(opt.key)}
-            />
-            <div className="option-text">
-              <div className="option-label label-with-info">
-                {opt.label}
-                <InfoTip text={opt.description} />
-              </div>
-              <div className="option-param mono">
-                {opt.param}={String(state[opt.key])}
-              </div>
-            </div>
-          </label>
-        ))}
-
-        <div className="option-row keyterms-option">
-          <div className="option-text">
-            <div className="option-label label-with-info">
-              Keyterm Prompting
-              <InfoTip text="Boosts recognition of important words or phrases, like names, product terms, or jargon. Up to 100 keyterms per request." />
-            </div>
-            <div className="option-param mono">keyterm=TERM_OR_PHRASE</div>
-            <div className="keyterms-list">
-              {state.keyterms.map((kt, i) => (
-                <div key={i} className="replacement-row">
-                  <input
-                    type="text"
-                    value={kt}
-                    placeholder="e.g. Deepgram"
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <FormField
+            control={form.control}
+            name="language"
+            render={({ field }) => (
+              <FormItem className="field-group">
+                <div className="label-with-info" style={{ marginBottom: 4 }}>
+                  <FormLabel className="field-label" style={{ margin: 0 }}>
+                    Language
+                  </FormLabel>
+                  <InfoTip text="Language code (e.g. en, multi, es, de)." />
+                </div>
+                <FormControl>
+                  <Input
+                    {...field}
+                    placeholder="en"
                     spellCheck={false}
                     autoComplete="off"
-                    onChange={(e) => updateKeyterm(i, e.target.value)}
                   />
-                  <button
-                    className="icon-button"
-                    aria-label="Remove"
-                    onClick={() => removeKeyterm(i)}
-                  >
-                    ×
-                  </button>
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <div className="options-list">
+            {BOOL_OPTIONS.map((opt) => (
+              <FormField
+                key={opt.key}
+                control={form.control}
+                name={opt.key}
+                render={({ field }) => (
+                  <FormItem>
+                    <label
+                      className="option-row"
+                      htmlFor={`switch-${opt.key}`}
+                    >
+                      <div className="option-text">
+                        <div className="option-label label-with-info">
+                          {opt.label}
+                          <InfoTip text={opt.description} />
+                        </div>
+                        <div className="option-param mono">
+                          {opt.param}={String(field.value)}
+                        </div>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          id={`switch-${opt.key}`}
+                          checked={field.value as boolean}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </label>
+                  </FormItem>
+                )}
+              />
+            ))}
+
+            <div className="option-row keyterms-option">
+              <div className="option-text">
+                <div className="option-label label-with-info">
+                  Keyterm Prompting
+                  <InfoTip text="Boosts recognition of important words or phrases, like names, product terms, or jargon. Up to 100 keyterms per request." />
                 </div>
-              ))}
-            </div>
-            <div className="row">
-              <button onClick={addKeyterm}>+ Add keyterm</button>
+                <div className="option-param mono">keyterm=TERM_OR_PHRASE</div>
+                <div className="keyterms-list">
+                  {keyterms.map((kt, i) => (
+                    <div key={i} className="replacement-row">
+                      <Input
+                        className="flex-1 min-w-0"
+                        value={kt}
+                        placeholder="e.g. Deepgram"
+                        spellCheck={false}
+                        autoComplete="off"
+                        onChange={(e) => updateKeyterm(i, e.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Remove"
+                        onClick={() => removeKeyterm(i)}
+                      >
+                        ×
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <div className="row">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addKeyterm}
+                  >
+                    + Add keyterm
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div className="row replacements-actions save-row">
-        <div className="spacer" />
-        <button
-          className="primary"
-          onClick={handleSave}
-          disabled={!dirty || status === "saving"}
-        >
-          {status === "saving" ? "Saving…" : "Save"}
-        </button>
-      </div>
-      {status === "saved" && <div className="status ok">Saved</div>}
-      {status === "error" && <div className="status err">{error}</div>}
+          <div className="row replacements-actions save-row">
+            <div className="spacer" />
+            <Button type="submit" disabled={!form.formState.isDirty || saving}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </div>
+          {savedOk && <div className="status ok">Saved</div>}
+          {saveError && <div className="status err">{saveError}</div>}
+        </form>
+      </Form>
     </CollapsibleCard>
   );
 }
