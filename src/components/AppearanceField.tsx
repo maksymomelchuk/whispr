@@ -1,14 +1,7 @@
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 import * as z from "zod";
 
-import {
-  setShowInDock as persistShowInDock,
-  setShowLivePreview as persistShowLivePreview,
-} from "../lib/api";
-import { usePersistedToggle } from "../hooks/usePersistedToggle";
-import type { ThemePreference } from "../hooks/useTheme";
 import {
   Form,
   FormControl,
@@ -16,14 +9,27 @@ import {
   FormItem,
   FormLabel,
 } from "@/components/ui/form";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Switch } from "@/components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+
+import { usePersistedToggle } from "../hooks/usePersistedToggle";
+import type { ThemePreference } from "../hooks/useTheme";
+import {
+  setShowInDock as persistShowInDock,
+  setShowLivePreview as persistShowLivePreview,
+} from "../lib/api";
 
 const themeSchema = z.object({
   theme: z.enum(["system", "light", "dark"]),
 });
 
 type ThemeFormValues = z.infer<typeof themeSchema>;
+
+const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
 
 interface Props {
   preference: ThemePreference;
@@ -44,12 +50,8 @@ export function AppearanceField({
 }: Props) {
   const form = useForm<ThemeFormValues>({
     resolver: zodResolver(themeSchema),
-    defaultValues: { theme: preference },
+    values: { theme: preference },
   });
-
-  useEffect(() => {
-    form.setValue("theme", preference);
-  }, [preference, form]);
 
   const dock = usePersistedToggle(
     showInDock,
@@ -79,22 +81,19 @@ export function AppearanceField({
                   variant="outline"
                   value={field.value}
                   onValueChange={(val) => {
-                    if (!val) return;
-                    const theme = val as ThemePreference;
-                    field.onChange(theme);
-                    onChange(theme);
+                    if (val) onChange(val as ThemePreference);
                   }}
                   className="w-full"
                 >
-                  <ToggleGroupItem value="system" className="flex-1 text-xs">
-                    System
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="light" className="flex-1 text-xs">
-                    Light
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="dark" className="flex-1 text-xs">
-                    Dark
-                  </ToggleGroupItem>
+                  {THEME_OPTIONS.map(({ value, label }) => (
+                    <ToggleGroupItem
+                      key={value}
+                      value={value}
+                      className="flex-1 text-xs"
+                    >
+                      {label}
+                    </ToggleGroupItem>
+                  ))}
                 </ToggleGroup>
               </FormControl>
             </FormItem>
@@ -103,19 +102,15 @@ export function AppearanceField({
       </Form>
 
       <label className="toggle-row">
-        <span className="toggle-row-label">Show in Dock &amp; Cmd-Tab</span>
-        <Switch
-          checked={dock.enabled}
-          onCheckedChange={() => dock.toggle()}
-        />
+        <span className="toggle-row-label">Show in Dock & Cmd-Tab</span>
+        <Switch checked={dock.enabled} onCheckedChange={dock.toggle} />
       </label>
 
       <label className="toggle-row">
-        <span className="toggle-row-label">Show live preview while dictating</span>
-        <Switch
-          checked={preview.enabled}
-          onCheckedChange={() => preview.toggle()}
-        />
+        <span className="toggle-row-label">
+          Show live preview while dictating
+        </span>
+        <Switch checked={preview.enabled} onCheckedChange={preview.toggle} />
       </label>
 
       {saveError && <div className="status err">{saveError}</div>}
