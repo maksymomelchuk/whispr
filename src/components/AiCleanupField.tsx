@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
-
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
@@ -19,21 +18,17 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 import { usePersistedToggle } from "../hooks/usePersistedToggle";
 import {
-  setAiCleanupEnabled as persistEnabled,
   setAnthropicApiKey as persistApiKey,
-  setAnthropicOauthToken as persistOauthToken,
   setCleanupAuthMode as persistAuthMode,
+  setAiCleanupEnabled as persistEnabled,
+  setAnthropicOauthToken as persistOauthToken,
   setCleanupThresholds as persistThresholds,
 } from "../lib/api";
 import type { CleanupAuthMode } from "../lib/types";
 import { CollapsibleCard } from "./CollapsibleCard";
 import { InfoTip } from "./InfoTip";
 
-// Discriminated union: each mode's fields validated independently.
-const credentialSchema = z.discriminatedUnion("authMode", [
-  z.object({ authMode: z.literal("api_key"), credential: z.string() }),
-  z.object({ authMode: z.literal("oauth"), credential: z.string() }),
-]);
+const credentialSchema = z.object({ credential: z.string() });
 
 const thresholdsSchema = z.object({
   minWords: z
@@ -103,7 +98,11 @@ export function AiCleanupField({
   onThresholdsChange,
   defaultOpen = false,
 }: Props) {
-  const enabledToggle = usePersistedToggle(enabled, persistEnabled, onEnabledChange);
+  const enabledToggle = usePersistedToggle(
+    enabled,
+    persistEnabled,
+    onEnabledChange,
+  );
 
   const handleAuthModeChange = async (val: string) => {
     if (!val || val === authMode) return;
@@ -118,7 +117,7 @@ export function AiCleanupField({
 
   const credentialForm = useForm<CredentialValues>({
     resolver: zodResolver(credentialSchema),
-    defaultValues: { authMode, credential: "" },
+    defaultValues: { credential: "" },
   });
 
   const [credSaving, setCredSaving] = useState(false);
@@ -133,41 +132,21 @@ export function AiCleanupField({
   // Switching modes wipes the unsaved draft so we don't accidentally try to
   // save a half-typed API key as an OAuth token (or vice versa).
   useEffect(() => {
-    credentialForm.reset({ authMode, credential: "" });
+    credentialForm.reset({ credential: "" });
   }, [authMode, credentialForm]);
 
-  const onCredentialSubmit = async (values: CredentialValues) => {
-    setCredSaving(true);
-    try {
-      const trimmed = values.credential.trim();
-      if (values.authMode === "api_key") {
-        await persistApiKey(trimmed);
-        onApiKeyConfiguredChange(trimmed.length > 0);
-      } else {
-        await persistOauthToken(trimmed);
-        onOauthTokenConfiguredChange(trimmed.length > 0);
-      }
-      credentialForm.reset({ authMode, credential: "" });
-      setCredSavedOk(true);
-    } catch (e) {
-      credentialForm.setError("credential", { message: String(e) });
-    } finally {
-      setCredSaving(false);
-    }
-  };
-
-  const handleCredentialClear = async () => {
+  const persistCredential = async (raw: string) => {
     setCredSaving(true);
     credentialForm.clearErrors("credential");
     try {
       if (authMode === "api_key") {
-        await persistApiKey("");
-        onApiKeyConfiguredChange(false);
+        await persistApiKey(raw);
+        onApiKeyConfiguredChange(raw.length > 0);
       } else {
-        await persistOauthToken("");
-        onOauthTokenConfiguredChange(false);
+        await persistOauthToken(raw);
+        onOauthTokenConfiguredChange(raw.length > 0);
       }
-      credentialForm.reset({ authMode, credential: "" });
+      credentialForm.reset({ credential: "" });
       setCredSavedOk(true);
     } catch (e) {
       credentialForm.setError("credential", { message: String(e) });
@@ -175,6 +154,10 @@ export function AiCleanupField({
       setCredSaving(false);
     }
   };
+
+  const onCredentialSubmit = (values: CredentialValues) =>
+    persistCredential(values.credential.trim());
+  const handleCredentialClear = () => persistCredential("");
 
   const thresholdsForm = useForm<ThresholdsValues>({
     resolver: zodResolver(thresholdsSchema),
@@ -212,7 +195,9 @@ export function AiCleanupField({
     authMode === "api_key" ? apiKeyConfigured : oauthTokenConfigured;
   const showWarning = enabledToggle.enabled && !configured;
   const copy = MODE_COPY[authMode];
-  const placeholder = configured ? copy.placeholderReplace : copy.placeholderEmpty;
+  const placeholder = configured
+    ? copy.placeholderReplace
+    : copy.placeholderEmpty;
   const credentialValue = credentialForm.watch("credential");
   const credentialDirty = credentialValue.trim().length > 0;
 
