@@ -1,8 +1,9 @@
 use tauri::{
-    AppHandle, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+    AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
 
 const OVERLAY_LABEL: &str = "overlay";
+const OVERLAY_RESET_EVENT: &str = "overlay-reset";
 /// Logical points (multiplied by monitor scale for physical pixels). The
 /// inner pill collapses via CSS, so the slack here stays click-through.
 const OVERLAY_WIDTH: f64 = 640.0;
@@ -71,6 +72,9 @@ pub fn show(app: &AppHandle) {
 
 pub fn hide(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(OVERLAY_LABEL) {
+        // Reset before hiding so the next show() paints a clean pill instead
+        // of one frame of stale preview while ptt-pressed is still in flight.
+        let _ = app.emit(OVERLAY_RESET_EVENT, ());
         let _ = window.hide();
     }
 }

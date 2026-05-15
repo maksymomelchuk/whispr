@@ -69,6 +69,7 @@ impl TranscriptionSession for GroqSession {
         } else {
             settings.groq.language.trim().to_string()
         };
+        let show_live_preview = settings.show_live_preview;
 
         let buffered: Arc<Mutex<Vec<i16>>> = Arc::new(Mutex::new(Vec::new()));
         let samples_per_second: u64 = format.sample_rate as u64 * format.channels as u64;
@@ -86,6 +87,7 @@ impl TranscriptionSession for GroqSession {
             key,
             model,
             language,
+            show_live_preview,
             outcome_tx: outcome_tx.clone(),
         };
 
@@ -174,6 +176,7 @@ struct Runner {
     key: String,
     model: &'static str,
     language: String,
+    show_live_preview: bool,
     outcome_tx: UnboundedSender<Outcome>,
 }
 
@@ -202,7 +205,9 @@ impl Runner {
                 );
             }
             Action::EmitPartial(text) => {
-                let _ = self.app.emit(TRANSCRIPT_PARTIAL_EVENT, &text);
+                if self.show_live_preview {
+                    let _ = self.app.emit(TRANSCRIPT_PARTIAL_EVENT, &text);
+                }
             }
             Action::DispatchFinal => {
                 spawn_final_post(

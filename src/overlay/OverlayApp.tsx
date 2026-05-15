@@ -63,7 +63,11 @@ function ErrorIcon() {
   );
 }
 
-const Waveform = ({ levelRef }: { levelRef: React.RefObject<HTMLDivElement | null> }) => (
+const Waveform = ({
+  levelRef,
+}: {
+  levelRef: React.RefObject<HTMLDivElement | null>;
+}) => (
   <div ref={levelRef} className="overlay-wave" aria-hidden="true">
     <span className="overlay-bar" />
     <span className="overlay-bar" />
@@ -96,9 +100,10 @@ export function OverlayApp() {
   };
 
   useEffect(() => {
+    if (ready) return;
     const id = requestAnimationFrame(() => setReady(true));
     return () => cancelAnimationFrame(id);
-  }, []);
+  }, [ready]);
 
   useEffect(() => {
     if (mode !== "recording" || startedAt === null) return;
@@ -114,14 +119,23 @@ export function OverlayApp() {
   useEffect(() => {
     let cancelled = false;
     let unsubs: (() => void)[] = [];
+
+    const resetSession = () => {
+      setReady(false);
+      setStartedAt(null);
+      setElapsedSec(0);
+      setMode("recording");
+      setPartial("");
+      setTarget(null);
+      applyLevel(0);
+    };
     Promise.all([
       listen("ptt-pressed", () => {
+        resetSession();
         setStartedAt(Date.now());
-        setElapsedSec(0);
-        setMode("recording");
-        setPartial("");
-        setTarget(null);
-        applyLevel(0);
+      }),
+      listen("overlay-reset", () => {
+        resetSession();
       }),
       listen<TargetApp>("target-app", (e) => {
         if (e.payload) setTarget(e.payload);
