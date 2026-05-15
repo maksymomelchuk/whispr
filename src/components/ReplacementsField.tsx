@@ -36,7 +36,7 @@ export function ReplacementsField({
 }: Props) {
   const form = useForm<ReplacementsFormValues>({
     resolver: zodResolver(replacementsSchema),
-    values: { rows: initial.map((r) => ({ from: r.from, to: r.to })) },
+    values: { rows: initial },
   });
 
   const { fields, append, remove } = useFieldArray({
@@ -82,8 +82,8 @@ export function ReplacementsField({
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <div className="mb-2.5 flex flex-col gap-1.5">
-            {fields.map((field, i) => (
-              <div key={field.id} className="flex items-center gap-1.5">
+            {fields.map(({ id }, i) => (
+              <div key={id} className="flex items-center gap-1.5">
                 <FormField
                   control={form.control}
                   name={`rows.${i}.from`}
