@@ -1,5 +1,23 @@
 import { useEffect, useState } from "react";
 
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
+
+import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+
+import { usePersistedToggle } from "../hooks/usePersistedToggle";
 import {
   setAiCleanupEnabled as persistEnabled,
   setAnthropicApiKey as persistApiKey,
@@ -10,6 +28,30 @@ import {
 import type { CleanupAuthMode } from "../lib/types";
 import { CollapsibleCard } from "./CollapsibleCard";
 import { InfoTip } from "./InfoTip";
+
+// Discriminated union: each mode's fields validated independently.
+const credentialSchema = z.discriminatedUnion("authMode", [
+  z.object({ authMode: z.literal("api_key"), credential: z.string() }),
+  z.object({ authMode: z.literal("oauth"), credential: z.string() }),
+]);
+
+const thresholdsSchema = z.object({
+  minWords: z
+    .string()
+    .refine(
+      (v) => /^\d+$/.test(v.trim()) && Number(v) >= 0,
+      "Must be a non-negative integer",
+    ),
+  minDurationSec: z
+    .string()
+    .refine(
+      (v) => !Number.isNaN(Number(v)) && Number(v) >= 0,
+      "Must be a non-negative number",
+    ),
+});
+
+type CredentialValues = z.infer<typeof credentialSchema>;
+type ThresholdsValues = z.infer<typeof thresholdsSchema>;
 
 interface Props {
   enabled: boolean;
@@ -25,8 +67,6 @@ interface Props {
   onThresholdsChange: (minWords: number, minDurationMs: number) => void;
   defaultOpen?: boolean;
 }
-
-type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 function formatSeconds(ms: number): string {
   const seconds = ms / 1000;
@@ -63,92 +103,11 @@ export function AiCleanupField({
   onThresholdsChange,
   defaultOpen = false,
 }: Props) {
-  const [wordsDraft, setWordsDraft] = useState(String(minWords));
-  const [secondsDraft, setSecondsDraft] = useState(
-    formatSeconds(minDurationMs),
-  );
-  const [thresholdStatus, setThresholdStatus] = useState<SaveStatus>("idle");
-  const [thresholdError, setThresholdError] = useState<string | null>(null);
+  const enabledToggle = usePersistedToggle(enabled, persistEnabled, onEnabledChange);
 
-  useEffect(() => {
-    setWordsDraft(String(minWords));
-    setSecondsDraft(formatSeconds(minDurationMs));
-  }, [minWords, minDurationMs]);
-
-  useEffect(() => {
-    if (thresholdStatus !== "saved") return;
-    const t = setTimeout(() => setThresholdStatus("idle"), 1500);
-    return () => clearTimeout(t);
-  }, [thresholdStatus]);
-
-  const thresholdsDirty =
-    Number(wordsDraft) !== minWords ||
-    Math.round(Number(secondsDraft) * 1000) !== minDurationMs;
-
-  const handleSaveThresholds = async () => {
-    const wordsNum = Number(wordsDraft);
-    const secondsNum = Number(secondsDraft);
-    if (
-      !Number.isFinite(wordsNum) ||
-      wordsNum < 0 ||
-      !Number.isInteger(wordsNum)
-    ) {
-      setThresholdStatus("error");
-      setThresholdError("Min words must be a non-negative integer.");
-      return;
-    }
-    if (!Number.isFinite(secondsNum) || secondsNum < 0) {
-      setThresholdStatus("error");
-      setThresholdError("Min duration must be a non-negative number.");
-      return;
-    }
-    const ms = Math.round(secondsNum * 1000);
-    setThresholdStatus("saving");
-    setThresholdError(null);
-    try {
-      await persistThresholds(wordsNum, ms);
-      onThresholdsChange(wordsNum, ms);
-      setThresholdStatus("saved");
-    } catch (e) {
-      setThresholdStatus("error");
-      setThresholdError(String(e));
-    }
-  };
-
-  const [draft, setDraft] = useState("");
-  const [status, setStatus] = useState<SaveStatus>("idle");
-  const [error, setError] = useState<string | null>(null);
-  const [toggleSaving, setToggleSaving] = useState(false);
-
-  useEffect(() => {
-    if (status !== "saved") return;
-    const t = setTimeout(() => setStatus("idle"), 1500);
-    return () => clearTimeout(t);
-  }, [status]);
-
-  // Switching modes wipes the unsaved draft so we don't accidentally try to
-  // save a half-typed API key as an OAuth token (or vice versa).
-  useEffect(() => {
-    setDraft("");
-    setStatus("idle");
-    setError(null);
-  }, [authMode]);
-
-  const handleToggle = async () => {
-    const next = !enabled;
-    setToggleSaving(true);
-    try {
-      await persistEnabled(next);
-      onEnabledChange(next);
-    } catch (e) {
-      console.error("Failed to save AI cleanup toggle", e);
-    } finally {
-      setToggleSaving(false);
-    }
-  };
-
-  const handleAuthModeChange = async (mode: CleanupAuthMode) => {
-    if (mode === authMode) return;
+  const handleAuthModeChange = async (val: string) => {
+    if (!val || val === authMode) return;
+    const mode = val as CleanupAuthMode;
     try {
       await persistAuthMode(mode);
       onAuthModeChange(mode);
@@ -157,133 +116,202 @@ export function AiCleanupField({
     }
   };
 
-  const persistValue = async (value: string) => {
-    setStatus("saving");
-    setError(null);
+  const credentialForm = useForm<CredentialValues>({
+    resolver: zodResolver(credentialSchema),
+    defaultValues: { authMode, credential: "" },
+  });
+
+  const [credSaving, setCredSaving] = useState(false);
+  const [credSavedOk, setCredSavedOk] = useState(false);
+
+  useEffect(() => {
+    if (!credSavedOk) return;
+    const t = setTimeout(() => setCredSavedOk(false), 1500);
+    return () => clearTimeout(t);
+  }, [credSavedOk]);
+
+  // Switching modes wipes the unsaved draft so we don't accidentally try to
+  // save a half-typed API key as an OAuth token (or vice versa).
+  useEffect(() => {
+    credentialForm.reset({ authMode, credential: "" });
+  }, [authMode, credentialForm]);
+
+  const onCredentialSubmit = async (values: CredentialValues) => {
+    setCredSaving(true);
     try {
-      if (authMode === "api_key") {
-        await persistApiKey(value);
-        onApiKeyConfiguredChange(value.length > 0);
+      const trimmed = values.credential.trim();
+      if (values.authMode === "api_key") {
+        await persistApiKey(trimmed);
+        onApiKeyConfiguredChange(trimmed.length > 0);
       } else {
-        await persistOauthToken(value);
-        onOauthTokenConfiguredChange(value.length > 0);
+        await persistOauthToken(trimmed);
+        onOauthTokenConfiguredChange(trimmed.length > 0);
       }
-      setDraft("");
-      setStatus("saved");
+      credentialForm.reset({ authMode, credential: "" });
+      setCredSavedOk(true);
     } catch (e) {
-      setStatus("error");
-      setError(String(e));
+      credentialForm.setError("credential", { message: String(e) });
+    } finally {
+      setCredSaving(false);
     }
   };
 
-  const handleSave = () => persistValue(draft.trim());
-  const handleClear = () => persistValue("");
+  const handleCredentialClear = async () => {
+    setCredSaving(true);
+    credentialForm.clearErrors("credential");
+    try {
+      if (authMode === "api_key") {
+        await persistApiKey("");
+        onApiKeyConfiguredChange(false);
+      } else {
+        await persistOauthToken("");
+        onOauthTokenConfiguredChange(false);
+      }
+      credentialForm.reset({ authMode, credential: "" });
+      setCredSavedOk(true);
+    } catch (e) {
+      credentialForm.setError("credential", { message: String(e) });
+    } finally {
+      setCredSaving(false);
+    }
+  };
 
-  const dirty = draft.trim().length > 0;
+  const thresholdsForm = useForm<ThresholdsValues>({
+    resolver: zodResolver(thresholdsSchema),
+    values: {
+      minWords: String(minWords),
+      minDurationSec: formatSeconds(minDurationMs),
+    },
+  });
+
+  const [threshSaving, setThreshSaving] = useState(false);
+  const [threshSavedOk, setThreshSavedOk] = useState(false);
+
+  useEffect(() => {
+    if (!threshSavedOk) return;
+    const t = setTimeout(() => setThreshSavedOk(false), 1500);
+    return () => clearTimeout(t);
+  }, [threshSavedOk]);
+
+  const onThresholdsSubmit = async (values: ThresholdsValues) => {
+    setThreshSaving(true);
+    const wordsNum = Number(values.minWords);
+    const ms = Math.round(Number(values.minDurationSec) * 1000);
+    try {
+      await persistThresholds(wordsNum, ms);
+      onThresholdsChange(wordsNum, ms);
+      setThreshSavedOk(true);
+    } catch (e) {
+      thresholdsForm.setError("root", { message: String(e) });
+    } finally {
+      setThreshSaving(false);
+    }
+  };
+
   const configured =
     authMode === "api_key" ? apiKeyConfigured : oauthTokenConfigured;
-  const showWarning = enabled && !configured;
+  const showWarning = enabledToggle.enabled && !configured;
   const copy = MODE_COPY[authMode];
-  const placeholder = configured
-    ? copy.placeholderReplace
-    : copy.placeholderEmpty;
+  const placeholder = configured ? copy.placeholderReplace : copy.placeholderEmpty;
+  const credentialValue = credentialForm.watch("credential");
+  const credentialDirty = credentialValue.trim().length > 0;
 
   return (
     <CollapsibleCard title="AI Cleanup" defaultOpen={defaultOpen}>
-      <div className="options-list">
-        <label className="option-row">
-          <input
-            type="checkbox"
-            checked={enabled}
-            disabled={toggleSaving}
-            onChange={handleToggle}
-          />
-          <div className="option-text">
-            <div className="option-label label-with-info">
-              Enable AI post-processing
-              <InfoTip text="Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Adds ~500ms." />
-            </div>
-          </div>
-        </label>
-      </div>
+      <label className="toggle-row">
+        <span className="toggle-row-label label-with-info">
+          Enable AI post-processing
+          <InfoTip text="Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Adds ~500ms." />
+        </span>
+        <Switch
+          checked={enabledToggle.enabled}
+          onCheckedChange={enabledToggle.toggle}
+        />
+      </label>
 
-      {enabled && (
+      {enabledToggle.enabled && (
         <>
           <div className="field-group">
-            <label className="field-label">Authentication</label>
-            <div className="options-list">
-              <label className="option-row">
-                <input
-                  type="radio"
-                  name="cleanup-auth-mode"
-                  value="api_key"
-                  checked={authMode === "api_key"}
-                  onChange={() => handleAuthModeChange("api_key")}
-                />
-                <div className="option-text">
-                  <div className="option-label label-with-info">
-                    Anthropic API Key
-                    <InfoTip text="Pay-as-you-go via console.anthropic.com." />
-                  </div>
-                </div>
-              </label>
-              <label className="option-row">
-                <input
-                  type="radio"
-                  name="cleanup-auth-mode"
-                  value="oauth"
-                  checked={authMode === "oauth"}
-                  onChange={() => handleAuthModeChange("oauth")}
-                />
-                <div className="option-text">
-                  <div className="option-label label-with-info">
-                    Claude Code OAuth token
-                    <InfoTip text="Uses your Claude subscription. Mint with `claude setup-token`." />
-                  </div>
-                </div>
-              </label>
-            </div>
+            <span className="field-label">Authentication</span>
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              value={authMode}
+              onValueChange={handleAuthModeChange}
+              className="w-full"
+            >
+              <ToggleGroupItem value="api_key" className="flex-1 text-xs">
+                <span className="label-with-info">
+                  Anthropic API Key
+                  <InfoTip text="Pay-as-you-go via console.anthropic.com." />
+                </span>
+              </ToggleGroupItem>
+              <ToggleGroupItem value="oauth" className="flex-1 text-xs">
+                <span className="label-with-info">
+                  Claude Code OAuth
+                  <InfoTip text="Uses your Claude subscription. Mint with `claude setup-token`." />
+                </span>
+              </ToggleGroupItem>
+            </ToggleGroup>
           </div>
 
           <div className="field-group">
             <div className="row" style={{ alignItems: "baseline", gap: 8 }}>
-              <label className="field-label" style={{ margin: 0 }}>
+              <span className="field-label" style={{ margin: 0 }}>
                 {copy.fieldLabel}
-              </label>
+              </span>
               {configured ? (
                 <span className="status ok">Configured</span>
               ) : (
                 <span className="status err">Not set</span>
               )}
             </div>
-            <div className="row">
-              <input
-                type="password"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder={placeholder}
-                spellCheck={false}
-                autoComplete="off"
-              />
-              <button
-                onClick={handleSave}
-                disabled={!dirty || status === "saving"}
-              >
-                {status === "saving" ? "Saving…" : "Save"}
-              </button>
-              {configured && (
-                <button
-                  onClick={handleClear}
-                  disabled={status === "saving"}
-                  className="secondary"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-            {status === "saved" && <div className="status ok">Saved</div>}
-            {status === "error" && <div className="status err">{error}</div>}
-            {showWarning && status !== "error" && (
+            <Form {...credentialForm}>
+              <form onSubmit={credentialForm.handleSubmit(onCredentialSubmit)}>
+                <FormField
+                  control={credentialForm.control}
+                  name="credential"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <div className="row">
+                          <Input
+                            {...field}
+                            type="password"
+                            placeholder={placeholder}
+                            spellCheck={false}
+                            autoComplete="off"
+                            onChange={(e) => {
+                              field.onChange(e);
+                              credentialForm.clearErrors("credential");
+                            }}
+                          />
+                          <Button
+                            type="submit"
+                            disabled={!credentialDirty || credSaving}
+                          >
+                            {credSaving ? "Saving…" : "Save"}
+                          </Button>
+                          {configured && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={handleCredentialClear}
+                              disabled={credSaving}
+                            >
+                              Clear
+                            </Button>
+                          )}
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </form>
+            </Form>
+            {credSavedOk && <div className="status ok">Saved</div>}
+            {showWarning && !credentialForm.formState.errors.credential && (
               <p className="hint-sm">
                 Cleanup is bypassed until a credential is set.
               </p>
@@ -292,63 +320,69 @@ export function AiCleanupField({
 
           <div className="field-group">
             <div className="label-with-info" style={{ marginBottom: 0 }}>
-              <label className="field-label" style={{ margin: 0 }}>
+              <span className="field-label" style={{ margin: 0 }}>
                 Trigger thresholds
-              </label>
+              </span>
               <InfoTip text="Both must be met for cleanup to run." />
             </div>
-            <div className="row" style={{ alignItems: "flex-end" }}>
-              <label
-                className="hint-sm"
-                style={{
-                  minWidth: 120,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 4,
-                  textAlign: "left",
-                }}
-              >
-                Min words
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={wordsDraft}
-                  onChange={(e) => setWordsDraft(e.target.value)}
-                />
-              </label>
-              <label
-                className="hint-sm"
-                style={{
-                  minWidth: 160,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 4,
-                  textAlign: "left",
-                }}
-              >
-                Min duration (s)
-                <input
-                  type="number"
-                  min={0}
-                  step={0.5}
-                  value={secondsDraft}
-                  onChange={(e) => setSecondsDraft(e.target.value)}
-                />
-              </label>
-              <button
-                onClick={handleSaveThresholds}
-                disabled={!thresholdsDirty || thresholdStatus === "saving"}
-              >
-                {thresholdStatus === "saving" ? "Saving…" : "Save"}
-              </button>
-            </div>
-            {thresholdStatus === "saved" && (
-              <div className="status ok">Saved</div>
-            )}
-            {thresholdStatus === "error" && (
-              <div className="status err">{thresholdError}</div>
-            )}
+            <Form {...thresholdsForm}>
+              <form onSubmit={thresholdsForm.handleSubmit(onThresholdsSubmit)}>
+                <div className="row" style={{ alignItems: "flex-end" }}>
+                  <FormField
+                    control={thresholdsForm.control}
+                    name="minWords"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="hint-sm">Min words</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type="number"
+                            min={0}
+                            step={1}
+                            style={{ minWidth: 120 }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={thresholdsForm.control}
+                    name="minDurationSec"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="hint-sm">
+                          Min duration (s)
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type="number"
+                            min={0}
+                            step={0.5}
+                            style={{ minWidth: 160 }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button
+                    type="submit"
+                    disabled={!thresholdsForm.formState.isDirty || threshSaving}
+                  >
+                    {threshSaving ? "Saving…" : "Save"}
+                  </Button>
+                </div>
+                {thresholdsForm.formState.errors.root && (
+                  <div className="status err">
+                    {thresholdsForm.formState.errors.root.message}
+                  </div>
+                )}
+              </form>
+            </Form>
+            {threshSavedOk && <div className="status ok">Saved</div>}
           </div>
         </>
       )}
