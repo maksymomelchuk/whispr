@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { AppShell } from "./components/AppShell";
 import { Toaster } from "./components/ui/sonner";
+import { TooltipProvider } from "./components/ui/tooltip";
 import { SettingsContext } from "./context/SettingsContext";
 import { useTheme } from "./hooks/useTheme";
 import { getSettings } from "./lib/api";
@@ -59,10 +60,12 @@ function App() {
     <SettingsContext.Provider
       value={{ settings, setSettings, themePreference, setThemePreference }}
     >
-      <BrowserRouter>
-        <AppShell />
-        <Toaster />
-      </BrowserRouter>
+      <TooltipProvider>
+        <BrowserRouter>
+          <AppShell />
+          <Toaster />
+        </BrowserRouter>
+      </TooltipProvider>
     </SettingsContext.Provider>
   );
 }
