@@ -248,38 +248,6 @@ input[type="number"] {
   background: var(--bg);
 }
 
-.mic-select {
-  flex: 1;
-  appearance: none;
-  -webkit-appearance: none;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 6px 28px 6px 10px;
-  font-size: 13px;
-  font-family: inherit;
-  background-color: var(--bg-elevated);
-  color: var(--text);
-  outline: none;
-  cursor: pointer;
-  background-image: var(--select-arrow);
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  transition: border-color 0.15s;
-}
-
-:root.dark .mic-select {
-  background-color: var(--bg);
-}
-
-.mic-select:focus {
-  border-color: var(--primary);
-}
-
-.mic-select:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 /* Labeled field: small caption over its control, ~6px gap. */
 .field {
   display: flex;

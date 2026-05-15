@@ -1,4 +1,25 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
+import { type Control, useForm } from "react-hook-form";
+import * as z from "zod";
+
+import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import {
   setDeepgramApiKey as persistDeepgramApiKey,
@@ -18,6 +39,32 @@ import { ApiKeyField } from "./ApiKeyField";
 import { InfoTip } from "./InfoTip";
 import { TranscriptionField } from "./TranscriptionField";
 
+const groqVariant = z.object({
+  provider: z.literal("groq"),
+  model: z.enum(["whisper_large_v3_turbo", "whisper_large_v3"]),
+  language: z.string().min(1, "Language is required"),
+});
+
+const schema = z.discriminatedUnion("provider", [
+  z.object({ provider: z.literal("deepgram") }),
+  groqVariant,
+]);
+
+type FormValues = z.infer<typeof schema>;
+type GroqFormValues = z.infer<typeof groqVariant>;
+
+const PROVIDER_OPTIONS: { value: TranscriptionProvider; label: string }[] = [
+  { value: "deepgram", label: "Deepgram" },
+  { value: "groq", label: "Groq" },
+];
+
+const GROQ_MODEL_OPTIONS: { value: GroqModel; label: string }[] = [
+  { value: "whisper_large_v3_turbo", label: "Whisper Large v3-turbo" },
+  { value: "whisper_large_v3", label: "Whisper Large v3" },
+];
+
+type SaveStatus = "idle" | "saving" | "saved" | "error";
+
 interface Props {
   provider: TranscriptionProvider;
   deepgram: DeepgramSettings;
@@ -30,16 +77,6 @@ interface Props {
   onDeepgramApiKeyConfiguredChange: (configured: boolean) => void;
   onGroqApiKeyConfiguredChange: (configured: boolean) => void;
 }
-
-const PROVIDER_OPTIONS: { value: TranscriptionProvider; label: string }[] = [
-  { value: "deepgram", label: "Deepgram" },
-  { value: "groq", label: "Groq" },
-];
-
-const GROQ_MODEL_OPTIONS: { value: GroqModel; label: string }[] = [
-  { value: "whisper_large_v3_turbo", label: "Whisper Large v3-turbo" },
-  { value: "whisper_large_v3", label: "Whisper Large v3" },
-];
 
 export function TranscriptionProviderField({
   provider,
@@ -56,6 +93,27 @@ export function TranscriptionProviderField({
   const [providerSaveError, setProviderSaveError] = useState<string | null>(
     null,
   );
+  const [groqStatus, setGroqStatus] = useState<SaveStatus>("idle");
+  const [groqError, setGroqError] = useState<string | null>(null);
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    values:
+      provider === "groq"
+        ? { provider: "groq" as const, model: groq.model, language: groq.language }
+        : { provider: "deepgram" as const },
+  });
+
+  // Path<FormValues> only includes "provider" (the common key across the discriminated union),
+  // so groq-specific fields need a narrowed control type. These FormFields only mount when
+  // provider === "groq", so the runtime variant is always the groq branch.
+  const groqControl = form.control as unknown as Control<GroqFormValues>;
+
+  useEffect(() => {
+    if (groqStatus !== "saved") return;
+    const t = setTimeout(() => setGroqStatus("idle"), 1500);
+    return () => clearTimeout(t);
+  }, [groqStatus]);
 
   const handleProviderChange = async (next: TranscriptionProvider) => {
     if (next === provider) return;
@@ -70,35 +128,60 @@ export function TranscriptionProviderField({
     }
   };
 
+  const handleGroqSave = form.handleSubmit(async (values) => {
+    if (values.provider !== "groq") return;
+    const cleaned: GroqSettings = {
+      model: values.model,
+      language: values.language.trim() || "en",
+    };
+    setGroqStatus("saving");
+    setGroqError(null);
+    try {
+      await persistGroqSettings(cleaned);
+      onGroqSaved(cleaned);
+      setGroqStatus("saved");
+    } catch (e) {
+      setGroqStatus("error");
+      setGroqError(String(e));
+    }
+  });
+
   return (
-    <>
+    <Form {...form}>
       <section className="card">
-        <div className="field">
-          <div className="label-with-info" style={{ marginBottom: 4 }}>
-            <label
-              className="field-label"
-              style={{ margin: 0 }}
-              htmlFor="transcription-provider"
-            >
-              Transcription provider
-            </label>
-            <InfoTip text="Provider used for the next dictation. Each provider keeps its own API key and options." />
-          </div>
-          <select
-            id="transcription-provider"
-            className="mic-select"
-            value={provider}
-            onChange={(e) =>
-              handleProviderChange(e.target.value as TranscriptionProvider)
-            }
-          >
-            {PROVIDER_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <FormField
+          control={form.control}
+          name="provider"
+          render={({ field }) => (
+            <FormItem className="gap-[6px]">
+              <div className="label-with-info">
+                <FormLabel className="field-label" style={{ margin: 0 }}>
+                  Transcription provider
+                </FormLabel>
+                <InfoTip text="Provider used for the next dictation. Each provider keeps its own API key and options." />
+              </div>
+              <FormControl>
+                <Select
+                  value={field.value}
+                  onValueChange={(val) =>
+                    handleProviderChange(val as TranscriptionProvider)
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PROVIDER_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormControl>
+            </FormItem>
+          )}
+        />
         {providerSaveError && (
           <div className="status err">{providerSaveError}</div>
         )}
@@ -134,123 +217,85 @@ export function TranscriptionProviderField({
             validate={validateGroqApiKey}
             onSaved={onGroqApiKeyConfiguredChange}
           />
-          <GroqOptions initial={groq} onSaved={onGroqSaved} />
+          <section className="card">
+            <div className="card-title-row">
+              <h2 style={{ margin: 0 }}>Groq</h2>
+              <InfoTip text="Whisper Large via Groq's transcription endpoint." />
+            </div>
+            <div className="field-group">
+              <FormField
+                control={groqControl}
+                name="model"
+                render={({ field }) => (
+                  <FormItem className="gap-[6px]">
+                    <div className="label-with-info">
+                      <FormLabel className="field-label" style={{ margin: 0 }}>
+                        Model
+                      </FormLabel>
+                      <InfoTip text="v3-turbo is the cheapest and fastest. v3 is slightly more accurate." />
+                    </div>
+                    <FormControl>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {GROQ_MODEL_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
+            <div className="field-group">
+              <FormField
+                control={groqControl}
+                name="language"
+                render={({ field }) => (
+                  <FormItem className="gap-[6px]">
+                    <div className="label-with-info">
+                      <FormLabel className="field-label" style={{ margin: 0 }}>
+                        Language
+                      </FormLabel>
+                      <InfoTip text="ISO-639-1 language code (e.g. en, fr, es). Defaults to en." />
+                    </div>
+                    <FormControl>
+                      <Input
+                        placeholder="en"
+                        spellCheck={false}
+                        autoComplete="off"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <div className="row replacements-actions save-row">
+              <div className="spacer" />
+              <Button
+                onClick={handleGroqSave}
+                disabled={!form.formState.isDirty || groqStatus === "saving"}
+              >
+                {groqStatus === "saving" ? "Saving…" : "Save"}
+              </Button>
+            </div>
+            {groqStatus === "saved" && <div className="status ok">Saved</div>}
+            {groqStatus === "error" && (
+              <div className="status err">{groqError}</div>
+            )}
+          </section>
         </>
       )}
-    </>
-  );
-}
-
-interface GroqOptionsProps {
-  initial: GroqSettings;
-  onSaved: (groq: GroqSettings) => void;
-}
-
-type SaveStatus = "idle" | "saving" | "saved" | "error";
-
-function GroqOptions({ initial, onSaved }: GroqOptionsProps) {
-  const [state, setState] = useState<GroqSettings>(initial);
-  const [status, setStatus] = useState<SaveStatus>("idle");
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setState(initial);
-  }, [initial]);
-
-  useEffect(() => {
-    if (status !== "saved") return;
-    const t = setTimeout(() => setStatus("idle"), 1500);
-    return () => clearTimeout(t);
-  }, [status]);
-
-  const dirty =
-    state.model !== initial.model || state.language !== initial.language;
-
-  const handleSave = async () => {
-    const cleaned: GroqSettings = {
-      ...state,
-      language: state.language.trim() || "en",
-    };
-    setStatus("saving");
-    setError(null);
-    try {
-      await persistGroqSettings(cleaned);
-      setState(cleaned);
-      onSaved(cleaned);
-      setStatus("saved");
-    } catch (e) {
-      setStatus("error");
-      setError(String(e));
-    }
-  };
-
-  return (
-    <section className="card">
-      <div className="card-title-row">
-        <h2 style={{ margin: 0 }}>Groq</h2>
-        <InfoTip text="Whisper Large via Groq's transcription endpoint." />
-      </div>
-      <div className="field-group">
-        <div className="label-with-info" style={{ marginBottom: 4 }}>
-          <label
-            className="field-label"
-            style={{ margin: 0 }}
-            htmlFor="groq-model"
-          >
-            Model
-          </label>
-          <InfoTip text="v3-turbo is the cheapest and fastest. v3 is slightly more accurate." />
-        </div>
-        <select
-          id="groq-model"
-          className="mic-select"
-          value={state.model}
-          onChange={(e) =>
-            setState((s) => ({ ...s, model: e.target.value as GroqModel }))
-          }
-        >
-          {GROQ_MODEL_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="field-group">
-        <div className="label-with-info" style={{ marginBottom: 4 }}>
-          <label
-            className="field-label"
-            style={{ margin: 0 }}
-            htmlFor="groq-language"
-          >
-            Language
-          </label>
-          <InfoTip text="ISO-639-1 language code (e.g. en, fr, es). Defaults to en." />
-        </div>
-        <input
-          id="groq-language"
-          type="text"
-          value={state.language}
-          placeholder="en"
-          spellCheck={false}
-          autoComplete="off"
-          onChange={(e) =>
-            setState((s) => ({ ...s, language: e.target.value }))
-          }
-        />
-      </div>
-      <div className="row replacements-actions save-row">
-        <div className="spacer" />
-        <button
-          className="primary"
-          onClick={handleSave}
-          disabled={!dirty || status === "saving"}
-        >
-          {status === "saving" ? "Saving…" : "Save"}
-        </button>
-      </div>
-      {status === "saved" && <div className="status ok">Saved</div>}
-      {status === "error" && <div className="status err">{error}</div>}
-    </section>
+    </Form>
   );
 }
