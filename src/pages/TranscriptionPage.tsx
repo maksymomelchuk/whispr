@@ -2,7 +2,12 @@ import { AiCleanupField } from "../components/AiCleanupField";
 import { ReplacementsField } from "../components/ReplacementsField";
 import { TranscriptionProviderField } from "../components/TranscriptionProviderField";
 import { useSettings } from "../context/SettingsContext";
-import type { DeepgramSettings, GroqSettings, Replacement, TranscriptionProvider } from "../lib/types";
+import type {
+  DeepgramSettings,
+  GroqSettings,
+  Replacement,
+  TranscriptionProvider,
+} from "../lib/types";
 
 export function TranscriptionPage() {
   const { settings, setSettings } = useSettings();
@@ -58,7 +63,10 @@ export function TranscriptionPage() {
         }
         minWords={settings.ai_cleanup_min_words}
         minDurationMs={settings.ai_cleanup_min_duration_ms}
-        onThresholdsChange={(ai_cleanup_min_words, ai_cleanup_min_duration_ms) =>
+        onThresholdsChange={(
+          ai_cleanup_min_words,
+          ai_cleanup_min_duration_ms,
+        ) =>
           setSettings((s) =>
             s ? { ...s, ai_cleanup_min_words, ai_cleanup_min_duration_ms } : s,
           )

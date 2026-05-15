@@ -9,9 +9,7 @@ export function UpdateBanner({ inline }: Props) {
 
   if (state.status === "idle") return null;
 
-  const baseClass = inline
-    ? "update-banner-inline"
-    : "update-banner";
+  const baseClass = inline ? "update-banner-inline" : "update-banner";
 
   if (state.status === "error") {
     return (

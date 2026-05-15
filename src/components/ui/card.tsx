@@ -1,4 +1,4 @@
-import { type HTMLAttributes, forwardRef } from "react";
+import { forwardRef, type HTMLAttributes } from "react";
 
 export const Card = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className = "", ...props }, ref) => (
@@ -15,7 +15,11 @@ export const CardHeader = forwardRef<
   HTMLDivElement,
   HTMLAttributes<HTMLDivElement>
 >(({ className = "", ...props }, ref) => (
-  <div ref={ref} className={`flex flex-col gap-1.5 p-6 ${className}`} {...props} />
+  <div
+    ref={ref}
+    className={`flex flex-col gap-1.5 p-6 ${className}`}
+    {...props}
+  />
 ));
 CardHeader.displayName = "CardHeader";
 

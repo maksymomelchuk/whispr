@@ -14,6 +14,7 @@ export const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 export function useSettings(): SettingsContextValue {
   const ctx = useContext(SettingsContext);
-  if (!ctx) throw new Error("useSettings must be used inside SettingsContext.Provider");
+  if (!ctx)
+    throw new Error("useSettings must be used inside SettingsContext.Provider");
   return ctx;
 }
