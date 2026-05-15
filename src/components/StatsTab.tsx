@@ -8,11 +8,7 @@ import {
   getStats,
 } from "../lib/api";
 import type { CleanupStats, StatsRow } from "../lib/types";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { InfoTip } from "./InfoTip";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -201,20 +197,7 @@ export function StatsTab() {
       <div className="stats-header">
         <div className="label-with-info">
           <h2 className="stats-title">Dictation stats</h2>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span
-                className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-[var(--border-strong)] text-[10px] font-semibold leading-none text-[var(--text-tertiary)] bg-[var(--bg-elevated)] cursor-help select-none outline-none"
-                aria-label="Words dictated and your effective words per minute."
-                tabIndex={0}
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                onMouseDown={(e) => e.preventDefault()}
-              >
-                ?
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>Words dictated and your effective words per minute.</TooltipContent>
-          </Tooltip>
+          <InfoTip text="Words dictated and your effective words per minute." />
         </div>
         {hasAny && (
           <button
@@ -273,20 +256,7 @@ export function StatsTab() {
               style={{ display: "flex", alignItems: "center", gap: 8 }}
             >
               <h2 className="stats-title">AI Cleanup</h2>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-[var(--border-strong)] text-[10px] font-semibold leading-none text-[var(--text-tertiary)] bg-[var(--bg-elevated)] cursor-help select-none outline-none"
-                    aria-label="Anthropic Claude Haiku 4.5 token usage and estimated cost."
-                    tabIndex={0}
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                    onMouseDown={(e) => e.preventDefault()}
-                  >
-                    ?
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>Anthropic Claude Haiku 4.5 token usage and estimated cost.</TooltipContent>
-              </Tooltip>
+              <InfoTip text="Anthropic Claude Haiku 4.5 token usage and estimated cost." />
             </div>
           </div>
           <ul className="stats-list">

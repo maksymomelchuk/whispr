@@ -3,11 +3,7 @@ import { useEffect, useState } from "react";
 import { setDeepgramSettings as persistDeepgramSettings } from "../lib/api";
 import type { DeepgramSettings } from "../lib/types";
 import { CollapsibleCard } from "./CollapsibleCard";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { InfoTip } from "./InfoTip";
 
 interface Props {
   initial: DeepgramSettings;
@@ -134,20 +130,7 @@ export function TranscriptionField({
           <label className="field-label" style={{ margin: 0 }}>
             Language
           </label>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span
-                className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-[var(--border-strong)] text-[10px] font-semibold leading-none text-[var(--text-tertiary)] bg-[var(--bg-elevated)] cursor-help select-none outline-none"
-                aria-label="Language code (e.g. en, multi, es, de)."
-                tabIndex={0}
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                onMouseDown={(e) => e.preventDefault()}
-              >
-                ?
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>Language code (e.g. en, multi, es, de).</TooltipContent>
-          </Tooltip>
+          <InfoTip text="Language code (e.g. en, multi, es, de)." />
         </div>
         <input
           type="text"
@@ -170,20 +153,7 @@ export function TranscriptionField({
             <div className="option-text">
               <div className="option-label label-with-info">
                 {opt.label}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span
-                      className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-[var(--border-strong)] text-[10px] font-semibold leading-none text-[var(--text-tertiary)] bg-[var(--bg-elevated)] cursor-help select-none outline-none"
-                      aria-label={opt.description}
-                      tabIndex={0}
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                      onMouseDown={(e) => e.preventDefault()}
-                    >
-                      ?
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>{opt.description}</TooltipContent>
-                </Tooltip>
+                <InfoTip text={opt.description} />
               </div>
               <div className="option-param mono">
                 {opt.param}={String(state[opt.key])}
@@ -196,20 +166,7 @@ export function TranscriptionField({
           <div className="option-text">
             <div className="option-label label-with-info">
               Keyterm Prompting
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-[var(--border-strong)] text-[10px] font-semibold leading-none text-[var(--text-tertiary)] bg-[var(--bg-elevated)] cursor-help select-none outline-none"
-                    aria-label="Boosts recognition of important words or phrases, like names, product terms, or jargon. Up to 100 keyterms per request."
-                    tabIndex={0}
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                    onMouseDown={(e) => e.preventDefault()}
-                  >
-                    ?
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>Boosts recognition of important words or phrases, like names, product terms, or jargon. Up to 100 keyterms per request.</TooltipContent>
-              </Tooltip>
+              <InfoTip text="Boosts recognition of important words or phrases, like names, product terms, or jargon. Up to 100 keyterms per request." />
             </div>
             <div className="option-param mono">keyterm=TERM_OR_PHRASE</div>
             <div className="keyterms-list">

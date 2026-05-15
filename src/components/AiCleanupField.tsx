@@ -9,11 +9,7 @@ import {
 } from "../lib/api";
 import type { CleanupAuthMode } from "../lib/types";
 import { CollapsibleCard } from "./CollapsibleCard";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { InfoTip } from "./InfoTip";
 
 interface Props {
   enabled: boolean;
@@ -205,20 +201,7 @@ export function AiCleanupField({
           <div className="option-text">
             <div className="option-label label-with-info">
               Enable AI post-processing
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-[var(--border-strong)] text-[10px] font-semibold leading-none text-[var(--text-tertiary)] bg-[var(--bg-elevated)] cursor-help select-none outline-none"
-                    aria-label="Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Adds ~500ms."
-                    tabIndex={0}
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                    onMouseDown={(e) => e.preventDefault()}
-                  >
-                    ?
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Adds ~500ms.</TooltipContent>
-              </Tooltip>
+              <InfoTip text="Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Adds ~500ms." />
             </div>
           </div>
         </label>
@@ -240,20 +223,7 @@ export function AiCleanupField({
                 <div className="option-text">
                   <div className="option-label label-with-info">
                     Anthropic API Key
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span
-                          className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-[var(--border-strong)] text-[10px] font-semibold leading-none text-[var(--text-tertiary)] bg-[var(--bg-elevated)] cursor-help select-none outline-none"
-                          aria-label="Pay-as-you-go via console.anthropic.com."
-                          tabIndex={0}
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                          onMouseDown={(e) => e.preventDefault()}
-                        >
-                          ?
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>Pay-as-you-go via console.anthropic.com.</TooltipContent>
-                    </Tooltip>
+                    <InfoTip text="Pay-as-you-go via console.anthropic.com." />
                   </div>
                 </div>
               </label>
@@ -268,20 +238,7 @@ export function AiCleanupField({
                 <div className="option-text">
                   <div className="option-label label-with-info">
                     Claude Code OAuth token
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span
-                          className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-[var(--border-strong)] text-[10px] font-semibold leading-none text-[var(--text-tertiary)] bg-[var(--bg-elevated)] cursor-help select-none outline-none"
-                          aria-label="Uses your Claude subscription. Mint with `claude setup-token`."
-                          tabIndex={0}
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                          onMouseDown={(e) => e.preventDefault()}
-                        >
-                          ?
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>Uses your Claude subscription. Mint with `claude setup-token`.</TooltipContent>
-                    </Tooltip>
+                    <InfoTip text="Uses your Claude subscription. Mint with `claude setup-token`." />
                   </div>
                 </div>
               </label>
@@ -289,10 +246,7 @@ export function AiCleanupField({
           </div>
 
           <div className="field-group">
-            <div
-              className="row"
-              style={{ alignItems: "baseline", gap: 8 }}
-            >
+            <div className="row" style={{ alignItems: "baseline", gap: 8 }}>
               <label className="field-label" style={{ margin: 0 }}>
                 {copy.fieldLabel}
               </label>
@@ -341,20 +295,7 @@ export function AiCleanupField({
               <label className="field-label" style={{ margin: 0 }}>
                 Trigger thresholds
               </label>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-[var(--border-strong)] text-[10px] font-semibold leading-none text-[var(--text-tertiary)] bg-[var(--bg-elevated)] cursor-help select-none outline-none"
-                    aria-label="Both must be met for cleanup to run."
-                    tabIndex={0}
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                    onMouseDown={(e) => e.preventDefault()}
-                  >
-                    ?
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>Both must be met for cleanup to run.</TooltipContent>
-              </Tooltip>
+              <InfoTip text="Both must be met for cleanup to run." />
             </div>
             <div className="row" style={{ alignItems: "flex-end" }}>
               <label
