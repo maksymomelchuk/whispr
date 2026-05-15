@@ -1,9 +1,29 @@
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+
 import {
   setShowInDock as persistShowInDock,
   setShowLivePreview as persistShowLivePreview,
 } from "../lib/api";
 import { usePersistedToggle } from "../hooks/usePersistedToggle";
 import type { ThemePreference } from "../hooks/useTheme";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+} from "@/components/ui/form";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Switch } from "@/components/ui/switch";
+
+const themeSchema = z.object({
+  theme: z.enum(["system", "light", "dark"]),
+});
+
+type ThemeFormValues = z.infer<typeof themeSchema>;
 
 interface Props {
   preference: ThemePreference;
@@ -14,12 +34,6 @@ interface Props {
   onShowLivePreviewChange: (next: boolean) => void;
 }
 
-const OPTIONS: { value: ThemePreference; label: string }[] = [
-  { value: "system", label: "System" },
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-];
-
 export function AppearanceField({
   preference,
   onChange,
@@ -28,6 +42,15 @@ export function AppearanceField({
   showLivePreview,
   onShowLivePreviewChange,
 }: Props) {
+  const form = useForm<ThemeFormValues>({
+    resolver: zodResolver(themeSchema),
+    defaultValues: { theme: preference },
+  });
+
+  useEffect(() => {
+    form.setValue("theme", preference);
+  }, [preference, form]);
+
   const dock = usePersistedToggle(
     showInDock,
     persistShowInDock,
@@ -43,50 +66,55 @@ export function AppearanceField({
   return (
     <section className="card">
       <h2>Appearance</h2>
-      <div className="field">
-        <span className="field-label" id="theme-label">
-          Theme
-        </span>
-        <div
-          className="segmented"
-          role="radiogroup"
-          aria-labelledby="theme-label"
-        >
-          {OPTIONS.map((opt) => {
-            const active = preference === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                className={`segmented-option ${active ? "active" : ""}`}
-                onClick={() => onChange(opt.value)}
-              >
-                {opt.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <Form {...form}>
+        <FormField
+          control={form.control}
+          name="theme"
+          render={({ field }) => (
+            <FormItem className="mt-2.5 gap-[6px]">
+              <FormLabel className="field-label">Theme</FormLabel>
+              <FormControl>
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  value={field.value}
+                  onValueChange={(val) => {
+                    if (!val) return;
+                    const theme = val as ThemePreference;
+                    field.onChange(theme);
+                    onChange(theme);
+                  }}
+                  className="w-full"
+                >
+                  <ToggleGroupItem value="system" className="flex-1 text-xs">
+                    System
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="light" className="flex-1 text-xs">
+                    Light
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="dark" className="flex-1 text-xs">
+                    Dark
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </FormControl>
+            </FormItem>
+          )}
+        />
+      </Form>
 
       <label className="toggle-row">
-        <span className="toggle-row-label">Show in Dock & Cmd-Tab</span>
-        <input
-          type="checkbox"
-          role="switch"
+        <span className="toggle-row-label">Show in Dock &amp; Cmd-Tab</span>
+        <Switch
           checked={dock.enabled}
-          onChange={dock.toggle}
+          onCheckedChange={() => dock.toggle()}
         />
       </label>
 
       <label className="toggle-row">
         <span className="toggle-row-label">Show live preview while dictating</span>
-        <input
-          type="checkbox"
-          role="switch"
+        <Switch
           checked={preview.enabled}
-          onChange={preview.toggle}
+          onCheckedChange={() => preview.toggle()}
         />
       </label>
 
