@@ -1,4 +1,21 @@
 import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 
 import {
   listInputDevices,
@@ -16,7 +33,16 @@ interface Props {
 type LoadState = "loading" | "ready" | "error";
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
-const SYSTEM_DEFAULT = "";
+// Radix Select doesn't render correctly with empty-string values; use a sentinel.
+const DEVICE_DEFAULT = "__system_default__";
+
+function toSelectValue(device: string | null): string {
+  return device ?? DEVICE_DEFAULT;
+}
+
+function fromSelectValue(val: string): string | null {
+  return val === DEVICE_DEFAULT ? null : val;
+}
 
 export function MicrophoneField({
   initial,
@@ -27,10 +53,12 @@ export function MicrophoneField({
   const [devices, setDevices] = useState<string[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [value, setValue] = useState<string>(initial ?? SYSTEM_DEFAULT);
+  const [value, setValue] = useState<string>(toSelectValue(initial));
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [pauseEnabled, setPauseEnabled] = useState(pauseMedia);
+
+  const form = useForm({ values: { device: value } });
 
   useEffect(() => {
     listInputDevices()
@@ -45,7 +73,7 @@ export function MicrophoneField({
   }, []);
 
   useEffect(() => {
-    setValue(initial ?? SYSTEM_DEFAULT);
+    setValue(toSelectValue(initial));
   }, [initial]);
 
   useEffect(() => {
@@ -61,7 +89,7 @@ export function MicrophoneField({
   const handleChange = async (next: string) => {
     const previous = value;
     setValue(next);
-    const payload = next === SYSTEM_DEFAULT ? null : next;
+    const payload = fromSelectValue(next);
     setStatus("saving");
     setSaveError(null);
     try {
@@ -94,41 +122,55 @@ export function MicrophoneField({
     initial !== undefined &&
     !devices.includes(initial);
 
+  const isDisabled = loadState !== "ready" || status === "saving";
+
   return (
     <section className="card">
       <h2>Audio</h2>
 
-      <div className="field">
-        <label className="field-label" htmlFor="mic-device">
-          Input device
-        </label>
-        <select
-          id="mic-device"
-          className="mic-select"
-          value={value}
-          disabled={loadState !== "ready" || status === "saving"}
-          onChange={(e) => handleChange(e.target.value)}
-        >
-          <option value={SYSTEM_DEFAULT}>System default</option>
-          {devices.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-          {missing && initial ? (
-            <option value={initial}>{initial} (unavailable)</option>
-          ) : null}
-        </select>
-      </div>
+      <Form {...form}>
+        <FormField
+          control={form.control}
+          name="device"
+          render={({ field }) => (
+            <FormItem className="mt-2.5 gap-[6px]">
+              <FormLabel className="field-label">Input device</FormLabel>
+              <FormControl>
+                <Select
+                  value={field.value}
+                  onValueChange={handleChange}
+                  disabled={isDisabled}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={DEVICE_DEFAULT}>
+                      System default
+                    </SelectItem>
+                    {devices.map((name) => (
+                      <SelectItem key={name} value={name}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                    {missing && initial ? (
+                      <SelectItem value={initial}>
+                        {initial} (unavailable)
+                      </SelectItem>
+                    ) : null}
+                  </SelectContent>
+                </Select>
+              </FormControl>
+            </FormItem>
+          )}
+        />
+      </Form>
 
       <label className="toggle-row">
-        <span className="toggle-row-label">Mute system audio while recording</span>
-        <input
-          type="checkbox"
-          role="switch"
-          checked={pauseEnabled}
-          onChange={togglePauseMedia}
-        />
+        <span className="toggle-row-label">
+          Mute system audio while recording
+        </span>
+        <Switch checked={pauseEnabled} onCheckedChange={togglePauseMedia} />
       </label>
 
       {loadState === "loading" && (
