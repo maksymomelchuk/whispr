@@ -1,6 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useMemo, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { useConfirmAction } from "../hooks/useConfirmAction";
 import {
   clearStats as persistClearStats,
@@ -200,13 +201,13 @@ export function StatsTab() {
           <InfoTip text="Words dictated and your effective words per minute." />
         </div>
         {hasAny && (
-          <button
-            type="button"
-            className={`stats-clear ${confirmingClear ? "confirm" : ""}`}
+          <Button
+            variant={confirmingClear ? "destructive" : "ghost"}
+            size="sm"
             onClick={handleClear}
           >
             {confirmingClear ? "Click to confirm" : "Clear stats"}
-          </button>
+          </Button>
         )}
       </div>
 
