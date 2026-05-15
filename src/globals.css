@@ -34,6 +34,10 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar: var(--sidebar);
 }
 
 /* Light theme */
@@ -62,6 +66,10 @@
   --sidebar-accent-foreground: 0 0% 6%;
   --sidebar-border: 0 0% 89%;
   --radius: 0.5rem;
+  --sidebar: hsl(0 0% 97%);
+  --sidebar-primary: hsl(213 100% 53%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-ring: hsl(213 100% 53%);
 }
 
 /* Dark theme */
@@ -89,6 +97,10 @@
   --sidebar-accent: 0 0% 20%;
   --sidebar-accent-foreground: 0 0% 96.5%;
   --sidebar-border: 0 0% 20%;
+  --sidebar: hsl(0 0% 13%);
+  --sidebar-primary: hsl(213 100% 53%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-ring: hsl(213 100% 53%);
 }
 
 /* CollapsibleCard content open/close animation via Radix height var */

@@ -3,12 +3,10 @@ import {
   History,
   House,
   Keyboard,
-  Menu,
   Mic,
   Settings,
 } from "lucide-react";
-import { useState } from "react";
-import { NavLink, Route, Routes } from "react-router-dom";
+import { useLocation, NavLink, Route, Routes } from "react-router-dom";
 
 import { GeneralPage } from "../pages/GeneralPage";
 import { HistoryPage } from "../pages/HistoryPage";
@@ -16,8 +14,17 @@ import { HomePage } from "../pages/HomePage";
 import { ShortcutPage } from "../pages/ShortcutPage";
 import { StatsPage } from "../pages/StatsPage";
 import { TranscriptionPage } from "../pages/TranscriptionPage";
-import { Button } from "./ui/button";
 import { Separator } from "./ui/separator";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from "./ui/sidebar";
 import { UpdateBanner } from "./UpdateBanner";
 
 interface NavItem {
@@ -35,80 +42,67 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Stats", icon: BarChart3, path: "/stats" },
 ];
 
-function SidebarNav() {
+const SIDEBAR_COOKIE_NAME = "sidebar_state";
+
+function getInitialOpen(): boolean {
+  const match = document.cookie.match(
+    new RegExp(`(?:^|;\\s*)${SIDEBAR_COOKIE_NAME}=([^;]*)`)
+  );
+  return match ? match[1] === "true" : true;
+}
+
+function NavMenuButton({ label, icon: Icon, path }: NavItem) {
+  const { pathname } = useLocation();
+  const isActive = path === "/" ? pathname === "/" : pathname.startsWith(path);
+
   return (
-    <nav className="flex flex-col gap-0.5 px-2">
-      {NAV_ITEMS.map(({ label, icon: Icon, path }) => (
-        <NavLink
-          key={path}
-          to={path}
-          end={path === "/"}
-          className={({ isActive }) =>
-            [
-              "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-              isActive
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-            ].join(" ")
-          }
-        >
-          <Icon size={15} className="shrink-0" />
-          {label}
-        </NavLink>
-      ))}
-    </nav>
+    <SidebarMenuButton asChild isActive={isActive} tooltip={label}>
+      <NavLink to={path} end={path === "/"}>
+        <Icon size={15} className="shrink-0" />
+        <span>{label}</span>
+      </NavLink>
+    </SidebarMenuButton>
   );
 }
 
 export function AppShell() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
-      {sidebarOpen && (
-        <aside className="w-60 shrink-0 flex flex-col bg-sidebar-bg border-r border-sidebar-border">
-          {/* h-11 leaves room for the macOS traffic-light buttons that overlay this region */}
-          <div
-            data-tauri-drag-region
-            className="h-11 shrink-0 flex items-center justify-end px-2"
-          >
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSidebarOpen(false)}
-              className="text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/60"
-              title="Collapse sidebar"
-            >
-              <Menu size={16} />
-            </Button>
-          </div>
+    <SidebarProvider
+      className="h-screen w-screen overflow-hidden bg-background text-foreground"
+      defaultOpen={getInitialOpen()}
+    >
+      <Sidebar collapsible="icon">
+        {/* h-11 clears the macOS traffic-light overlay in the top-left corner */}
+        <SidebarHeader
+          data-tauri-drag-region
+          className="h-11 flex-row items-center justify-end"
+        >
+          <SidebarTrigger
+            // prevent the drag region from swallowing click events on the trigger
+            data-tauri-drag-region="false"
+          />
+        </SidebarHeader>
 
-          <Separator className="bg-sidebar-border" />
+        <Separator className="bg-sidebar-border" />
 
-          <div className="flex-1 overflow-y-auto py-2">
-            <SidebarNav />
-          </div>
-        </aside>
-      )}
+        <SidebarContent className="px-2 py-2">
+          <SidebarMenu>
+            {NAV_ITEMS.map((item) => (
+              <SidebarMenuItem key={item.path}>
+                <NavMenuButton {...item} />
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        </SidebarContent>
+      </Sidebar>
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* pl-20 when collapsed reserves space for the macOS traffic lights that now overlay this panel */}
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        {/* matching h-11 drag strip so traffic lights remain draggable when
+            the collapsed rail is narrower than the 78px traffic-light region */}
         <div
           data-tauri-drag-region
-          className={`h-11 shrink-0 flex items-center gap-2 px-3 ${sidebarOpen ? "" : "pl-20"}`}
-        >
-          {!sidebarOpen && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSidebarOpen(true)}
-              className="text-muted-foreground hover:text-foreground shrink-0"
-              title="Expand sidebar"
-            >
-              <Menu size={16} />
-            </Button>
-          )}
-        </div>
+          className="h-11 shrink-0 bg-background"
+        />
 
         <Separator />
 
@@ -125,6 +119,6 @@ export function AppShell() {
           </Routes>
         </main>
       </div>
-    </div>
+    </SidebarProvider>
   );
 }
