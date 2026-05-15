@@ -113,22 +113,6 @@ impl State {
         self.phase
     }
 
-    pub fn in_flight(&self) -> Option<&InFlight> {
-        self.in_flight.as_ref()
-    }
-
-    pub fn successful_polls(&self) -> u32 {
-        self.successful_polls
-    }
-
-    pub fn last_partial(&self) -> &str {
-        &self.last_partial
-    }
-
-    pub fn next_poll_at(&self) -> Duration {
-        self.next_poll_at
-    }
-
     pub fn step(&mut self, event: Event) -> Vec<Action> {
         let mut actions = Vec::new();
         match event {
@@ -252,7 +236,7 @@ mod tests {
             elapsed: millis(2_900),
         });
         assert!(actions.is_empty());
-        assert!(s.in_flight().is_none());
+        assert!(s.in_flight.is_none());
     }
 
     #[test]
@@ -271,7 +255,7 @@ mod tests {
             }
             other => panic!("expected DispatchPoll, got: {other:?}"),
         }
-        let inflight = s.in_flight().expect("in_flight set");
+        let inflight = s.in_flight.as_ref().expect("in_flight set");
         assert_eq!(inflight.id, 1);
         assert_eq!(inflight.dispatched_at, secs(3));
     }
@@ -300,9 +284,9 @@ mod tests {
             Action::EmitPartial(t) => assert_eq!(t, "hello world"),
             other => panic!("expected EmitPartial, got: {other:?}"),
         }
-        assert_eq!(s.successful_polls(), 1);
-        assert_eq!(s.last_partial(), "hello world");
-        assert!(s.in_flight().is_none());
+        assert_eq!(s.successful_polls, 1);
+        assert_eq!(s.last_partial, "hello world");
+        assert!(s.in_flight.is_none());
     }
 
     #[test]
@@ -320,7 +304,7 @@ mod tests {
             text: "the quick brown fox".into(),
         });
         assert!(matches!(&a[0], Action::EmitPartial(t) if t == "the quick brown fox"));
-        assert_eq!(s.last_partial(), "the quick brown fox");
+        assert_eq!(s.last_partial, "the quick brown fox");
     }
 
     #[test]
@@ -333,8 +317,8 @@ mod tests {
             text: "ghost".into(),
         });
         assert!(actions.is_empty());
-        assert_eq!(s.successful_polls(), 0);
-        assert!(s.in_flight().is_some(), "real poll 1 still in-flight");
+        assert_eq!(s.successful_polls, 0);
+        assert!(s.in_flight.is_some(), "real poll 1 still in-flight");
     }
 
     #[test]
@@ -348,7 +332,7 @@ mod tests {
         });
         assert_eq!(actions, vec![Action::DispatchFinal]);
         assert_eq!(s.phase(), Phase::AwaitingFinalPost);
-        assert_eq!(s.successful_polls(), 0);
+        assert_eq!(s.successful_polls, 0);
     }
 
     #[test]
@@ -410,13 +394,13 @@ mod tests {
             kind: PollFailure::RateLimited,
         });
         assert_eq!(actions, vec![Action::LogRateLimited]);
-        assert_eq!(s.successful_polls(), 0);
+        assert_eq!(s.successful_polls, 0);
         assert_eq!(
-            s.next_poll_at(),
+            s.next_poll_at,
             secs(6),
             "429 must not push the schedule back — next poll still fires at 6 s"
         );
-        assert!(s.in_flight().is_none());
+        assert!(s.in_flight.is_none());
 
         // Next tick at 6 s should dispatch poll 2 unchanged.
         let actions = s.step(Event::Tick { elapsed: secs(6) });
