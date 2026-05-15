@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 export type ThemePreference = "system" | "light" | "dark";
 
 const STORAGE_KEY = "whispr.theme";
-const DARK_CLASS = "theme-dark";
+const DARK_CLASS = "dark";
 
 function readStored(): ThemePreference {
   try {

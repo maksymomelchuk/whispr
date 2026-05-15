@@ -1,13 +1,21 @@
 import { useAppUpdate } from "../hooks/useAppUpdate";
 
-export function UpdateBanner() {
+interface Props {
+  inline?: boolean;
+}
+
+export function UpdateBanner({ inline }: Props) {
   const { state, installAndRestart } = useAppUpdate();
 
   if (state.status === "idle") return null;
 
+  const baseClass = inline
+    ? "update-banner-inline"
+    : "update-banner";
+
   if (state.status === "error") {
     return (
-      <div className="update-banner err" role="alert">
+      <div className={`${baseClass} err`} role="alert">
         Update failed: {state.message}
       </div>
     );
@@ -15,7 +23,7 @@ export function UpdateBanner() {
 
   if (state.status === "downloading") {
     return (
-      <div className="update-banner" role="status">
+      <div className={baseClass} role="status">
         Downloading update…
       </div>
     );
@@ -23,7 +31,7 @@ export function UpdateBanner() {
 
   const { version } = state.update;
   return (
-    <div className="update-banner" role="status">
+    <div className={baseClass} role="status">
       <span>
         Update available (
         <span className="update-banner-version">v{version}</span>)

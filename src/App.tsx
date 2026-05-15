@@ -1,45 +1,21 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
+import { BrowserRouter } from "react-router-dom";
+import { toast } from "sonner";
 
-import { AiCleanupField } from "./components/AiCleanupField";
-import { AppearanceField } from "./components/AppearanceField";
-import { HistoryTab } from "./components/HistoryTab";
-import { MicrophoneField } from "./components/MicrophoneField";
-import { ReplacementsField } from "./components/ReplacementsField";
-import { ShortcutField } from "./components/ShortcutField";
-import { ShortcutRecorder } from "./components/ShortcutRecorder";
-import { StatsTab } from "./components/StatsTab";
-import { TranscriptionProviderField } from "./components/TranscriptionProviderField";
-import { UpdateBanner } from "./components/UpdateBanner";
+import { AppShell } from "./components/AppShell";
+import { Toaster } from "./components/ui/sonner";
+import { SettingsContext } from "./context/SettingsContext";
 import { useTheme } from "./hooks/useTheme";
-import { getSettings, setShortcut as persistShortcut } from "./lib/api";
-import type {
-  DeepgramSettings,
-  GroqSettings,
-  Replacement,
-  Settings,
-  Shortcut,
-  TranscriptionProvider,
-} from "./lib/types";
+import { getSettings } from "./lib/api";
+import type { Settings } from "./lib/types";
 
 import "./App.css";
-
-type TabId = "general" | "shortcut" | "transcription" | "history" | "stats";
-
-const TABS: { id: TabId; label: string }[] = [
-  { id: "general", label: "General" },
-  { id: "shortcut", label: "Shortcut" },
-  { id: "transcription", label: "Transcription" },
-  { id: "history", label: "History" },
-  { id: "stats", label: "Stats" },
-];
+import "./globals.css";
 
 function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [recording, setRecording] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabId>("general");
-  const [toast, setToast] = useState<string | null>(null);
   const { preference: themePreference, setPreference: setThemePreference } =
     useTheme();
 
@@ -52,7 +28,7 @@ function App() {
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     listen<string>("transcription-error", (e) => {
-      setToast(e.payload || "Transcription failed");
+      toast.error(e.payload || "Transcription failed");
     })
       .then((un) => {
         unlisten = un;
@@ -60,22 +36,6 @@ function App() {
       .catch((err) => console.error("listen(transcription-error) failed", err));
     return () => unlisten?.();
   }, []);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 5000);
-    return () => clearTimeout(t);
-  }, [toast]);
-
-  const handleShortcutSave = async (shortcut: Shortcut) => {
-    try {
-      await persistShortcut(shortcut);
-      setSettings((s) => (s ? { ...s, shortcut } : s));
-      setRecording(false);
-    } catch (e) {
-      console.error("Failed to save shortcut", e);
-    }
-  };
 
   if (loadError) {
     return (
@@ -96,160 +56,14 @@ function App() {
   }
 
   return (
-    <main className="app">
-      <nav className="tabs" role="tablist">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            className={`tab ${activeTab === tab.id ? "active" : ""}`}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </nav>
-
-      <div className="tab-panel">
-        {activeTab === "general" && (
-          <>
-            <MicrophoneField
-              initial={settings.input_device}
-              onSaved={(input_device) =>
-                setSettings((s) => (s ? { ...s, input_device } : s))
-              }
-              pauseMedia={settings.pause_media_on_record}
-              onPauseMediaSaved={(pause_media_on_record) =>
-                setSettings((s) => (s ? { ...s, pause_media_on_record } : s))
-              }
-            />
-            <AppearanceField
-              preference={themePreference}
-              onChange={setThemePreference}
-              showInDock={settings.show_in_dock}
-              onShowInDockChange={(show_in_dock) =>
-                setSettings((s) => (s ? { ...s, show_in_dock } : s))
-              }
-              showLivePreview={settings.show_live_preview}
-              onShowLivePreviewChange={(show_live_preview) =>
-                setSettings((s) => (s ? { ...s, show_live_preview } : s))
-              }
-            />
-          </>
-        )}
-        {activeTab === "shortcut" && (
-          <ShortcutField
-            shortcut={settings.shortcut}
-            onStartRecord={() => setRecording(true)}
-          />
-        )}
-        {activeTab === "transcription" && (
-          <>
-            <TranscriptionProviderField
-              provider={settings.transcription_provider}
-              deepgram={settings.deepgram}
-              groq={settings.groq}
-              deepgramApiKeyConfigured={settings.deepgram_api_key_configured}
-              groqApiKeyConfigured={settings.groq_api_key_configured}
-              onProviderChange={(
-                transcription_provider: TranscriptionProvider,
-              ) =>
-                setSettings((s) => (s ? { ...s, transcription_provider } : s))
-              }
-              onDeepgramSaved={(deepgram: DeepgramSettings) =>
-                setSettings((s) => (s ? { ...s, deepgram } : s))
-              }
-              onGroqSaved={(groq: GroqSettings) =>
-                setSettings((s) => (s ? { ...s, groq } : s))
-              }
-              onDeepgramApiKeyConfiguredChange={(configured) =>
-                setSettings((s) =>
-                  s ? { ...s, deepgram_api_key_configured: configured } : s,
-                )
-              }
-              onGroqApiKeyConfiguredChange={(configured) =>
-                setSettings((s) =>
-                  s ? { ...s, groq_api_key_configured: configured } : s,
-                )
-              }
-            />
-            <AiCleanupField
-              enabled={settings.ai_cleanup_enabled}
-              authMode={settings.ai_cleanup_auth_mode}
-              apiKeyConfigured={settings.ai_cleanup_key_configured}
-              oauthTokenConfigured={settings.ai_cleanup_oauth_token_configured}
-              onEnabledChange={(ai_cleanup_enabled) =>
-                setSettings((s) => (s ? { ...s, ai_cleanup_enabled } : s))
-              }
-              onAuthModeChange={(ai_cleanup_auth_mode) =>
-                setSettings((s) => (s ? { ...s, ai_cleanup_auth_mode } : s))
-              }
-              onApiKeyConfiguredChange={(ai_cleanup_key_configured) =>
-                setSettings((s) =>
-                  s ? { ...s, ai_cleanup_key_configured } : s,
-                )
-              }
-              onOauthTokenConfiguredChange={(
-                ai_cleanup_oauth_token_configured,
-              ) =>
-                setSettings((s) =>
-                  s ? { ...s, ai_cleanup_oauth_token_configured } : s,
-                )
-              }
-              minWords={settings.ai_cleanup_min_words}
-              minDurationMs={settings.ai_cleanup_min_duration_ms}
-              onThresholdsChange={(
-                ai_cleanup_min_words,
-                ai_cleanup_min_duration_ms,
-              ) =>
-                setSettings((s) =>
-                  s
-                    ? {
-                        ...s,
-                        ai_cleanup_min_words,
-                        ai_cleanup_min_duration_ms,
-                      }
-                    : s,
-                )
-              }
-            />
-            <ReplacementsField
-              initial={settings.replacements}
-              defaultOpen={false}
-              onSaved={(replacements: Replacement[]) =>
-                setSettings((s) => (s ? { ...s, replacements } : s))
-              }
-            />
-          </>
-        )}
-        {activeTab === "history" && (
-          <HistoryTab
-            historyLimit={settings.history_limit}
-            onHistoryLimitChange={(history_limit) =>
-              setSettings((s) => (s ? { ...s, history_limit } : s))
-            }
-          />
-        )}
-        {activeTab === "stats" && <StatsTab />}
-      </div>
-
-      {recording && (
-        <ShortcutRecorder
-          initial={settings.shortcut}
-          onSave={handleShortcutSave}
-          onCancel={() => setRecording(false)}
-        />
-      )}
-
-      {toast && (
-        <div className="toast err" role="alert" onClick={() => setToast(null)}>
-          {toast}
-        </div>
-      )}
-
-      <UpdateBanner />
-    </main>
+    <SettingsContext.Provider
+      value={{ settings, setSettings, themePreference, setThemePreference }}
+    >
+      <BrowserRouter>
+        <AppShell />
+        <Toaster />
+      </BrowserRouter>
+    </SettingsContext.Provider>
   );
 }
 

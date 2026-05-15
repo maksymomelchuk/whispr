@@ -15,7 +15,7 @@
             pref === "dark" ||
             (pref === "system" &&
               window.matchMedia("(prefers-color-scheme: dark)").matches);
-          if (isDark) document.documentElement.classList.add("theme-dark");
+          if (isDark) document.documentElement.classList.add("dark");
         } catch (_) {}
       })();
     </script>

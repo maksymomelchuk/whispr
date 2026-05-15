@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+/* Class-based dark mode: applies dark: utilities when .dark is on any ancestor */
+@custom-variant dark (&:is(.dark, .dark *));
+
+/* Map Tailwind color utilities to shadcn CSS variable tokens */
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-shadcn-primary: hsl(var(--shadcn-primary));
+  --color-shadcn-primary-foreground: hsl(var(--shadcn-primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-border: hsl(var(--border-shadcn));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-sidebar-bg: hsl(var(--sidebar-bg));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* Light theme */
+:root {
+  --background: 0 0% 96.5%;
+  --foreground: 0 0% 6%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 6%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 6%;
+  --shadcn-primary: 213 100% 53%;
+  --shadcn-primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 95%;
+  --secondary-foreground: 0 0% 6%;
+  --muted: 0 0% 95%;
+  --muted-foreground: 0 0% 42%;
+  --accent: 0 0% 92%;
+  --accent-foreground: 0 0% 6%;
+  --destructive: 0 72% 40%;
+  --border-shadcn: 0 0% 90%;
+  --input: 0 0% 90%;
+  --ring: 213 100% 53%;
+  --sidebar-bg: 0 0% 97%;
+  --sidebar-foreground: 0 0% 6%;
+  --sidebar-accent: 0 0% 91%;
+  --sidebar-accent-foreground: 0 0% 6%;
+  --sidebar-border: 0 0% 89%;
+  --radius: 0.5rem;
+}
+
+/* Dark theme */
+.dark {
+  --background: 0 0% 11.8%;
+  --foreground: 0 0% 96.5%;
+  --card: 0 0% 16.5%;
+  --card-foreground: 0 0% 96.5%;
+  --popover: 0 0% 16.5%;
+  --popover-foreground: 0 0% 96.5%;
+  --shadcn-primary: 213 100% 53%;
+  --shadcn-primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 19%;
+  --secondary-foreground: 0 0% 96.5%;
+  --muted: 0 0% 19%;
+  --muted-foreground: 0 0% 67%;
+  --accent: 0 0% 23%;
+  --accent-foreground: 0 0% 96.5%;
+  --destructive: 0 62% 60%;
+  --border-shadcn: 0 0% 23%;
+  --input: 0 0% 23%;
+  --ring: 213 100% 53%;
+  --sidebar-bg: 0 0% 13%;
+  --sidebar-foreground: 0 0% 96.5%;
+  --sidebar-accent: 0 0% 20%;
+  --sidebar-accent-foreground: 0 0% 96.5%;
+  --sidebar-border: 0 0% 20%;
+}
