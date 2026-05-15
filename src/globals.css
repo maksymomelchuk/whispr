@@ -13,6 +13,8 @@
   --color-popover-foreground: hsl(var(--popover-foreground));
   --color-shadcn-primary: hsl(var(--shadcn-primary));
   --color-shadcn-primary-foreground: hsl(var(--shadcn-primary-foreground));
+  --color-primary: hsl(var(--shadcn-primary));
+  --color-primary-foreground: hsl(var(--shadcn-primary-foreground));
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
   --color-muted: hsl(var(--muted));
