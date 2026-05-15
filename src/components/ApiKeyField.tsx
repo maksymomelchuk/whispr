@@ -1,7 +1,27 @@
 import { useEffect, useState } from "react";
 
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
+
+import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+
 import type { ApiKeyValidation } from "../lib/types";
 import { InfoTip } from "./InfoTip";
+
+const apiKeySchema = z.object({
+  apiKey: z.string().min(1, "API key is required"),
+});
+
+type ApiKeyFormValues = z.infer<typeof apiKeySchema>;
 
 interface Props {
   title: string;
@@ -13,13 +33,6 @@ interface Props {
   onSaved: (configured: boolean) => void;
 }
 
-type SaveStatus = "idle" | "saving" | "saved" | "error";
-
-type ValidationState =
-  | { kind: "idle" }
-  | { kind: "checking" }
-  | { kind: "result"; result: ApiKeyValidation };
-
 export function ApiKeyField({
   title,
   info,
@@ -29,77 +42,75 @@ export function ApiKeyField({
   validate,
   onSaved,
 }: Props) {
-  const [value, setValue] = useState("");
-  const [status, setStatus] = useState<SaveStatus>("idle");
-  const [error, setError] = useState<string | null>(null);
-  const [validation, setValidation] = useState<ValidationState>({
-    kind: "idle",
+  const form = useForm<ApiKeyFormValues>({
+    resolver: zodResolver(apiKeySchema),
+    defaultValues: { apiKey: "" },
   });
 
-  useEffect(() => {
-    if (status !== "saved") return;
-    const t = setTimeout(() => setStatus("idle"), 1500);
-    return () => clearTimeout(t);
-  }, [status]);
+  const [saving, setSaving] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
+  const [validating, setValidating] = useState(false);
 
-  const handleSave = async () => {
-    setStatus("saving");
-    setError(null);
+  useEffect(() => {
+    if (!savedOk) return;
+    const t = setTimeout(() => setSavedOk(false), 1500);
+    return () => clearTimeout(t);
+  }, [savedOk]);
+
+  const onSubmit = async (values: ApiKeyFormValues) => {
+    setSaving(true);
     try {
-      const trimmed = value.trim();
+      const trimmed = values.apiKey.trim();
       await persist(trimmed);
-      setValue("");
+      form.reset();
       onSaved(trimmed.length > 0);
-      setStatus("saved");
-      setValidation({ kind: "idle" });
+      setSavedOk(true);
     } catch (e) {
-      setStatus("error");
-      setError(String(e));
+      form.setError("apiKey", { message: String(e) });
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleClear = async () => {
-    setStatus("saving");
-    setError(null);
+    setSaving(true);
+    form.clearErrors("apiKey");
     try {
       await persist("");
-      setValue("");
+      form.reset();
       onSaved(false);
-      setStatus("saved");
-      setValidation({ kind: "idle" });
+      setSavedOk(true);
     } catch (e) {
-      setStatus("error");
-      setError(String(e));
+      form.setError("apiKey", { message: String(e) });
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleBlur = async () => {
+  const handleBlur = async (value: string) => {
     if (!validate) return;
     const trimmed = value.trim();
-    if (trimmed.length === 0) {
-      setValidation({ kind: "idle" });
-      return;
-    }
-    setValidation({ kind: "checking" });
+    if (!trimmed) return;
+    setValidating(true);
+    form.clearErrors("apiKey");
     try {
       const result = await validate(trimmed);
-      setValidation({ kind: "result", result });
+      if (result.kind === "invalid") {
+        form.setError("apiKey", { message: "Invalid API key" });
+      } else if (result.kind === "error") {
+        form.setError("apiKey", {
+          message: `Could not validate key: ${result.message}`,
+        });
+      }
     } catch (e) {
-      setValidation({
-        kind: "result",
-        result: { kind: "error", message: String(e) },
+      form.setError("apiKey", {
+        message: `Could not validate key: ${String(e)}`,
       });
+    } finally {
+      setValidating(false);
     }
   };
 
-  const handleChange = (next: string) => {
-    setValue(next);
-    if (validation.kind !== "idle") {
-      setValidation({ kind: "idle" });
-    }
-  };
-
-  const dirty = value.trim().length > 0;
   const inputPlaceholder = isConfigured
     ? "Enter new key to replace…"
     : (placeholder ?? "");
@@ -115,54 +126,59 @@ export function ApiKeyField({
           <span className="status err">Not set</span>
         )}
       </div>
-      <div className="row">
-        <input
-          type="password"
-          value={value}
-          onChange={(e) => handleChange(e.target.value)}
-          onBlur={handleBlur}
-          placeholder={inputPlaceholder}
-          spellCheck={false}
-          autoComplete="off"
-        />
-        <button onClick={handleSave} disabled={!dirty || status === "saving"}>
-          {status === "saving" ? "Saving…" : "Save"}
-        </button>
-        {isConfigured && (
-          <button
-            onClick={handleClear}
-            disabled={status === "saving"}
-            className="secondary"
-          >
-            Clear
-          </button>
-        )}
-      </div>
-      {renderValidation(validation)}
-      {status === "saved" && <div className="status ok">Saved</div>}
-      {status === "error" && <div className="status err">{error}</div>}
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <FormField
+            control={form.control}
+            name="apiKey"
+            render={({ field }) => (
+              <FormItem>
+                <FormControl>
+                  <div className="row">
+                    <Input
+                      {...field}
+                      type="password"
+                      placeholder={inputPlaceholder}
+                      spellCheck={false}
+                      autoComplete="off"
+                      onChange={(e) => {
+                        field.onChange(e);
+                        form.clearErrors("apiKey");
+                      }}
+                      onBlur={(e) => {
+                        field.onBlur();
+                        handleBlur(e.target.value);
+                      }}
+                    />
+                    <Button
+                      type="submit"
+                      disabled={!form.formState.isDirty || saving}
+                    >
+                      {saving ? "Saving…" : "Save"}
+                    </Button>
+                    {isConfigured && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleClear}
+                        disabled={saving}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                </FormControl>
+                {validating ? (
+                  <div className="status">Checking key…</div>
+                ) : (
+                  <FormMessage />
+                )}
+              </FormItem>
+            )}
+          />
+        </form>
+      </Form>
+      {savedOk && <div className="status ok">Saved</div>}
     </section>
   );
-}
-
-function renderValidation(state: ValidationState) {
-  switch (state.kind) {
-    case "idle":
-      return null;
-    case "checking":
-      return <div className="status">Checking key…</div>;
-    case "result":
-      switch (state.result.kind) {
-        case "valid":
-          return <div className="status ok">Key is valid</div>;
-        case "invalid":
-          return <div className="status err">Invalid API key</div>;
-        case "error":
-          return (
-            <div className="status err">
-              Could not validate key: {state.result.message}
-            </div>
-          );
-      }
-  }
 }
