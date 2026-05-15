@@ -1,4 +1,6 @@
+import { cn } from "../lib/utils";
 import { useAppUpdate } from "../hooks/useAppUpdate";
+import { Button } from "./ui/button";
 
 interface Props {
   inline?: boolean;
@@ -34,9 +36,13 @@ export function UpdateBanner({ inline }: Props) {
         Update available (
         <span className="update-banner-version">v{version}</span>)
       </span>
-      <button className="primary" onClick={installAndRestart}>
+      <Button
+        size="sm"
+        className={cn("rounded-full text-xs", inline && "ml-auto")}
+        onClick={installAndRestart}
+      >
         Install &amp; restart
-      </button>
+      </Button>
     </div>
   );
 }
