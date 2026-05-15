@@ -419,13 +419,6 @@ button:disabled {
   color: var(--text);
 }
 
-.replacements-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-
 .replacement-row {
   display: flex;
   align-items: center;
@@ -435,12 +428,6 @@ button:disabled {
 .replacement-row input[type="text"] {
   flex: 1;
   min-width: 0;
-}
-
-.replacement-arrow {
-  color: var(--text-tertiary);
-  font-size: 12px;
-  user-select: none;
 }
 
 .icon-button {

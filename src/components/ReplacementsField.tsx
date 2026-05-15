@@ -1,8 +1,27 @@
 import { useEffect, useState } from "react";
 
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useFieldArray, useForm } from "react-hook-form";
+import * as z from "zod";
+
+import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+
 import { setReplacements as persistReplacements } from "../lib/api";
 import type { Replacement } from "../lib/types";
 import { CollapsibleCard } from "./CollapsibleCard";
+
+const replacementsSchema = z.object({
+  rows: z.array(z.object({ from: z.string(), to: z.string() })),
+});
+
+type ReplacementsFormValues = z.infer<typeof replacementsSchema>;
 
 interface Props {
   initial: Replacement[];
@@ -10,110 +29,131 @@ interface Props {
   defaultOpen?: boolean;
 }
 
-type SaveStatus = "idle" | "saving" | "saved" | "error";
-
-const same = (a: Replacement[], b: Replacement[]) =>
-  a.length === b.length &&
-  a.every((r, i) => r.from === b[i].from && r.to === b[i].to);
-
 export function ReplacementsField({
   initial,
   onSaved,
   defaultOpen = true,
 }: Props) {
-  const [rows, setRows] = useState<Replacement[]>(initial);
-  const [status, setStatus] = useState<SaveStatus>("idle");
-  const [error, setError] = useState<string | null>(null);
+  const form = useForm<ReplacementsFormValues>({
+    resolver: zodResolver(replacementsSchema),
+    values: { rows: initial.map((r) => ({ from: r.from, to: r.to })) },
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "rows",
+  });
+
+  const [saving, setSaving] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    setRows(initial);
-  }, [initial]);
-
-  useEffect(() => {
-    if (status !== "saved") return;
-    const t = setTimeout(() => setStatus("idle"), 1500);
+    if (!savedOk) return;
+    const t = setTimeout(() => setSavedOk(false), 1500);
     return () => clearTimeout(t);
-  }, [status]);
+  }, [savedOk]);
 
-  const updateRow = (index: number, patch: Partial<Replacement>) =>
-    setRows((prev) =>
-      prev.map((r, i) => (i === index ? { ...r, ...patch } : r)),
-    );
-
-  const removeRow = (index: number) =>
-    setRows((prev) => prev.filter((_, i) => i !== index));
-
-  const addRow = () => setRows((prev) => [...prev, { from: "", to: "" }]);
-
-  const handleSave = async () => {
-    const cleaned = rows
+  const onSubmit = async (values: ReplacementsFormValues) => {
+    const cleaned = values.rows
       .map((r) => ({ from: r.from.trim(), to: r.to }))
       .filter((r) => r.from.length > 0);
-    setStatus("saving");
-    setError(null);
+    setSaving(true);
+    setSaveError(null);
     try {
       await persistReplacements(cleaned);
-      setRows(cleaned);
+      form.reset({ rows: cleaned });
       onSaved(cleaned);
-      setStatus("saved");
+      setSavedOk(true);
     } catch (e) {
-      setStatus("error");
-      setError(String(e));
+      setSaveError(String(e));
+    } finally {
+      setSaving(false);
     }
   };
-
-  const dirty = !same(rows, initial);
 
   return (
     <CollapsibleCard
       title="Voice Replacements"
       defaultOpen={defaultOpen}
-      dirty={dirty}
+      dirty={form.formState.isDirty}
       info='Spoken words on the left become the text on the right. Punctuation like ". / -" is spaced intelligently — saying "test dot ts" produces "test.ts".'
     >
-      <div className="replacements-list">
-        {rows.map((row, i) => (
-          <div key={i} className="replacement-row">
-            <input
-              type="text"
-              value={row.from}
-              placeholder="spoken"
-              spellCheck={false}
-              autoComplete="off"
-              onChange={(e) => updateRow(i, { from: e.target.value })}
-            />
-            <span className="replacement-arrow">→</span>
-            <input
-              type="text"
-              value={row.to}
-              placeholder="text"
-              spellCheck={false}
-              autoComplete="off"
-              onChange={(e) => updateRow(i, { to: e.target.value })}
-            />
-            <button
-              className="icon-button"
-              aria-label="Remove"
-              onClick={() => removeRow(i)}
-            >
-              ×
-            </button>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <div className="mb-2.5 flex flex-col gap-1.5">
+            {fields.map((field, i) => (
+              <div key={field.id} className="flex items-center gap-1.5">
+                <FormField
+                  control={form.control}
+                  name={`rows.${i}.from`}
+                  render={({ field }) => (
+                    <FormItem className="min-w-0 flex-1">
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="spoken"
+                          spellCheck={false}
+                          autoComplete="off"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <span className="select-none text-xs text-[var(--text-tertiary)]">
+                  →
+                </span>
+                <FormField
+                  control={form.control}
+                  name={`rows.${i}.to`}
+                  render={({ field }) => (
+                    <FormItem className="min-w-0 flex-1">
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="text"
+                          spellCheck={false}
+                          autoComplete="off"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Remove"
+                  onClick={() => remove(i)}
+                  className="text-[var(--text-tertiary)] hover:text-[var(--danger)]"
+                >
+                  ×
+                </Button>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <div className="row replacements-actions">
-        <button onClick={addRow}>+ Add</button>
-        <div className="spacer" />
-        <button
-          className="primary"
-          onClick={handleSave}
-          disabled={!dirty || status === "saving"}
-        >
-          {status === "saving" ? "Saving…" : "Save"}
-        </button>
-      </div>
-      {status === "saved" && <div className="status ok">Saved</div>}
-      {status === "error" && <div className="status err">{error}</div>}
+          <div className="flex items-center">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => append({ from: "", to: "" })}
+            >
+              + Add
+            </Button>
+            <div className="flex-1" />
+            <Button
+              type="submit"
+              size="sm"
+              disabled={!form.formState.isDirty || saving}
+            >
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </div>
+          {savedOk && <div className="status ok">Saved</div>}
+          {saveError && <div className="status err">{saveError}</div>}
+        </form>
+      </Form>
     </CollapsibleCard>
   );
 }
