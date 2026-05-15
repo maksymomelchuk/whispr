@@ -1,6 +1,15 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import { useConfirmAction } from "../hooks/useConfirmAction";
 import {
   clearHistory as persistClearHistory,
@@ -108,8 +117,8 @@ export function HistoryTab({
     },
   );
 
-  const handleLimitChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const next = optionValueToLimit(e.target.value);
+  const handleLimitChange = async (value: string) => {
+    const next = optionValueToLimit(value);
     try {
       await persistHistoryLimit(next);
       onHistoryLimitChange(next);
@@ -170,28 +179,33 @@ export function HistoryTab({
           </p>
         </div>
         <div className="history-actions">
-          <label className="history-limit">
+          <div className="history-limit">
             <span className="history-limit-label">Keep last</span>
-            <select
-              className="history-limit-select"
+            <Select
               value={limitToOptionValue(historyLimit)}
-              onChange={handleLimitChange}
+              onValueChange={handleLimitChange}
             >
-              {LIMIT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </label>
+              <SelectTrigger size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LIMIT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           {entries.length > 0 && (
-            <button
+            <Button
               type="button"
-              className={`history-clear ${confirmingClear ? "confirm" : ""}`}
+              variant={confirmingClear ? "destructive" : "ghost"}
+              size="sm"
               onClick={handleClear}
             >
               {confirmingClear ? "Click to confirm" : "Clear all"}
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -387,27 +401,29 @@ function HistoryItem({ entry, now }: ItemProps) {
             {view.badge.label}
           </span>
         )}
-        <button
+        <Button
           type="button"
-          className={`history-copy ${copied ? "copied" : ""}`}
+          variant="ghost"
+          size="xs"
+          className={cn("ml-auto", copied && "text-green-600")}
           aria-label="Copy transcript"
           aria-live="polite"
           onClick={() => flash(entry.final_text)}
         >
-          <span className="history-copy-label" aria-hidden="true">
-            {copied ? "Copied" : "Copy"}
-          </span>
-        </button>
+          {copied ? "Copied" : "Copy"}
+        </Button>
       </div>
       <div className="history-text">{entry.final_text}</div>
-      <button
+      <Button
         type="button"
-        className="history-trace-toggle"
+        variant="ghost"
+        size="xs"
+        className="self-start text-muted-foreground"
         aria-expanded={traceOpen}
         onClick={() => setTraceOpen((o) => !o)}
       >
         {traceOpen ? "Hide trace" : "Show trace"}
-      </button>
+      </Button>
       {traceOpen && <HistoryTrace entry={entry} cleanupNote={view.note} />}
     </li>
   );
@@ -455,14 +471,16 @@ function Stage({ label, text, previousText, note }: StageProps) {
       <div className="history-stage-head">
         <span className="history-stage-label">{label}</span>
         {!unchanged && text.length > 0 && (
-          <button
+          <Button
             type="button"
-            className={`history-stage-copy ${copied ? "copied" : ""}`}
+            variant="ghost"
+            size="xs"
+            className={cn(copied ? "text-green-600" : "text-muted-foreground")}
             aria-label={`Copy ${label} output`}
             onClick={() => flash(text)}
           >
             {copied ? "Copied" : "Copy"}
-          </button>
+          </Button>
         )}
       </div>
       {unchanged ? (

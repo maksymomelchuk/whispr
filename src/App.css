@@ -615,7 +615,6 @@ button:disabled {
   color: var(--text-secondary);
 }
 
-.history-clear,
 .stats-clear {
   font-size: 12px;
   font-weight: 500;
@@ -632,25 +631,21 @@ button:disabled {
     border-color 150ms ease;
 }
 
-.history-clear:hover:not(:disabled),
 .stats-clear:hover:not(:disabled) {
   color: var(--danger);
   background: var(--danger-hover-bg);
 }
 
-.history-clear.confirm,
 .stats-clear.confirm {
   color: var(--danger);
   border-color: var(--danger-border);
   background: var(--danger-bg);
 }
 
-:root.dark .history-clear.confirm,
 :root.dark .stats-clear.confirm {
   color: var(--danger-soft-text);
 }
 
-.history-clear:focus-visible,
 .stats-clear:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
@@ -676,33 +671,6 @@ button:disabled {
   white-space: nowrap;
 }
 
-.history-limit-select {
-  font-size: 12px;
-  font-weight: 500;
-  padding: 5px 26px 5px 10px;
-  border: 1px solid var(--border);
-  background-color: var(--bg-elevated);
-  color: var(--text);
-  border-radius: 6px;
-  cursor: pointer;
-  appearance: none;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M1 1l4 4 4-4'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  transition:
-    border-color 150ms ease,
-    background-color 150ms ease;
-}
-
-.history-limit-select:hover {
-  border-color: var(--border-strong, var(--border));
-  background-color: var(--bg-subtle);
-}
-
-.history-limit-select:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
 
 .history-list {
   list-style: none;
@@ -858,50 +826,10 @@ button:disabled {
   gap: 10px;
 }
 
-.history-item-head .history-copy {
-  margin-left: auto;
-}
-
 .history-time {
   font-size: 11px;
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
-}
-
-.history-copy {
-  all: unset;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  padding: 4px 10px;
-  min-width: 62px;
-  box-sizing: border-box;
-  text-align: center;
-  border-radius: 6px;
-  cursor: pointer;
-  user-select: none;
-  transition:
-    background-color 150ms ease,
-    color 150ms ease,
-    transform 100ms ease;
-}
-
-.history-copy:hover {
-  background: var(--bg-subtle);
-  color: var(--text);
-}
-
-.history-copy:active {
-  transform: scale(0.97);
-}
-
-.history-copy:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-.history-copy.copied {
-  color: var(--success);
 }
 
 .history-text {
@@ -938,27 +866,6 @@ button:disabled {
   color: var(--danger-soft-text);
 }
 
-.history-trace-toggle {
-  all: unset;
-  align-self: flex-start;
-  font-size: 11px;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  padding: 2px 4px;
-  margin-top: 2px;
-  border-radius: 4px;
-  transition: color 120ms ease;
-}
-
-.history-trace-toggle:hover {
-  color: var(--text-secondary);
-}
-
-.history-trace-toggle:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
 .history-trace {
   display: flex;
   flex-direction: column;
@@ -993,36 +900,6 @@ button:disabled {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-tertiary);
-}
-
-.history-stage-copy {
-  all: unset;
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--text-tertiary);
-  padding: 2px 8px;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: color 120ms ease, background-color 120ms ease;
-}
-
-.history-stage-copy:hover:not(:disabled) {
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
-}
-
-.history-stage-copy:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-.history-stage-copy.copied {
-  color: var(--success);
-}
-
-.history-stage-copy:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .history-stage-text {
@@ -1094,13 +971,8 @@ button:disabled {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .history-clear,
-  .stats-clear,
-  .history-copy {
+  .stats-clear {
     transition: none;
-  }
-  .history-copy:active {
-    transform: none;
   }
 }
 
