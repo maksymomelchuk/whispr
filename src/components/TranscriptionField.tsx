@@ -100,7 +100,9 @@ export function TranscriptionField({
     const cleaned: DeepgramSettings = {
       ...values,
       language: values.language.trim() || "en",
-      keyterms: values.keyterms.map((k) => k.trim()).filter((k) => k.length > 0),
+      keyterms: values.keyterms
+        .map((k) => k.trim())
+        .filter((k) => k.length > 0),
     };
     setSaving(true);
     setSaveError(null);
@@ -155,10 +157,7 @@ export function TranscriptionField({
                 name={opt.key}
                 render={({ field }) => (
                   <FormItem>
-                    <label
-                      className="option-row"
-                      htmlFor={`switch-${opt.key}`}
-                    >
+                    <label className="option-row" htmlFor={`switch-${opt.key}`}>
                       <div className="option-text">
                         <div className="option-label label-with-info">
                           {opt.label}
@@ -171,7 +170,7 @@ export function TranscriptionField({
                       <FormControl>
                         <Switch
                           id={`switch-${opt.key}`}
-                          checked={field.value as boolean}
+                          checked={field.value}
                           onCheckedChange={field.onChange}
                         />
                       </FormControl>
