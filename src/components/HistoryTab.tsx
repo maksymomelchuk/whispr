@@ -475,7 +475,7 @@ function Stage({ label, text, previousText, note }: StageProps) {
             type="button"
             variant="ghost"
             size="xs"
-            className={cn(copied ? "text-green-600" : "text-muted-foreground")}
+            className={copied ? "text-green-600" : "text-muted-foreground"}
             aria-label={`Copy ${label} output`}
             onClick={() => flash(text)}
           >
