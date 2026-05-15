@@ -2,7 +2,6 @@ import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 
 import { AiCleanupField } from "./components/AiCleanupField";
-import { ApiKeyField } from "./components/ApiKeyField";
 import { AppearanceField } from "./components/AppearanceField";
 import { HistoryTab } from "./components/HistoryTab";
 import { MicrophoneField } from "./components/MicrophoneField";
@@ -10,25 +9,22 @@ import { ReplacementsField } from "./components/ReplacementsField";
 import { ShortcutField } from "./components/ShortcutField";
 import { ShortcutRecorder } from "./components/ShortcutRecorder";
 import { StatsTab } from "./components/StatsTab";
-import { TranscriptionField } from "./components/TranscriptionField";
+import { TranscriptionProviderField } from "./components/TranscriptionProviderField";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { useTheme } from "./hooks/useTheme";
 import { getSettings, setShortcut as persistShortcut } from "./lib/api";
 import type {
   DeepgramSettings,
+  GroqSettings,
   Replacement,
   Settings,
   Shortcut,
+  TranscriptionProvider,
 } from "./lib/types";
 
 import "./App.css";
 
-type TabId =
-  | "general"
-  | "shortcut"
-  | "transcription"
-  | "history"
-  | "stats";
+type TabId = "general" | "shortcut" | "transcription" | "history" | "stats";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "general", label: "General" },
@@ -118,14 +114,6 @@ function App() {
       <div className="tab-panel">
         {activeTab === "general" && (
           <>
-            <ApiKeyField
-              isConfigured={settings.api_key_configured}
-              onSaved={(configured) =>
-                setSettings((s) =>
-                  s ? { ...s, api_key_configured: configured } : s,
-                )
-              }
-            />
             <MicrophoneField
               initial={settings.input_device}
               onSaved={(input_device) =>
@@ -158,11 +146,32 @@ function App() {
         )}
         {activeTab === "transcription" && (
           <>
-            <TranscriptionField
-              initial={settings.deepgram}
-              defaultOpen={false}
-              onSaved={(deepgram: DeepgramSettings) =>
+            <TranscriptionProviderField
+              provider={settings.transcription_provider}
+              deepgram={settings.deepgram}
+              groq={settings.groq}
+              deepgramApiKeyConfigured={settings.deepgram_api_key_configured}
+              groqApiKeyConfigured={settings.groq_api_key_configured}
+              onProviderChange={(
+                transcription_provider: TranscriptionProvider,
+              ) =>
+                setSettings((s) => (s ? { ...s, transcription_provider } : s))
+              }
+              onDeepgramSaved={(deepgram: DeepgramSettings) =>
                 setSettings((s) => (s ? { ...s, deepgram } : s))
+              }
+              onGroqSaved={(groq: GroqSettings) =>
+                setSettings((s) => (s ? { ...s, groq } : s))
+              }
+              onDeepgramApiKeyConfiguredChange={(configured) =>
+                setSettings((s) =>
+                  s ? { ...s, deepgram_api_key_configured: configured } : s,
+                )
+              }
+              onGroqApiKeyConfiguredChange={(configured) =>
+                setSettings((s) =>
+                  s ? { ...s, groq_api_key_configured: configured } : s,
+                )
               }
             />
             <AiCleanupField
@@ -174,9 +183,7 @@ function App() {
                 setSettings((s) => (s ? { ...s, ai_cleanup_enabled } : s))
               }
               onAuthModeChange={(ai_cleanup_auth_mode) =>
-                setSettings((s) =>
-                  s ? { ...s, ai_cleanup_auth_mode } : s,
-                )
+                setSettings((s) => (s ? { ...s, ai_cleanup_auth_mode } : s))
               }
               onApiKeyConfiguredChange={(ai_cleanup_key_configured) =>
                 setSettings((s) =>

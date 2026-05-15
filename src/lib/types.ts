@@ -16,16 +16,33 @@ export interface DeepgramSettings {
   keyterms: string[];
 }
 
+export type TranscriptionProvider = "deepgram" | "groq";
+
+export type GroqModel = "whisper_large_v3" | "whisper_large_v3_turbo";
+
+export interface GroqSettings {
+  model: GroqModel;
+  language: string;
+}
+
 /// `null` = unlimited, `0` = off, `n` = keep last n.
 export type HistoryLimit = number | null;
 
 export type CleanupAuthMode = "api_key" | "oauth";
 
+export type ApiKeyValidation =
+  | { kind: "valid" }
+  | { kind: "invalid" }
+  | { kind: "error"; message: string };
+
 export interface Settings {
-  api_key_configured: boolean;
+  transcription_provider: TranscriptionProvider;
+  deepgram_api_key_configured: boolean;
+  groq_api_key_configured: boolean;
   shortcut: Shortcut;
   replacements: Replacement[];
   deepgram: DeepgramSettings;
+  groq: GroqSettings;
   ai_cleanup_enabled: boolean;
   ai_cleanup_auth_mode: CleanupAuthMode;
   ai_cleanup_key_configured: boolean;

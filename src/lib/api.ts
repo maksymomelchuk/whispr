@@ -1,21 +1,39 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type {
+  ApiKeyValidation,
   CleanupAuthMode,
   CleanupStats,
   DeepgramSettings,
+  GroqSettings,
   HistoryEntry,
   HistoryLimit,
   Replacement,
   Settings,
   Shortcut,
   StatsRow,
+  TranscriptionProvider,
 } from "./types";
 
 export const getSettings = () => invoke<Settings>("get_settings");
 
-export const setApiKey = (apiKey: string) =>
-  invoke<void>("set_api_key", { apiKey });
+export const setTranscriptionProvider = (provider: TranscriptionProvider) =>
+  invoke<void>("set_transcription_provider", { provider });
+
+export const setDeepgramApiKey = (apiKey: string) =>
+  invoke<void>("set_deepgram_api_key", { apiKey });
+
+export const setGroqApiKey = (apiKey: string) =>
+  invoke<void>("set_groq_api_key", { apiKey });
+
+export const setGroqSettings = (groq: GroqSettings) =>
+  invoke<void>("set_groq_settings", { groq });
+
+export const validateDeepgramApiKey = (apiKey: string) =>
+  invoke<ApiKeyValidation>("validate_deepgram_api_key", { apiKey });
+
+export const validateGroqApiKey = (apiKey: string) =>
+  invoke<ApiKeyValidation>("validate_groq_api_key", { apiKey });
 
 export const setShortcut = (shortcut: Shortcut) =>
   invoke<void>("set_shortcut", { shortcut });
@@ -38,10 +56,7 @@ export const setAnthropicOauthToken = (token: string) =>
 export const setCleanupAuthMode = (mode: CleanupAuthMode) =>
   invoke<void>("set_cleanup_auth_mode", { mode });
 
-export const setCleanupThresholds = (
-  minWords: number,
-  minDurationMs: number,
-) =>
+export const setCleanupThresholds = (minWords: number, minDurationMs: number) =>
   invoke<void>("set_cleanup_thresholds", {
     minWords,
     minDurationMs,

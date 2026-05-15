@@ -1,5 +1,14 @@
+mod api_key_validation;
 mod commands;
 mod config;
+// groq_audio is only used by groq_session (macOS-gated); allow unused
+// items on non-macOS builds so the module still ships and its tests
+// run, but the binary doesn't warn about dead code.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+mod groq_audio;
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+mod groq_session_state;
+mod groq_stabilizer;
 mod history;
 mod permissions;
 mod state;
@@ -11,7 +20,13 @@ mod cleanup;
 #[cfg(target_os = "macos")]
 mod cleanup_stats;
 #[cfg(target_os = "macos")]
-mod transcription_stream;
+mod deepgram_session;
+#[cfg(target_os = "macos")]
+mod groq_session;
+#[cfg(target_os = "macos")]
+mod replacements;
+#[cfg(target_os = "macos")]
+mod transcription_session;
 
 // Modules that wrap macOS-only APIs (CGEventTap, CGEventPost, CoreAudio via
 // cpal, transparent overlay windows via macOSPrivateApi). Cross-platform
@@ -112,7 +127,12 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
-            commands::set_api_key,
+            commands::set_transcription_provider,
+            commands::set_deepgram_api_key,
+            commands::set_groq_api_key,
+            commands::set_groq_settings,
+            commands::validate_deepgram_api_key,
+            commands::validate_groq_api_key,
             commands::set_shortcut,
             commands::set_replacements,
             commands::set_deepgram_settings,
