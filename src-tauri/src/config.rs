@@ -57,6 +57,22 @@ pub fn check_hotkey_conflicts(bindings: &[HotkeyBinding]) -> Result<(), String> 
     Ok(())
 }
 
+/// Each mode supports at most one hotkey binding. Two bindings for the same
+/// mode would fire identical actions on different gestures — redundant and
+/// confusing in the UI.
+pub fn check_one_binding_per_mode(bindings: &[HotkeyBinding]) -> Result<(), String> {
+    let mut seen: HashSet<&str> = HashSet::new();
+    for b in bindings {
+        if !seen.insert(b.mode_id.as_str()) {
+            return Err(format!(
+                "Mode '{}' already has a hotkey. Each mode supports a single binding.",
+                b.mode_id
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DictionaryEntry {
     pub from: String,
@@ -221,7 +237,7 @@ pub struct Settings {
     /// Legacy single-shortcut field; converted to a HotkeyBinding on first load.
     #[serde(rename = "shortcut", default, skip_serializing)]
     pub legacy_shortcut: Shortcut,
-    #[serde(default = "default_hotkey_bindings")]
+    #[serde(default)]
     pub hotkey_bindings: Vec<HotkeyBinding>,
     #[serde(default = "default_dictionary")]
     pub dictionary: Vec<DictionaryEntry>,
@@ -381,6 +397,17 @@ fn migrate(s: &mut Settings) -> bool {
         let before = s.hotkey_bindings.len();
         s.hotkey_bindings
             .retain(|b| mode_ids.contains(b.mode_id.as_str()));
+        if s.hotkey_bindings.len() != before {
+            changed = true;
+        }
+    }
+
+    // Collapse to one binding per mode. Older settings (pre one-binding-per-mode)
+    // could carry duplicates; keep the first occurrence and drop the rest.
+    {
+        let before = s.hotkey_bindings.len();
+        let mut seen: HashSet<String> = HashSet::new();
+        s.hotkey_bindings.retain(|b| seen.insert(b.mode_id.clone()));
         if s.hotkey_bindings.len() != before {
             changed = true;
         }
@@ -878,6 +905,56 @@ mod tests {
             },
         ];
         assert!(check_hotkey_conflicts(&bindings).is_ok());
+    }
+
+    #[test]
+    fn check_one_binding_per_mode_allows_distinct_modes() {
+        let bindings = vec![
+            HotkeyBinding {
+                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                mode_id: "mode-default-en".to_string(),
+            },
+            HotkeyBinding {
+                shortcut: Shortcut { key: "MetaRight".to_string(), modifiers: vec![], is_double_tap: false },
+                mode_id: "mode-cleaned-en".to_string(),
+            },
+        ];
+        assert!(check_one_binding_per_mode(&bindings).is_ok());
+    }
+
+    #[test]
+    fn check_one_binding_per_mode_rejects_duplicate_mode() {
+        let bindings = vec![
+            HotkeyBinding {
+                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                mode_id: "mode-default-en".to_string(),
+            },
+            HotkeyBinding {
+                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
+                mode_id: "mode-default-en".to_string(),
+            },
+        ];
+        assert!(check_one_binding_per_mode(&bindings).is_err());
+    }
+
+    #[test]
+    fn migration_collapses_duplicate_mode_bindings_to_first() {
+        let mut s = Settings::default();
+        s.hotkey_bindings = vec![
+            HotkeyBinding {
+                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                mode_id: SEED_MODE_DEFAULT_EN.to_string(),
+            },
+            HotkeyBinding {
+                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
+                mode_id: SEED_MODE_DEFAULT_EN.to_string(),
+            },
+        ];
+        let changed = migrate(&mut s);
+        assert!(changed);
+        assert_eq!(s.hotkey_bindings.len(), 1);
+        // First binding (the single-press variant) is preserved.
+        assert!(!s.hotkey_bindings[0].shortcut.is_double_tap);
     }
 
     #[test]

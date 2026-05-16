@@ -130,6 +130,7 @@ pub fn set_hotkey_bindings(
     bindings: Vec<HotkeyBinding>,
 ) -> Result<(), String> {
     config::check_hotkey_conflicts(&bindings)?;
+    config::check_one_binding_per_mode(&bindings)?;
     config::update(&app, |s| s.hotkey_bindings = bindings.clone())?;
     // Live-update the PTT listener so the change takes effect immediately.
     *state.hotkey_bindings.lock().unwrap() = bindings;
