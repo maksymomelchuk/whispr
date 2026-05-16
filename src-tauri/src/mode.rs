@@ -13,6 +13,10 @@ pub enum ModeLanguage {
     Auto,
     #[serde(rename = "exact")]
     Exact { code: String },
+    // Two or more language codes the user expects to speak; providers treat
+    // this as a multi-language hint rather than a hard constraint.
+    #[serde(rename = "hints")]
+    Hints { codes: Vec<String> },
 }
 
 impl Default for ModeLanguage {
@@ -28,11 +32,16 @@ impl ModeLanguage {
         ModeLanguage::Exact { code: code.into() }
     }
 
-    /// Returns the ISO code for `Exact`, `None` for `Auto`.
+    pub fn hints(codes: Vec<String>) -> Self {
+        ModeLanguage::Hints { codes }
+    }
+
+    /// Returns the ISO code for `Exact`. Returns `None` for `Auto` and `Hints`
+    /// because neither maps to a single authoritative code.
     pub fn as_code(&self) -> Option<&str> {
         match self {
             ModeLanguage::Exact { code } => Some(code.as_str()),
-            ModeLanguage::Auto => None,
+            ModeLanguage::Auto | ModeLanguage::Hints { .. } => None,
         }
     }
 }
@@ -177,12 +186,23 @@ mod tests {
     }
 
     #[test]
+    fn mode_language_hints_serializes_with_kind_and_codes() {
+        let lang = ModeLanguage::hints(vec!["en".to_string(), "uk".to_string()]);
+        let json = serde_json::to_string(&lang).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(v["kind"], "hints");
+        assert_eq!(v["codes"][0], "en");
+        assert_eq!(v["codes"][1], "uk");
+    }
+
+    #[test]
     fn mode_language_round_trips() {
         let cases = vec![
             ModeLanguage::Auto,
             ModeLanguage::exact("en"),
             ModeLanguage::exact("uk"),
             ModeLanguage::exact("fr"),
+            ModeLanguage::hints(vec!["en".to_string(), "uk".to_string()]),
         ];
         for case in cases {
             let json = serde_json::to_string(&case).unwrap();
@@ -194,6 +214,14 @@ mod tests {
     #[test]
     fn mode_language_as_code_returns_none_for_auto() {
         assert_eq!(ModeLanguage::Auto.as_code(), None);
+    }
+
+    #[test]
+    fn mode_language_as_code_returns_none_for_hints() {
+        assert_eq!(
+            ModeLanguage::hints(vec!["en".to_string(), "uk".to_string()]).as_code(),
+            None
+        );
     }
 
     #[test]

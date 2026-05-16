@@ -214,9 +214,16 @@ fn build_ws_url(
     {
         let mut q = url.query_pairs_mut();
         q.append_pair("model", "nova-3");
-        // Auto omits the language parameter; Exact sends the ISO code.
-        if let Some(code) = language.as_code() {
-            q.append_pair("language", code);
+        match language {
+            ModeLanguage::Auto => {}
+            ModeLanguage::Exact { code } => {
+                q.append_pair("language", code);
+            }
+            // Deepgram's multi-language detection mode; individual codes are
+            // informational only (Deepgram doesn't expose per-language hint params yet).
+            ModeLanguage::Hints { .. } => {
+                q.append_pair("language", "multi");
+            }
         }
         q.append_pair("encoding", "linear16");
         q.append_pair("sample_rate", &format.sample_rate.to_string());
@@ -303,6 +310,28 @@ mod tests {
         assert!(query.contains("numerals=true"), "URL must contain numerals=true");
         assert!(!query.contains("dictation"), "URL must not contain dictation");
         assert!(!query.contains("keyterm"), "URL must not contain keyterm");
+    }
+
+    #[test]
+    fn url_omits_language_for_auto() {
+        let url = build_ws_url(&ModeLanguage::Auto, fmt(), &[]).unwrap();
+        let q = url.query().unwrap_or("");
+        assert!(!q.contains("language="), "Auto must not send language param: {q}");
+    }
+
+    #[test]
+    fn url_sends_exact_language_code() {
+        let url = build_ws_url(&ModeLanguage::exact("uk"), fmt(), &[]).unwrap();
+        let q = url.query().unwrap_or("");
+        assert!(q.contains("language=uk"), "Exact must send language=uk: {q}");
+    }
+
+    #[test]
+    fn url_sends_multi_for_hints() {
+        let lang = ModeLanguage::hints(vec!["en".to_string(), "uk".to_string()]);
+        let url = build_ws_url(&lang, fmt(), &[]).unwrap();
+        let q = url.query().unwrap_or("");
+        assert!(q.contains("language=multi"), "Hints must send language=multi: {q}");
     }
 
     #[test]

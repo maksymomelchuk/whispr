@@ -41,7 +41,8 @@ export type ApiKeyValidation =
 
 export type ModeLanguage =
   | { kind: "auto" }
-  | { kind: "exact"; code: string };
+  | { kind: "exact"; code: string }
+  | { kind: "hints"; codes: string[] };
 
 export type TranslateTarget =
   | { kind: "off" }

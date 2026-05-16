@@ -50,9 +50,45 @@ import {
 import type { HotkeyBinding, Mode, ModeLanguage } from "../lib/types";
 import { ToggleRow } from "../components/ToggleRow";
 
+const LANGUAGES: { code: string; name: string; flag: string }[] = [
+  { code: "en", name: "English", flag: "🇺🇸" },
+  { code: "uk", name: "Ukrainian", flag: "🇺🇦" },
+  { code: "fr", name: "French", flag: "🇫🇷" },
+  { code: "de", name: "German", flag: "🇩🇪" },
+  { code: "es", name: "Spanish", flag: "🇪🇸" },
+  { code: "it", name: "Italian", flag: "🇮🇹" },
+  { code: "pt", name: "Portuguese", flag: "🇵🇹" },
+  { code: "ru", name: "Russian", flag: "🇷🇺" },
+  { code: "zh", name: "Chinese", flag: "🇨🇳" },
+  { code: "ja", name: "Japanese", flag: "🇯🇵" },
+  { code: "ko", name: "Korean", flag: "🇰🇷" },
+  { code: "ar", name: "Arabic", flag: "🇸🇦" },
+  { code: "pl", name: "Polish", flag: "🇵🇱" },
+  { code: "nl", name: "Dutch", flag: "🇳🇱" },
+  { code: "tr", name: "Turkish", flag: "🇹🇷" },
+  { code: "sv", name: "Swedish", flag: "🇸🇪" },
+  { code: "da", name: "Danish", flag: "🇩🇰" },
+  { code: "fi", name: "Finnish", flag: "🇫🇮" },
+  { code: "nb", name: "Norwegian", flag: "🇳🇴" },
+  { code: "cs", name: "Czech", flag: "🇨🇿" },
+  { code: "hu", name: "Hungarian", flag: "🇭🇺" },
+  { code: "ro", name: "Romanian", flag: "🇷🇴" },
+  { code: "hi", name: "Hindi", flag: "🇮🇳" },
+  { code: "vi", name: "Vietnamese", flag: "🇻🇳" },
+  { code: "th", name: "Thai", flag: "🇹🇭" },
+  { code: "id", name: "Indonesian", flag: "🇮🇩" },
+  { code: "he", name: "Hebrew", flag: "🇮🇱" },
+];
+
+function langLabel(code: string): string {
+  const entry = LANGUAGES.find((l) => l.code === code);
+  return entry ? `${entry.flag} ${entry.name}` : code.toUpperCase();
+}
+
 function languageSummary(lang: ModeLanguage): string {
   if (lang.kind === "auto") return "Auto-detect";
-  return lang.code.toUpperCase();
+  if (lang.kind === "exact") return lang.code.toUpperCase();
+  return lang.codes.map((c) => c.toUpperCase()).join(", ");
 }
 
 function translateSummary(mode: Mode): string {
@@ -209,17 +245,26 @@ function ModeEditor({
     !!mode.ai_cleanup.prompt_override,
   );
 
-  const langKind = draft.language.kind;
-  const langCode = draft.language.kind === "exact" ? draft.language.code : "en";
+  // Language UI state — kept separate so chip list survives toggling to Auto.
+  const [langMode, setLangMode] = useState<"auto" | "restrict">(
+    mode.language.kind === "auto" ? "auto" : "restrict",
+  );
+  const [restrictCodes, setRestrictCodes] = useState<string[]>(() => {
+    if (mode.language.kind === "exact") return [mode.language.code];
+    if (mode.language.kind === "hints") return mode.language.codes;
+    return ["en"];
+  });
+
+  const addLangCode = (code: string) => {
+    if (!restrictCodes.includes(code)) setRestrictCodes([...restrictCodes, code]);
+  };
+  const removeLangCode = (code: string) => {
+    const updated = restrictCodes.filter((c) => c !== code);
+    setRestrictCodes(updated);
+    if (updated.length === 0) setLangMode("auto");
+  };
 
   const setName = (name: string) => setDraft((d) => ({ ...d, name }));
-  const setLangKind = (kind: "auto" | "exact") =>
-    setDraft((d) => ({
-      ...d,
-      language: kind === "auto" ? { kind: "auto" } : { kind: "exact", code: langCode },
-    }));
-  const setLangCode = (code: string) =>
-    setDraft((d) => ({ ...d, language: { kind: "exact", code } }));
   const setCleanup = (enabled: boolean) =>
     setDraft((d) => ({
       ...d,
@@ -241,8 +286,15 @@ function ModeEditor({
   const handleSave = async () => {
     setSaving(true);
     setError(null);
+    const language: ModeLanguage =
+      langMode === "auto" || restrictCodes.length === 0
+        ? { kind: "auto" }
+        : restrictCodes.length === 1
+          ? { kind: "exact", code: restrictCodes[0] }
+          : { kind: "hints", codes: restrictCodes };
     const normalized: Mode = {
       ...draft,
+      language,
       ai_cleanup: {
         ...draft.ai_cleanup,
         prompt_override: draft.ai_cleanup.prompt_override?.trim() || null,
@@ -287,30 +339,77 @@ function ModeEditor({
           />
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <Label className="text-[13px]">Spoken language</Label>
-          <div className="flex gap-2">
-            <Select value={langKind} onValueChange={setLangKind}>
-              <SelectTrigger size="sm" className="w-36">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">Auto-detect</SelectItem>
-                <SelectItem value="exact">Exact code</SelectItem>
-              </SelectContent>
-            </Select>
-            {langKind === "exact" && (
-              <Input
-                className="h-8 w-24 text-sm"
-                value={langCode}
-                onChange={(e) => setLangCode(e.target.value.toLowerCase())}
-                placeholder="en"
-                maxLength={8}
-                spellCheck={false}
-                autoComplete="off"
-              />
-            )}
-          </div>
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="radio"
+              name={`lang-mode-${draft.id}`}
+              value="auto"
+              checked={langMode === "auto"}
+              onChange={() => setLangMode("auto")}
+              className="mt-0.5 shrink-0"
+            />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm">Auto-detect all languages</span>
+              <span className="text-xs text-muted-foreground">
+                Let the engine detect the spoken language without restrictions.
+              </span>
+            </div>
+          </label>
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="radio"
+              name={`lang-mode-${draft.id}`}
+              value="restrict"
+              checked={langMode === "restrict"}
+              onChange={() => setLangMode("restrict")}
+              className="mt-0.5 shrink-0"
+            />
+            <div className="flex flex-col gap-1">
+              <span className="text-sm">Restrict detection to selected languages</span>
+              <span className="text-xs text-muted-foreground">
+                Improve detection by limiting it to one or more expected languages.
+              </span>
+              {langMode === "restrict" && (
+                <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                  {restrictCodes.map((code) => (
+                    <span
+                      key={code}
+                      className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium"
+                    >
+                      {langLabel(code)}
+                      <button
+                        type="button"
+                        onClick={() => removeLangCode(code)}
+                        className="ml-0.5 text-muted-foreground hover:text-foreground leading-none"
+                        aria-label={`Remove ${code}`}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                  <Select
+                    value=""
+                    onValueChange={(v) => { if (v) addLangCode(v); }}
+                  >
+                    <SelectTrigger size="sm" className="h-6 w-auto px-2 text-xs">
+                      <SelectValue placeholder="+ Add" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LANGUAGES.filter(
+                        (l) => !restrictCodes.includes(l.code),
+                      ).map((l) => (
+                        <SelectItem key={l.code} value={l.code}>
+                          {l.flag} {l.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          </label>
         </div>
 
         <div className="flex flex-col gap-1.5">

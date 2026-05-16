@@ -68,8 +68,7 @@ impl TranscriptionSession for GroqSession {
         let language = config::get_default_mode(&settings)
             .language
             .as_code()
-            .unwrap_or("en")
-            .to_string();
+            .map(str::to_string);
         let prompt = dictionary::groq_prompt_hint(&settings.dictionary);
         let show_live_preview = settings.show_live_preview;
 
@@ -185,7 +184,7 @@ struct Runner {
     format: AudioFormat,
     key: String,
     model: &'static str,
-    language: String,
+    language: Option<String>,
     prompt: Option<String>,
     show_live_preview: bool,
     outcome_tx: UnboundedSender<Outcome>,
@@ -269,7 +268,7 @@ fn spawn_poll(
     format: AudioFormat,
     key: String,
     model: &'static str,
-    language: String,
+    language: Option<String>,
     prompt: Option<String>,
     outcome_tx: UnboundedSender<Outcome>,
 ) {
@@ -288,14 +287,18 @@ fn spawn_poll(
         }
         let result = match encode_to_flac_16k_mono(&snapshot, format.sample_rate, format.channels)
         {
-            Ok(flac) => match post_to_groq(&key, model, &language, prompt.as_deref(), flac).await {
-                Ok(text) => Ok(text),
-                Err(GroqHttpError::RateLimited) => Err(PollFailure::RateLimited),
-                Err(GroqHttpError::Other(msg)) => {
-                    eprintln!("[groq poll {id}] {msg}");
-                    Err(PollFailure::Other)
+            Ok(flac) => {
+                match post_to_groq(&key, model, language.as_deref(), prompt.as_deref(), flac)
+                    .await
+                {
+                    Ok(text) => Ok(text),
+                    Err(GroqHttpError::RateLimited) => Err(PollFailure::RateLimited),
+                    Err(GroqHttpError::Other(msg)) => {
+                        eprintln!("[groq poll {id}] {msg}");
+                        Err(PollFailure::Other)
+                    }
                 }
-            },
+            }
             Err(e) => {
                 eprintln!("[groq poll {id}] FLAC encode failed: {e}");
                 Err(PollFailure::Other)
@@ -310,7 +313,7 @@ fn spawn_final_post(
     format: AudioFormat,
     key: String,
     model: &'static str,
-    language: String,
+    language: Option<String>,
     prompt: Option<String>,
     outcome_tx: UnboundedSender<Outcome>,
 ) {
@@ -322,13 +325,17 @@ fn spawn_final_post(
         }
         let result = match encode_to_flac_16k_mono(&snapshot, format.sample_rate, format.channels)
         {
-            Ok(flac) => match post_to_groq(&key, model, &language, prompt.as_deref(), flac).await {
-                Ok(text) => Ok(text),
-                Err(GroqHttpError::RateLimited) => {
-                    Err("Groq rate-limited the final POST".to_string())
+            Ok(flac) => {
+                match post_to_groq(&key, model, language.as_deref(), prompt.as_deref(), flac)
+                    .await
+                {
+                    Ok(text) => Ok(text),
+                    Err(GroqHttpError::RateLimited) => {
+                        Err("Groq rate-limited the final POST".to_string())
+                    }
+                    Err(GroqHttpError::Other(msg)) => Err(msg),
                 }
-                Err(GroqHttpError::Other(msg)) => Err(msg),
-            },
+            }
             Err(e) => Err(format!("FLAC encode failed: {e}")),
         };
         let _ = outcome_tx.send(Outcome::Final(result));
@@ -350,7 +357,8 @@ fn http_client() -> &'static reqwest::Client {
 async fn post_to_groq(
     key: &str,
     model: &str,
-    language: &str,
+    // None for Auto and Hints — Whisper falls back to its own auto-detect.
+    language: Option<&str>,
     prompt: Option<&str>,
     flac: Vec<u8>,
 ) -> Result<String, GroqHttpError> {
@@ -360,9 +368,11 @@ async fn post_to_groq(
         .map_err(|e| GroqHttpError::Other(format!("Groq mime build failed: {e}")))?;
     let mut form = reqwest::multipart::Form::new()
         .text("model", model.to_string())
-        .text("response_format", "json")
-        .text("language", language.to_string())
-        .part("file", part);
+        .text("response_format", "json");
+    if let Some(lang) = language {
+        form = form.text("language", lang.to_string());
+    }
+    form = form.part("file", part);
     if let Some(p) = prompt {
         form = form.text("prompt", p.to_string());
     }
@@ -430,6 +440,24 @@ fn compute_level(chunk: &[i16]) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::mode::ModeLanguage;
+
+    #[test]
+    fn groq_language_is_none_for_auto() {
+        assert_eq!(ModeLanguage::Auto.as_code(), None);
+    }
+
+    #[test]
+    fn groq_language_is_none_for_hints() {
+        let lang = ModeLanguage::hints(vec!["en".to_string(), "uk".to_string()]);
+        assert_eq!(lang.as_code(), None);
+    }
+
+    #[test]
+    fn groq_language_is_some_for_exact() {
+        assert_eq!(ModeLanguage::exact("fr").as_code(), Some("fr"));
+    }
 
     #[test]
     fn maps_groq_model_to_api_id() {
