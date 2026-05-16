@@ -16,7 +16,17 @@ function readStored(): ThemePreference {
 }
 
 function applyDark(isDark: boolean) {
-  document.documentElement.classList.toggle(DARK_CLASS, isDark);
+  const root = document.documentElement;
+  // Suppress CSS transitions across the theme flip so colors that change
+  // between modes (bg-input, text-muted-foreground, etc.) don't animate
+  // their old → new value over ~150ms.
+  root.classList.add("no-theme-transition");
+  root.classList.toggle(DARK_CLASS, isDark);
+  // Force the browser to apply the change before we drop the suppression.
+  void root.offsetHeight;
+  requestAnimationFrame(() => {
+    root.classList.remove("no-theme-transition");
+  });
 }
 
 function resolveDark(pref: ThemePreference): boolean {

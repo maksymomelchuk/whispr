@@ -152,6 +152,15 @@ main {
   scrollbar-color: hsl(var(--muted-foreground) / 0.25) transparent;
 }
 
+/* Applied briefly during a theme flip so background/color transitions don't
+   animate the old → new token value. Removed on the next animation frame. */
+.no-theme-transition,
+.no-theme-transition *,
+.no-theme-transition *::before,
+.no-theme-transition *::after {
+  transition: none !important;
+}
+
 /* Divider between adjacent toggle rows (or after a preceding form item). */
 [data-slot="toggle-row"] + [data-slot="toggle-row"],
 [data-slot="form-item"] + [data-slot="toggle-row"] {
