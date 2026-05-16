@@ -44,6 +44,9 @@ export const setHotkeyBindings = (bindings: HotkeyBinding[]) =>
 export const setShortcutCapturePaused = (paused: boolean) =>
   invoke<void>("set_shortcut_capture_paused", { paused });
 
+export const openTranslationSettings = () =>
+  invoke<void>("open_translation_settings");
+
 export const setDictionary = (dictionary: DictionaryEntry[]) =>
   invoke<void>("set_dictionary", { dictionary });
 

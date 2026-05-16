@@ -10,7 +10,7 @@ import { TooltipProvider } from "./components/ui/tooltip";
 import { SettingsContext } from "./context/SettingsContext";
 import { useAccent } from "./hooks/useAccent";
 import { useTheme } from "./hooks/useTheme";
-import { getSettings } from "./lib/api";
+import { getSettings, openTranslationSettings } from "./lib/api";
 import type { Settings } from "./lib/types";
 
 import "./globals.css";
@@ -29,15 +29,41 @@ function App() {
   }, []);
 
   useEffect(() => {
+    // Race-safe: cleanup may run before listen() resolves (StrictMode
+    // double-invoke). A `cancelled` flag tears the listener down as soon as
+    // it arrives — without it we leak the first subscription and every
+    // transcription-error fires the toast twice.
+    let cancelled = false;
     let unlisten: (() => void) | undefined;
     listen<string>("transcription-error", (e) => {
-      toast.error(e.payload || "Transcription failed");
+      const message = e.payload || "Transcription failed";
+      // The message itself is the only signal we have for which error kind
+      // fired; backend wires "System Settings" only into actionable error
+      // strings (missing language pack, etc.).
+      const actionable = message.includes("System Settings");
+      toast.error(message, {
+        duration: actionable ? 12000 : 6000,
+        action: actionable
+          ? {
+              label: "Open Settings",
+              onClick: () => {
+                openTranslationSettings().catch((err) =>
+                  console.error("open_translation_settings failed", err),
+                );
+              },
+            }
+          : undefined,
+      });
     })
       .then((un) => {
-        unlisten = un;
+        if (cancelled) un();
+        else unlisten = un;
       })
       .catch((err) => console.error("listen(transcription-error) failed", err));
-    return () => unlisten?.();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
   }, []);
 
   if (loadError) {

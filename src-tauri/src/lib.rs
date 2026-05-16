@@ -146,6 +146,7 @@ pub fn run() {
             commands::validate_groq_api_key,
             commands::set_hotkey_bindings,
             commands::set_shortcut_capture_paused,
+            commands::open_translation_settings,
             commands::set_dictionary,
             commands::set_snippets,
             commands::set_default_mode_cleanup_enabled,
