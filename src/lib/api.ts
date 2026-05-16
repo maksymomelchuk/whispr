@@ -47,8 +47,8 @@ export const setReplacements = (replacements: Replacement[]) =>
 export const setDeepgramSettings = (deepgram: DeepgramSettings) =>
   invoke<void>("set_deepgram_settings", { deepgram });
 
-export const setAiCleanupEnabled = (enabled: boolean) =>
-  invoke<void>("set_ai_cleanup_enabled", { enabled });
+export const setDefaultModeCleanupEnabled = (enabled: boolean) =>
+  invoke<void>("set_default_mode_cleanup_enabled", { enabled });
 
 export const setAnthropicApiKey = (apiKey: string) =>
   invoke<void>("set_anthropic_api_key", { apiKey });

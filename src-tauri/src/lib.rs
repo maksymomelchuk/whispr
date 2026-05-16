@@ -1,6 +1,7 @@
 mod api_key_validation;
 mod commands;
 mod config;
+mod mode;
 // groq_audio is only used by groq_session (macOS-gated); allow unused
 // items on non-macOS builds so the module still ships and its tests
 // run, but the binary doesn't warn about dead code.
@@ -137,7 +138,7 @@ pub fn run() {
             commands::set_shortcut_capture_paused,
             commands::set_replacements,
             commands::set_deepgram_settings,
-            commands::set_ai_cleanup_enabled,
+            commands::set_default_mode_cleanup_enabled,
             commands::set_anthropic_api_key,
             commands::set_anthropic_oauth_token,
             commands::set_cleanup_auth_mode,

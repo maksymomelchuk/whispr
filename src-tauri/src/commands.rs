@@ -5,6 +5,7 @@ use crate::config::{
     TranscriptionProvider,
 };
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
+use crate::mode::{Mode, ModeId};
 use crate::permissions;
 use crate::state::AppState;
 use crate::stats::{self, StatsRow, STATS_UPDATED_EVENT};
@@ -23,7 +24,8 @@ pub struct SettingsView {
     pub replacements: Vec<Replacement>,
     pub deepgram: DeepgramSettings,
     pub groq: GroqSettings,
-    pub ai_cleanup_enabled: bool,
+    pub modes: Vec<Mode>,
+    pub default_mode_id: ModeId,
     pub ai_cleanup_auth_mode: CleanupAuthMode,
     pub ai_cleanup_key_configured: bool,
     pub ai_cleanup_oauth_token_configured: bool,
@@ -53,7 +55,8 @@ impl From<Settings> for SettingsView {
             replacements: s.replacements,
             deepgram: s.deepgram,
             groq: s.groq,
-            ai_cleanup_enabled: s.ai_cleanup.enabled,
+            modes: s.modes.clone(),
+            default_mode_id: s.default_mode_id.clone(),
             ai_cleanup_auth_mode: s.ai_cleanup.auth_mode,
             ai_cleanup_key_configured: s
                 .ai_cleanup
@@ -112,8 +115,12 @@ pub async fn validate_deepgram_api_key(api_key: String) -> ApiKeyValidation {
 #[tauri::command]
 pub async fn validate_groq_api_key(app: AppHandle, api_key: String) -> ApiKeyValidation {
     let settings = config::load(&app);
-    api_key_validation::validate_groq(&api_key, settings.groq.model, &settings.groq.language)
-        .await
+    let language = config::get_default_mode(&settings)
+        .language
+        .as_code()
+        .unwrap_or("en")
+        .to_string();
+    api_key_validation::validate_groq(&api_key, settings.groq.model, &language).await
 }
 
 #[tauri::command]
@@ -150,9 +157,16 @@ pub fn set_deepgram_settings(
     config::update(&app, |s| s.deepgram = deepgram)
 }
 
+/// Sets `ai_cleanup.enabled` on the default mode (identified by
+/// `default_mode_id`). Creates a default mode if none exists.
 #[tauri::command]
-pub fn set_ai_cleanup_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
-    config::update(&app, |s| s.ai_cleanup.enabled = enabled)
+pub fn set_default_mode_cleanup_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
+    config::update(&app, |s| {
+        let id = s.default_mode_id.clone();
+        if let Some(mode) = s.modes.iter_mut().find(|m| m.id == id) {
+            mode.ai_cleanup.enabled = enabled;
+        }
+    })
 }
 
 #[tauri::command]
@@ -288,6 +302,7 @@ pub fn open_accessibility_settings() {
 mod tests {
     use super::*;
     use crate::config::GroqModel;
+    use crate::mode::ModeLanguage;
 
     #[test]
     fn settings_view_defaults_match_fresh_install() {
@@ -296,7 +311,14 @@ mod tests {
         assert!(!view.deepgram_api_key_configured);
         assert!(!view.groq_api_key_configured);
         assert_eq!(view.groq.model, GroqModel::WhisperLargeV3Turbo);
-        assert_eq!(view.groq.language, "en");
+    }
+
+    #[test]
+    fn settings_view_exposes_modes_and_default_mode_id() {
+        let view: SettingsView = Settings::default().into();
+        assert_eq!(view.modes.len(), 1);
+        assert_eq!(view.default_mode_id, crate::mode::SEED_MODE_DEFAULT_EN);
+        assert_eq!(view.modes[0].language, ModeLanguage::exact("en"));
     }
 
     #[test]
@@ -354,13 +376,12 @@ mod tests {
         let view: SettingsView = Settings {
             groq: GroqSettings {
                 model: GroqModel::WhisperLargeV3,
-                language: "fr".to_string(),
+                language: None,
             },
             ..Settings::default()
         }
         .into();
         assert_eq!(view.groq.model, GroqModel::WhisperLargeV3);
-        assert_eq!(view.groq.language, "fr");
     }
 
     #[test]

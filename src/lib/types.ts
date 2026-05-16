@@ -9,7 +9,6 @@ export interface Replacement {
 }
 
 export interface DeepgramSettings {
-  language: string;
   smart_format: boolean;
   dictation: boolean;
   numerals: boolean;
@@ -22,7 +21,6 @@ export type GroqModel = "whisper_large_v3" | "whisper_large_v3_turbo";
 
 export interface GroqSettings {
   model: GroqModel;
-  language: string;
 }
 
 /// `null` = unlimited, `0` = off, `n` = keep last n.
@@ -35,6 +33,32 @@ export type ApiKeyValidation =
   | { kind: "invalid" }
   | { kind: "error"; message: string };
 
+// ── Mode types ────────────────────────────────────────────────────────────────
+
+export type ModeLanguage =
+  | { kind: "auto" }
+  | { kind: "exact"; code: string };
+
+export type TranslateTarget = { kind: "off" };
+
+export interface ModeCleanup {
+  enabled: boolean;
+  prompt_override: string | null;
+}
+
+export interface Mode {
+  id: string;
+  name: string;
+  icon: string | null;
+  language: ModeLanguage;
+  translate: TranslateTarget;
+  ai_cleanup: ModeCleanup;
+  use_dictionary: boolean;
+  use_snippets: boolean;
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
 export interface Settings {
   transcription_provider: TranscriptionProvider;
   deepgram_api_key_configured: boolean;
@@ -43,7 +67,8 @@ export interface Settings {
   replacements: Replacement[];
   deepgram: DeepgramSettings;
   groq: GroqSettings;
-  ai_cleanup_enabled: boolean;
+  modes: Mode[];
+  default_mode_id: string;
   ai_cleanup_auth_mode: CleanupAuthMode;
   ai_cleanup_key_configured: boolean;
   ai_cleanup_oauth_token_configured: boolean;

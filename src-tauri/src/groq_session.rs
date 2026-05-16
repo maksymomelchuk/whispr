@@ -64,11 +64,11 @@ impl TranscriptionSession for GroqSession {
             .filter(|k| !k.is_empty())
             .ok_or_else(|| "Groq API key not configured".to_string())?;
         let model = groq_model_api_id(settings.groq.model);
-        let language = if settings.groq.language.trim().is_empty() {
-            "en".to_string()
-        } else {
-            settings.groq.language.trim().to_string()
-        };
+        let language = config::get_default_mode(&settings)
+            .language
+            .as_code()
+            .unwrap_or("en")
+            .to_string();
         let show_live_preview = settings.show_live_preview;
 
         let buffered: Arc<Mutex<Vec<i16>>> = Arc::new(Mutex::new(Vec::new()));

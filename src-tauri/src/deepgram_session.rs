@@ -1,4 +1,5 @@
 use crate::config::{self, Replacement};
+use crate::mode::ModeLanguage;
 use crate::recorder::AudioFormat;
 use crate::replacements::apply_replacements;
 use crate::transcription_session::TranscriptionSession;
@@ -49,7 +50,8 @@ impl TranscriptionSession for DeepgramSession {
         let show_live_preview = settings.show_live_preview;
         let replacements = settings.replacements.clone();
 
-        let url = build_ws_url(&settings.deepgram, format)?;
+        let mode_language = config::get_default_mode(&settings).language.clone();
+        let url = build_ws_url(&settings.deepgram, &mode_language, format)?;
         let mut req = url
             .as_str()
             .into_client_request()
@@ -203,17 +205,19 @@ fn compose_preview(
     apply_replacements(&preview, replacements)
 }
 
-fn build_ws_url(dg: &config::DeepgramSettings, format: AudioFormat) -> Result<Url, String> {
+fn build_ws_url(
+    dg: &config::DeepgramSettings,
+    language: &ModeLanguage,
+    format: AudioFormat,
+) -> Result<Url, String> {
     let mut url = Url::parse(DEEPGRAM_WS_BASE).map_err(|e| format!("base URL parse: {e}"))?;
-    let language = if dg.language.trim().is_empty() {
-        "en"
-    } else {
-        dg.language.trim()
-    };
     {
         let mut q = url.query_pairs_mut();
         q.append_pair("model", "nova-3");
-        q.append_pair("language", language);
+        // Auto omits the language parameter; Exact sends the ISO code.
+        if let Some(code) = language.as_code() {
+            q.append_pair("language", code);
+        }
         q.append_pair("encoding", "linear16");
         q.append_pair("sample_rate", &format.sample_rate.to_string());
         q.append_pair("channels", &format.channels.to_string());

@@ -330,8 +330,11 @@ async fn run_session(
 
     let replaced_text = apply_replacements(&raw_text, &settings.replacements);
 
+    let default_mode = config::get_default_mode(&settings);
+    let mode_cleanup_enabled = default_mode.ai_cleanup.enabled;
+
     let (final_text, cleanup_status, notice) =
-        maybe_cleanup(app, &settings, &replaced_text, speak_duration).await;
+        maybe_cleanup(app, &settings, mode_cleanup_enabled, &replaced_text, speak_duration).await;
 
     let words = final_text.split_whitespace().count() as u64;
     let seconds = speak_duration.as_secs() as u32;
@@ -378,12 +381,13 @@ async fn run_session(
 async fn maybe_cleanup(
     app: &AppHandle,
     settings: &config::Settings,
+    mode_cleanup_enabled: bool,
     transcript: &str,
     speak_duration: Duration,
 ) -> (String, CleanupStatus, Notice) {
     let cleanup_settings = &settings.ai_cleanup;
 
-    if !cleanup_settings.enabled {
+    if !mode_cleanup_enabled {
         return (transcript.to_string(), CleanupStatus::Disabled, Notice::None);
     }
 

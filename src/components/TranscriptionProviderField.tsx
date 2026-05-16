@@ -11,9 +11,7 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -53,7 +51,6 @@ const GROQ_MODEL_OPTIONS: { value: GroqModel; label: string }[] = [
 
 const groqSchema = z.object({
   model: z.enum(["whisper_large_v3_turbo", "whisper_large_v3"]),
-  language: z.string().min(1, "Language is required"),
 });
 
 type GroqFormValues = z.infer<typeof groqSchema>;
@@ -194,7 +191,7 @@ interface GroqOptionsProps {
 function GroqOptions({ initial, onSaved }: GroqOptionsProps) {
   const form = useForm<GroqFormValues>({
     resolver: zodResolver(groqSchema),
-    values: { model: initial.model, language: initial.language },
+    values: { model: initial.model },
   });
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -206,10 +203,7 @@ function GroqOptions({ initial, onSaved }: GroqOptionsProps) {
   }, [status]);
 
   const onSubmit = form.handleSubmit(async (values) => {
-    const cleaned: GroqSettings = {
-      model: values.model,
-      language: values.language.trim() || "en",
-    };
+    const cleaned: GroqSettings = { model: values.model };
     setStatus("saving");
     setError(null);
     try {
@@ -254,31 +248,6 @@ function GroqOptions({ initial, onSaved }: GroqOptionsProps) {
                     </SelectContent>
                   </Select>
                 </FormControl>
-              </FormItem>
-            )}
-          />
-        </div>
-        <div className="mb-4 flex flex-col gap-1">
-          <FormField
-            control={form.control}
-            name="language"
-            render={({ field }) => (
-              <FormItem className="gap-[6px]">
-                <div className="inline-flex items-center gap-2">
-                  <FormLabel className="m-0 text-xs font-semibold text-foreground">
-                    Language
-                  </FormLabel>
-                  <InfoTip text="ISO-639-1 language code (e.g. en, fr, es). Defaults to en." />
-                </div>
-                <FormControl>
-                  <Input
-                    placeholder="en"
-                    spellCheck={false}
-                    autoComplete="off"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
               </FormItem>
             )}
           />

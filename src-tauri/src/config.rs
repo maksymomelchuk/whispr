@@ -1,3 +1,4 @@
+use crate::mode::{Mode, ModeCleanup, ModeId, ModeLanguage, TranslateTarget, SEED_MODE_DEFAULT_EN};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -47,10 +48,12 @@ pub fn default_replacements() -> Vec<Replacement> {
     .collect()
 }
 
+/// Language is now owned by Mode; this field is read from legacy JSON during
+/// migration and never written back (skip_serializing).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeepgramSettings {
-    #[serde(default = "default_language")]
-    pub language: String,
+    #[serde(default, skip_serializing)]
+    pub language: Option<String>,
     #[serde(default)]
     pub smart_format: bool,
     #[serde(default)]
@@ -61,14 +64,10 @@ pub struct DeepgramSettings {
     pub keyterms: Vec<String>,
 }
 
-fn default_language() -> String {
-    "en".to_string()
-}
-
 impl Default for DeepgramSettings {
     fn default() -> Self {
         Self {
-            language: default_language(),
+            language: None,
             smart_format: false,
             dictation: false,
             numerals: false,
@@ -93,19 +92,21 @@ pub enum GroqModel {
     WhisperLargeV3Turbo,
 }
 
+/// Language is now owned by Mode; this field is read from legacy JSON during
+/// migration and never written back (skip_serializing).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GroqSettings {
     #[serde(default)]
     pub model: GroqModel,
-    #[serde(default = "default_language")]
-    pub language: String,
+    #[serde(default, skip_serializing)]
+    pub language: Option<String>,
 }
 
 impl Default for GroqSettings {
     fn default() -> Self {
         Self {
             model: GroqModel::default(),
-            language: default_language(),
+            language: None,
         }
     }
 }
@@ -132,8 +133,6 @@ fn default_cleanup_min_duration_ms() -> u64 {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiCleanupSettings {
     #[serde(default)]
-    pub enabled: bool,
-    #[serde(default)]
     pub auth_mode: CleanupAuthMode,
     #[serde(default)]
     pub anthropic_api_key: Option<String>,
@@ -154,7 +153,6 @@ pub struct AiCleanupSettings {
 impl Default for AiCleanupSettings {
     fn default() -> Self {
         Self {
-            enabled: false,
             auth_mode: CleanupAuthMode::default(),
             anthropic_api_key: None,
             anthropic_oauth_token: None,
@@ -173,6 +171,10 @@ fn default_history_limit() -> Option<usize> {
     Some(5)
 }
 
+fn default_mode_id() -> ModeId {
+    SEED_MODE_DEFAULT_EN.to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     /// Legacy single-provider field. Read on load for migration into
@@ -180,6 +182,10 @@ pub struct Settings {
     /// New code should not write to this field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
+    /// Legacy flat cleanup toggle; read during migration to seed the default
+    /// mode's `ai_cleanup.enabled`, then cleared.
+    #[serde(default, skip_serializing)]
+    pub ai_cleanup_enabled: Option<bool>,
     #[serde(default)]
     pub transcription_provider: TranscriptionProvider,
     #[serde(default)]
@@ -197,6 +203,10 @@ pub struct Settings {
     #[serde(default)]
     pub ai_cleanup: AiCleanupSettings,
     #[serde(default)]
+    pub modes: Vec<Mode>,
+    #[serde(default = "default_mode_id")]
+    pub default_mode_id: ModeId,
+    #[serde(default)]
     pub input_device: Option<String>,
     #[serde(default = "default_true")]
     pub pause_media_on_record: bool,
@@ -212,6 +222,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             api_key: None,
+            ai_cleanup_enabled: None,
             transcription_provider: TranscriptionProvider::default(),
             deepgram_api_key: None,
             groq_api_key: None,
@@ -220,6 +231,8 @@ impl Default for Settings {
             deepgram: DeepgramSettings::default(),
             groq: GroqSettings::default(),
             ai_cleanup: AiCleanupSettings::default(),
+            modes: vec![Mode::seed_default_en(false)],
+            default_mode_id: default_mode_id(),
             input_device: None,
             pause_media_on_record: true,
             history_limit: default_history_limit(),
@@ -229,26 +242,98 @@ impl Default for Settings {
     }
 }
 
-/// One-way migration from the legacy single-`api_key` schema to per-provider
-/// keys. Returns `true` if any change was made so the caller can re-save.
-///
-/// Rules:
-/// - If a non-empty legacy `api_key` is present and `deepgram_api_key` is
-///   empty, copy the legacy value across.
-/// - Always clear `api_key` so the field stops appearing in serialized form.
-/// - Never overwrite an existing `deepgram_api_key`.
+/// Returns the default mode from settings, falling back to the first mode if
+/// `default_mode_id` doesn't match any entry, or creating a fallback mode if
+/// `modes` is somehow empty.
+pub fn get_default_mode(settings: &Settings) -> &Mode {
+    settings
+        .modes
+        .iter()
+        .find(|m| m.id == settings.default_mode_id)
+        .or_else(|| settings.modes.first())
+        .unwrap_or_else(|| {
+            // Statically allocated fallback so we can return a reference.
+            // Unreachable in practice: migration always seeds at least one mode.
+            static FALLBACK: std::sync::OnceLock<Mode> = std::sync::OnceLock::new();
+            FALLBACK.get_or_init(|| Mode::seed_default_en(false))
+        })
+}
+
+/// Migrates legacy settings into the new shape. Returns `true` if any change
+/// was made so the caller can re-save.
 fn migrate(s: &mut Settings) -> bool {
-    let Some(legacy) = s.api_key.take() else {
-        return false;
-    };
-    let deepgram_already_set = s
-        .deepgram_api_key
-        .as_deref()
-        .is_some_and(|k| !k.is_empty());
-    if !legacy.is_empty() && !deepgram_already_set {
-        s.deepgram_api_key = Some(legacy);
+    let mut changed = false;
+
+    // ── Legacy api_key → deepgram_api_key ────────────────────────────────
+    if let Some(legacy) = s.api_key.take() {
+        let deepgram_already_set = s
+            .deepgram_api_key
+            .as_deref()
+            .is_some_and(|k| !k.is_empty());
+        if !legacy.is_empty() && !deepgram_already_set {
+            s.deepgram_api_key = Some(legacy);
+        }
+        changed = true;
     }
-    true
+
+    // ── Seed the default mode if none exist ──────────────────────────────
+    if s.modes.is_empty() {
+        let legacy_language = match s.transcription_provider {
+            TranscriptionProvider::Groq => s
+                .groq
+                .language
+                .clone()
+                .filter(|l| !l.trim().is_empty())
+                .or_else(|| {
+                    s.deepgram
+                        .language
+                        .clone()
+                        .filter(|l| !l.trim().is_empty())
+                }),
+            _ => s
+                .deepgram
+                .language
+                .clone()
+                .filter(|l| !l.trim().is_empty())
+                .or_else(|| {
+                    s.groq
+                        .language
+                        .clone()
+                        .filter(|l| !l.trim().is_empty())
+                }),
+        };
+
+        let language = match legacy_language {
+            Some(code) => ModeLanguage::exact(code),
+            None => ModeLanguage::exact("en"),
+        };
+
+        // Read the legacy flat toggle if present.
+        let cleanup_enabled = s.ai_cleanup_enabled.unwrap_or(false);
+
+        s.modes.push(Mode {
+            id: SEED_MODE_DEFAULT_EN.to_string(),
+            name: "Default".to_string(),
+            icon: None,
+            language,
+            translate: TranslateTarget::Off,
+            ai_cleanup: ModeCleanup {
+                enabled: cleanup_enabled,
+                prompt_override: None,
+            },
+            use_dictionary: true,
+            use_snippets: true,
+        });
+        s.default_mode_id = SEED_MODE_DEFAULT_EN.to_string();
+        changed = true;
+    }
+
+    // Drop the legacy flat cleanup toggle; it's now in the mode.
+    if s.ai_cleanup_enabled.take().is_some() {
+        changed = true;
+    }
+
+    changed
 }
 
 fn settings_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -320,15 +405,23 @@ pub fn save(app: &tauri::AppHandle, settings: &Settings) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mode::ModeLanguage;
 
     #[test]
     fn default_settings_have_expected_provider_and_groq_defaults() {
         let s = Settings::default();
         assert_eq!(s.transcription_provider, TranscriptionProvider::Deepgram);
         assert_eq!(s.groq.model, GroqModel::WhisperLargeV3Turbo);
-        assert_eq!(s.groq.language, "en");
         assert!(s.deepgram_api_key.is_none());
         assert!(s.groq_api_key.is_none());
+    }
+
+    #[test]
+    fn default_settings_seed_one_default_mode() {
+        let s = Settings::default();
+        assert_eq!(s.modes.len(), 1);
+        assert_eq!(s.modes[0].id, SEED_MODE_DEFAULT_EN);
+        assert_eq!(s.default_mode_id, SEED_MODE_DEFAULT_EN);
     }
 
     #[test]
@@ -395,30 +488,107 @@ mod tests {
     }
 
     #[test]
-    fn migration_is_noop_for_fresh_settings() {
-        let json = r#"{}"#;
+    fn migration_creates_mode_from_deepgram_language() {
+        let json = r#"{
+            "transcription_provider": "deepgram",
+            "deepgram": { "language": "fr" }
+        }"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
+        assert!(s.modes.is_empty());
+
         let changed = migrate(&mut s);
-        assert!(!changed);
-        assert!(s.api_key.is_none());
-        assert!(s.deepgram_api_key.is_none());
+        assert!(changed);
+        assert_eq!(s.modes.len(), 1);
+        assert_eq!(s.modes[0].id, SEED_MODE_DEFAULT_EN);
+        assert_eq!(s.modes[0].language, ModeLanguage::exact("fr"));
     }
 
     #[test]
-    fn migration_clears_empty_legacy_api_key() {
-        let json = r#"{"api_key": ""}"#;
+    fn migration_creates_mode_from_groq_language_when_groq_is_active() {
+        let json = r#"{
+            "transcription_provider": "groq",
+            "groq": { "model": "whisper_large_v3_turbo", "language": "uk" }
+        }"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         let changed = migrate(&mut s);
         assert!(changed);
-        assert!(s.api_key.is_none());
+        assert_eq!(s.modes.len(), 1);
+        assert_eq!(s.modes[0].language, ModeLanguage::exact("uk"));
+    }
+
+    #[test]
+    fn migration_defaults_language_to_en_when_none_present() {
+        let json = r#"{}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        migrate(&mut s);
+        assert_eq!(s.modes[0].language, ModeLanguage::exact("en"));
+    }
+
+    #[test]
+    fn migration_reads_legacy_ai_cleanup_enabled_into_mode() {
+        let json = r#"{"ai_cleanup_enabled": true}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        migrate(&mut s);
+        assert!(s.modes[0].ai_cleanup.enabled);
+        // The flat field must be gone from subsequent saves.
+        let reserialized = serde_json::to_string(&s).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
+        assert!(v.get("ai_cleanup_enabled").is_none());
+    }
+
+    #[test]
+    fn migration_is_idempotent_when_modes_already_present() {
+        let json = r#"{
+            "modes": [{"id":"mode-default-en","name":"Default","language":{"kind":"exact","code":"en"},"translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_dictionary":true,"use_snippets":true}],
+            "default_mode_id": "mode-default-en"
+        }"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        assert_eq!(s.modes.len(), 1);
+        // Simulate running migration twice.
+        migrate(&mut s);
+        assert_eq!(s.modes.len(), 1, "second migration must not add another mode");
+    }
+
+    #[test]
+    fn get_default_mode_finds_mode_by_id() {
+        let s = Settings::default();
+        let mode = get_default_mode(&s);
+        assert_eq!(mode.id, SEED_MODE_DEFAULT_EN);
+    }
+
+    #[test]
+    fn get_default_mode_falls_back_to_first_when_id_missing() {
+        let mut s = Settings::default();
+        s.default_mode_id = "nonexistent".to_string();
+        let mode = get_default_mode(&s);
+        // Falls back to the first (and only) mode.
+        assert_eq!(mode.id, SEED_MODE_DEFAULT_EN);
+    }
+
+    #[test]
+    fn deepgram_language_does_not_appear_in_serialized_output() {
+        let s = Settings::default();
+        let json = serde_json::to_string(&s).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(
-            s.deepgram_api_key.is_none(),
-            "empty legacy key should not populate deepgram_api_key"
+            v["deepgram"].get("language").is_none(),
+            "deepgram.language must not appear in serialized settings"
         );
     }
 
     #[test]
-    fn legacy_settings_round_trip_loses_only_api_key_field() {
+    fn groq_language_does_not_appear_in_serialized_output() {
+        let s = Settings::default();
+        let json = serde_json::to_string(&s).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(
+            v["groq"].get("language").is_none(),
+            "groq.language must not appear in serialized settings"
+        );
+    }
+
+    #[test]
+    fn legacy_settings_round_trip_loses_language_fields() {
         let legacy = r#"{
             "api_key": "dg-key",
             "shortcut": {"key": "AltRight", "modifiers": []},
@@ -432,11 +602,14 @@ mod tests {
         }"#;
         let mut s: Settings = serde_json::from_str(legacy).unwrap();
         migrate(&mut s);
-        assert_eq!(s.deepgram.language, "fr");
+        // Language moved to the mode.
+        assert_eq!(s.modes[0].language, ModeLanguage::exact("fr"));
+        // Smart format etc. still readable for this slice.
         assert!(s.deepgram.smart_format);
         assert_eq!(s.deepgram_api_key.as_deref(), Some("dg-key"));
-        assert_eq!(s.transcription_provider, TranscriptionProvider::Deepgram);
-        assert_eq!(s.groq.model, GroqModel::WhisperLargeV3Turbo);
-        assert_eq!(s.groq.language, "en");
+        // Serialized form must not contain deepgram.language.
+        let json = serde_json::to_string(&s).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(v["deepgram"].get("language").is_none());
     }
 }

@@ -5,12 +5,14 @@ import {
   House,
   Keyboard,
   Microphone,
+  Sliders,
 } from "@phosphor-icons/react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 
 import { GeneralPage } from "../pages/GeneralPage";
 import { HistoryPage } from "../pages/HistoryPage";
 import { HomePage } from "../pages/HomePage";
+import { ModesPage } from "../pages/ModesPage";
 import { ShortcutPage } from "../pages/ShortcutPage";
 import { StatsPage } from "../pages/StatsPage";
 import { TranscriptionPage } from "../pages/TranscriptionPage";
@@ -36,6 +38,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "General", icon: Gear, path: "/general" },
   { label: "Shortcut", icon: Keyboard, path: "/shortcut" },
   { label: "Transcription", icon: Microphone, path: "/transcription" },
+  { label: "Modes", icon: Sliders, path: "/modes" },
   { label: "History", icon: ClockCounterClockwise, path: "/history" },
   { label: "Stats", icon: ChartBar, path: "/stats" },
 ];
@@ -101,6 +104,7 @@ export function AppShell() {
               <Route path="/general" element={<GeneralPage />} />
               <Route path="/shortcut" element={<ShortcutPage />} />
               <Route path="/transcription" element={<TranscriptionPage />} />
+              <Route path="/modes" element={<ModesPage />} />
               <Route path="/history" element={<HistoryPage />} />
               <Route path="/stats" element={<StatsPage />} />
             </Routes>

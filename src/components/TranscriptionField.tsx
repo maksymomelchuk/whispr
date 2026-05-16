@@ -8,7 +8,6 @@ import {
   FormControl,
   FormField,
   FormItem,
-  FormLabel,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -16,7 +15,6 @@ import { Switch } from "@/components/ui/switch";
 import { setDeepgramSettings as persistDeepgramSettings } from "../lib/api";
 import type { DeepgramSettings } from "../lib/types";
 import { CollapsibleCard } from "./CollapsibleCard";
-import { InfoTip } from "./InfoTip";
 import { OptionRow } from "./OptionRow";
 
 interface Props {
@@ -101,7 +99,6 @@ export function TranscriptionField({
   const onSubmit = async (values: DeepgramSettings) => {
     const cleaned: DeepgramSettings = {
       ...values,
-      language: values.language.trim() || "en",
       keyterms: values.keyterms
         .map((k) => k.trim())
         .filter((k) => k.length > 0),
@@ -128,29 +125,6 @@ export function TranscriptionField({
     >
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
-          <FormField
-            control={form.control}
-            name="language"
-            render={({ field }) => (
-              <FormItem className="mb-4 flex flex-col gap-1">
-                <div className="mb-1 inline-flex items-center gap-2">
-                  <FormLabel className="m-0 text-xs font-semibold text-foreground">
-                    Language
-                  </FormLabel>
-                  <InfoTip text="Language code (e.g. en, multi, es, de)." />
-                </div>
-                <FormControl>
-                  <Input
-                    {...field}
-                    placeholder="en"
-                    spellCheck={false}
-                    autoComplete="off"
-                  />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-
           <div className="mb-4 flex flex-col gap-2.5">
             {BOOL_OPTIONS.map((opt) => (
               <FormField
