@@ -1,5 +1,5 @@
 use crate::config::{self, DictionaryEntry};
-use crate::dictionary::apply_dictionary;
+use crate::dictionary::{self, apply_dictionary};
 use crate::mode::ModeLanguage;
 use crate::recorder::AudioFormat;
 use crate::transcription_session::TranscriptionSession;
@@ -51,7 +51,7 @@ impl TranscriptionSession for DeepgramSession {
         let dictionary = settings.dictionary.clone();
 
         let mode_language = config::get_default_mode(&settings).language.clone();
-        let url = build_ws_url(&mode_language, format)?;
+        let url = build_ws_url(&mode_language, format, &dictionary)?;
         let mut req = url
             .as_str()
             .into_client_request()
@@ -205,7 +205,11 @@ fn compose_preview(
     apply_dictionary(&preview, dictionary)
 }
 
-fn build_ws_url(language: &ModeLanguage, format: AudioFormat) -> Result<Url, String> {
+fn build_ws_url(
+    language: &ModeLanguage,
+    format: AudioFormat,
+    dictionary: &[DictionaryEntry],
+) -> Result<Url, String> {
     let mut url = Url::parse(DEEPGRAM_WS_BASE).map_err(|e| format!("base URL parse: {e}"))?;
     {
         let mut q = url.query_pairs_mut();
@@ -219,6 +223,16 @@ fn build_ws_url(language: &ModeLanguage, format: AudioFormat) -> Result<Url, Str
         q.append_pair("channels", &format.channels.to_string());
         q.append_pair("smart_format", "true");
         q.append_pair("numerals", "true");
+    }
+    // Append dictionary `from` terms as keyterms, staying within the 4 KB
+    // total-URL ceiling. Budget is computed after all static params.
+    let remaining =
+        dictionary::DEEPGRAM_KEYTERM_BUDGET_BYTES.saturating_sub(url.as_str().len());
+    {
+        let mut q = url.query_pairs_mut();
+        for term in dictionary::deepgram_keyterms(dictionary, remaining) {
+            q.append_pair("keyterm", &term);
+        }
     }
     Ok(url)
 }
@@ -265,17 +279,68 @@ fn pcm_bytes(samples: &[i16]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mode::ModeLanguage;
     use crate::recorder::AudioFormat;
+
+    fn fmt() -> AudioFormat {
+        AudioFormat {
+            sample_rate: 16000,
+            channels: 1,
+        }
+    }
+
+    fn entry(from: &str, to: &str) -> DictionaryEntry {
+        DictionaryEntry {
+            from: from.to_string(),
+            to: to.to_string(),
+        }
+    }
 
     #[test]
     fn build_ws_url_hardcodes_smart_format_and_numerals() {
-        let fmt = AudioFormat { sample_rate: 16000, channels: 1 };
-        let url = build_ws_url(&ModeLanguage::Auto, fmt).unwrap();
+        let url = build_ws_url(&ModeLanguage::Auto, fmt(), &[]).unwrap();
         let query = url.query().unwrap_or("");
         assert!(query.contains("smart_format=true"), "URL must contain smart_format=true");
         assert!(query.contains("numerals=true"), "URL must contain numerals=true");
         assert!(!query.contains("dictation"), "URL must not contain dictation");
         assert!(!query.contains("keyterm"), "URL must not contain keyterm");
+    }
+
+    #[test]
+    fn url_includes_dictionary_keyterms() {
+        let entries = vec![entry("MongoDB", "MongoDB"), entry("TypeScript", "TypeScript")];
+        let url = build_ws_url(&ModeLanguage::exact("en"), fmt(), &entries).unwrap();
+        let q = url.query().unwrap_or("");
+        assert!(q.contains("keyterm=MongoDB"), "missing MongoDB: {q}");
+        assert!(q.contains("keyterm=TypeScript"), "missing TypeScript: {q}");
+    }
+
+    #[test]
+    fn url_excludes_punctuation_cue_entries() {
+        let entries = vec![entry("dot", "."), entry("MongoDB", "MongoDB"), entry("slash", "/")];
+        let url = build_ws_url(&ModeLanguage::exact("en"), fmt(), &entries).unwrap();
+        let q = url.query().unwrap_or("");
+        assert!(q.contains("keyterm=MongoDB"), "missing MongoDB: {q}");
+        assert!(!q.contains("keyterm=dot"), "unexpected dot: {q}");
+        assert!(!q.contains("keyterm=slash"), "unexpected slash: {q}");
+    }
+
+    #[test]
+    fn url_has_no_keyterms_for_empty_dictionary() {
+        let url = build_ws_url(&ModeLanguage::exact("en"), fmt(), &[]).unwrap();
+        let q = url.query().unwrap_or("");
+        assert!(!q.contains("keyterm="), "unexpected keyterm: {q}");
+    }
+
+    #[test]
+    fn url_respects_keyterm_budget() {
+        let entries: Vec<DictionaryEntry> = (0..200)
+            .map(|i| entry(&format!("term{i:05}"), &format!("term{i:05}")))
+            .collect();
+        let url = build_ws_url(&ModeLanguage::exact("en"), fmt(), &entries).unwrap();
+        assert!(
+            url.as_str().len() <= dictionary::DEEPGRAM_KEYTERM_BUDGET_BYTES,
+            "URL too long: {} bytes",
+            url.as_str().len()
+        );
     }
 }

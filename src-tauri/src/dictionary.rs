@@ -7,6 +7,15 @@ const COMPACT: &[char] = &['.', '/', '-', '_', '@'];
 /// trailing one. Example: "hello comma world" → "hello, world".
 const CLING_LEFT: &[char] = &[',', ';', ':', '?', '!'];
 
+/// 4 KB ceiling — Deepgram's documented maximum is ~8 KB; halving gives
+/// comfortable headroom for the base URL and engine parameters that precede
+/// any keyterm pairs.
+pub const DEEPGRAM_KEYTERM_BUDGET_BYTES: usize = 4096;
+
+/// Whisper's prompt parameter is documented as up to 224 tokens; 800 chars
+/// stays well within that window for typical English vocabulary lists.
+pub const GROQ_PROMPT_BUDGET_CHARS: usize = 800;
+
 /// Case-insensitive whole-word replacement with a small spacing policy. We
 /// pad the whole transcript with spaces on both ends, then search for `from`
 /// flanked by non-word characters — so Deepgram's terminal punctuation
@@ -100,6 +109,67 @@ fn find_word_match(haystack: &str, needle: &str) -> Option<(usize, usize)> {
     None
 }
 
+/// Returns true if `entry` is a punctuation-cue that should be excluded
+/// from engine prompt hints. Sending these biases the engine on noise rather
+/// than real vocabulary words.
+pub fn is_punctuation_cue(entry: &DictionaryEntry) -> bool {
+    let to = entry.to.trim();
+    to.len() < 3 && to.chars().all(|c| c.is_ascii_punctuation())
+}
+
+/// Yields trimmed `from` terms that are eligible to send as engine hints —
+/// drops punctuation-cue and blank-`from` entries. Preserves insertion order.
+fn eligible_terms(entries: &[DictionaryEntry]) -> impl Iterator<Item = &str> {
+    entries.iter().filter_map(|entry| {
+        if is_punctuation_cue(entry) {
+            return None;
+        }
+        let term = entry.from.trim();
+        (!term.is_empty()).then_some(term)
+    })
+}
+
+/// Returns the `from` terms suitable for Deepgram `keyterm` query params.
+/// Filters out punctuation cues and blank entries; truncates in insertion
+/// order once the next term would push the consumed bytes past
+/// `remaining_budget`. Pass `DEEPGRAM_KEYTERM_BUDGET_BYTES - url_base_len`
+/// as the budget so the final URL stays within the 4 KB ceiling.
+pub fn deepgram_keyterms(entries: &[DictionaryEntry], remaining_budget: usize) -> Vec<String> {
+    // Size each encoded value the way `url::Url::query_pairs_mut().append_pair`
+    // will, so the running total matches the bytes the final URL actually gains.
+    const KEY_PREFIX_BYTES: usize = "&keyterm=".len();
+    let mut terms = Vec::new();
+    let mut used = 0usize;
+    for term in eligible_terms(entries) {
+        let encoded: String = url::form_urlencoded::byte_serialize(term.as_bytes()).collect();
+        let needed = KEY_PREFIX_BYTES + encoded.len();
+        if used + needed > remaining_budget {
+            break;
+        }
+        terms.push(term.to_string());
+        used += needed;
+    }
+    terms
+}
+
+/// Builds the Groq prompt hint (`"Vocabulary: t1, t2, t3"`) from dictionary
+/// entries. Filters punctuation cues; truncates at a comma boundary so the
+/// result stays within `GROQ_PROMPT_BUDGET_CHARS`. Returns `None` when no
+/// eligible entries exist.
+pub fn groq_prompt_hint(entries: &[DictionaryEntry]) -> Option<String> {
+    const PREFIX: &str = "Vocabulary: ";
+    let mut result = PREFIX.to_string();
+    for term in eligible_terms(entries) {
+        let sep = if result.len() == PREFIX.len() { "" } else { ", " };
+        if result.len() + sep.len() + term.len() > GROQ_PROMPT_BUDGET_CHARS {
+            break;
+        }
+        result.push_str(sep);
+        result.push_str(term);
+    }
+    (result.len() > PREFIX.len()).then_some(result)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -166,5 +236,157 @@ mod tests {
         let entries = [entry("Mongo", "MongoDB")];
         let final_text = apply_dictionary(after_cleanup, &entries);
         assert_eq!(final_text, "I prefer MongoDB");
+    }
+
+    // ── is_punctuation_cue ──────────────────────────────────────────────
+
+    #[test]
+    fn punctuation_cue_single_char_punct() {
+        assert!(is_punctuation_cue(&entry("dot", ".")));
+        assert!(is_punctuation_cue(&entry("slash", "/")));
+        assert!(is_punctuation_cue(&entry("comma", ",")));
+        assert!(is_punctuation_cue(&entry("question mark", "?")));
+        assert!(is_punctuation_cue(&entry("exclamation mark", "!")));
+    }
+
+    #[test]
+    fn punctuation_cue_two_char_punct() {
+        assert!(is_punctuation_cue(&entry("double dash", "--")));
+    }
+
+    #[test]
+    fn not_punctuation_cue_real_word() {
+        assert!(!is_punctuation_cue(&entry("MongoDB", "MongoDB")));
+        assert!(!is_punctuation_cue(&entry("TypeScript", "TypeScript")));
+    }
+
+    #[test]
+    fn not_punctuation_cue_three_char_punct_to() {
+        // to.len() == 3 → does not meet < 3 condition
+        assert!(!is_punctuation_cue(&entry("ellipsis", "...")));
+    }
+
+    #[test]
+    fn not_punctuation_cue_mixed_to() {
+        // 'y' is not ascii_punctuation
+        assert!(!is_punctuation_cue(&entry("something", "y")));
+    }
+
+    // ── deepgram_keyterms ───────────────────────────────────────────────
+
+    #[test]
+    fn keyterms_filters_punctuation_cues() {
+        let entries = vec![
+            entry("dot", "."),
+            entry("MongoDB", "MongoDB"),
+            entry("slash", "/"),
+            entry("TypeScript", "TypeScript"),
+        ];
+        let terms = deepgram_keyterms(&entries, 4096);
+        assert_eq!(terms, vec!["MongoDB", "TypeScript"]);
+    }
+
+    #[test]
+    fn keyterms_empty_entries() {
+        assert!(deepgram_keyterms(&[], 4096).is_empty());
+    }
+
+    #[test]
+    fn keyterms_all_punctuation_returns_empty() {
+        let entries = vec![entry("dot", "."), entry("slash", "/"), entry("comma", ",")];
+        assert!(deepgram_keyterms(&entries, 4096).is_empty());
+    }
+
+    #[test]
+    fn keyterms_truncates_at_budget() {
+        // "alpha" → encoded "alpha" (5 bytes); needed = 9+5 = 14.
+        // "beta"  → encoded "beta"  (4 bytes); needed = 9+4 = 13.
+        // Budget 25: alpha (14) fits, beta (14+13=27 > 25) truncated.
+        let entries = vec![entry("alpha", "alpha"), entry("beta", "beta")];
+        let terms = deepgram_keyterms(&entries, 25);
+        assert_eq!(terms, vec!["alpha"]);
+    }
+
+    #[test]
+    fn keyterms_zero_budget_returns_empty() {
+        let entries = vec![entry("MongoDB", "MongoDB")];
+        assert!(deepgram_keyterms(&entries, 0).is_empty());
+    }
+
+    #[test]
+    fn keyterms_exact_budget_fit() {
+        // "hi" → 2 bytes; needed = 9+2 = 11.
+        // Budget 11 → exactly fits one term.
+        let entries = vec![entry("hi", "hi"), entry("bye", "bye")];
+        let terms = deepgram_keyterms(&entries, 11);
+        assert_eq!(terms, vec!["hi"]);
+    }
+
+    #[test]
+    fn keyterms_skips_blank_from() {
+        let entries = vec![entry("  ", "something"), entry("MongoDB", "MongoDB")];
+        let terms = deepgram_keyterms(&entries, 4096);
+        assert_eq!(terms, vec!["MongoDB"]);
+    }
+
+    // ── groq_prompt_hint ────────────────────────────────────────────────
+
+    #[test]
+    fn prompt_hint_formats_correctly() {
+        let entries = vec![
+            entry("MongoDB", "MongoDB"),
+            entry("TypeScript", "TypeScript"),
+            entry("Kubernetes", "Kubernetes"),
+        ];
+        assert_eq!(
+            groq_prompt_hint(&entries).unwrap(),
+            "Vocabulary: MongoDB, TypeScript, Kubernetes"
+        );
+    }
+
+    #[test]
+    fn prompt_hint_filters_punctuation_cues() {
+        let entries = vec![entry("dot", "."), entry("MongoDB", "MongoDB"), entry("slash", "/")];
+        assert_eq!(groq_prompt_hint(&entries).unwrap(), "Vocabulary: MongoDB");
+    }
+
+    #[test]
+    fn prompt_hint_returns_none_for_empty() {
+        assert!(groq_prompt_hint(&[]).is_none());
+    }
+
+    #[test]
+    fn prompt_hint_returns_none_for_all_punctuation() {
+        let entries = vec![entry("dot", "."), entry("comma", ",")];
+        assert!(groq_prompt_hint(&entries).is_none());
+    }
+
+    #[test]
+    fn prompt_hint_truncates_at_budget() {
+        // "Vocabulary: " = 12 chars. Budget = 800.
+        // filler (785 chars): result becomes 797 chars.
+        // ", yy" would add 4 chars → 801 > 800 → truncated.
+        let filler = "x".repeat(785);
+        let entries = vec![entry(&filler, &filler), entry("yy", "yy")];
+        let hint = groq_prompt_hint(&entries).unwrap();
+        assert_eq!(hint.len(), 797);
+        assert!(!hint.contains("yy"));
+    }
+
+    #[test]
+    fn prompt_hint_includes_term_that_exactly_fits() {
+        // "Vocabulary: " = 12 chars. 785-char filler → 797 chars.
+        // ", y" = 3 chars → 800 exactly ≤ 800 → included.
+        let filler = "x".repeat(785);
+        let entries = vec![entry(&filler, &filler), entry("y", "y")];
+        let hint = groq_prompt_hint(&entries).unwrap();
+        assert_eq!(hint.len(), 800);
+        assert!(hint.ends_with(", y"));
+    }
+
+    #[test]
+    fn prompt_hint_single_term_no_comma() {
+        let entries = vec![entry("MongoDB", "MongoDB")];
+        assert_eq!(groq_prompt_hint(&entries).unwrap(), "Vocabulary: MongoDB");
     }
 }
