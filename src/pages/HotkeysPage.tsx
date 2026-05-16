@@ -9,149 +9,32 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Keycap, ShortcutKeycaps } from "@/components/Keycap";
+import { RowCard, RowCardButton } from "@/components/RowCard";
+import { SectionHeader } from "@/components/SectionHeader";
 
 import { useSettings } from "../context/SettingsContext";
+import { useFlash } from "../hooks/useFlash";
 import { usePtt } from "../hooks/usePtt";
 import { setHotkeyBindings, setShortcutCapturePaused } from "../lib/api";
+import {
+  collectModifiers,
+  hasConflict,
+  isModifierCode,
+  shortcutKey,
+  shortcutsEqual,
+} from "../lib/shortcut";
 import type { HotkeyBinding, Mode, Shortcut } from "../lib/types";
 
 const CONFLICT_MESSAGE =
   "Two bindings use the same shortcut. Remove the conflict before saving.";
 
 const DEFAULT_SHORTCUT: Shortcut = { key: "AltRight", modifiers: [] };
-const FLASH_MS = 700;
-
-const MOD_LABEL: Record<string, string> = {
-  Meta: "⌘",
-  Control: "⌃",
-  Alt: "⌥",
-  Shift: "⇧",
-};
-
-const KEY_LABEL: Record<string, string> = {
-  AltRight: "Right ⌥",
-  AltLeft: "Left ⌥",
-  MetaRight: "Right ⌘",
-  MetaLeft: "Left ⌘",
-  ControlRight: "Right ⌃",
-  ControlLeft: "Left ⌃",
-  ShiftRight: "Right ⇧",
-  ShiftLeft: "Left ⇧",
-  Space: "Space",
-  Escape: "Esc",
-  Tab: "Tab",
-  Enter: "Return",
-  Backspace: "Del",
-  ArrowUp: "↑",
-  ArrowDown: "↓",
-  ArrowLeft: "←",
-  ArrowRight: "→",
-};
-
-const MODIFIER_CODES = new Set([
-  "MetaLeft",
-  "MetaRight",
-  "ControlLeft",
-  "ControlRight",
-  "AltLeft",
-  "AltRight",
-  "ShiftLeft",
-  "ShiftRight",
-]);
-
-function isModifierCode(code: string): boolean {
-  return MODIFIER_CODES.has(code);
-}
-
-function collectModifiers(e: KeyboardEvent): string[] {
-  const mods: string[] = [];
-  if (e.metaKey) mods.push("Meta");
-  if (e.ctrlKey) mods.push("Control");
-  if (e.altKey) mods.push("Alt");
-  if (e.shiftKey) mods.push("Shift");
-  return mods;
-}
-
-function displayKey(code: string): string {
-  if (KEY_LABEL[code]) return KEY_LABEL[code];
-  const k = code.match(/^Key([A-Z])$/);
-  if (k) return k[1];
-  const d = code.match(/^Digit(\d)$/);
-  if (d) return d[1];
-  if (/^F\d{1,2}$/.test(code)) return code;
-  return code;
-}
-
-function shortcutKey(shortcut: Shortcut): string {
-  return `${shortcut.key}|${shortcut.modifiers.join(",")}|${shortcut.is_double_tap ?? false}`;
-}
-
-function shortcutsEqual(a: Shortcut, b: Shortcut): boolean {
-  if (a.key !== b.key) return false;
-  if ((a.is_double_tap ?? false) !== (b.is_double_tap ?? false)) return false;
-  if (a.modifiers.length !== b.modifiers.length) return false;
-  const aSet = new Set(a.modifiers);
-  return b.modifiers.every((m) => aSet.has(m));
-}
-
-function hasConflict(bindings: HotkeyBinding[], index: number): boolean {
-  const key = shortcutKey(bindings[index].shortcut);
-  return bindings.some(
-    (other, i) => i !== index && shortcutKey(other.shortcut) === key,
-  );
-}
 
 interface RecorderTarget {
   modeId: string;
   bindingIndex: number | null;
   current: Shortcut;
-}
-
-function Keycap({
-  children,
-  tone = "neutral",
-}: {
-  children: React.ReactNode;
-  tone?: "neutral" | "destructive" | "phantom" | "accent";
-}) {
-  const base =
-    "inline-flex items-center justify-center h-7 min-w-7 px-1.5 rounded-md " +
-    "font-mono text-[12px] font-medium leading-none tracking-tight border " +
-    "transition-[border-color,background-color,color] duration-150";
-  const tones = {
-    neutral:
-      "border-border/80 bg-background text-foreground " +
-      "shadow-[inset_0_-1px_0_0_hsl(var(--border)/0.7),0_1px_0_0_hsl(var(--border)/0.35)] " +
-      "group-hover:border-ring/40",
-    accent:
-      "border-ring/40 bg-ring/10 text-foreground " +
-      "shadow-[inset_0_-1px_0_0_hsl(var(--ring)/0.35)]",
-    destructive:
-      "border-destructive/45 bg-destructive/[0.06] text-destructive " +
-      "shadow-[inset_0_-1px_0_0_hsl(var(--destructive)/0.35)]",
-    phantom:
-      "border-border/60 bg-transparent text-muted-foreground/60",
-  };
-  return <kbd className={`${base} ${tones[tone]}`}>{children}</kbd>;
-}
-
-function ShortcutKeycaps({
-  shortcut,
-  tone = "neutral",
-}: {
-  shortcut: Shortcut;
-  tone?: "neutral" | "destructive" | "accent";
-}) {
-  return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      {shortcut.modifiers.map((m, i) => (
-        <Keycap key={`mod-${i}`} tone={tone}>
-          {MOD_LABEL[m] ?? m}
-        </Keycap>
-      ))}
-      <Keycap tone={tone}>{displayKey(shortcut.key)}</Keycap>
-    </div>
-  );
 }
 
 function ArmedDot() {
@@ -181,32 +64,16 @@ function BindingRow({
   onEdit: () => void;
   onRemove: () => void;
 }) {
+  const tone = conflict ? "destructive" : armed ? "accent" : "neutral";
   return (
-    <div
-      className={
-        "group relative flex items-center gap-3 rounded-[10px] border bg-card pl-3 pr-2 py-2.5 " +
-        "shadow-xs transition-[border-color,box-shadow,background-color,outline-color] duration-150 " +
-        "outline outline-2 outline-offset-0 " +
-        (flashing
-          ? "outline-ring/45 "
-          : "outline-transparent motion-safe:duration-[600ms] ") +
-        (conflict
-          ? "border-destructive/45 bg-destructive/[0.04] hover:border-destructive/65"
-          : armed
-            ? "border-ring/60 bg-ring/[0.04]"
-            : "border-border hover:border-ring/55 hover:shadow-sm")
-      }
-    >
+    <RowCard tone={tone} flashing={flashing}>
       {armed && (
         <span className="absolute -left-3 top-1/2 -translate-y-1/2">
           <ArmedDot />
         </span>
       )}
       <div className="flex flex-1 min-w-0 items-center gap-2.5 flex-wrap">
-        <ShortcutKeycaps
-          shortcut={binding.shortcut}
-          tone={conflict ? "destructive" : armed ? "accent" : "neutral"}
-        />
+        <ShortcutKeycaps shortcut={binding.shortcut} tone={tone} />
         {binding.shortcut.is_double_tap && (
           <Badge
             variant="neutral"
@@ -222,7 +89,7 @@ function BindingRow({
         )}
       </div>
 
-      <div className="flex items-center gap-0.5 shrink-0 opacity-65 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-0.5 shrink-0 transform-gpu opacity-65 group-hover:opacity-100 transition-opacity">
         <Button
           variant="ghost"
           size="sm"
@@ -239,15 +106,15 @@ function BindingRow({
               size="icon-sm"
               aria-label="Remove binding"
               onClick={onRemove}
-              className="text-muted-foreground/70 hover:text-destructive"
+              className="transition-colors text-muted-foreground/70 hover:text-destructive"
             >
-              <Trash size={15} />
+              <Trash size={16} />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Remove</TooltipContent>
         </Tooltip>
       </div>
-    </div>
+    </RowCard>
   );
 }
 
@@ -300,12 +167,10 @@ function RecordingRow({
   };
 
   return (
-    <div
-      className={
-        "relative flex items-center gap-3 rounded-[10px] " +
-        "border border-ring/55 bg-ring/[0.04] shadow-sm pl-3 pr-2 py-2.5 " +
-        "ring-2 ring-ring/15 transition-colors"
-      }
+    <RowCard
+      tone="accent"
+      interactive={false}
+      className="shadow-sm ring-2 ring-ring/15"
     >
       <div className="flex flex-1 min-w-0 items-center gap-3 flex-wrap">
         {captured ? (
@@ -347,23 +212,13 @@ function RecordingRow({
           Save
         </Button>
       </div>
-    </div>
+    </RowCard>
   );
 }
 
 function EmptyModeCard({ onAdd }: { onAdd: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onAdd}
-      className={
-        "group flex items-center justify-between gap-3 rounded-[10px] " +
-        "border border-dashed border-border/80 bg-card/30 pl-3 pr-4 py-2.5 " +
-        "hover:border-ring/55 hover:bg-card hover:shadow-xs " +
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 " +
-        "transition-[border-color,background-color,box-shadow] duration-150"
-      }
-    >
+    <RowCardButton onClick={onAdd} className="justify-between pr-4">
       <div className="flex items-center gap-1.5">
         <Keycap tone="phantom">⌥</Keycap>
         <Keycap tone="phantom">⌘</Keycap>
@@ -373,7 +228,7 @@ function EmptyModeCard({ onAdd }: { onAdd: () => void }) {
         <Plus size={13} />
         Add hotkey
       </span>
-    </button>
+    </RowCardButton>
   );
 }
 
@@ -384,13 +239,7 @@ export function HotkeysPage() {
     null,
   );
   const [error, setError] = useState<string | null>(null);
-  const [flashId, setFlashId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!flashId) return;
-    const t = setTimeout(() => setFlashId(null), FLASH_MS);
-    return () => clearTimeout(t);
-  }, [flashId]);
+  const { flash, isFlashing } = useFlash();
 
   if (!settings) return null;
 
@@ -410,7 +259,7 @@ export function HotkeysPage() {
       await setHotkeyBindings(next);
       setSettings((s) => (s ? { ...s, hotkey_bindings: next } : s));
       if (flashSig) {
-        setFlashId(`${flashSig.modeId}|${shortcutKey(flashSig.shortcut)}`);
+        flash(rowFlashId(flashSig.modeId, flashSig.shortcut));
       }
     } catch (e) {
       setError(String(e));
@@ -473,19 +322,11 @@ export function HotkeysPage() {
 
         return (
           <section key={mode.id} className="flex flex-col gap-2.5">
-            <div className="flex items-baseline gap-3 pb-1.5 border-b border-border/40">
-              <span className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/55 tabular-nums">
-                {String(modeIdx + 1).padStart(2, "0")}
-              </span>
-              <h3 className="text-[14px] font-semibold text-foreground tracking-[-0.005em]">
-                {mode.name}
-              </h3>
-              {isDefault && (
-                <Badge className="text-[9.5px] font-semibold uppercase tracking-[0.08em] px-1.5 py-0">
-                  Default
-                </Badge>
-              )}
-            </div>
+            <SectionHeader
+              index={modeIdx}
+              title={mode.name}
+              isDefault={isDefault}
+            />
 
             {rows.length === 0 ? (
               recordingNewBinding ? (
@@ -500,48 +341,46 @@ export function HotkeysPage() {
                 />
               )
             ) : (
-              <>
-                <div className="flex flex-col gap-2">
-                  {rows.map(({ binding, index }) => {
-                    if (recordingExistingIndex === index) {
-                      return (
-                        <RecordingRow
-                          key={index}
-                          initial={recorderTarget!.current}
-                          onSave={handleRecordSave}
-                          onCancel={() => setRecorderTarget(null)}
-                        />
-                      );
-                    }
-                    const flashing =
-                      flashId ===
-                      rowFlashId(mode.id, binding.shortcut);
-                    const armed =
-                      !!activeShortcut &&
-                      shortcutsEqual(activeShortcut, binding.shortcut);
+              <div className="flex flex-col gap-2">
+                {rows.map(({ binding, index }) => {
+                  if (recordingExistingIndex === index) {
                     return (
-                      <BindingRow
+                      <RecordingRow
                         key={index}
-                        binding={binding}
-                        conflict={hasConflict(bindings, index)}
-                        armed={armed}
-                        flashing={flashing}
-                        onEdit={() =>
-                          startRecording(index, binding.shortcut)
-                        }
-                        onRemove={() => handleRemove(index)}
+                        initial={recorderTarget!.current}
+                        onSave={handleRecordSave}
+                        onCancel={() => setRecorderTarget(null)}
                       />
                     );
-                  })}
-                  {recordingNewBinding && (
-                    <RecordingRow
-                      initial={recorderTarget!.current}
-                      onSave={handleRecordSave}
-                      onCancel={() => setRecorderTarget(null)}
+                  }
+                  const flashing = isFlashing(
+                    rowFlashId(mode.id, binding.shortcut),
+                  );
+                  const armed =
+                    !!activeShortcut &&
+                    shortcutsEqual(activeShortcut, binding.shortcut);
+                  return (
+                    <BindingRow
+                      key={index}
+                      binding={binding}
+                      conflict={hasConflict(bindings, index)}
+                      armed={armed}
+                      flashing={flashing}
+                      onEdit={() =>
+                        startRecording(index, binding.shortcut)
+                      }
+                      onRemove={() => handleRemove(index)}
                     />
-                  )}
-                </div>
-              </>
+                  );
+                })}
+                {recordingNewBinding && (
+                  <RecordingRow
+                    initial={recorderTarget!.current}
+                    onSave={handleRecordSave}
+                    onCancel={() => setRecorderTarget(null)}
+                  />
+                )}
+              </div>
             )}
           </section>
         );
