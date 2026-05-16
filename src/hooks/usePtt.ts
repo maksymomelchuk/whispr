@@ -1,6 +1,8 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 
+import type { Shortcut } from "../lib/types";
+
 interface UsePttOptions {
   onPressed?: () => void;
   onReleased?: () => void;
@@ -21,18 +23,21 @@ export function usePtt({ onPressed, onReleased }: UsePttOptions = {}) {
   onReleasedRef.current = onReleased;
 
   const [isHeld, setIsHeld] = useState(false);
+  const [activeShortcut, setActiveShortcut] = useState<Shortcut | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const unlisteners: Array<() => void> = [];
 
     const attach = async () => {
-      const unP = await listen("ptt-pressed", () => {
+      const unP = await listen<Shortcut | null>("ptt-pressed", (e) => {
         setIsHeld(true);
+        setActiveShortcut(e.payload ?? null);
         onPressedRef.current?.();
       });
       const unR = await listen("ptt-released", () => {
         setIsHeld(false);
+        setActiveShortcut(null);
         onReleasedRef.current?.();
       });
       // If the component unmounted before subscriptions resolved, tear them
@@ -52,5 +57,5 @@ export function usePtt({ onPressed, onReleased }: UsePttOptions = {}) {
     };
   }, []);
 
-  return { isHeld };
+  return { isHeld, activeShortcut };
 }
