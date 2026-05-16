@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { CaretDown, CaretUp, Check } from "@phosphor-icons/react"
+import { CaretDown, CaretUp, CheckFat } from "@phosphor-icons/react"
 import { Select as SelectPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
@@ -119,7 +119,7 @@ function SelectItem({
         className="absolute right-2 flex size-3.5 items-center justify-center"
       >
         <SelectPrimitive.ItemIndicator>
-          <Check className="size-4" />
+          <CheckFat className="size-4" />
         </SelectPrimitive.ItemIndicator>
       </span>
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
