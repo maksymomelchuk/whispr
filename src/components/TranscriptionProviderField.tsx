@@ -283,8 +283,7 @@ function GroqOptions({ initial, onSaved }: GroqOptionsProps) {
             )}
           />
         </div>
-        <div className="row replacements-actions save-row">
-          <div className="spacer" />
+        <div className="mt-2 flex items-center justify-end">
           <Button
             onClick={onSubmit}
             disabled={!form.formState.isDirty || status === "saving"}

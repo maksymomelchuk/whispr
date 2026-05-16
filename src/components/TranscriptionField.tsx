@@ -17,6 +17,7 @@ import { setDeepgramSettings as persistDeepgramSettings } from "../lib/api";
 import type { DeepgramSettings } from "../lib/types";
 import { CollapsibleCard } from "./CollapsibleCard";
 import { InfoTip } from "./InfoTip";
+import { OptionRow } from "./OptionRow";
 
 interface Props {
   initial: DeepgramSettings;
@@ -150,7 +151,7 @@ export function TranscriptionField({
             )}
           />
 
-          <div className="options-list">
+          <div className="mb-4 flex flex-col gap-2.5">
             {BOOL_OPTIONS.map((opt) => (
               <FormField
                 key={opt.key}
@@ -158,75 +159,68 @@ export function TranscriptionField({
                 name={opt.key}
                 render={({ field }) => (
                   <FormItem>
-                    <label className="option-row" htmlFor={`switch-${opt.key}`}>
-                      <div className="option-text">
-                        <div className="option-label label-with-info">
-                          {opt.label}
-                          <InfoTip text={opt.description} />
-                        </div>
-                        <div className="option-param mono">
-                          {opt.param}={String(field.value)}
-                        </div>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          id={`switch-${opt.key}`}
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </label>
+                    <OptionRow
+                      htmlFor={`switch-${opt.key}`}
+                      label={opt.label}
+                      info={opt.description}
+                      param={`${opt.param}=${String(field.value)}`}
+                      control={
+                        <FormControl>
+                          <Switch
+                            id={`switch-${opt.key}`}
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      }
+                    />
                   </FormItem>
                 )}
               />
             ))}
 
-            <div className="option-row keyterms-option">
-              <div className="option-text">
-                <div className="option-label label-with-info">
-                  Keyterm Prompting
-                  <InfoTip text="Boosts recognition of important words or phrases, like names, product terms, or jargon. Up to 100 keyterms per request." />
-                </div>
-                <div className="option-param mono">keyterm=TERM_OR_PHRASE</div>
-                <div className="keyterms-list">
-                  {keyterms.map((kt, i) => (
-                    <div key={i} className="replacement-row">
-                      <Input
-                        className="flex-1 min-w-0"
-                        value={kt}
-                        placeholder="e.g. Deepgram"
-                        spellCheck={false}
-                        autoComplete="off"
-                        onChange={(e) => updateKeyterm(i, e.target.value)}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Remove"
-                        onClick={() => removeKeyterm(i)}
-                      >
-                        ×
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-                <div className="row">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addKeyterm}
-                  >
-                    + Add keyterm
-                  </Button>
-                </div>
+            <OptionRow
+              label="Keyterm Prompting"
+              info="Boosts recognition of important words or phrases, like names, product terms, or jargon. Up to 100 keyterms per request."
+              param="keyterm=TERM_OR_PHRASE"
+            >
+              <div className="my-1.5 flex flex-col gap-1.5">
+                {keyterms.map((kt, i) => (
+                  <div key={i} className="flex items-center gap-1.5">
+                    <Input
+                      className="flex-1 min-w-0"
+                      value={kt}
+                      placeholder="e.g. Deepgram"
+                      spellCheck={false}
+                      autoComplete="off"
+                      onChange={(e) => updateKeyterm(i, e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Remove"
+                      onClick={() => removeKeyterm(i)}
+                    >
+                      ×
+                    </Button>
+                  </div>
+                ))}
               </div>
-            </div>
+              <div className="flex items-center">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addKeyterm}
+                >
+                  + Add keyterm
+                </Button>
+              </div>
+            </OptionRow>
           </div>
 
-          <div className="row replacements-actions save-row">
-            <div className="spacer" />
+          <div className="mt-2 flex items-center justify-end">
             <Button type="submit" disabled={!form.formState.isDirty || saving}>
               {saving ? "Saving…" : "Save"}
             </Button>
