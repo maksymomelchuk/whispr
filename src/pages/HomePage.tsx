@@ -1,4 +1,4 @@
-import { Keyboard, Mic } from "lucide-react";
+import { Keyboard, Microphone } from "@phosphor-icons/react";
 
 import { Card, CardContent } from "../components/ui/card";
 import { useSettings } from "../context/SettingsContext";
@@ -55,7 +55,7 @@ export function HomePage() {
         <Card className="border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 mb-1">
-              <Mic size={15} className="text-amber-700 dark:text-amber-400" />
+              <Microphone size={15} className="text-amber-700 dark:text-amber-400" />
               <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
                 Select a microphone
               </p>

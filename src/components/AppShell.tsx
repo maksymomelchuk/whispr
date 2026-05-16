@@ -1,11 +1,11 @@
 import {
-  BarChart3,
-  History,
+  ChartBar,
+  ClockCounterClockwise,
+  Gear,
   House,
   Keyboard,
-  Mic,
-  Settings,
-} from "lucide-react";
+  Microphone,
+} from "@phosphor-icons/react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 
 import { GeneralPage } from "../pages/GeneralPage";
@@ -33,11 +33,11 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: "Home", icon: House, path: "/" },
-  { label: "General", icon: Settings, path: "/general" },
+  { label: "General", icon: Gear, path: "/general" },
   { label: "Shortcut", icon: Keyboard, path: "/shortcut" },
-  { label: "Transcription", icon: Mic, path: "/transcription" },
-  { label: "History", icon: History, path: "/history" },
-  { label: "Stats", icon: BarChart3, path: "/stats" },
+  { label: "Transcription", icon: Microphone, path: "/transcription" },
+  { label: "History", icon: ClockCounterClockwise, path: "/history" },
+  { label: "Stats", icon: ChartBar, path: "/stats" },
 ];
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";

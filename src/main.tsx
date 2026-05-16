@@ -1,3 +1,4 @@
+import { IconContext } from "@phosphor-icons/react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import React from "react";
 import ReactDOM from "react-dom/client";
@@ -10,6 +11,8 @@ const Root = label === "overlay" ? OverlayApp : App;
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <Root />
+    <IconContext.Provider value={{ weight: "duotone" }}>
+      <Root />
+    </IconContext.Provider>
   </React.StrictMode>,
 );

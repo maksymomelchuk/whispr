@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { CaretRight } from "@phosphor-icons/react";
 import { useState, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
@@ -42,7 +42,7 @@ export function CollapsibleCard({
               "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--primary)]",
             )}
           >
-            <ChevronRight
+            <CaretRight
               className={cn(
                 "size-[10px] shrink-0 text-[var(--text-tertiary)]",
                 "transition-transform duration-[180ms] ease-[cubic-bezier(0.25,0.46,0.45,0.94)] motion-reduce:transition-none",
