@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  CaretRight,
   Copy,
   PencilSimple,
   Star,
@@ -18,6 +19,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Sheet,
   SheetContent,
@@ -199,6 +205,9 @@ function ModeEditor({
   const [draft, setDraft] = useState<Mode>(mode);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [promptOpen, setPromptOpen] = useState(
+    !!mode.ai_cleanup.prompt_override,
+  );
 
   const langKind = draft.language.kind;
   const langCode = draft.language.kind === "exact" ? draft.language.code : "en";
@@ -216,6 +225,14 @@ function ModeEditor({
       ...d,
       ai_cleanup: { ...d.ai_cleanup, enabled },
     }));
+  const setPromptOverride = (value: string) =>
+    setDraft((d) => ({
+      ...d,
+      ai_cleanup: {
+        ...d.ai_cleanup,
+        prompt_override: value || null,
+      },
+    }));
   const setUseDictionary = (use_dictionary: boolean) =>
     setDraft((d) => ({ ...d, use_dictionary }));
   const setUseSnippets = (use_snippets: boolean) =>
@@ -224,13 +241,20 @@ function ModeEditor({
   const handleSave = async () => {
     setSaving(true);
     setError(null);
+    const normalized: Mode = {
+      ...draft,
+      ai_cleanup: {
+        ...draft.ai_cleanup,
+        prompt_override: draft.ai_cleanup.prompt_override?.trim() || null,
+      },
+    };
     try {
       if (isNew) {
-        await addMode(draft);
+        await addMode(normalized);
       } else {
-        await updateMode(draft);
+        await updateMode(normalized);
       }
-      onSaved(draft);
+      onSaved(normalized);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -308,6 +332,33 @@ function ModeEditor({
             checked={draft.ai_cleanup.enabled}
             onCheckedChange={setCleanup}
           />
+          {draft.ai_cleanup.enabled && (
+            <Collapsible
+              open={promptOpen}
+              onOpenChange={setPromptOpen}
+              className="ml-[52px] flex flex-col gap-2"
+            >
+              <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-fit">
+                <CaretRight
+                  size={10}
+                  className={`transition-transform ${promptOpen ? "rotate-90" : ""}`}
+                />
+                Custom prompt
+              </CollapsibleTrigger>
+              <CollapsibleContent className="flex flex-col gap-2">
+                <textarea
+                  className="w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring min-h-[80px]"
+                  placeholder="Leave empty to use the default cleanup prompt."
+                  value={draft.ai_cleanup.prompt_override ?? ""}
+                  onChange={(e) => setPromptOverride(e.target.value)}
+                  spellCheck={false}
+                />
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  The text inside <code className="font-mono">&lt;transcript&gt;</code> tags will be your dictation. Your prompt is responsible for treating it as data to transform, not instructions to execute.
+                </p>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
           <ToggleRow
             id="dictionary"
             label="Use dictionary"

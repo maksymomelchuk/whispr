@@ -354,8 +354,15 @@ async fn run_session(
     let mode_use_snippets = active_mode.use_snippets;
     let mode_use_dictionary = active_mode.use_dictionary;
 
-    let (replaced_text, cleanup_status, notice) =
-        maybe_cleanup(app, &settings, mode_cleanup_enabled, &raw_text, speak_duration).await;
+    let (replaced_text, cleanup_status, notice) = maybe_cleanup(
+        app,
+        &settings,
+        mode_cleanup_enabled,
+        &raw_text,
+        speak_duration,
+        default_mode.ai_cleanup.prompt_override.as_deref(),
+    )
+    .await;
 
     let mut final_text = replaced_text.clone();
     if mode_use_snippets {
@@ -413,6 +420,7 @@ async fn maybe_cleanup(
     mode_cleanup_enabled: bool,
     transcript: &str,
     speak_duration: Duration,
+    prompt_override: Option<&str>,
 ) -> (String, CleanupStatus, Notice) {
     let cleanup_settings = &settings.ai_cleanup;
 
@@ -469,7 +477,8 @@ async fn maybe_cleanup(
 
     let _ = app.emit(PTT_THINKING_EVENT, ());
 
-    match cleanup::run(transcript, credential).await {
+    let prompt = cleanup::effective_prompt(prompt_override);
+    match cleanup::run(transcript, credential, prompt).await {
         Ok((cleaned, usage)) => {
             cleanup_stats::record(app, usage.input_tokens, usage.output_tokens);
             (cleaned, CleanupStatus::Ran, Notice::None)
