@@ -38,6 +38,9 @@ export const validateGroqApiKey = (apiKey: string) =>
 export const setShortcut = (shortcut: Shortcut) =>
   invoke<void>("set_shortcut", { shortcut });
 
+export const setShortcutCapturePaused = (paused: boolean) =>
+  invoke<void>("set_shortcut_capture_paused", { paused });
+
 export const setReplacements = (replacements: Replacement[]) =>
   invoke<void>("set_replacements", { replacements });
 

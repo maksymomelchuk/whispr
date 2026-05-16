@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { formatShortcut } from "../lib/api";
+import { formatShortcut, setShortcutCapturePaused } from "../lib/api";
 import type { Shortcut } from "../lib/types";
+import { Button } from "./ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
 
 interface Props {
+  open: boolean;
   initial: Shortcut;
   onSave: (shortcut: Shortcut) => void;
   onCancel: () => void;
@@ -24,7 +34,6 @@ function isModifierCode(code: string): boolean {
   return MODIFIER_CODES.has(code);
 }
 
-// Translate KeyboardEvent.key modifier names to our stored modifier names.
 function collectModifiers(e: KeyboardEvent): string[] {
   const mods: string[] = [];
   if (e.metaKey) mods.push("Meta");
@@ -34,7 +43,7 @@ function collectModifiers(e: KeyboardEvent): string[] {
   return mods;
 }
 
-export function ShortcutRecorder({ initial, onSave, onCancel }: Props) {
+export function ShortcutRecorder({ open, initial, onSave, onCancel }: Props) {
   const [captured, setCaptured] = useState<Shortcut | null>(null);
 
   const handleKeyDown = useCallback(
@@ -49,8 +58,6 @@ export function ShortcutRecorder({ initial, onSave, onCancel }: Props) {
       const modifiers = collectModifiers(e);
       const code = e.code;
 
-      // Modifier-only shortcut (like "Right Option" alone): store the modifier
-      // as the key with no additional modifiers.
       if (isModifierCode(code)) {
         setCaptured({ key: code, modifiers: [] });
         return;
@@ -62,39 +69,53 @@ export function ShortcutRecorder({ initial, onSave, onCancel }: Props) {
   );
 
   useEffect(() => {
+    if (!open) {
+      setCaptured(null);
+      return;
+    }
+    // Suppress the OS-level CGEventTap PTT match so pressing the current
+    // shortcut here gets captured as a new binding instead of triggering
+    // dictation.
+    setShortcutCapturePaused(true).catch(() => {});
     window.addEventListener("keydown", handleKeyDown, { capture: true });
-    return () =>
+    return () => {
       window.removeEventListener("keydown", handleKeyDown, { capture: true });
-  }, [handleKeyDown]);
+      setShortcutCapturePaused(false).catch(() => {});
+    };
+  }, [open, handleKeyDown]);
 
   const hasChanges = captured !== null;
 
   return (
-    <div className="modal-backdrop" onClick={onCancel}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Record shortcut</h2>
-        <p className="hint">
-          Press the key combination you want to hold for dictation.
-          <br />
-          Esc to cancel.
-        </p>
-        <div className="shortcut-preview">
+    <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
+      <DialogContent showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle>Record shortcut</DialogTitle>
+          <DialogDescription>
+            Press the key combination you want to hold for dictation.
+            <br />
+            Esc to cancel.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="mt-3 mb-2 px-3 py-5 bg-muted border border-dashed border-input rounded-lg text-center font-mono text-sm text-foreground min-h-6">
           {captured ? formatShortcut(captured) : "Listening…"}
         </div>
-        <p className="hint-sm">
-          Current: <span className="mono">{formatShortcut(initial)}</span>
+        <p className="m-0 text-[11px] text-muted-foreground text-center">
+          Current:{" "}
+          <span className="font-mono text-xs">{formatShortcut(initial)}</span>
         </p>
-        <div className="modal-actions">
-          <button onClick={onCancel}>Cancel</button>
-          <button
+        <DialogFooter className="mt-4">
+          <Button variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button
             disabled={!hasChanges || !captured}
             onClick={() => captured && onSave(captured)}
-            className="primary"
           >
             Save
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

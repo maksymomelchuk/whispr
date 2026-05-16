@@ -134,6 +134,7 @@ pub fn run() {
             commands::validate_deepgram_api_key,
             commands::validate_groq_api_key,
             commands::set_shortcut,
+            commands::set_shortcut_capture_paused,
             commands::set_replacements,
             commands::set_deepgram_settings,
             commands::set_ai_cleanup_enabled,

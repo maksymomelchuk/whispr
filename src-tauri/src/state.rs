@@ -36,4 +36,7 @@ pub struct AppState {
     /// Transient: did we actually pause media at the start of the current
     /// recording? If so, release should resume; otherwise leave it alone.
     pub did_pause_media: Arc<Mutex<bool>>,
+    /// When true, the CGEventTap skips PTT matching so the settings UI can
+    /// capture keystrokes for shortcut rebinding without firing dictation.
+    pub shortcut_capture_paused: Arc<Mutex<bool>>,
 }

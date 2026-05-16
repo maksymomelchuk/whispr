@@ -535,6 +535,10 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                     _ => return None,
                 };
 
+                if *state.shortcut_capture_paused.lock().unwrap() {
+                    return None;
+                }
+
                 let shortcut = state.shortcut.lock().unwrap().clone();
 
                 // Press requires the exact shortcut (key + modifiers) to be

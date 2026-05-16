@@ -116,14 +116,6 @@
   color-scheme: dark;
 }
 
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-}
-
 .app {
   padding: 20px;
   display: flex;
@@ -174,27 +166,6 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-input[type="password"],
-input[type="text"],
-input[type="number"] {
-  flex: 1;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 13px;
-  font-family: inherit;
-  background: var(--bg-elevated);
-  color: var(--text);
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-:root.dark input[type="password"],
-:root.dark input[type="number"],
-:root.dark input[type="text"] {
-  background: var(--bg);
 }
 
 /* Labeled field: small caption over its control, ~6px gap. */
@@ -302,38 +273,6 @@ input[type="number"] {
   }
 }
 
-input:focus {
-  border-color: var(--primary);
-}
-
-button:not([data-slot]) {
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  font-family: inherit;
-  background: var(--bg-elevated);
-  color: var(--text);
-  cursor: pointer;
-  transition:
-    background-color 0.15s,
-    border-color 0.15s;
-}
-
-:root.dark button:not([data-slot]) {
-  background: var(--bg);
-}
-
-button:not([data-slot]):hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-button:not([data-slot]):disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .status {
   margin-top: 8px;
   font-size: 12px;
@@ -355,17 +294,6 @@ button:not([data-slot]):disabled {
 
 :root.dark .err-card {
   color: var(--danger-soft-text);
-}
-
-.shortcut-display {
-  flex: 1;
-  padding: 6px 10px;
-  font-size: 13px;
-  font-family: "SF Mono", Menlo, monospace;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  background: var(--bg-elevated-2);
-  color: var(--text);
 }
 
 .replacement-row {
@@ -399,11 +327,6 @@ button:not([data-slot]):disabled {
   font-weight: 600;
   color: var(--text);
   letter-spacing: 0;
-}
-
-.hint-sm.left {
-  text-align: left;
-  color: var(--text-secondary);
 }
 
 .options-list {
@@ -815,68 +738,11 @@ button:not([data-slot]):disabled {
   font-size: 12px;
 }
 
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: var(--modal-backdrop);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-  backdrop-filter: blur(2px);
-}
-
-.modal {
-  background: var(--bg-elevated);
-  border-radius: 12px;
-  padding: 20px;
-  width: 380px;
-  box-shadow: var(--shadow-modal);
-  border: 1px solid var(--border);
-}
-
-.modal h2 {
-  margin: 0 0 4px;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.shortcut-preview {
-  margin: 12px 0 8px;
-  padding: 20px 12px;
-  background: var(--bg-subtle);
-  border: 1px dashed var(--border-strong);
-  border-radius: 8px;
-  text-align: center;
-  font-family: "SF Mono", Menlo, monospace;
-  font-size: 14px;
-  color: var(--text);
-  min-height: 24px;
-}
-
 .hint-sm {
   margin: 0;
   font-size: 11px;
   color: var(--text-tertiary);
   text-align: center;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 16px;
-}
-
-button.primary {
-  background: var(--primary);
-  color: var(--text-on-primary);
-  border-color: var(--primary);
-}
-
-button.primary:hover:not(:disabled) {
-  background: var(--primary-strong);
-  border-color: var(--primary-strong);
 }
 
 .update-banner {

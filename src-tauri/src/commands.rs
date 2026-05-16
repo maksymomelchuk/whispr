@@ -130,6 +130,11 @@ pub fn set_shortcut(
 }
 
 #[tauri::command]
+pub fn set_shortcut_capture_paused(state: State<'_, AppState>, paused: bool) {
+    *state.shortcut_capture_paused.lock().unwrap() = paused;
+}
+
+#[tauri::command]
 pub fn set_replacements(
     app: AppHandle,
     replacements: Vec<Replacement>,

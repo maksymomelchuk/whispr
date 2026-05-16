@@ -28,13 +28,12 @@ export function ShortcutPage() {
         shortcut={settings.shortcut}
         onStartRecord={() => setRecording(true)}
       />
-      {recording && (
-        <ShortcutRecorder
-          initial={settings.shortcut}
-          onSave={handleShortcutSave}
-          onCancel={() => setRecording(false)}
-        />
-      )}
+      <ShortcutRecorder
+        open={recording}
+        initial={settings.shortcut}
+        onSave={handleShortcutSave}
+        onCancel={() => setRecording(false)}
+      />
     </div>
   );
 }
