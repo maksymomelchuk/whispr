@@ -3,7 +3,6 @@ import { DictionaryField } from "../components/DictionaryField";
 import { TranscriptionProviderField } from "../components/TranscriptionProviderField";
 import { useSettings } from "../context/SettingsContext";
 import type {
-  DeepgramSettings,
   DictionaryEntry,
   GroqSettings,
   TranscriptionProvider,
@@ -22,15 +21,11 @@ export function TranscriptionPage() {
     <div className="p-6 flex flex-col gap-4">
       <TranscriptionProviderField
         provider={settings.transcription_provider}
-        deepgram={settings.deepgram}
         groq={settings.groq}
         deepgramApiKeyConfigured={settings.deepgram_api_key_configured}
         groqApiKeyConfigured={settings.groq_api_key_configured}
         onProviderChange={(transcription_provider: TranscriptionProvider) =>
           setSettings((s) => (s ? { ...s, transcription_provider } : s))
-        }
-        onDeepgramSaved={(deepgram: DeepgramSettings) =>
-          setSettings((s) => (s ? { ...s, deepgram } : s))
         }
         onGroqSaved={(groq: GroqSettings) =>
           setSettings((s) => (s ? { ...s, groq } : s))

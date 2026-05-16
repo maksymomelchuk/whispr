@@ -29,7 +29,6 @@ import {
   validateGroqApiKey,
 } from "../lib/api";
 import type {
-  DeepgramSettings,
   GroqModel,
   GroqSettings,
   TranscriptionProvider,
@@ -37,7 +36,6 @@ import type {
 import { ApiKeyField } from "./ApiKeyField";
 import { InfoTip } from "./InfoTip";
 import { SectionCard } from "./SectionCard";
-import { TranscriptionField } from "./TranscriptionField";
 
 const PROVIDER_OPTIONS: { value: TranscriptionProvider; label: string }[] = [
   { value: "deepgram", label: "Deepgram" },
@@ -58,12 +56,10 @@ type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 interface Props {
   provider: TranscriptionProvider;
-  deepgram: DeepgramSettings;
   groq: GroqSettings;
   deepgramApiKeyConfigured: boolean;
   groqApiKeyConfigured: boolean;
   onProviderChange: (provider: TranscriptionProvider) => void;
-  onDeepgramSaved: (deepgram: DeepgramSettings) => void;
   onGroqSaved: (groq: GroqSettings) => void;
   onDeepgramApiKeyConfiguredChange: (configured: boolean) => void;
   onGroqApiKeyConfiguredChange: (configured: boolean) => void;
@@ -71,12 +67,10 @@ interface Props {
 
 export function TranscriptionProviderField({
   provider,
-  deepgram,
   groq,
   deepgramApiKeyConfigured,
   groqApiKeyConfigured,
   onProviderChange,
-  onDeepgramSaved,
   onGroqSaved,
   onDeepgramApiKeyConfiguredChange,
   onGroqApiKeyConfiguredChange,
@@ -157,11 +151,7 @@ export function TranscriptionProviderField({
             validate={validateDeepgramApiKey}
             onSaved={onDeepgramApiKeyConfiguredChange}
           />
-          <TranscriptionField
-            initial={deepgram}
-            defaultOpen
-            onSaved={onDeepgramSaved}
-          />
+          <SectionCard title="Deepgram" info="Deepgram nova-3." />
         </>
       )}
 

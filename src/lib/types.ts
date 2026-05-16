@@ -8,13 +8,6 @@ export interface DictionaryEntry {
   to: string;
 }
 
-export interface DeepgramSettings {
-  smart_format: boolean;
-  dictation: boolean;
-  numerals: boolean;
-  keyterms: string[];
-}
-
 export type TranscriptionProvider = "deepgram" | "groq";
 
 export type GroqModel = "whisper_large_v3" | "whisper_large_v3_turbo";
@@ -65,7 +58,6 @@ export interface Settings {
   groq_api_key_configured: boolean;
   shortcut: Shortcut;
   dictionary: DictionaryEntry[];
-  deepgram: DeepgramSettings;
   groq: GroqSettings;
   modes: Mode[];
   default_mode_id: string;
