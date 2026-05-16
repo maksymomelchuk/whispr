@@ -120,10 +120,6 @@
   box-sizing: border-box;
 }
 
-html {
-  scrollbar-gutter: stable;
-}
-
 body {
   margin: 0;
 }
@@ -310,7 +306,7 @@ input:focus {
   border-color: var(--primary);
 }
 
-button {
+button:not([data-slot]) {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 6px 12px;
@@ -325,15 +321,15 @@ button {
     border-color 0.15s;
 }
 
-:root.dark button {
+:root.dark button:not([data-slot]) {
   background: var(--bg);
 }
 
-button:hover:not(:disabled) {
+button:not([data-slot]):hover:not(:disabled) {
   background: var(--bg-hover);
 }
 
-button:disabled {
+button:not([data-slot]):disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -865,7 +861,6 @@ button:disabled {
   text-align: center;
 }
 
-
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -956,4 +951,3 @@ button.primary:hover:not(:disabled) {
     animation: none;
   }
 }
-

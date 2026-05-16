@@ -103,6 +103,34 @@
   --sidebar-ring: hsl(213 100% 53%);
 }
 
+main::-webkit-scrollbar {
+  width: 10px;
+  background: transparent;
+}
+
+main::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+main::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.25);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+main::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.5);
+}
+
+main::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+main {
+  scrollbar-color: hsl(var(--muted-foreground) / 0.25) transparent;
+}
+
 /* CollapsibleCard content open/close animation via Radix height var */
 [data-slot="collapsible-content"] {
   overflow: hidden;

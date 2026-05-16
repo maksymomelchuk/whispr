@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Whispr",
+        "title": "",
         "width": 950,
         "height": 600,
         "minWidth": 880,
