@@ -1,4 +1,4 @@
-use crate::mode::{Mode, ModeCleanup, ModeId, ModeLanguage, TranslateTarget, SEED_MODE_DEFAULT_EN};
+use crate::mode::{Mode, ModeId, ModeLanguage, SEED_MODE_DEFAULT_EN};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -278,52 +278,22 @@ fn migrate(s: &mut Settings) -> bool {
 
     // ── Seed the default mode if none exist ──────────────────────────────
     if s.modes.is_empty() {
-        let legacy_language = match s.transcription_provider {
-            TranscriptionProvider::Groq => s
-                .groq
-                .language
-                .clone()
-                .filter(|l| !l.trim().is_empty())
-                .or_else(|| {
-                    s.deepgram
-                        .language
-                        .clone()
-                        .filter(|l| !l.trim().is_empty())
-                }),
-            _ => s
-                .deepgram
-                .language
-                .clone()
-                .filter(|l| !l.trim().is_empty())
-                .or_else(|| {
-                    s.groq
-                        .language
-                        .clone()
-                        .filter(|l| !l.trim().is_empty())
-                }),
+        // Prefer the active provider's language, then the other provider's.
+        // An empty/whitespace value is treated as missing.
+        let non_empty = |opt: &Option<String>| -> Option<String> {
+            opt.clone().filter(|l| !l.trim().is_empty())
         };
-
-        let language = match legacy_language {
-            Some(code) => ModeLanguage::exact(code),
-            None => ModeLanguage::exact("en"),
+        let (primary, secondary) = match s.transcription_provider {
+            TranscriptionProvider::Groq => (&s.groq.language, &s.deepgram.language),
+            _ => (&s.deepgram.language, &s.groq.language),
         };
+        let legacy_language = non_empty(primary).or_else(|| non_empty(secondary));
 
-        // Read the legacy flat toggle if present.
-        let cleanup_enabled = s.ai_cleanup_enabled.unwrap_or(false);
-
-        s.modes.push(Mode {
-            id: SEED_MODE_DEFAULT_EN.to_string(),
-            name: "Default".to_string(),
-            icon: None,
-            language,
-            translate: TranslateTarget::Off,
-            ai_cleanup: ModeCleanup {
-                enabled: cleanup_enabled,
-                prompt_override: None,
-            },
-            use_dictionary: true,
-            use_snippets: true,
-        });
+        let mut mode = Mode::seed_default_en(s.ai_cleanup_enabled.unwrap_or(false));
+        if let Some(code) = legacy_language {
+            mode.language = ModeLanguage::exact(code);
+        }
+        s.modes.push(mode);
         s.default_mode_id = SEED_MODE_DEFAULT_EN.to_string();
         changed = true;
     }

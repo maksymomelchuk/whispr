@@ -55,8 +55,8 @@ impl From<Settings> for SettingsView {
             replacements: s.replacements,
             deepgram: s.deepgram,
             groq: s.groq,
-            modes: s.modes.clone(),
-            default_mode_id: s.default_mode_id.clone(),
+            modes: s.modes,
+            default_mode_id: s.default_mode_id,
             ai_cleanup_auth_mode: s.ai_cleanup.auth_mode,
             ai_cleanup_key_configured: s
                 .ai_cleanup
@@ -157,8 +157,8 @@ pub fn set_deepgram_settings(
     config::update(&app, |s| s.deepgram = deepgram)
 }
 
-/// Sets `ai_cleanup.enabled` on the default mode (identified by
-/// `default_mode_id`). Creates a default mode if none exists.
+/// Sets `ai_cleanup.enabled` on the mode identified by `default_mode_id`.
+/// No-op if that mode is missing — migration guarantees one exists on load.
 #[tauri::command]
 pub fn set_default_mode_cleanup_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
     config::update(&app, |s| {
