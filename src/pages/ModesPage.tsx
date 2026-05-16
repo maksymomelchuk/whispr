@@ -91,6 +91,15 @@ function languageSummary(lang: ModeLanguage): string {
   return lang.codes.map((c) => c.toUpperCase()).join(", ");
 }
 
+function buildLanguage(
+  langMode: "auto" | "restrict",
+  codes: string[],
+): ModeLanguage {
+  if (langMode === "auto" || codes.length === 0) return { kind: "auto" };
+  if (codes.length === 1) return { kind: "exact", code: codes[0] };
+  return { kind: "hints", codes };
+}
+
 function translateSummary(mode: Mode): string {
   if (mode.translate.kind === "off") return "Off";
   return `→ ${mode.translate.target.toUpperCase()}`;
@@ -286,15 +295,9 @@ function ModeEditor({
   const handleSave = async () => {
     setSaving(true);
     setError(null);
-    const language: ModeLanguage =
-      langMode === "auto" || restrictCodes.length === 0
-        ? { kind: "auto" }
-        : restrictCodes.length === 1
-          ? { kind: "exact", code: restrictCodes[0] }
-          : { kind: "hints", codes: restrictCodes };
     const normalized: Mode = {
       ...draft,
-      language,
+      language: buildLanguage(langMode, restrictCodes),
       ai_cleanup: {
         ...draft.ai_cleanup,
         prompt_override: draft.ai_cleanup.prompt_override?.trim() || null,

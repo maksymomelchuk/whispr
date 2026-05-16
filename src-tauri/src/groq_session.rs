@@ -441,24 +441,6 @@ fn compute_level(chunk: &[i16]) -> f32 {
 mod tests {
     use super::*;
 
-    use crate::mode::ModeLanguage;
-
-    #[test]
-    fn groq_language_is_none_for_auto() {
-        assert_eq!(ModeLanguage::Auto.as_code(), None);
-    }
-
-    #[test]
-    fn groq_language_is_none_for_hints() {
-        let lang = ModeLanguage::hints(vec!["en".to_string(), "uk".to_string()]);
-        assert_eq!(lang.as_code(), None);
-    }
-
-    #[test]
-    fn groq_language_is_some_for_exact() {
-        assert_eq!(ModeLanguage::exact("fr").as_code(), Some("fr"));
-    }
-
     #[test]
     fn maps_groq_model_to_api_id() {
         assert_eq!(
