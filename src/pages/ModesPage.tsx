@@ -47,7 +47,7 @@ import {
   setDefaultMode,
   updateMode,
 } from "../lib/api";
-import type { HotkeyBinding, Mode, ModeLanguage, TranslateTarget } from "../lib/types";
+import type { HotkeyBinding, Mode, ModeLanguage } from "../lib/types";
 import { ToggleRow } from "../components/ToggleRow";
 
 // Languages Apple Translate supports (code → display name).
@@ -265,8 +265,8 @@ function ModeEditor({
       ...d,
       translate:
         value === "off"
-          ? ({ kind: "off" } as TranslateTarget)
-          : ({ kind: "apple", target: value } as TranslateTarget),
+          ? { kind: "off" }
+          : { kind: "apple", target: value },
     }));
   const setUseDictionary = (use_dictionary: boolean) =>
     setDraft((d) => ({ ...d, use_dictionary }));

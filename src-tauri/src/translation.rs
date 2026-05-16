@@ -47,7 +47,6 @@ struct TranslateRequest<'a> {
 struct TranslateResponse {
     translated: Option<String>,
     error_code: Option<String>,
-    #[allow(dead_code)]
     error: Option<String>,
 }
 

@@ -44,7 +44,6 @@ if #available(macOS 15.0, *) {
     }
     let targetLang = Locale.Language(languageCode: Locale.LanguageCode(request.target))
 
-    // Configuration accepts nil source for auto-detection.
     let config = TranslationSession.Configuration(source: sourceLang, target: targetLang)
 
     let semaphore = DispatchSemaphore(value: 0)
