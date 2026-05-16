@@ -2,6 +2,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -157,7 +158,9 @@ export function HistoryTab({
   }, []);
 
   if (loadState === "loading") {
-    return <div className="loading">Loading…</div>;
+    return (
+      <div className="py-10 text-center text-muted-foreground">Loading…</div>
+    );
   }
 
   if (loadState === "error") {
@@ -171,17 +174,21 @@ export function HistoryTab({
   const isOff = historyLimit === 0;
 
   return (
-    <section className="history">
-      <div className="history-header">
+    <section className="flex flex-col gap-3.5">
+      <div className="flex items-start justify-between gap-3 px-0.5">
         <div>
-          <h2 className="history-title">Recent transcriptions</h2>
-          <p className="hint history-hint">
+          <h2 className="m-0 mb-0.5 text-[13px] font-semibold">
+            Recent transcriptions
+          </h2>
+          <p className="m-0 text-xs text-muted-foreground">
             {limitHint(historyLimit, entries.length)}
           </p>
         </div>
-        <div className="history-actions">
-          <div className="history-limit">
-            <span className="history-limit-label">Keep last</span>
+        <div className="flex shrink-0 items-center gap-2.5">
+          <div className="inline-flex items-center gap-1.5">
+            <span className="whitespace-nowrap text-[11px] font-medium text-muted-foreground">
+              Keep last
+            </span>
             <Select
               value={limitToOptionValue(historyLimit)}
               onValueChange={handleLimitChange}
@@ -213,7 +220,7 @@ export function HistoryTab({
 
       {entries.length === 0 && (isOff ? <DisabledState /> : <EmptyState />)}
       {entries.length > 0 && (
-        <ul className="history-list">
+        <ul className="m-0 list-none overflow-hidden rounded-[10px] border border-border bg-card p-0">
           {entries.map((entry, i) => (
             <HistoryItem
               key={`${entry.timestamp}-${i}`}
@@ -229,7 +236,7 @@ export function HistoryTab({
 
 function EmptyState() {
   return (
-    <div className="history-empty">
+    <div className="flex flex-col items-center justify-center gap-2.5 rounded-[10px] border border-border bg-card px-6 py-14 text-center">
       <svg
         width="32"
         height="32"
@@ -240,12 +247,15 @@ function EmptyState() {
         strokeLinecap="round"
         strokeLinejoin="round"
         aria-hidden="true"
+        className="text-border"
       >
         <path d="M12 8v4l3 2" />
         <circle cx="12" cy="12" r="9" />
       </svg>
-      <div className="history-empty-title">No transcriptions yet</div>
-      <div className="history-empty-hint">
+      <div className="text-[13px] font-semibold text-muted-foreground">
+        No transcriptions yet
+      </div>
+      <div className="max-w-[280px] text-xs text-muted-foreground/70">
         Hold your shortcut and speak — transcripts will appear here.
       </div>
     </div>
@@ -254,7 +264,7 @@ function EmptyState() {
 
 function DisabledState() {
   return (
-    <div className="history-empty">
+    <div className="flex flex-col items-center justify-center gap-2.5 rounded-[10px] border border-border bg-card px-6 py-14 text-center">
       <svg
         width="32"
         height="32"
@@ -265,12 +275,15 @@ function DisabledState() {
         strokeLinecap="round"
         strokeLinejoin="round"
         aria-hidden="true"
+        className="text-border"
       >
         <circle cx="12" cy="12" r="9" />
         <path d="M5.5 5.5l13 13" />
       </svg>
-      <div className="history-empty-title">History is disabled</div>
-      <div className="history-empty-hint">
+      <div className="text-[13px] font-semibold text-muted-foreground">
+        History is disabled
+      </div>
+      <div className="max-w-[280px] text-xs text-muted-foreground/70">
         Pick a Keep last value above to start saving transcripts again.
       </div>
     </div>
@@ -389,19 +402,15 @@ function HistoryItem({ entry, now }: ItemProps) {
   const view = cleanupView(entry.cleanup_status);
 
   return (
-    <li className="history-item">
-      <div className="history-item-head">
+    <li className="flex flex-col gap-1.5 px-3.5 py-3 [&+li]:border-t [&+li]:border-border">
+      <div className="flex items-center gap-2.5">
         <time
-          className="history-time"
+          className="text-[11px] tabular-nums text-muted-foreground/70"
           dateTime={new Date(entry.timestamp * 1000).toISOString()}
         >
           {formatRelative(entry.timestamp, now)}
         </time>
-        {view.badge && (
-          <span className={`history-badge tone-${view.badge.tone}`}>
-            {view.badge.label}
-          </span>
-        )}
+        {view.badge && <Badge variant={view.badge.tone}>{view.badge.label}</Badge>}
         <Button
           type="button"
           variant="ghost"
@@ -414,7 +423,9 @@ function HistoryItem({ entry, now }: ItemProps) {
           {copied ? "Copied" : "Copy"}
         </Button>
       </div>
-      <div className="history-text">{entry.final_text}</div>
+      <div className="whitespace-pre-wrap break-words text-[13px] leading-[1.5] text-foreground select-text">
+        {entry.final_text}
+      </div>
       <Button
         type="button"
         variant="ghost"
@@ -438,7 +449,7 @@ interface TraceProps {
 function HistoryTrace({ entry, cleanupNote }: TraceProps) {
   const cleanupTextChanged = entry.final_text !== entry.replaced_text;
   return (
-    <div className="history-trace">
+    <div className="mt-1 flex flex-col gap-2 rounded-lg bg-muted px-3 py-2.5">
       <Stage label="Deepgram" text={entry.raw_text} />
       <Stage
         label="Replacements"
@@ -450,7 +461,7 @@ function HistoryTrace({ entry, cleanupNote }: TraceProps) {
         text={entry.final_text}
         note={cleanupNote(cleanupTextChanged)}
       />
-      <div className="history-trace-meta">
+      <div className="border-t border-dashed border-border pt-1 text-[10px] tabular-nums text-muted-foreground/70">
         Held PTT for {formatHeldDuration(entry.speak_duration_ms)}
       </div>
     </div>
@@ -468,9 +479,14 @@ function Stage({ label, text, previousText, note }: StageProps) {
   const { copied, flash } = useCopyFlash();
   const unchanged = previousText !== undefined && previousText === text;
   return (
-    <div className="history-stage">
-      <div className="history-stage-head">
-        <span className="history-stage-label">{label}</span>
+    <div
+      data-history-stage
+      className="flex flex-col gap-1 [&+[data-history-stage]]:mt-2 [&+[data-history-stage]]:border-t [&+[data-history-stage]]:border-dashed [&+[data-history-stage]]:border-border [&+[data-history-stage]]:pt-2"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/70">
+          {label}
+        </span>
         {!unchanged && text.length > 0 && (
           <Button
             type="button"
@@ -485,18 +501,31 @@ function Stage({ label, text, previousText, note }: StageProps) {
         )}
       </div>
       {unchanged ? (
-        <div className="history-stage-unchanged">(no change)</div>
+        <div className="text-[11px] italic text-muted-foreground/70">
+          (no change)
+        </div>
       ) : (
-        <div className="history-stage-text">
+        <div className="whitespace-pre-wrap break-words text-xs leading-[1.5] text-foreground select-text">
           {text.length === 0 ? (
-            <span className="history-stage-empty">(empty)</span>
+            <span className="text-[11px] italic text-muted-foreground/70">
+              (empty)
+            </span>
           ) : (
             text
           )}
         </div>
       )}
       {note && (
-        <div className={`history-stage-note tone-${note.tone}`}>{note.text}</div>
+        <div
+          className={cn(
+            "text-[11px] break-words",
+            note.tone === "info"
+              ? "italic text-muted-foreground/70"
+              : "font-mono text-destructive",
+          )}
+        >
+          {note.text}
+        </div>
       )}
     </div>
   );
