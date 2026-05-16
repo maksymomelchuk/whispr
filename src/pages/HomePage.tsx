@@ -1,8 +1,17 @@
-import { Keyboard, Microphone } from "@phosphor-icons/react";
+import { Microphone, WarningCircle } from "@phosphor-icons/react";
+import { Link } from "react-router-dom";
 
-import { Card, CardContent } from "../components/ui/card";
+import { Button } from "@/components/ui/button";
+
+import { PageHeader } from "../components/PageHeader";
 import { useSettings } from "../context/SettingsContext";
 import { formatShortcut } from "../lib/api";
+
+interface StatusItem {
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  label: string;
+  action: { to: string; label: string };
+}
 
 export function HomePage() {
   const { settings } = useSettings();
@@ -15,60 +24,90 @@ export function HomePage() {
       : !settings.groq_api_key_configured;
   const missingMic = !settings.input_device;
 
+  const statuses: StatusItem[] = [];
+  if (missingApiKey) {
+    statuses.push({
+      icon: WarningCircle,
+      label: `Set up your ${settings.transcription_provider === "deepgram" ? "Deepgram" : "Groq"} API key`,
+      action: { to: "/transcription", label: "Open Transcription" },
+    });
+  }
+  if (missingMic) {
+    statuses.push({
+      icon: Microphone,
+      label: "Select a microphone",
+      action: { to: "/general", label: "Open General" },
+    });
+  }
+
+  const shortcuts = settings.hotkey_bindings.map((b) =>
+    formatShortcut(b.shortcut),
+  );
+
   return (
-    <div className="p-6 flex flex-col gap-4 max-w-lg">
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-3 mb-2">
-            <Keyboard className="text-muted-foreground" size={20} />
-            <span className="text-sm text-muted-foreground font-medium">
-              Push to Talk
-            </span>
+    <div className="flex flex-col gap-10 px-10 pt-9 pb-12 max-w-3xl">
+      <PageHeader
+        eyebrow="Workspace · Home"
+        title="Whispr"
+        subtitle="Hold a shortcut, speak, release. Transcription lands in the focused app."
+      />
+
+      <section className="flex flex-col gap-3">
+        <span className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
+          Push to talk
+        </span>
+        {shortcuts.length > 0 ? (
+          <div className="flex flex-wrap items-baseline gap-x-7 gap-y-2">
+            {shortcuts.map((s, i) => (
+              <span
+                key={`${s}-${i}`}
+                className="font-mono text-[34px] font-semibold leading-none tracking-[0.04em] text-foreground"
+              >
+                {s}
+              </span>
+            ))}
           </div>
-          <p className="text-2xl font-semibold text-foreground font-mono tracking-wide">
-            {settings.hotkey_bindings.length > 0
-              ? settings.hotkey_bindings
-                  .map((b) => formatShortcut(b.shortcut))
-                  .join("  ·  ")
-              : "No hotkeys set"}
+        ) : (
+          <p className="font-mono text-[24px] font-medium leading-none text-muted-foreground/70">
+            No hotkeys set
           </p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Hold to dictate, release to transcribe and paste
-          </p>
-        </CardContent>
-      </Card>
+        )}
+        <p className="text-[13px] text-muted-foreground">
+          Hold to dictate · release to transcribe and paste
+        </p>
+      </section>
 
-      {missingApiKey && (
-        <Card className="border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30">
-          <CardContent className="pt-6">
-            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-1">
-              Set up your transcription API key
-            </p>
-            <p className="text-sm text-amber-700 dark:text-amber-400">
-              Go to Transcription to configure your{" "}
-              {settings.transcription_provider === "deepgram"
-                ? "Deepgram"
-                : "Groq"}{" "}
-              API key before your first dictation.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {missingMic && (
-        <Card className="border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 mb-1">
-              <Microphone size={15} className="text-amber-700 dark:text-amber-400" />
-              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-                Select a microphone
-              </p>
-            </div>
-            <p className="text-sm text-amber-700 dark:text-amber-400">
-              Go to General to choose your input device.
-            </p>
-          </CardContent>
-        </Card>
+      {statuses.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <span className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
+            Needs attention
+          </span>
+          <ul className="flex flex-col">
+            {statuses.map(({ icon: Icon, label, action }, i) => (
+              <li
+                key={i}
+                className="flex items-center gap-3 py-2.5 border-t border-border/60 last:border-b"
+              >
+                <span
+                  aria-hidden
+                  className="inline-flex size-1.5 rounded-full bg-[hsl(15_85%_55%)] shrink-0"
+                />
+                <Icon size={15} className="text-muted-foreground shrink-0" />
+                <span className="flex-1 text-[13px] text-foreground">
+                  {label}
+                </span>
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-[12px]"
+                >
+                  <Link to={action.to}>{action.label}</Link>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </div>
   );
