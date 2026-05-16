@@ -1,5 +1,5 @@
+import { Plus, Trash } from "@phosphor-icons/react";
 import { useState } from "react";
-import { Trash, Plus } from "@phosphor-icons/react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -13,23 +13,20 @@ import { useSettings } from "../context/SettingsContext";
 import { formatShortcut, setHotkeyBindings } from "../lib/api";
 import type { HotkeyBinding, Mode, Shortcut } from "../lib/types";
 
-function hasConflict(bindings: HotkeyBinding[], index: number): boolean {
-  const b = bindings[index];
-  const key = `${b.shortcut.key}|${b.shortcut.modifiers.join(",")}`;
-  return bindings.some(
-    (other, i) =>
-      i !== index &&
-      `${other.shortcut.key}|${other.shortcut.modifiers.join(",")}` === key,
-  );
+const CONFLICT_MESSAGE =
+  "Two bindings use the same shortcut. Remove the conflict before saving.";
+
+const DEFAULT_SHORTCUT: Shortcut = { key: "AltRight", modifiers: [] };
+
+function shortcutKey(shortcut: Shortcut): string {
+  return `${shortcut.key}|${shortcut.modifiers.join(",")}`;
 }
 
-function findConflict(bindings: HotkeyBinding[]): string | null {
-  for (let i = 0; i < bindings.length; i++) {
-    if (hasConflict(bindings, i)) {
-      return "Two bindings use the same shortcut. Remove the conflict before saving.";
-    }
-  }
-  return null;
+function hasConflict(bindings: HotkeyBinding[], index: number): boolean {
+  const key = shortcutKey(bindings[index].shortcut);
+  return bindings.some(
+    (other, i) => i !== index && shortcutKey(other.shortcut) === key,
+  );
 }
 
 interface RecorderTarget {
@@ -50,9 +47,9 @@ export function HotkeysPage() {
   const bindings = settings.hotkey_bindings;
 
   const persist = async (next: HotkeyBinding[]) => {
-    const conflict = findConflict(next);
-    if (conflict) {
-      setError(conflict);
+    const hasAnyConflict = next.some((_, i) => hasConflict(next, i));
+    if (hasAnyConflict) {
+      setError(CONFLICT_MESSAGE);
       return;
     }
     setError(null);
@@ -88,8 +85,6 @@ export function HotkeysPage() {
     bindings
       .map((b, i) => ({ binding: b, index: i }))
       .filter(({ binding }) => binding.mode_id === mode.id);
-
-  const defaultShortcut: Shortcut = { key: "AltRight", modifiers: [] };
 
   return (
     <div className="p-6 flex flex-col gap-6">
@@ -167,7 +162,7 @@ export function HotkeysPage() {
                   setRecorderTarget({
                     modeId: mode.id,
                     bindingIndex: null,
-                    current: defaultShortcut,
+                    current: DEFAULT_SHORTCUT,
                   })
                 }
               >

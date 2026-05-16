@@ -595,24 +595,17 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                 let mut active = state.ptt_active.lock().unwrap();
 
                 if is_press && !*active {
-                    // Find the first binding whose key matches and whose
-                    // modifiers are all satisfied.
                     let bindings = state.hotkey_bindings.lock().unwrap().clone();
+                    let modifiers = *state.modifiers.lock().unwrap();
                     let matched = bindings.iter().find(|b| {
-                        if code != b.shortcut.key {
-                            return false;
-                        }
-                        if is_modifier_code(&b.shortcut.key) {
-                            true
-                        } else {
-                            state.modifiers.lock().unwrap().matches(&b.shortcut.modifiers)
-                        }
+                        code == b.shortcut.key
+                            && (is_modifier_code(&b.shortcut.key)
+                                || modifiers.matches(&b.shortcut.modifiers))
                     });
                     if let Some(binding) = matched {
-                        let mode_id = binding.mode_id.clone();
-                        let shortcut = binding.shortcut.clone();
                         *active = true;
-                        *state.active_shortcut.lock().unwrap() = Some(shortcut);
+                        *state.active_shortcut.lock().unwrap() = Some(binding.shortcut.clone());
+                        let mode_id = binding.mode_id.clone();
                         let device = state.input_device.lock().unwrap().clone();
                         // Capture frontmost app before overlay::show so the
                         // worker's frontmostApplication() lookup can't race

@@ -40,17 +40,14 @@ pub fn default_hotkey_bindings() -> Vec<HotkeyBinding> {
 
 /// Returns `Err` if any two bindings share the same shortcut key + modifiers.
 pub fn check_hotkey_conflicts(bindings: &[HotkeyBinding]) -> Result<(), String> {
-    let mut seen: HashSet<String> = HashSet::new();
+    let mut seen: HashSet<(&str, Vec<&str>)> = HashSet::new();
     for b in bindings {
-        let key = format!(
-            "{}|{}",
-            b.shortcut.key,
-            b.shortcut.modifiers.join(",")
-        );
-        if !seen.insert(key) {
-            return Err(format!(
+        let mods: Vec<&str> = b.shortcut.modifiers.iter().map(String::as_str).collect();
+        if !seen.insert((b.shortcut.key.as_str(), mods)) {
+            return Err(
                 "Shortcut conflict: the same key combination is used by more than one binding."
-            ));
+                    .to_string(),
+            );
         }
     }
     Ok(())
