@@ -585,7 +585,22 @@ async fn maybe_translate(
         Ok(Ok(translated)) => (translated, Notice::None),
         Ok(Err(e)) => {
             let _ = app.emit(PTT_ERROR_EVENT, ());
-            (text.to_string(), Notice::Flash(format!("Translation unavailable: {e}")))
+            // Self-contained Display impls already read naturally — no
+            // "Translation unavailable:" prefix needed (it just duplicates
+            // the "Translation pack missing" / "Apple Translate requires…"
+            // language inside each variant).
+            let message = e.to_string();
+            // Errors the user needs to act on (missing language pack, missing
+            // source language, OS too old) deserve the main window — Flash is
+            // a silent overlay tint that's easy to miss when not focused.
+            let notice = match e {
+                translation::TranslationError::ModelNotInstalled { .. }
+                | translation::TranslationError::SourceRequired
+                | translation::TranslationError::RequiresMacOS26
+                | translation::TranslationError::UnsupportedPair => Notice::Focus(message),
+                _ => Notice::Flash(message),
+            };
+            (text.to_string(), notice)
         }
         Err(_) => {
             let _ = app.emit(PTT_ERROR_EVENT, ());

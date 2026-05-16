@@ -26,6 +26,10 @@ func respond(_ r: TranslateResponse) -> Never {
     exit(r.translated != nil ? 0 : 1)
 }
 
+func logStep(_ message: String) {
+    FileHandle.standardError.write(Data("[apple-translate] \(message)\n".utf8))
+}
+
 // ── Read request from stdin ──────────────────────────────────────────────────
 
 let inputData = FileHandle.standardInput.readDataToEndOfFile()
@@ -53,53 +57,71 @@ if #available(macOS 26.0, *) {
     let sourceLang = Locale.Language(languageCode: Locale.LanguageCode(sourceCode))
     let targetLang = Locale.Language(languageCode: Locale.LanguageCode(request.target))
 
-    let semaphore = DispatchSemaphore(value: 0)
+    // CLI sidecar pattern: pump the main runloop while the Swift Concurrency
+    // task runs. TranslationSession's translate() delivers its result via the
+    // main runloop (likely XPC-backed), so blocking on a DispatchSemaphore
+    // without pumping deadlocks. Schedule a hard 30 s timeout via DispatchQueue.
+    let runLoop = CFRunLoopGetCurrent()
+    let timeoutWork = DispatchWorkItem {
+        respond(TranslateResponse(
+            translated: nil,
+            error_code: "translation_failed",
+            error: "Translation timed out."
+        ))
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 30, execute: timeoutWork)
+
+    logStep("starting task: \(sourceCode) → \(request.target)")
 
     Task {
         do {
-            let availability = LanguageAvailability()
-            let status = await availability.status(from: sourceLang, to: targetLang)
-            switch status {
-            case .installed:
-                break
-            case .supported:
-                respond(TranslateResponse(
-                    translated: nil,
-                    error_code: "model_not_installed",
-                    error: "Translation language pack not installed. Open System Settings › General › Language & Region to download it."
-                ))
-            case .unsupported:
-                respond(TranslateResponse(
-                    translated: nil,
-                    error_code: "unsupported_pair",
-                    error: "Apple Translate does not support this language pair."
-                ))
-            @unknown default:
-                respond(TranslateResponse(
-                    translated: nil,
-                    error_code: "unsupported_pair",
-                    error: "Unknown language availability status."
-                ))
-            }
-
+            // We deliberately skip LanguageAvailability().status(...) here:
+            // on macOS 26 from a CLI process (no SwiftUI environment) that
+            // call hangs forever. session.translate's own error is surfaced
+            // instead — including "language pack not installed".
+            logStep("creating TranslationSession")
             let session = TranslationSession(installedSource: sourceLang, target: targetLang)
+            logStep("calling session.translate")
             let result = try await session.translate(request.text)
+            logStep("translation complete")
             respond(TranslateResponse(translated: result.targetText, error_code: nil, error: nil))
         } catch {
+            let description = error.localizedDescription
+            logStep("translate failed: \(description)")
+            // Surface a structured "model_not_installed" when the framework
+            // says so, so the UI can prompt the user to download the pack.
+            let lower = description.lowercased()
+            let code: String
+            // "Unable to Translate" is the framework's generic message when
+            // the language pack for the requested pair isn't installed.
+            if lower.contains("not installed") || lower.contains("download")
+                || lower.contains("not supported on this device")
+                || lower.contains("unavailable")
+                || lower.contains("unable to translate")
+            {
+                code = "model_not_installed"
+            } else {
+                code = "translation_failed"
+            }
             respond(TranslateResponse(
                 translated: nil,
-                error_code: "translation_failed",
-                error: error.localizedDescription
+                error_code: code,
+                error: description
             ))
         }
-        semaphore.signal()
+        // Unreached in practice: respond() exits the process. Kept as a
+        // safety net in case future edits make the task return normally.
+        timeoutWork.cancel()
+        CFRunLoopStop(runLoop)
     }
 
-    _ = semaphore.wait(timeout: .now() + 30)
+    CFRunLoopRun()
+    // CFRunLoopRun returns when the timeout work item or the Task's
+    // respond() has exited the process. If we somehow get here, exit.
     respond(TranslateResponse(
         translated: nil,
         error_code: "translation_failed",
-        error: "Translation timed out."
+        error: "Translation timed out (runloop exited unexpectedly)."
     ))
 } else {
     respond(TranslateResponse(

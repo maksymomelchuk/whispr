@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 pub enum TranslationError {
     BinaryNotFound,
     // Language pack not downloaded; user needs System Settings > Language & Region.
-    ModelNotInstalled,
+    ModelNotInstalled { from: String, to: String },
     UnsupportedPair,
     RequiresMacOS26,
     SourceRequired,
@@ -16,14 +16,38 @@ pub enum TranslationError {
     Io(String),
 }
 
+/// Best-effort language code → human name for error messages. Falls back to
+/// the code itself for codes not in this short table.
+fn language_name(code: &str) -> &str {
+    match code {
+        "en" => "English",
+        "uk" => "Ukrainian",
+        "fr" => "French",
+        "de" => "German",
+        "es" => "Spanish",
+        "it" => "Italian",
+        "pt" => "Portuguese",
+        "pl" => "Polish",
+        "ru" => "Russian",
+        "ja" => "Japanese",
+        "ko" => "Korean",
+        "zh" => "Chinese",
+        "ar" => "Arabic",
+        "tr" => "Turkish",
+        "nl" => "Dutch",
+        _ => code,
+    }
+}
+
 impl std::fmt::Display for TranslationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TranslationError::BinaryNotFound => write!(f, "Translation helper binary not found"),
-            TranslationError::ModelNotInstalled => write!(
+            TranslationError::ModelNotInstalled { from, to } => write!(
                 f,
-                "Translation language pack not installed — open System Settings › General › \
-                 Language & Region to download it"
+                "Translation pack missing. Add {} and {} in System Settings.",
+                language_name(from),
+                language_name(to),
             ),
             TranslationError::UnsupportedPair => {
                 write!(f, "Apple Translate does not support this language pair")
@@ -73,7 +97,9 @@ pub fn translate(
     let mut child = Command::new(&binary)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        // Surface swift-side diagnostics (the sidecar writes `[apple-translate]`
+        // step logs to stderr) so a hang's last completed step is visible.
+        .stderr(Stdio::inherit())
         .spawn()
         .map_err(|e| TranslationError::Io(e.to_string()))?;
 
@@ -99,7 +125,10 @@ pub fn translate(
     }
 
     Err(match response.error_code.as_deref() {
-        Some("model_not_installed") => TranslationError::ModelNotInstalled,
+        Some("model_not_installed") => TranslationError::ModelNotInstalled {
+            from: source.unwrap_or("").to_string(),
+            to: target.to_string(),
+        },
         Some("unsupported_pair") => TranslationError::UnsupportedPair,
         Some("requires_macos_26") => TranslationError::RequiresMacOS26,
         Some("source_required") => TranslationError::SourceRequired,
@@ -198,7 +227,14 @@ mod tests {
     #[test]
     fn translation_error_display_covers_all_variants() {
         assert!(TranslationError::BinaryNotFound.to_string().contains("binary"));
-        assert!(TranslationError::ModelNotInstalled.to_string().contains("System Settings"));
+        assert!(
+            TranslationError::ModelNotInstalled {
+                from: "uk".to_string(),
+                to: "en".to_string(),
+            }
+            .to_string()
+            .contains("System Settings")
+        );
         assert!(TranslationError::UnsupportedPair.to_string().contains("language pair"));
         assert!(TranslationError::RequiresMacOS26.to_string().contains("macOS 26"));
         assert!(TranslationError::SourceRequired.to_string().contains("source language"));
