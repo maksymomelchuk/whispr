@@ -862,7 +862,7 @@ mod tests {
         let json = r#"{"key": "AltRight", "modifiers": []}"#;
         let s: Shortcut = serde_json::from_str(json).unwrap();
         assert_eq!(s.key, "AltRight");
-        assert_eq!(s.is_double_tap, false);
+        assert!(!s.is_double_tap);
     }
 
     #[test]

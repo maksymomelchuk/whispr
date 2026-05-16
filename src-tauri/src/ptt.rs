@@ -315,6 +315,19 @@ fn shortcut_is_relevant(code: &str, shortcut: &Shortcut) -> bool {
     })
 }
 
+/// True if this event triggers `shortcut`: same key, and required modifiers
+/// held. Modifier-only shortcuts (key is itself a modifier) skip the modifier
+/// check because the FlagsChanged that fires the key also mutates the bitmask.
+fn shortcut_matches(code: &str, shortcut: &Shortcut, mods: ModifierState) -> bool {
+    code == shortcut.key
+        && (is_modifier_code(&shortcut.key) || mods.matches(&shortcut.modifiers))
+}
+
+/// Identity for the per-binding double-tap state map.
+fn tap_state_key(shortcut: &Shortcut) -> (String, Vec<String>) {
+    (shortcut.key.clone(), shortcut.modifiers.clone())
+}
+
 fn is_modifier_code(code: &str) -> bool {
     matches!(
         code,
@@ -700,13 +713,8 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                 // this event doesn't match — "other key" cancels the gesture.
                 if is_press && !ptt_active_now {
                     for b in bindings.iter().filter(|b| b.shortcut.is_double_tap) {
-                        let key_matches = code == b.shortcut.key
-                            && (is_modifier_code(&b.shortcut.key)
-                                || modifiers_val.matches(&b.shortcut.modifiers));
-                        if !key_matches {
-                            let tap_key =
-                                (b.shortcut.key.clone(), b.shortcut.modifiers.clone());
-                            if let Some(ts) = tap_states.get_mut(&tap_key) {
+                        if !shortcut_matches(code, &b.shortcut, modifiers_val) {
+                            if let Some(ts) = tap_states.get_mut(&tap_state_key(&b.shortcut)) {
                                 advance_tap_state(ts, TapEvent::OtherKey, now);
                             }
                         }
@@ -740,13 +748,8 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                         if !b.shortcut.is_double_tap {
                             continue;
                         }
-                        if code == b.shortcut.key
-                            && (is_modifier_code(&b.shortcut.key)
-                                || modifiers_val.matches(&b.shortcut.modifiers))
-                        {
-                            let tap_key =
-                                (b.shortcut.key.clone(), b.shortcut.modifiers.clone());
-                            let ts = tap_states.entry(tap_key).or_default();
+                        if shortcut_matches(code, &b.shortcut, modifiers_val) {
+                            let ts = tap_states.entry(tap_state_key(&b.shortcut)).or_default();
                             if advance_tap_state(ts, TapEvent::Down, now) == Dispatch::StartPtt {
                                 dt_start_idx = Some(i);
                                 break;
@@ -759,9 +762,7 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                     } else {
                         bindings.iter().find(|b| {
                             !b.shortcut.is_double_tap
-                                && code == b.shortcut.key
-                                && (is_modifier_code(&b.shortcut.key)
-                                    || modifiers_val.matches(&b.shortcut.modifiers))
+                                && shortcut_matches(code, &b.shortcut, modifiers_val)
                         })
                     };
 
@@ -785,8 +786,7 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                     let sc_opt = state.active_shortcut.lock().unwrap().clone();
                     let should_stop = match sc_opt {
                         Some(ref sc) if sc.is_double_tap => {
-                            let tap_key = (sc.key.clone(), sc.modifiers.clone());
-                            let ts = tap_states.entry(tap_key).or_default();
+                            let ts = tap_states.entry(tap_state_key(sc)).or_default();
                             advance_tap_state(ts, TapEvent::Up, now) == Dispatch::StopPtt
                         }
                         _ => true,
@@ -804,13 +804,8 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                 } else if !is_press && !*active {
                     // Key-up while idle: record first-tap-up time for double-tap bindings.
                     for b in bindings.iter().filter(|b| b.shortcut.is_double_tap) {
-                        if code == b.shortcut.key
-                            && (is_modifier_code(&b.shortcut.key)
-                                || modifiers_val.matches(&b.shortcut.modifiers))
-                        {
-                            let tap_key =
-                                (b.shortcut.key.clone(), b.shortcut.modifiers.clone());
-                            if let Some(ts) = tap_states.get_mut(&tap_key) {
+                        if shortcut_matches(code, &b.shortcut, modifiers_val) {
+                            if let Some(ts) = tap_states.get_mut(&tap_state_key(&b.shortcut)) {
                                 if ts.tap_count > 0 {
                                     advance_tap_state(ts, TapEvent::Up, now);
                                 }
@@ -860,15 +855,10 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{Duration, Instant};
-
-    fn t0() -> Instant {
-        Instant::now()
-    }
 
     #[test]
     fn double_tap_within_window_starts_on_second_down_stops_on_second_up() {
-        let base = t0();
+        let base = Instant::now();
         let mut state = TapState::default();
 
         // First down: tap_count → 1, no start
@@ -894,7 +884,7 @@ mod tests {
 
     #[test]
     fn double_tap_expired_window_second_down_treated_as_new_first_tap() {
-        let base = t0();
+        let base = Instant::now();
         let mut state = TapState::default();
 
         assert_eq!(advance_tap_state(&mut state, TapEvent::Down, base), Dispatch::Nothing);
@@ -910,7 +900,7 @@ mod tests {
 
     #[test]
     fn other_key_between_taps_resets_state() {
-        let base = t0();
+        let base = Instant::now();
         let mut state = TapState::default();
 
         advance_tap_state(&mut state, TapEvent::Down, base);
@@ -933,7 +923,7 @@ mod tests {
     #[test]
     fn fresh_state_up_event_is_noop() {
         let mut state = TapState::default();
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Up, t0()), Dispatch::Nothing);
+        assert_eq!(advance_tap_state(&mut state, TapEvent::Up, Instant::now()), Dispatch::Nothing);
         assert_eq!(state.tap_count, 0);
         assert!(state.last_tap_up_time.is_none());
     }
