@@ -5,10 +5,10 @@ import type {
   CleanupAuthMode,
   CleanupStats,
   DeepgramSettings,
+  DictionaryEntry,
   GroqSettings,
   HistoryEntry,
   HistoryLimit,
-  Replacement,
   Settings,
   Shortcut,
   StatsRow,
@@ -41,8 +41,8 @@ export const setShortcut = (shortcut: Shortcut) =>
 export const setShortcutCapturePaused = (paused: boolean) =>
   invoke<void>("set_shortcut_capture_paused", { paused });
 
-export const setReplacements = (replacements: Replacement[]) =>
-  invoke<void>("set_replacements", { replacements });
+export const setDictionary = (dictionary: DictionaryEntry[]) =>
+  invoke<void>("set_dictionary", { dictionary });
 
 export const setDeepgramSettings = (deepgram: DeepgramSettings) =>
   invoke<void>("set_deepgram_settings", { deepgram });

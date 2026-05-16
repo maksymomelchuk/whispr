@@ -22,12 +22,12 @@ impl Default for Shortcut {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Replacement {
+pub struct DictionaryEntry {
     pub from: String,
     pub to: String,
 }
 
-pub fn default_replacements() -> Vec<Replacement> {
+pub fn default_dictionary() -> Vec<DictionaryEntry> {
     [
         ("dot", "."),
         ("slash", "/"),
@@ -41,7 +41,7 @@ pub fn default_replacements() -> Vec<Replacement> {
         ("exclamation mark", "!"),
     ]
     .into_iter()
-    .map(|(from, to)| Replacement {
+    .map(|(from, to)| DictionaryEntry {
         from: from.to_string(),
         to: to.to_string(),
     })
@@ -186,6 +186,9 @@ pub struct Settings {
     /// mode's `ai_cleanup.enabled`, then cleared.
     #[serde(default, skip_serializing)]
     pub ai_cleanup_enabled: Option<bool>,
+    /// Legacy field; renamed to `dictionary`. Read during migration, never written back.
+    #[serde(rename = "replacements", default, skip_serializing)]
+    pub legacy_replacements: Option<Vec<DictionaryEntry>>,
     #[serde(default)]
     pub transcription_provider: TranscriptionProvider,
     #[serde(default)]
@@ -194,8 +197,8 @@ pub struct Settings {
     pub groq_api_key: Option<String>,
     #[serde(default)]
     pub shortcut: Shortcut,
-    #[serde(default = "default_replacements")]
-    pub replacements: Vec<Replacement>,
+    #[serde(default = "default_dictionary")]
+    pub dictionary: Vec<DictionaryEntry>,
     #[serde(default)]
     pub deepgram: DeepgramSettings,
     #[serde(default)]
@@ -223,11 +226,12 @@ impl Default for Settings {
         Self {
             api_key: None,
             ai_cleanup_enabled: None,
+            legacy_replacements: None,
             transcription_provider: TranscriptionProvider::default(),
             deepgram_api_key: None,
             groq_api_key: None,
             shortcut: Shortcut::default(),
-            replacements: default_replacements(),
+            dictionary: default_dictionary(),
             deepgram: DeepgramSettings::default(),
             groq: GroqSettings::default(),
             ai_cleanup: AiCleanupSettings::default(),
@@ -300,6 +304,12 @@ fn migrate(s: &mut Settings) -> bool {
 
     // Drop the legacy flat cleanup toggle; it's now in the mode.
     if s.ai_cleanup_enabled.take().is_some() {
+        changed = true;
+    }
+
+    // ── Legacy replacements → dictionary ─────────────────────────────────
+    if let Some(legacy) = s.legacy_replacements.take() {
+        s.dictionary = legacy;
         changed = true;
     }
 
@@ -504,6 +514,23 @@ mod tests {
         let reserialized = serde_json::to_string(&s).unwrap();
         let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
         assert!(v.get("ai_cleanup_enabled").is_none());
+    }
+
+    #[test]
+    fn migration_renames_legacy_replacements_to_dictionary() {
+        let json = r#"{"replacements": [{"from": "dot", "to": "."}]}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        assert_eq!(s.legacy_replacements.as_ref().map(|v| v.len()), Some(1));
+        let changed = migrate(&mut s);
+        assert!(changed);
+        assert_eq!(s.dictionary.len(), 1);
+        assert_eq!(s.dictionary[0].from, "dot");
+        assert!(s.legacy_replacements.is_none());
+        // Serialized form must use "dictionary" key, not "replacements".
+        let reserialized = serde_json::to_string(&s).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
+        assert!(v.get("replacements").is_none());
+        assert!(v.get("dictionary").is_some());
     }
 
     #[test]

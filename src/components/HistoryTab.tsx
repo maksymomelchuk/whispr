@@ -447,19 +447,20 @@ interface TraceProps {
 }
 
 function HistoryTrace({ entry, cleanupNote }: TraceProps) {
-  const cleanupTextChanged = entry.final_text !== entry.replaced_text;
+  const cleanupTextChanged = entry.replaced_text !== entry.raw_text;
   return (
     <div className="mt-1 flex flex-col gap-2 rounded-lg bg-muted px-3 py-2.5">
       <Stage label="Deepgram" text={entry.raw_text} />
       <Stage
-        label="Replacements"
+        label="AI cleanup"
         text={entry.replaced_text}
         previousText={entry.raw_text}
+        note={cleanupNote(cleanupTextChanged)}
       />
       <Stage
-        label="AI cleanup"
+        label="Dictionary"
         text={entry.final_text}
-        note={cleanupNote(cleanupTextChanged)}
+        previousText={entry.replaced_text}
       />
       <div className="border-t border-dashed border-border pt-1 text-[10px] tabular-nums text-muted-foreground/70">
         Held PTT for {formatHeldDuration(entry.speak_duration_ms)}

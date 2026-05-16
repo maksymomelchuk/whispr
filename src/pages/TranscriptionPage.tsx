@@ -1,11 +1,11 @@
 import { AiCleanupField } from "../components/AiCleanupField";
-import { ReplacementsField } from "../components/ReplacementsField";
+import { DictionaryField } from "../components/DictionaryField";
 import { TranscriptionProviderField } from "../components/TranscriptionProviderField";
 import { useSettings } from "../context/SettingsContext";
 import type {
   DeepgramSettings,
+  DictionaryEntry,
   GroqSettings,
-  Replacement,
   TranscriptionProvider,
 } from "../lib/types";
 
@@ -84,11 +84,11 @@ export function TranscriptionPage() {
           )
         }
       />
-      <ReplacementsField
-        initial={settings.replacements}
+      <DictionaryField
+        initial={settings.dictionary}
         defaultOpen={false}
-        onSaved={(replacements: Replacement[]) =>
-          setSettings((s) => (s ? { ...s, replacements } : s))
+        onSaved={(dictionary: DictionaryEntry[]) =>
+          setSettings((s) => (s ? { ...s, dictionary } : s))
         }
       />
     </div>

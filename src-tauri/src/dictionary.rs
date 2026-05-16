@@ -1,4 +1,4 @@
-use crate::config::Replacement;
+use crate::config::DictionaryEntry;
 
 /// Punctuation whose replacement should glue to both neighbors with no spaces.
 /// Example: "test dot ts" → "test.ts".
@@ -15,26 +15,26 @@ const CLING_LEFT: &[char] = &[',', ';', ':', '?', '!'];
 /// with surrounding spaces and collapsed by the phase-2 punctuation passes
 /// below. The outer loop re-runs replacements until stable so chains like
 /// "dash dash help" fully resolve to "--help".
-pub fn apply_replacements(text: &str, replacements: &[Replacement]) -> String {
-    if replacements.is_empty() {
+pub fn apply_dictionary(text: &str, entries: &[DictionaryEntry]) -> String {
+    if entries.is_empty() {
         return text.to_string();
     }
 
     let mut padded = format!(" {} ", text);
-    let froms_lc: Vec<String> = replacements
+    let froms_lc: Vec<String> = entries
         .iter()
-        .map(|r| r.from.to_lowercase())
+        .map(|e| e.from.to_lowercase())
         .collect();
 
     loop {
         let lower = padded.to_lowercase();
         let mut changed = false;
-        for (r, from_lc) in replacements.iter().zip(froms_lc.iter()) {
+        for (e, from_lc) in entries.iter().zip(froms_lc.iter()) {
             if from_lc.is_empty() {
                 continue;
             }
             if let Some((start, end)) = find_word_match(&lower, from_lc) {
-                let replacement = format!(" {} ", r.to);
+                let replacement = format!(" {} ", e.to);
                 padded.replace_range(start..end, &replacement);
                 changed = true;
                 // Restart the scan from the top — replacement may have
@@ -104,8 +104,8 @@ fn find_word_match(haystack: &str, needle: &str) -> Option<(usize, usize)> {
 mod tests {
     use super::*;
 
-    fn r(from: &str, to: &str) -> Replacement {
-        Replacement {
+    fn entry(from: &str, to: &str) -> DictionaryEntry {
+        DictionaryEntry {
             from: from.to_string(),
             to: to.to_string(),
         }
@@ -113,18 +113,18 @@ mod tests {
 
     #[test]
     fn matches_with_trailing_period() {
-        let out = apply_replacements(
+        let out = apply_dictionary(
             "Let me improve my design skill.",
-            &[r("design skill", "/emil-design-engineering")],
+            &[entry("design skill", "/emil-design-engineering")],
         );
         assert_eq!(out, "Let me improve my /emil-design-engineering.");
     }
 
     #[test]
     fn matches_with_trailing_comma() {
-        let out = apply_replacements(
+        let out = apply_dictionary(
             "I rely on my design skill, every day.",
-            &[r("design skill", "/emil-design-engineering")],
+            &[entry("design skill", "/emil-design-engineering")],
         );
         assert_eq!(
             out,
@@ -134,28 +134,37 @@ mod tests {
 
     #[test]
     fn matches_with_trailing_question_mark() {
-        let out = apply_replacements(
+        let out = apply_dictionary(
             "Want to use my design skill?",
-            &[r("design skill", "/emil-design-engineering")],
+            &[entry("design skill", "/emil-design-engineering")],
         );
         assert_eq!(out, "Want to use my /emil-design-engineering?");
     }
 
     #[test]
     fn does_not_match_inside_word() {
-        let out = apply_replacements("I love design skills", &[r("design skill", "X")]);
+        let out = apply_dictionary("I love design skills", &[entry("design skill", "X")]);
         assert_eq!(out, "I love design skills");
     }
 
     #[test]
     fn does_not_match_with_hyphen_boundary() {
-        let out = apply_replacements("well-being matters", &[r("well", "good")]);
+        let out = apply_dictionary("well-being matters", &[entry("well", "good")]);
         assert_eq!(out, "well-being matters");
     }
 
     #[test]
     fn case_insensitive_match() {
-        let out = apply_replacements("Design Skill rules.", &[r("design skill", "X")]);
+        let out = apply_dictionary("Design Skill rules.", &[entry("design skill", "X")]);
         assert_eq!(out, "X rules.");
+    }
+
+    #[test]
+    fn pipeline_applies_dictionary_after_cleanup_stub() {
+        // Simulated cleanup pass: identity function returns input unchanged.
+        let after_cleanup = "I prefer Mongo";
+        let entries = [entry("Mongo", "MongoDB")];
+        let final_text = apply_dictionary(after_cleanup, &entries);
+        assert_eq!(final_text, "I prefer MongoDB");
     }
 }

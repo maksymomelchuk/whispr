@@ -14,29 +14,29 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 
-import { setReplacements as persistReplacements } from "../lib/api";
-import type { Replacement } from "../lib/types";
+import { setDictionary as persistDictionary } from "../lib/api";
+import type { DictionaryEntry } from "../lib/types";
 import { CollapsibleCard } from "./CollapsibleCard";
 
-const replacementsSchema = z.object({
+const dictionarySchema = z.object({
   rows: z.array(z.object({ from: z.string(), to: z.string() })),
 });
 
-type ReplacementsFormValues = z.infer<typeof replacementsSchema>;
+type DictionaryFormValues = z.infer<typeof dictionarySchema>;
 
 interface Props {
-  initial: Replacement[];
-  onSaved: (replacements: Replacement[]) => void;
+  initial: DictionaryEntry[];
+  onSaved: (dictionary: DictionaryEntry[]) => void;
   defaultOpen?: boolean;
 }
 
-export function ReplacementsField({
+export function DictionaryField({
   initial,
   onSaved,
   defaultOpen = true,
 }: Props) {
-  const form = useForm<ReplacementsFormValues>({
-    resolver: zodResolver(replacementsSchema),
+  const form = useForm<DictionaryFormValues>({
+    resolver: zodResolver(dictionarySchema),
     values: { rows: initial },
   });
 
@@ -55,14 +55,14 @@ export function ReplacementsField({
     return () => clearTimeout(t);
   }, [savedOk]);
 
-  const onSubmit = async (values: ReplacementsFormValues) => {
+  const onSubmit = async (values: DictionaryFormValues) => {
     const cleaned = values.rows
       .map((r) => ({ from: r.from.trim(), to: r.to }))
       .filter((r) => r.from.length > 0);
     setSaving(true);
     setSaveError(null);
     try {
-      await persistReplacements(cleaned);
+      await persistDictionary(cleaned);
       form.reset({ rows: cleaned });
       onSaved(cleaned);
       setSavedOk(true);
@@ -75,7 +75,7 @@ export function ReplacementsField({
 
   return (
     <CollapsibleCard
-      title="Voice Replacements"
+      title="Dictionary"
       defaultOpen={defaultOpen}
       dirty={form.formState.isDirty}
       info='Spoken words on the left become the text on the right. Punctuation like ". / -" is spaced intelligently — saying "test dot ts" produces "test.ts".'

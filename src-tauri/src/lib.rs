@@ -25,7 +25,7 @@ mod deepgram_session;
 #[cfg(target_os = "macos")]
 mod groq_session;
 #[cfg(target_os = "macos")]
-mod replacements;
+mod dictionary;
 #[cfg(target_os = "macos")]
 mod transcription_session;
 
@@ -136,7 +136,7 @@ pub fn run() {
             commands::validate_groq_api_key,
             commands::set_shortcut,
             commands::set_shortcut_capture_paused,
-            commands::set_replacements,
+            commands::set_dictionary,
             commands::set_deepgram_settings,
             commands::set_default_mode_cleanup_enabled,
             commands::set_anthropic_api_key,

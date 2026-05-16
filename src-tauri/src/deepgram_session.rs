@@ -1,7 +1,7 @@
-use crate::config::{self, Replacement};
+use crate::config::{self, DictionaryEntry};
+use crate::dictionary::apply_dictionary;
 use crate::mode::ModeLanguage;
 use crate::recorder::AudioFormat;
-use crate::replacements::apply_replacements;
 use crate::transcription_session::TranscriptionSession;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
@@ -48,7 +48,7 @@ impl TranscriptionSession for DeepgramSession {
             .filter(|k| !k.is_empty())
             .ok_or_else(|| "API key not configured".to_string())?;
         let show_live_preview = settings.show_live_preview;
-        let replacements = settings.replacements.clone();
+        let dictionary = settings.dictionary.clone();
 
         let mode_language = config::get_default_mode(&settings).language.clone();
         let url = build_ws_url(&settings.deepgram, &mode_language, format)?;
@@ -124,7 +124,7 @@ impl TranscriptionSession for DeepgramSession {
                                         let preview = compose_preview(
                                             &transcript_pieces,
                                             &current_interim,
-                                            &replacements,
+                                            &dictionary,
                                         );
                                         if preview != last_emitted {
                                             let _ = app.emit(TRANSCRIPT_PARTIAL_EVENT, &preview);
@@ -180,7 +180,7 @@ impl TranscriptionSession for DeepgramSession {
         let raw = raw.trim().to_string();
 
         if show_live_preview && !raw.is_empty() {
-            let final_preview = apply_replacements(&raw, &replacements);
+            let final_preview = apply_dictionary(&raw, &dictionary);
             if final_preview != last_emitted {
                 let _ = app.emit(TRANSCRIPT_PARTIAL_EVENT, &final_preview);
             }
@@ -193,7 +193,7 @@ impl TranscriptionSession for DeepgramSession {
 fn compose_preview(
     finals: &[String],
     interim: &str,
-    replacements: &[Replacement],
+    dictionary: &[DictionaryEntry],
 ) -> String {
     let mut preview = finals.join(" ");
     if !interim.is_empty() {
@@ -202,7 +202,7 @@ fn compose_preview(
         }
         preview.push_str(interim);
     }
-    apply_replacements(&preview, replacements)
+    apply_dictionary(&preview, dictionary)
 }
 
 fn build_ws_url(

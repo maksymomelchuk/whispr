@@ -3,7 +3,7 @@ use crate::deepgram_session::DeepgramSession;
 use crate::groq_session::GroqSession;
 use crate::history::{self, CleanupStatus, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::recorder::Recorder;
-use crate::replacements::apply_replacements;
+use crate::dictionary::apply_dictionary;
 use crate::state::{AppState, ModifierState};
 use crate::transcription_session::TranscriptionSession;
 use crate::{cleanup, cleanup_stats, config, media, overlay, paste, stats, target_app};
@@ -328,13 +328,18 @@ async fn run_session(
         return Ok(());
     }
 
-    let replaced_text = apply_replacements(&raw_text, &settings.replacements);
-
     let default_mode = config::get_default_mode(&settings);
     let mode_cleanup_enabled = default_mode.ai_cleanup.enabled;
+    let mode_use_dictionary = default_mode.use_dictionary;
 
-    let (final_text, cleanup_status, notice) =
-        maybe_cleanup(app, &settings, mode_cleanup_enabled, &replaced_text, speak_duration).await;
+    let (replaced_text, cleanup_status, notice) =
+        maybe_cleanup(app, &settings, mode_cleanup_enabled, &raw_text, speak_duration).await;
+
+    let final_text = if mode_use_dictionary {
+        apply_dictionary(&replaced_text, &settings.dictionary)
+    } else {
+        replaced_text.clone()
+    };
 
     let words = final_text.split_whitespace().count() as u64;
     let seconds = speak_duration.as_secs() as u32;

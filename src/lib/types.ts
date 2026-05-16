@@ -3,7 +3,7 @@ export interface Shortcut {
   modifiers: string[];
 }
 
-export interface Replacement {
+export interface DictionaryEntry {
   from: string;
   to: string;
 }
@@ -64,7 +64,7 @@ export interface Settings {
   deepgram_api_key_configured: boolean;
   groq_api_key_configured: boolean;
   shortcut: Shortcut;
-  replacements: Replacement[];
+  dictionary: DictionaryEntry[];
   deepgram: DeepgramSettings;
   groq: GroqSettings;
   modes: Mode[];
