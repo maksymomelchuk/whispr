@@ -12,7 +12,6 @@ import { useTheme } from "./hooks/useTheme";
 import { getSettings } from "./lib/api";
 import type { Settings } from "./lib/types";
 
-import "./App.css";
 import "./globals.css";
 
 function App() {

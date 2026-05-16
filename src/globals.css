@@ -3,6 +3,27 @@
 /* Class-based dark mode: applies dark: utilities when .dark is on any ancestor */
 @custom-variant dark (&:is(.dark, .dark *));
 
+:root {
+  color-scheme: light dark;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+body {
+  color: hsl(var(--foreground));
+  background-color: hsl(var(--background));
+}
+
 /* Map Tailwind color utilities to shadcn CSS variable tokens */
 @theme inline {
   --color-background: hsl(var(--background));

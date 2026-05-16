@@ -101,7 +101,7 @@ export function ReplacementsField({
                     </FormItem>
                   )}
                 />
-                <span className="select-none text-xs text-[var(--text-tertiary)]">
+                <span className="select-none text-xs text-muted-foreground/70">
                   →
                 </span>
                 <FormField
@@ -126,7 +126,7 @@ export function ReplacementsField({
                   size="icon-sm"
                   aria-label="Remove"
                   onClick={() => remove(i)}
-                  className="text-[var(--text-tertiary)] hover:text-[var(--danger)]"
+                  className="text-muted-foreground/70 hover:text-destructive"
                 >
                   ×
                 </Button>

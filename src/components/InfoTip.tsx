@@ -13,7 +13,7 @@ export function InfoTip({ text }: Props) {
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-[var(--border-strong)] text-[10px] font-semibold leading-none text-[var(--text-tertiary)] bg-[var(--bg-elevated)] cursor-help select-none outline-none"
+          className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-border text-[10px] font-semibold leading-none text-muted-foreground/70 bg-card cursor-help select-none outline-none"
           aria-label={text}
           tabIndex={0}
           onClick={(e) => {

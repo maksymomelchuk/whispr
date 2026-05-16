@@ -38,15 +38,15 @@ export function CollapsibleCard({
               "rounded-none border-0 bg-transparent text-left",
               "cursor-pointer select-none",
               "transition-colors duration-150 motion-reduce:transition-none",
-              "hover:bg-[var(--bg-header-hover)]",
-              "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--primary)]",
+              "hover:bg-accent/60",
+              "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary",
             )}
           >
             <CaretRight
               className={cn(
-                "size-[10px] shrink-0 text-[var(--text-tertiary)]",
+                "size-[10px] shrink-0 text-muted-foreground/70",
                 "transition-transform duration-[180ms] ease-[cubic-bezier(0.25,0.46,0.45,0.94)] motion-reduce:transition-none",
-                open && "rotate-90 text-[var(--text-secondary)]",
+                open && "rotate-90 text-muted-foreground",
               )}
               aria-hidden
             />
@@ -55,7 +55,7 @@ export function CollapsibleCard({
             </h2>
             {dirty && !open && (
               <span
-                className="ml-auto inline-block size-1.5 rounded-full bg-[var(--warning)] shadow-[0_0_0_3px_var(--warning-halo)]"
+                className="ml-auto inline-block size-1.5 rounded-full bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.15)] dark:bg-amber-400 dark:shadow-[0_0_0_3px_rgba(251,191,36,0.2)]"
                 aria-label="Unsaved changes"
               />
             )}
