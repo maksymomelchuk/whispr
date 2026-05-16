@@ -28,6 +28,10 @@ mod tray;
 mod cleanup;
 #[cfg(target_os = "macos")]
 mod cleanup_stats;
+// translation helpers are consumed by macOS-only ptt; allow unused items on
+// non-macOS so the module still ships and its tests run.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+mod translation;
 #[cfg(target_os = "macos")]
 mod deepgram_session;
 #[cfg(target_os = "macos")]

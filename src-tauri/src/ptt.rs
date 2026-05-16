@@ -3,11 +3,12 @@ use crate::deepgram_session::DeepgramSession;
 use crate::dictionary::apply_dictionary;
 use crate::groq_session::GroqSession;
 use crate::history::{self, CleanupStatus, HistoryEntry, HISTORY_UPDATED_EVENT};
+use crate::mode::TranslateTarget;
 use crate::recorder::Recorder;
 use crate::snippets::expand_snippets;
 use crate::state::{AppState, ModifierState};
 use crate::transcription_session::TranscriptionSession;
-use crate::{cleanup, cleanup_stats, config, media, overlay, paste, stats, target_app};
+use crate::{cleanup, cleanup_stats, config, media, overlay, paste, stats, target_app, translation};
 use std::process::Command;
 use std::time::Duration;
 use core_foundation::base::TCFType;
@@ -353,16 +354,24 @@ async fn run_session(
     let mode_cleanup_enabled = active_mode.ai_cleanup.enabled;
     let mode_use_snippets = active_mode.use_snippets;
     let mode_use_dictionary = active_mode.use_dictionary;
+    let mode_translate = active_mode.translate.clone();
+    let mode_source_lang = active_mode.language.as_code().map(str::to_string);
+    let mode_prompt_override = active_mode.ai_cleanup.prompt_override.clone();
 
-    let (replaced_text, cleanup_status, notice) = maybe_cleanup(
+    let (translated_text, translate_notice) =
+        maybe_translate(app, &raw_text, &mode_translate, mode_source_lang.as_deref()).await;
+
+    let (replaced_text, cleanup_status, cleanup_notice) = maybe_cleanup(
         app,
         &settings,
         mode_cleanup_enabled,
-        &raw_text,
+        &translated_text,
         speak_duration,
-        default_mode.ai_cleanup.prompt_override.as_deref(),
+        mode_prompt_override.as_deref(),
     )
     .await;
+
+    let notice = merge_notices(translate_notice, cleanup_notice);
 
     let mut final_text = replaced_text.clone();
     if mode_use_snippets {
@@ -412,6 +421,46 @@ async fn run_session(
     }
 
     Ok(())
+}
+
+fn merge_notices(a: Notice, b: Notice) -> Notice {
+    match (a, b) {
+        (Notice::Focus(m), _) | (_, Notice::Focus(m)) => Notice::Focus(m),
+        (Notice::Flash(m), _) | (_, Notice::Flash(m)) => Notice::Flash(m),
+        _ => Notice::None,
+    }
+}
+
+async fn maybe_translate(
+    app: &AppHandle,
+    text: &str,
+    target: &TranslateTarget,
+    source_lang: Option<&str>,
+) -> (String, Notice) {
+    let TranslateTarget::Apple { target: target_lang } = target else {
+        return (text.to_string(), Notice::None);
+    };
+
+    let text_owned = text.to_string();
+    let source_owned = source_lang.map(str::to_string);
+    let target_owned = target_lang.clone();
+
+    let result = tokio::task::spawn_blocking(move || {
+        translation::translate(&text_owned, source_owned.as_deref(), &target_owned)
+    })
+    .await;
+
+    match result {
+        Ok(Ok(translated)) => (translated, Notice::None),
+        Ok(Err(e)) => {
+            let _ = app.emit(PTT_ERROR_EVENT, ());
+            (text.to_string(), Notice::Flash(format!("Translation unavailable: {e}")))
+        }
+        Err(_) => {
+            let _ = app.emit(PTT_ERROR_EVENT, ());
+            (text.to_string(), Notice::Flash("Translation thread panicked".to_string()))
+        }
+    }
 }
 
 async fn maybe_cleanup(
