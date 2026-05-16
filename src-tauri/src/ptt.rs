@@ -2,9 +2,9 @@ use crate::config::TranscriptionProvider;
 use crate::deepgram_session::DeepgramSession;
 use crate::dictionary::apply_dictionary;
 use crate::groq_session::GroqSession;
-use crate::snippets::expand_snippets;
 use crate::history::{self, CleanupStatus, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::recorder::Recorder;
+use crate::snippets::expand_snippets;
 use crate::state::{AppState, ModifierState};
 use crate::transcription_session::TranscriptionSession;
 use crate::{cleanup, cleanup_stats, config, media, overlay, paste, stats, target_app};
@@ -337,17 +337,13 @@ async fn run_session(
     let (replaced_text, cleanup_status, notice) =
         maybe_cleanup(app, &settings, mode_cleanup_enabled, &raw_text, speak_duration).await;
 
-    let snippet_text = if mode_use_snippets {
-        expand_snippets(&replaced_text, &settings.snippets)
-    } else {
-        replaced_text.clone()
-    };
-
-    let final_text = if mode_use_dictionary {
-        apply_dictionary(&snippet_text, &settings.dictionary)
-    } else {
-        snippet_text
-    };
+    let mut final_text = replaced_text.clone();
+    if mode_use_snippets {
+        final_text = expand_snippets(&final_text, &settings.snippets);
+    }
+    if mode_use_dictionary {
+        final_text = apply_dictionary(&final_text, &settings.dictionary);
+    }
 
     let words = final_text.split_whitespace().count() as u64;
     let seconds = speak_duration.as_secs() as u32;

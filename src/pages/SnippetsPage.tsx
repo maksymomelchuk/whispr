@@ -39,6 +39,9 @@ function SnippetRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const usedPlaceholders = PLACEHOLDERS.filter((p) =>
+    snippet.expansion.includes(p.label)
+  );
   return (
     <div className="flex items-center gap-3 rounded-[10px] border border-border bg-card px-4 py-3">
       <div className="flex flex-1 min-w-0 flex-col gap-0.5">
@@ -51,11 +54,9 @@ function SnippetRow({
             {snippet.expansion}
           </span>
         </div>
-        {PLACEHOLDERS.some((p) => snippet.expansion.includes(p.label)) && (
+        {usedPlaceholders.length > 0 && (
           <div className="flex gap-1 flex-wrap mt-0.5">
-            {PLACEHOLDERS.filter((p) =>
-              snippet.expansion.includes(p.label)
-            ).map((p) => (
+            {usedPlaceholders.map((p) => (
               <Badge key={p.label} variant="neutral" className="text-[10px]">
                 {p.label}
               </Badge>
@@ -138,18 +139,23 @@ export function SnippetsPage() {
     setSaveError(null);
   }
 
-  async function handleDelete(id: string) {
-    const updated = snippets.filter((s) => s.id !== id);
+  async function persistSnippets(updated: Snippet[]): Promise<boolean> {
     setSaving(true);
     try {
       await setSnippets(updated);
       const fresh = await getSettings();
       setSettings((prev) => (prev ? { ...prev, snippets: fresh.snippets } : prev));
+      return true;
     } catch (e) {
       setSaveError(String(e));
+      return false;
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleDelete(id: string) {
+    await persistSnippets(snippets.filter((s) => s.id !== id));
   }
 
   async function handleSave() {
@@ -157,25 +163,13 @@ export function SnippetsPage() {
       setSaveError("Trigger cannot be empty.");
       return;
     }
-    let updated: Snippet[];
-    if (editor?.isNew) {
-      updated = [...snippets, { ...draft, trigger: draft.trigger.trim() }];
-    } else {
-      updated = snippets.map((s) =>
-        s.id === draft.id ? { ...draft, trigger: draft.trigger.trim() } : s
-      );
-    }
-    setSaving(true);
+    const trimmed: Snippet = { ...draft, trigger: draft.trigger.trim() };
+    const updated = editor?.isNew
+      ? [...snippets, trimmed]
+      : snippets.map((s) => (s.id === trimmed.id ? trimmed : s));
     setSaveError(null);
-    try {
-      await setSnippets(updated);
-      const fresh = await getSettings();
-      setSettings((prev) => (prev ? { ...prev, snippets: fresh.snippets } : prev));
+    if (await persistSnippets(updated)) {
       closeEditor();
-    } catch (e) {
-      setSaveError(String(e));
-    } finally {
-      setSaving(false);
     }
   }
 

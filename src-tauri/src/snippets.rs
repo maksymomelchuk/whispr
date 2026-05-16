@@ -1,25 +1,29 @@
 use crate::config::SnippetEntry;
+use time::OffsetDateTime;
 
 /// Expands snippet triggers in `text`, then resolves placeholders in the result.
 ///
-/// Trigger matching is exact, case-sensitive substring replacement (v1).
-/// All occurrences of each trigger are replaced.
-/// Placeholder resolution runs after all trigger substitutions, so an expansion
-/// like "Today is {{DATE}}" correctly resolves the date.
+/// Trigger matching is exact, case-sensitive substring replacement; all
+/// occurrences of each trigger are replaced. Placeholder resolution runs after
+/// trigger substitutions, so an expansion like "Today is {{DATE}}" still
+/// resolves the date.
 pub fn expand_snippets(text: &str, entries: &[SnippetEntry]) -> String {
     let mut result = text.to_string();
     for entry in entries {
-        if entry.trigger.is_empty() {
+        let trigger = entry.trigger.as_str();
+        if trigger.is_empty() {
             continue;
         }
-        if result.contains(entry.trigger.as_str()) {
-            result = result.replace(entry.trigger.as_str(), &entry.expansion);
+        if result.contains(trigger) {
+            result = result.replace(trigger, &entry.expansion);
         }
     }
     resolve_placeholders(result)
 }
 
 fn resolve_placeholders(mut text: String) -> String {
+    // The contains-check guards the cost of each resolver: clipboard reads
+    // spawn a subprocess, and date/time avoid an unneeded syscall.
     if text.contains("{{DATE}}") {
         text = text.replace("{{DATE}}", &current_date());
     }
@@ -32,15 +36,17 @@ fn resolve_placeholders(mut text: String) -> String {
     text
 }
 
+fn now_local_or_utc() -> OffsetDateTime {
+    OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc())
+}
+
 fn current_date() -> String {
-    use time::OffsetDateTime;
-    let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
+    let now = now_local_or_utc();
     format!("{:04}-{:02}-{:02}", now.year(), now.month() as u8, now.day())
 }
 
 fn current_time() -> String {
-    use time::OffsetDateTime;
-    let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
+    let now = now_local_or_utc();
     format!("{:02}:{:02}", now.hour(), now.minute())
 }
 
