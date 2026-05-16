@@ -95,12 +95,19 @@ impl TranscriptionSession for GroqSession {
         let mut last_level_emit: Option<Instant> = None;
         // First poll fires `POLL_INTERVAL` after PTT-down, then every
         // `POLL_INTERVAL`. `Skip` so a stalled await never produces a burst of
-        // make-up ticks once it resumes.
-        let mut poll_timer = tokio::time::interval_at(
-            tokio::time::Instant::now() + groq_session_state::POLL_INTERVAL,
-            groq_session_state::POLL_INTERVAL,
-        );
-        poll_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        // make-up ticks once it resumes. When live preview is off there is
+        // nothing to render between polls, so we skip the timer entirely and
+        // let Phase 2's final POST carry the only Groq request.
+        let mut poll_timer = if show_live_preview {
+            let mut t = tokio::time::interval_at(
+                tokio::time::Instant::now() + groq_session_state::POLL_INTERVAL,
+                groq_session_state::POLL_INTERVAL,
+            );
+            t.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            Some(t)
+        } else {
+            None
+        };
 
         // Phase 1: PTT held — capture audio, poll on cadence, surface partials.
         loop {
@@ -121,7 +128,7 @@ impl TranscriptionSession for GroqSession {
                     }
                     None => break, // PTT released
                 },
-                _ = poll_timer.tick() => {
+                _ = async { poll_timer.as_mut().unwrap().tick().await }, if poll_timer.is_some() => {
                     runner.step(Event::Tick { elapsed: speak_start.elapsed() });
                 }
                 Some(outcome) = outcome_rx.recv() => {
