@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -15,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 
 import type { ApiKeyValidation } from "../lib/types";
-import { InfoTip } from "./InfoTip";
+import { SectionCard } from "./SectionCard";
 
 const apiKeySchema = z.object({
   apiKey: z.string().min(1, "API key is required"),
@@ -116,16 +117,19 @@ export function ApiKeyField({
     : (placeholder ?? "");
 
   return (
-    <section className="card">
-      <div className="card-title-row">
-        <h2 style={{ margin: 0 }}>{title}</h2>
-        <InfoTip text={info} />
-        {isConfigured ? (
-          <span className="status ok">Configured</span>
+    <SectionCard
+      title={title}
+      info={info}
+      status={
+        isConfigured ? (
+          <span className="text-xs text-emerald-600 dark:text-emerald-400">
+            Configured
+          </span>
         ) : (
-          <span className="status err">Not set</span>
-        )}
-      </div>
+          <span className="text-xs text-destructive">Not set</span>
+        )
+      }
+    >
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <FormField
@@ -169,7 +173,9 @@ export function ApiKeyField({
                   </div>
                 </FormControl>
                 {validating ? (
-                  <div className="status">Checking key…</div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Checking key…
+                  </p>
                 ) : (
                   <FormMessage />
                 )}
@@ -178,7 +184,11 @@ export function ApiKeyField({
           />
         </form>
       </Form>
-      {savedOk && <div className="status ok">Saved</div>}
-    </section>
+      {savedOk && (
+        <Alert variant="success" className="mt-2">
+          <AlertDescription>Saved</AlertDescription>
+        </Alert>
+      )}
+    </SectionCard>
   );
 }

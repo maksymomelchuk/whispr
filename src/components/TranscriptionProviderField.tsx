@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -37,6 +38,7 @@ import type {
 } from "../lib/types";
 import { ApiKeyField } from "./ApiKeyField";
 import { InfoTip } from "./InfoTip";
+import { SectionCard } from "./SectionCard";
 import { TranscriptionField } from "./TranscriptionField";
 
 const PROVIDER_OPTIONS: { value: TranscriptionProvider; label: string }[] = [
@@ -104,7 +106,7 @@ export function TranscriptionProviderField({
 
   return (
     <>
-      <section className="card">
+      <SectionCard>
         <Form {...providerForm}>
           <FormField
             control={providerForm.control}
@@ -141,9 +143,11 @@ export function TranscriptionProviderField({
           />
         </Form>
         {providerSaveError && (
-          <div className="status err">{providerSaveError}</div>
+          <Alert variant="destructive" className="mt-2">
+            <AlertDescription>{providerSaveError}</AlertDescription>
+          </Alert>
         )}
-      </section>
+      </SectionCard>
 
       {provider === "deepgram" && (
         <>
@@ -219,11 +223,10 @@ function GroqOptions({ initial, onSaved }: GroqOptionsProps) {
   });
 
   return (
-    <section className="card">
-      <div className="card-title-row">
-        <h2 style={{ margin: 0 }}>Groq</h2>
-        <InfoTip text="Whisper Large via Groq's transcription endpoint." />
-      </div>
+    <SectionCard
+      title="Groq"
+      info="Whisper Large via Groq's transcription endpoint."
+    >
       <Form {...form}>
         <div className="field-group">
           <FormField
@@ -290,8 +293,16 @@ function GroqOptions({ initial, onSaved }: GroqOptionsProps) {
           </Button>
         </div>
       </Form>
-      {status === "saved" && <div className="status ok">Saved</div>}
-      {status === "error" && <div className="status err">{error}</div>}
-    </section>
+      {status === "saved" && (
+        <Alert variant="success" className="mt-2">
+          <AlertDescription>Saved</AlertDescription>
+        </Alert>
+      )}
+      {status === "error" && (
+        <Alert variant="destructive" className="mt-2">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+    </SectionCard>
   );
 }

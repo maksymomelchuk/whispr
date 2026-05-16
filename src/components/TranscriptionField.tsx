@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -230,8 +231,16 @@ export function TranscriptionField({
               {saving ? "Saving…" : "Save"}
             </Button>
           </div>
-          {savedOk && <div className="status ok">Saved</div>}
-          {saveError && <div className="status err">{saveError}</div>}
+          {savedOk && (
+            <Alert variant="success" className="mt-2">
+              <AlertDescription>Saved</AlertDescription>
+            </Alert>
+          )}
+          {saveError && (
+            <Alert variant="destructive" className="mt-2">
+              <AlertDescription>{saveError}</AlertDescription>
+            </Alert>
+          )}
         </form>
       </Form>
     </CollapsibleCard>

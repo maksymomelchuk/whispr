@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { AppShell } from "./components/AppShell";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
+import { Alert, AlertDescription } from "./components/ui/alert";
 import { SettingsContext } from "./context/SettingsContext";
 import { useTheme } from "./hooks/useTheme";
 import { getSettings } from "./lib/api";
@@ -41,9 +42,11 @@ function App() {
   if (loadError) {
     return (
       <main className="app">
-        <div className="card err-card">
-          Failed to load settings: {loadError}
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription>
+            Failed to load settings: {loadError}
+          </AlertDescription>
+        </Alert>
       </main>
     );
   }

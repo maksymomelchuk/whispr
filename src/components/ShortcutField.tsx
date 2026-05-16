@@ -1,6 +1,6 @@
 import { formatShortcut } from "../lib/api";
 import type { Shortcut } from "../lib/types";
-import { InfoTip } from "./InfoTip";
+import { SectionCard } from "./SectionCard";
 import { Button } from "./ui/button";
 
 interface Props {
@@ -10,12 +10,11 @@ interface Props {
 
 export function ShortcutField({ shortcut, onStartRecord }: Props) {
   return (
-    <section className="card">
-      <div className="card-title-row">
-        <h2 style={{ margin: 0 }}>Dictation Shortcut</h2>
-        <InfoTip text="Hold this key to record. Release to transcribe and paste." />
-      </div>
-      <div className="row">
+    <SectionCard
+      title="Dictation Shortcut"
+      info="Hold this key to record. Release to transcribe and paste."
+    >
+      <div className="flex items-center gap-2">
         <div className="flex-1 px-2.5 py-1.5 text-sm font-mono border border-input rounded-md bg-secondary text-foreground">
           {formatShortcut(shortcut)}
         </div>
@@ -23,6 +22,6 @@ export function ShortcutField({ shortcut, onStartRecord }: Props) {
           Record new
         </Button>
       </div>
-    </section>
+    </SectionCard>
   );
 }

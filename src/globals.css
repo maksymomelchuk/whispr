@@ -131,6 +131,14 @@ main {
   scrollbar-color: hsl(var(--muted-foreground) / 0.25) transparent;
 }
 
+/* Divider between adjacent toggle rows (or after a preceding form item). */
+[data-slot="toggle-row"] + [data-slot="toggle-row"],
+[data-slot="form-item"] + [data-slot="toggle-row"] {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid hsl(var(--border-shadcn));
+}
+
 /* CollapsibleCard content open/close animation via Radix height var */
 [data-slot="collapsible-content"] {
   overflow: hidden;

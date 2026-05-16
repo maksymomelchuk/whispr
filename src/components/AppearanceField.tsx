@@ -2,6 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Form,
   FormControl,
@@ -9,12 +10,12 @@ import {
   FormItem,
   FormLabel,
 } from "@/components/ui/form";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 import { usePersistedToggle } from "../hooks/usePersistedToggle";
 import type { ThemePreference } from "../hooks/useTheme";
+import { SectionCard } from "./SectionCard";
+import { ToggleRow } from "./ToggleRow";
 import {
   setShowInDock as persistShowInDock,
   setShowLivePreview as persistShowLivePreview,
@@ -67,8 +68,7 @@ export function AppearanceField({
   const saveError = dock.error ?? preview.error;
 
   return (
-    <section className="card">
-      <h2>Appearance</h2>
+    <SectionCard title="Appearance">
       <Form {...form}>
         <FormField
           control={form.control}
@@ -102,29 +102,25 @@ export function AppearanceField({
         />
       </Form>
 
-      <div className="toggle-row">
-        <Label htmlFor="show-in-dock" className="toggle-row-label">
-          Show in Dock & Cmd-Tab
-        </Label>
-        <Switch
-          id="show-in-dock"
-          checked={dock.enabled}
-          onCheckedChange={dock.toggle}
-        />
-      </div>
+      <ToggleRow
+        id="show-in-dock"
+        label="Show in Dock & Cmd-Tab"
+        checked={dock.enabled}
+        onCheckedChange={dock.toggle}
+      />
 
-      <div className="toggle-row">
-        <Label htmlFor="show-live-preview" className="toggle-row-label">
-          Show live preview while dictating
-        </Label>
-        <Switch
-          id="show-live-preview"
-          checked={preview.enabled}
-          onCheckedChange={preview.toggle}
-        />
-      </div>
+      <ToggleRow
+        id="show-live-preview"
+        label="Show live preview while dictating"
+        checked={preview.enabled}
+        onCheckedChange={preview.toggle}
+      />
 
-      {saveError && <div className="status err">{saveError}</div>}
-    </section>
+      {saveError && (
+        <Alert variant="destructive" className="mt-2">
+          <AlertDescription>{saveError}</AlertDescription>
+        </Alert>
+      )}
+    </SectionCard>
   );
 }

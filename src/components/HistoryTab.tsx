@@ -1,6 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -161,9 +162,9 @@ export function HistoryTab({
 
   if (loadState === "error") {
     return (
-      <section className="card err-card">
-        Failed to load history: {loadError}
-      </section>
+      <Alert variant="destructive">
+        <AlertDescription>Failed to load history: {loadError}</AlertDescription>
+      </Alert>
     );
   }
 

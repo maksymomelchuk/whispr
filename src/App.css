@@ -98,35 +98,11 @@
   margin: 0 auto;
 }
 
-.card {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px;
-}
-
-.card-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.card-title-row .status {
-  margin-top: 0;
-}
-
 /* Inline label + small adornment on a single line. */
 .label-with-info {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-}
-
-.card h2 {
-  margin: 0 0 4px;
-  font-size: 13px;
-  font-weight: 600;
 }
 
 .hint {
@@ -148,62 +124,11 @@
   gap: 6px;
 }
 
-.card > h2 + .field {
-  margin-top: 10px;
-}
-
 .field-label {
   font-size: 11px;
   font-weight: 500;
   color: var(--text-secondary);
   letter-spacing: 0.2px;
-}
-
-/* Toggle row: text label on the left, switch on the right. */
-.toggle-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  cursor: pointer;
-  padding: 2px 0;
-}
-
-.card > .field + .toggle-row,
-.card > [data-slot="form-item"] + .toggle-row,
-.card > .toggle-row + .toggle-row {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border-muted);
-}
-
-.toggle-row-label {
-  font-size: 13px;
-  color: var(--text);
-  user-select: none;
-}
-
-.status {
-  margin-top: 8px;
-  font-size: 12px;
-}
-
-.status.ok {
-  color: var(--success);
-}
-
-.status.err {
-  color: var(--danger);
-}
-
-.err-card {
-  color: var(--danger);
-  border-color: var(--danger-border);
-  background: var(--danger-bg);
-}
-
-:root.dark .err-card {
-  color: var(--danger-soft-text);
 }
 
 .replacement-row {

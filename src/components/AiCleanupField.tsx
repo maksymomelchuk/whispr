@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -13,8 +14,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 import { usePersistedToggle } from "../hooks/usePersistedToggle";
@@ -28,6 +27,7 @@ import {
 import type { CleanupAuthMode } from "../lib/types";
 import { CollapsibleCard } from "./CollapsibleCard";
 import { InfoTip } from "./InfoTip";
+import { ToggleRow } from "./ToggleRow";
 
 const credentialSchema = z.object({ credential: z.string() });
 
@@ -204,20 +204,13 @@ export function AiCleanupField({
 
   return (
     <CollapsibleCard title="AI Cleanup" defaultOpen={defaultOpen}>
-      <div className="toggle-row">
-        <Label
-          htmlFor="ai-cleanup-enabled"
-          className="toggle-row-label label-with-info"
-        >
-          Enable AI post-processing
-          <InfoTip text="Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Adds ~500ms." />
-        </Label>
-        <Switch
-          id="ai-cleanup-enabled"
-          checked={enabledToggle.enabled}
-          onCheckedChange={enabledToggle.toggle}
-        />
-      </div>
+      <ToggleRow
+        id="ai-cleanup-enabled"
+        label="Enable AI post-processing"
+        info="Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Adds ~500ms."
+        checked={enabledToggle.enabled}
+        onCheckedChange={enabledToggle.toggle}
+      />
 
       {enabledToggle.enabled && (
         <>
@@ -251,9 +244,11 @@ export function AiCleanupField({
                 {copy.fieldLabel}
               </span>
               {configured ? (
-                <span className="status ok">Configured</span>
+                <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                  Configured
+                </span>
               ) : (
-                <span className="status err">Not set</span>
+                <span className="text-xs text-destructive">Not set</span>
               )}
             </div>
             <Form {...credentialForm}>
@@ -300,7 +295,11 @@ export function AiCleanupField({
                 />
               </form>
             </Form>
-            {credSavedOk && <div className="status ok">Saved</div>}
+            {credSavedOk && (
+              <Alert variant="success" className="mt-2">
+                <AlertDescription>Saved</AlertDescription>
+              </Alert>
+            )}
             {showWarning && !credentialForm.formState.errors.credential && (
               <p className="hint-sm">
                 Cleanup is bypassed until a credential is set.
@@ -366,13 +365,19 @@ export function AiCleanupField({
                   </Button>
                 </div>
                 {thresholdsForm.formState.errors.root && (
-                  <div className="status err">
-                    {thresholdsForm.formState.errors.root.message}
-                  </div>
+                  <Alert variant="destructive" className="mt-2">
+                    <AlertDescription>
+                      {thresholdsForm.formState.errors.root.message}
+                    </AlertDescription>
+                  </Alert>
                 )}
               </form>
             </Form>
-            {threshSavedOk && <div className="status ok">Saved</div>}
+            {threshSavedOk && (
+              <Alert variant="success" className="mt-2">
+                <AlertDescription>Saved</AlertDescription>
+              </Alert>
+            )}
           </div>
         </>
       )}

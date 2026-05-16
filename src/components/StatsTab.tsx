@@ -1,6 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useMemo, useState } from "react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useConfirmAction } from "../hooks/useConfirmAction";
 import {
@@ -187,7 +188,9 @@ export function StatsTab() {
 
   if (loadState === "error") {
     return (
-      <section className="card err-card">Failed to load stats: {loadError}</section>
+      <Alert variant="destructive">
+        <AlertDescription>Failed to load stats: {loadError}</AlertDescription>
+      </Alert>
     );
   }
 

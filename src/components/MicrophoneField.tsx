@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Form,
   FormControl,
@@ -8,7 +9,6 @@ import {
   FormItem,
   FormLabel,
 } from "@/components/ui/form";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -16,13 +16,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 
 import {
   listInputDevices,
   setInputDevice as persistInputDevice,
   setPauseMediaOnRecord as persistPauseMediaOnRecord,
 } from "../lib/api";
+import { SectionCard } from "./SectionCard";
+import { ToggleRow } from "./ToggleRow";
 
 interface Props {
   initial: string | null;
@@ -121,9 +122,7 @@ export function MicrophoneField({
   const isDisabled = loadState !== "ready" || status === "saving";
 
   return (
-    <section className="card">
-      <h2>Audio</h2>
-
+    <SectionCard title="Audio">
       <Form {...form}>
         <FormField
           control={form.control}
@@ -162,29 +161,41 @@ export function MicrophoneField({
         />
       </Form>
 
-      <div className="toggle-row">
-        <Label htmlFor="mute-system-audio" className="toggle-row-label">
-          Mute system audio while recording
-        </Label>
-        <Switch
-          id="mute-system-audio"
-          checked={pauseEnabled}
-          onCheckedChange={togglePauseMedia}
-        />
-      </div>
+      <ToggleRow
+        id="mute-system-audio"
+        label="Mute system audio while recording"
+        checked={pauseEnabled}
+        onCheckedChange={togglePauseMedia}
+      />
 
       {loadState === "loading" && (
-        <div className="status">Enumerating devices…</div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Enumerating devices…
+        </p>
       )}
-      {loadState === "error" && <div className="status err">{loadError}</div>}
+      {loadState === "error" && (
+        <Alert variant="destructive" className="mt-2">
+          <AlertDescription>{loadError}</AlertDescription>
+        </Alert>
+      )}
       {missing && (
-        <div className="status err">
-          Saved device isn&rsquo;t currently available. Recording will use the
-          system default until it&rsquo;s reconnected.
-        </div>
+        <Alert variant="destructive" className="mt-2">
+          <AlertDescription>
+            Saved device isn&rsquo;t currently available. Recording will use the
+            system default until it&rsquo;s reconnected.
+          </AlertDescription>
+        </Alert>
       )}
-      {status === "saved" && <div className="status ok">Saved</div>}
-      {status === "error" && <div className="status err">{saveError}</div>}
-    </section>
+      {status === "saved" && (
+        <Alert variant="success" className="mt-2">
+          <AlertDescription>Saved</AlertDescription>
+        </Alert>
+      )}
+      {status === "error" && (
+        <Alert variant="destructive" className="mt-2">
+          <AlertDescription>{saveError}</AlertDescription>
+        </Alert>
+      )}
+    </SectionCard>
   );
 }
