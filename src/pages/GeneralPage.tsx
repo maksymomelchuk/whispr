@@ -15,7 +15,7 @@ export function GeneralPage() {
   if (!settings) return null;
 
   return (
-    <div className="p-6 flex flex-col gap-4">
+    <div className="p-6 flex flex-col gap-6">
       <MicrophoneField
         initial={settings.input_device}
         onSaved={(input_device) =>

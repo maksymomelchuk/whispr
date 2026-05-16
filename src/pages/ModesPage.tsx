@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -48,6 +49,8 @@ import {
   updateMode,
 } from "../lib/api";
 import type { HotkeyBinding, Mode, ModeLanguage } from "../lib/types";
+import { Separator } from "@/components/ui/separator";
+
 import { ToggleRow } from "../components/ToggleRow";
 
 const LANGUAGES: { code: string; name: string; flag: string }[] = [
@@ -404,29 +407,13 @@ function ModeEditor({
                 Improve detection by limiting it to one or more expected languages.
               </span>
               {langMode === "restrict" && (
-                <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                  {restrictCodes.map((code) => (
-                    <span
-                      key={code}
-                      className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium"
-                    >
-                      {langLabel(code)}
-                      <button
-                        type="button"
-                        onClick={() => removeLangCode(code)}
-                        className="ml-0.5 text-muted-foreground hover:text-foreground leading-none"
-                        aria-label={`Remove ${code}`}
-                      >
-                        ✕
-                      </button>
-                    </span>
-                  ))}
+                <div className="flex flex-col gap-2 mt-1">
                   <Select
                     value=""
                     onValueChange={(v) => { if (v) addLangCode(v); }}
                   >
-                    <SelectTrigger size="sm" className="h-6 w-auto px-2 text-xs">
-                      <SelectValue placeholder="+ Add" />
+                    <SelectTrigger size="sm" className="h-6 w-auto self-start px-2 text-xs">
+                      <SelectValue placeholder="+ Add language" />
                     </SelectTrigger>
                     <SelectContent>
                       {LANGUAGES.filter(
@@ -438,6 +425,26 @@ function ModeEditor({
                       ))}
                     </SelectContent>
                   </Select>
+                  {restrictCodes.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {restrictCodes.map((code) => (
+                        <span
+                          key={code}
+                          className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium"
+                        >
+                          {langLabel(code)}
+                          <button
+                            type="button"
+                            onClick={() => removeLangCode(code)}
+                            className="ml-0.5 text-muted-foreground hover:text-foreground leading-none"
+                            aria-label={`Remove ${code}`}
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -480,7 +487,7 @@ function ModeEditor({
             <Collapsible
               open={promptOpen}
               onOpenChange={setPromptOpen}
-              className="ml-[52px] flex flex-col gap-2"
+              className="flex flex-col gap-2"
             >
               <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-fit">
                 <CaretRight
@@ -490,8 +497,8 @@ function ModeEditor({
                 Custom prompt
               </CollapsibleTrigger>
               <CollapsibleContent className="flex flex-col gap-2">
-                <textarea
-                  className="w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring min-h-[80px]"
+                <Textarea
+                  className="resize-none min-h-[80px] text-[13px] leading-[1.5]"
                   placeholder="Leave empty to use the default cleanup prompt."
                   value={draft.ai_cleanup.prompt_override ?? ""}
                   onChange={(e) => setPromptOverride(e.target.value)}
@@ -503,6 +510,7 @@ function ModeEditor({
               </CollapsibleContent>
             </Collapsible>
           )}
+          <Separator className="my-3.5" />
           <ToggleRow
             id="dictionary"
             label="Use dictionary"
@@ -522,11 +530,20 @@ function ModeEditor({
         )}
       </div>
 
-      <SheetFooter>
-        <Button variant="outline" onClick={onClose} disabled={saving}>
+      <SheetFooter className="flex-row gap-2">
+        <Button
+          variant="outline"
+          onClick={onClose}
+          disabled={saving}
+          className="flex-1"
+        >
           Cancel
         </Button>
-        <Button onClick={handleSave} disabled={saving || !draft.name.trim()}>
+        <Button
+          onClick={handleSave}
+          disabled={saving || !draft.name.trim()}
+          className="flex-1"
+        >
           {saving ? "Saving…" : "Save"}
         </Button>
       </SheetFooter>
@@ -637,7 +654,7 @@ export function ModesPage() {
       </div>
 
       <Sheet open={editor !== null} onOpenChange={(open) => !open && closeEditor()}>
-        <SheetContent side="right" className="w-80 sm:max-w-80 flex flex-col gap-4">
+        <SheetContent side="right" className="w-[440px] sm:max-w-[440px] flex flex-col gap-4">
           {editor && (
             <ModeEditor
               key={editor.mode.id}

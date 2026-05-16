@@ -11,11 +11,12 @@ import type {
   HotkeyBinding,
   Mode,
   Settings,
-  Shortcut,
   Snippet,
   StatsRow,
   TranscriptionProvider,
 } from "./types";
+
+export { formatShortcut } from "./shortcut";
 
 export const getSettings = () => invoke<Settings>("get_settings");
 
@@ -105,50 +106,3 @@ export const getStats = () => invoke<StatsRow[]>("get_stats");
 export const clearStats = () => invoke<void>("clear_stats");
 
 export const getCleanupStats = () => invoke<CleanupStats>("get_cleanup_stats");
-
-const MOD_MAP: Record<string, string> = {
-  Meta: "⌘",
-  Control: "⌃",
-  Alt: "⌥",
-  Shift: "⇧",
-};
-
-const KEY_MAP: Record<string, string> = {
-  AltRight: "Right ⌥",
-  AltLeft: "Left ⌥",
-  MetaRight: "Right ⌘",
-  MetaLeft: "Left ⌘",
-  ControlRight: "Right ⌃",
-  ControlLeft: "Left ⌃",
-  ShiftRight: "Right ⇧",
-  ShiftLeft: "Left ⇧",
-  Space: "Space",
-  Escape: "Esc",
-  Tab: "Tab",
-  Enter: "Return",
-  Backspace: "Del",
-  ArrowUp: "↑",
-  ArrowDown: "↓",
-  ArrowLeft: "←",
-  ArrowRight: "→",
-};
-
-const displayKey = (code: string): string => {
-  if (KEY_MAP[code]) return KEY_MAP[code];
-  // KeyA → A, KeyZ → Z
-  const keyMatch = code.match(/^Key([A-Z])$/);
-  if (keyMatch) return keyMatch[1];
-  // Digit0 → 0, Digit9 → 9
-  const digitMatch = code.match(/^Digit(\d)$/);
-  if (digitMatch) return digitMatch[1];
-  // F1..F20 → F1..F20
-  if (/^F\d{1,2}$/.test(code)) return code;
-  return code;
-};
-
-export const formatShortcut = (s: Shortcut): string => {
-  const mods = s.modifiers.map((m) => MOD_MAP[m] ?? m).join(" + ");
-  const key = displayKey(s.key);
-  const base = mods ? `${mods} + ${key}` : key;
-  return s.is_double_tap ? `${base} (double-tap)` : base;
-};

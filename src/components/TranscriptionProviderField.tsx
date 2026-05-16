@@ -97,7 +97,7 @@ export function TranscriptionProviderField({
 
   return (
     <>
-      <SectionCard>
+      <SectionCard title="Provider">
         <Form {...providerForm}>
           <FormField
             control={providerForm.control}
@@ -141,18 +141,15 @@ export function TranscriptionProviderField({
       </SectionCard>
 
       {provider === "deepgram" && (
-        <>
-          <ApiKeyField
-            title="Deepgram API Key"
-            info="Required to transcribe audio with Deepgram. Paste your key from console.deepgram.com."
-            placeholder="dg_..."
-            isConfigured={deepgramApiKeyConfigured}
-            persist={persistDeepgramApiKey}
-            validate={validateDeepgramApiKey}
-            onSaved={onDeepgramApiKeyConfiguredChange}
-          />
-          <SectionCard title="Deepgram" info="Deepgram nova-3." />
-        </>
+        <ApiKeyField
+          title="Deepgram API Key"
+          info="Required to transcribe audio with Deepgram. Paste your key from console.deepgram.com."
+          placeholder="dg_..."
+          isConfigured={deepgramApiKeyConfigured}
+          persist={persistDeepgramApiKey}
+          validate={validateDeepgramApiKey}
+          onSaved={onDeepgramApiKeyConfiguredChange}
+        />
       )}
 
       {provider === "groq" && (

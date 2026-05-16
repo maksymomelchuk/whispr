@@ -3,6 +3,7 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 import { InfoTip } from "./InfoTip";
+import { SectionHeader } from "./SectionHeader";
 
 interface Props extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   title?: ReactNode;
@@ -22,22 +23,17 @@ export function SectionCard({
   return (
     <section
       data-slot="section-card"
-      className={cn(
-        "rounded-[10px] border border-border bg-card p-4",
-        className,
-      )}
+      className={cn("flex flex-col gap-2.5", className)}
       {...rest}
     >
-      {showHeader && (
-        <div className="mb-2 flex items-center gap-2">
-          {title !== undefined && (
-            <h2 className="m-0 text-[13px] font-semibold">{title}</h2>
-          )}
-          {info && <InfoTip text={info} />}
-          {status}
-        </div>
+      {showHeader && title !== undefined && (
+        <SectionHeader
+          title={title}
+          badge={info ? <InfoTip text={info} /> : undefined}
+          trailing={status}
+        />
       )}
-      {children}
+      <div className="flex flex-col">{children}</div>
     </section>
   );
 }

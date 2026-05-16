@@ -2,10 +2,10 @@ import { Microphone, WarningCircle } from "@phosphor-icons/react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
+import { ShortcutKeycaps } from "@/components/Keycap";
 
 import { PageHeader } from "../components/PageHeader";
 import { useSettings } from "../context/SettingsContext";
-import { formatShortcut } from "../lib/api";
 
 interface StatusItem {
   icon: React.ComponentType<{ size?: number; className?: string }>;
@@ -40,8 +40,8 @@ export function HomePage() {
     });
   }
 
-  const shortcuts = settings.hotkey_bindings.map((b) =>
-    formatShortcut(b.shortcut),
+  const defaultBindings = settings.hotkey_bindings.filter(
+    (b) => b.mode_id === settings.default_mode_id,
   );
 
   return (
@@ -56,20 +56,18 @@ export function HomePage() {
         <span className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
           Push to talk
         </span>
-        {shortcuts.length > 0 ? (
-          <div className="flex flex-wrap items-baseline gap-x-7 gap-y-2">
-            {shortcuts.map((s, i) => (
-              <span
-                key={`${s}-${i}`}
-                className="font-mono text-[34px] font-semibold leading-none tracking-[0.04em] text-foreground"
-              >
-                {s}
-              </span>
+        {defaultBindings.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
+            {defaultBindings.map((b, i) => (
+              <ShortcutKeycaps key={i} shortcut={b.shortcut} size="lg" />
             ))}
           </div>
         ) : (
-          <p className="font-mono text-[24px] font-medium leading-none text-muted-foreground/70">
-            No hotkeys set
+          <p className="text-[14px] text-muted-foreground/70">
+            No hotkeys set ·{" "}
+            <Link to="/hotkeys" className="underline underline-offset-4">
+              Open Hotkeys
+            </Link>
           </p>
         )}
         <p className="text-[13px] text-muted-foreground">

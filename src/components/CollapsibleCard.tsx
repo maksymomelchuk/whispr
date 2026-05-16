@@ -4,7 +4,6 @@ import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 import { InfoTip } from "./InfoTip";
-import { Card } from "./ui/card";
 import {
   Collapsible,
   CollapsibleContent,
@@ -29,47 +28,40 @@ export function CollapsibleCard({
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <Card className="overflow-hidden">
-        <div className="relative flex items-center">
-          <CollapsibleTrigger
-            className={cn(
-              "flex flex-1 items-center gap-2.5 px-4 py-[14px]",
-              "rounded-none border-0 bg-transparent text-left",
-              "cursor-pointer select-none",
-              "transition-colors duration-150 motion-reduce:transition-none",
-              "hover:bg-accent/60",
-              "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary",
-            )}
-          >
-            <CaretRight
-              className={cn(
-                "size-[10px] shrink-0 text-muted-foreground/70",
-                "transition-transform duration-[180ms] ease-[cubic-bezier(0.25,0.46,0.45,0.94)] motion-reduce:transition-none",
-                open && "rotate-90 text-muted-foreground",
-              )}
-              aria-hidden
-            />
-            <h2 className="m-0 flex-1 text-[13px] font-semibold leading-none">
-              {title}
-            </h2>
-            {dirty && !open && (
-              <span
-                className="ml-auto inline-block size-1.5 rounded-full bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.15)] dark:bg-amber-400 dark:shadow-[0_0_0_3px_rgba(251,191,36,0.2)]"
-                aria-label="Unsaved changes"
-              />
-            )}
-          </CollapsibleTrigger>
-          {info && (
-            <span className="absolute right-4 top-1/2 z-[2] -translate-y-1/2">
-              <InfoTip text={info} />
-            </span>
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className="flex flex-col gap-2.5"
+    >
+      <CollapsibleTrigger
+        className={cn(
+          "flex w-full items-baseline gap-3 pb-1.5 border-b border-border/40",
+          "text-left bg-transparent border-x-0 border-t-0 cursor-pointer select-none",
+          "transition-colors duration-150 motion-reduce:transition-none",
+          "hover:text-foreground",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:rounded-sm",
+        )}
+      >
+        <CaretRight
+          className={cn(
+            "size-[10px] shrink-0 self-center text-muted-foreground/55",
+            "transition-transform duration-[180ms] ease-[cubic-bezier(0.25,0.46,0.45,0.94)] motion-reduce:transition-none",
+            open && "rotate-90 text-muted-foreground",
           )}
-        </div>
-        <CollapsibleContent>
-          <div className="px-4 pb-4">{children}</div>
-        </CollapsibleContent>
-      </Card>
+          aria-hidden
+        />
+        <h3 className="text-[14px] font-semibold text-foreground tracking-[-0.005em]">
+          {title}
+        </h3>
+        {info && <InfoTip text={info} />}
+        {dirty && !open && (
+          <span
+            className="ml-auto inline-block size-1.5 rounded-full bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.15)] dark:bg-amber-400 dark:shadow-[0_0_0_3px_rgba(251,191,36,0.2)]"
+            aria-label="Unsaved changes"
+          />
+        )}
+      </CollapsibleTrigger>
+      <CollapsibleContent>{children}</CollapsibleContent>
     </Collapsible>
   );
 }

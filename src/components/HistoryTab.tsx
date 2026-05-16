@@ -1,5 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -11,8 +11,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RowCard } from "@/components/RowCard";
+import { SectionHeader } from "@/components/SectionHeader";
 import { cn } from "@/lib/utils";
+
 import { useConfirmAction } from "../hooks/useConfirmAction";
+import { useFlash } from "../hooks/useFlash";
 import {
   clearHistory as persistClearHistory,
   getHistory,
@@ -50,42 +54,52 @@ interface HistoryTabProps {
 
 type LoadState = "loading" | "ready" | "error";
 
-function formatRelative(timestamp: number, now: number): string {
-  const diff = Math.max(0, now - timestamp);
-  if (diff < 45) return "just now";
-  if (diff < 60 * 60) {
-    const m = Math.round(diff / 60);
-    return `${m}m ago`;
-  }
-  if (diff < 60 * 60 * 24) {
-    const h = Math.round(diff / 3600);
-    return `${h}h ago`;
-  }
+function entryId(entry: HistoryEntry): string {
+  return `${entry.timestamp}|${entry.final_text.length}`;
+}
 
+function dayKey(timestamp: number): string {
+  const d = new Date(timestamp * 1000);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function dayLabel(timestamp: number, now: number): string {
   const date = new Date(timestamp * 1000);
   const today = new Date(now * 1000);
-  const startOfToday =
-    new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() /
-    1000;
-  const entryDay =
-    new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() /
-    1000;
-  const dayDiff = Math.round((startOfToday - entryDay) / (60 * 60 * 24));
-
-  const time = date.toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  if (dayDiff === 1) return `Yesterday, ${time}`;
-  if (dayDiff < 7) {
-    const weekday = date.toLocaleDateString([], { weekday: "short" });
-    return `${weekday}, ${time}`;
-  }
+  const startOfToday = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  ).getTime();
+  const entryDay = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+  ).getTime();
+  const dayDiff = Math.round((startOfToday - entryDay) / (1000 * 60 * 60 * 24));
+  if (dayDiff === 0) return "Today";
+  if (dayDiff === 1) return "Yesterday";
+  if (dayDiff < 7) return date.toLocaleDateString([], { weekday: "long" });
   return date.toLocaleDateString([], {
     month: "short",
     day: "numeric",
-    year: date.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
+    year:
+      date.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
   });
+}
+
+function formatTimeOfDay(timestamp: number): string {
+  return new Date(timestamp * 1000).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function formatHeldDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const s = ms / 1000;
+  return s < 10 ? `${s.toFixed(1)}s` : `${Math.round(s)}s`;
 }
 
 function useClock(intervalMs = 30_000): number {
@@ -107,12 +121,16 @@ export function HistoryTab({
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
   const now = useClock();
+  const { flash, isFlashing } = useFlash();
+  const seenIds = useRef<Set<string>>(new Set());
+  const initialized = useRef(false);
 
   const { confirming: confirmingClear, trigger: handleClear } = useConfirmAction(
     async () => {
       try {
         await persistClearHistory();
         setEntries([]);
+        seenIds.current.clear();
       } catch (e) {
         console.error("clear history failed", e);
       }
@@ -134,6 +152,19 @@ export function HistoryTab({
       .then((list) => {
         setEntries(list);
         setLoadState("ready");
+        if (!initialized.current) {
+          seenIds.current = new Set(list.map(entryId));
+          initialized.current = true;
+          return;
+        }
+        for (const e of list) {
+          const id = entryId(e);
+          if (!seenIds.current.has(id)) {
+            seenIds.current.add(id);
+            flash(id);
+            break;
+          }
+        }
       })
       .catch((e) => {
         setLoadState("error");
@@ -157,6 +188,20 @@ export function HistoryTab({
     };
   }, []);
 
+  const groups = useMemo(() => {
+    const buckets: { key: string; label: string; entries: HistoryEntry[] }[] = [];
+    for (const e of entries) {
+      const key = dayKey(e.timestamp);
+      const existing = buckets.find((b) => b.key === key);
+      if (existing) {
+        existing.entries.push(e);
+      } else {
+        buckets.push({ key, label: dayLabel(e.timestamp, now), entries: [e] });
+      }
+    }
+    return buckets;
+  }, [entries, now]);
+
   if (loadState === "loading") {
     return (
       <div className="py-10 text-center text-muted-foreground">Loading…</div>
@@ -174,16 +219,11 @@ export function HistoryTab({
   const isOff = historyLimit === 0;
 
   return (
-    <section className="flex flex-col gap-3.5">
-      <div className="flex items-start justify-between gap-3 px-0.5">
-        <div>
-          <h2 className="m-0 mb-0.5 text-[13px] font-semibold">
-            Recent transcriptions
-          </h2>
-          <p className="m-0 text-xs text-muted-foreground">
-            {limitHint(historyLimit, entries.length)}
-          </p>
-        </div>
+    <div className="flex flex-col gap-5">
+      <div className="flex items-start justify-between gap-3 pb-1 border-b border-border/40">
+        <p className="text-[12px] text-muted-foreground">
+          {limitHint(historyLimit, entries.length)}
+        </p>
         <div className="flex shrink-0 items-center gap-2.5">
           <div className="inline-flex items-center gap-1.5">
             <span className="whitespace-nowrap text-[11px] font-medium text-muted-foreground">
@@ -218,40 +258,35 @@ export function HistoryTab({
         </div>
       </div>
 
-      {entries.length === 0 && (isOff ? <DisabledState /> : <EmptyState />)}
-      {entries.length > 0 && (
-        <ul className="m-0 list-none overflow-hidden rounded-[10px] border border-border bg-card p-0">
-          {entries.map((entry, i) => (
-            <HistoryItem
-              key={`${entry.timestamp}-${i}`}
-              entry={entry}
-              now={now}
-            />
-          ))}
-        </ul>
-      )}
-    </section>
+      {entries.length === 0 &&
+        (isOff ? <DisabledState /> : <EmptyState />)}
+
+      {groups.map((group) => (
+        <section key={group.key} className="flex flex-col gap-2.5">
+          <SectionHeader
+            title={group.label}
+            trailing={`${group.entries.length} ${
+              group.entries.length === 1 ? "entry" : "entries"
+            }`}
+          />
+          <div className="flex flex-col gap-2">
+            {group.entries.map((entry) => (
+              <HistoryRow
+                key={entryId(entry)}
+                entry={entry}
+                flashing={isFlashing(entryId(entry))}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
   );
 }
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center gap-2.5 rounded-[10px] border border-border bg-card px-6 py-14 text-center">
-      <svg
-        width="32"
-        height="32"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-        className="text-border"
-      >
-        <path d="M12 8v4l3 2" />
-        <circle cx="12" cy="12" r="9" />
-      </svg>
+    <div className="flex flex-col items-center justify-center gap-2.5 rounded-[10px] border border-dashed border-border/80 bg-card/30 px-6 py-14 text-center">
       <div className="text-[13px] font-semibold text-muted-foreground">
         No transcriptions yet
       </div>
@@ -264,22 +299,7 @@ function EmptyState() {
 
 function DisabledState() {
   return (
-    <div className="flex flex-col items-center justify-center gap-2.5 rounded-[10px] border border-border bg-card px-6 py-14 text-center">
-      <svg
-        width="32"
-        height="32"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-        className="text-border"
-      >
-        <circle cx="12" cy="12" r="9" />
-        <path d="M5.5 5.5l13 13" />
-      </svg>
+    <div className="flex flex-col items-center justify-center gap-2.5 rounded-[10px] border border-dashed border-border/80 bg-card/30 px-6 py-14 text-center">
       <div className="text-[13px] font-semibold text-muted-foreground">
         History is disabled
       </div>
@@ -288,11 +308,6 @@ function DisabledState() {
       </div>
     </div>
   );
-}
-
-interface ItemProps {
-  entry: HistoryEntry;
-  now: number;
 }
 
 type Tone = "neutral" | "warn" | "error";
@@ -326,27 +341,18 @@ function cleanupView(status: CleanupStatus): CleanupView {
       };
     case "skipped_below_min_words":
       return {
-        badge: { label: "cleanup skipped: too short", tone: "neutral" },
-        note: () => ({
-          text: "Skipped: below minimum word count.",
-          tone: "info",
-        }),
+        badge: { label: "skipped: too short", tone: "neutral" },
+        note: () => ({ text: "Skipped: below minimum word count.", tone: "info" }),
       };
     case "skipped_below_min_duration":
       return {
-        badge: { label: "cleanup skipped: too brief", tone: "neutral" },
-        note: () => ({
-          text: "Skipped: below minimum duration.",
-          tone: "info",
-        }),
+        badge: { label: "skipped: too brief", tone: "neutral" },
+        note: () => ({ text: "Skipped: below minimum duration.", tone: "info" }),
       };
     case "no_credential":
       return {
         badge: { label: "cleanup unconfigured", tone: "warn" },
-        note: () => ({
-          text: "Skipped: no credential configured.",
-          tone: "error",
-        }),
+        note: () => ({ text: "Skipped: no credential configured.", tone: "error" }),
       };
     case "failed_timeout":
       return {
@@ -364,12 +370,6 @@ function cleanupView(status: CleanupStatus): CleanupView {
         note: () => ({ text: `Auth error: ${status.message}`, tone: "error" }),
       };
   }
-}
-
-function formatHeldDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  const s = ms / 1000;
-  return s < 10 ? `${s.toFixed(1)}s` : `${Math.round(s)}s`;
 }
 
 function useCopyFlash(): { copied: boolean; flash: (text: string) => void } {
@@ -396,48 +396,83 @@ function useCopyFlash(): { copied: boolean; flash: (text: string) => void } {
   return { copied, flash };
 }
 
-function HistoryItem({ entry, now }: ItemProps) {
+function HistoryRow({
+  entry,
+  flashing,
+}: {
+  entry: HistoryEntry;
+  flashing: boolean;
+}) {
   const [traceOpen, setTraceOpen] = useState(false);
   const { copied, flash } = useCopyFlash();
   const view = cleanupView(entry.cleanup_status);
 
   return (
-    <li className="flex flex-col gap-1.5 px-3.5 py-3 [&+li]:border-t [&+li]:border-border">
-      <div className="flex items-center gap-2.5">
-        <time
-          className="text-[11px] tabular-nums text-muted-foreground/70"
-          dateTime={new Date(entry.timestamp * 1000).toISOString()}
+    <RowCard
+      flashing={flashing}
+      interactive={!traceOpen}
+      className="items-stretch flex-col gap-2 py-3 pr-3"
+    >
+      <div className="flex items-start gap-3.5">
+        <div
+          className="flex flex-col items-end shrink-0 w-[68px] pt-0.5"
+          aria-label="time and duration"
         >
-          {formatRelative(entry.timestamp, now)}
-        </time>
-        {view.badge && <Badge variant={view.badge.tone}>{view.badge.label}</Badge>}
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          className={cn("ml-auto", copied && "text-green-600")}
-          aria-label="Copy transcript"
-          aria-live="polite"
-          onClick={() => flash(entry.final_text)}
-        >
-          {copied ? "Copied" : "Copy"}
-        </Button>
+          <time
+            dateTime={new Date(entry.timestamp * 1000).toISOString()}
+            className="font-mono text-[13px] font-semibold tabular-nums text-foreground leading-none"
+          >
+            {formatTimeOfDay(entry.timestamp)}
+          </time>
+          <span className="mt-1 font-mono text-[10.5px] tabular-nums text-muted-foreground/70 leading-none">
+            {formatHeldDuration(entry.speak_duration_ms)}
+          </span>
+        </div>
+
+        <div className="flex flex-1 min-w-0 flex-col gap-1.5">
+          <div className="whitespace-pre-wrap break-words text-[13px] leading-[1.5] text-foreground select-text">
+            {entry.final_text}
+          </div>
+          {view.badge && (
+            <Badge variant={view.badge.tone} className="self-start text-[10px]">
+              {view.badge.label}
+            </Badge>
+          )}
+          <div className="flex items-center gap-1 pt-0.5 opacity-65 group-hover:opacity-100 transition-opacity">
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="text-muted-foreground"
+              aria-expanded={traceOpen}
+              onClick={() => setTraceOpen((o) => !o)}
+            >
+              {traceOpen ? "Hide trace" : "Show trace"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className={cn(
+                "text-muted-foreground",
+                copied && "text-green-600",
+              )}
+              aria-label="Copy transcript"
+              aria-live="polite"
+              onClick={() => flash(entry.final_text)}
+            >
+              {copied ? "Copied" : "Copy"}
+            </Button>
+          </div>
+        </div>
       </div>
-      <div className="whitespace-pre-wrap break-words text-[13px] leading-[1.5] text-foreground select-text">
-        {entry.final_text}
-      </div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="xs"
-        className="self-start text-muted-foreground"
-        aria-expanded={traceOpen}
-        onClick={() => setTraceOpen((o) => !o)}
-      >
-        {traceOpen ? "Hide trace" : "Show trace"}
-      </Button>
-      {traceOpen && <HistoryTrace entry={entry} cleanupNote={view.note} />}
-    </li>
+
+      {traceOpen && (
+        <div className="ml-[84px]">
+          <HistoryTrace entry={entry} cleanupNote={view.note} />
+        </div>
+      )}
+    </RowCard>
   );
 }
 
@@ -449,7 +484,7 @@ interface TraceProps {
 function HistoryTrace({ entry, cleanupNote }: TraceProps) {
   const cleanupTextChanged = entry.replaced_text !== entry.raw_text;
   return (
-    <div className="mt-1 flex flex-col gap-2 rounded-lg bg-muted px-3 py-2.5">
+    <div className="flex flex-col gap-2 rounded-lg bg-muted/60 px-3 py-2.5">
       <Stage label="Deepgram" text={entry.raw_text} />
       <Stage
         label="AI cleanup"
@@ -462,9 +497,6 @@ function HistoryTrace({ entry, cleanupNote }: TraceProps) {
         text={entry.final_text}
         previousText={entry.replaced_text}
       />
-      <div className="border-t border-dashed border-border pt-1 text-[10px] tabular-nums text-muted-foreground/70">
-        Held PTT for {formatHeldDuration(entry.speak_duration_ms)}
-      </div>
     </div>
   );
 }
