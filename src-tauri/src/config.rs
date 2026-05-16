@@ -30,6 +30,13 @@ pub struct DictionaryEntry {
     pub to: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SnippetEntry {
+    pub id: String,
+    pub trigger: String,
+    pub expansion: String,
+}
+
 pub fn default_dictionary() -> Vec<DictionaryEntry> {
     [
         ("dot", "."),
@@ -183,6 +190,8 @@ pub struct Settings {
     #[serde(default = "default_dictionary")]
     pub dictionary: Vec<DictionaryEntry>,
     #[serde(default)]
+    pub snippets: Vec<SnippetEntry>,
+    #[serde(default)]
     pub deepgram: DeepgramSettings,
     #[serde(default)]
     pub groq: GroqSettings,
@@ -215,6 +224,7 @@ impl Default for Settings {
             groq_api_key: None,
             shortcut: Shortcut::default(),
             dictionary: default_dictionary(),
+            snippets: vec![],
             deepgram: DeepgramSettings::default(),
             groq: GroqSettings::default(),
             ai_cleanup: AiCleanupSettings::default(),

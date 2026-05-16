@@ -16,6 +16,10 @@ mod groq_session_state;
 mod groq_stabilizer;
 mod history;
 mod permissions;
+// snippets helpers are consumed by macOS-only ptt; allow unused items on
+// non-macOS so the module still ships and its tests run.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+mod snippets;
 mod state;
 mod stats;
 mod tray;
@@ -26,8 +30,6 @@ mod cleanup;
 mod cleanup_stats;
 #[cfg(target_os = "macos")]
 mod deepgram_session;
-#[cfg(target_os = "macos")]
-mod dictionary;
 #[cfg(target_os = "macos")]
 mod groq_session;
 #[cfg(target_os = "macos")]
@@ -141,6 +143,7 @@ pub fn run() {
             commands::set_shortcut,
             commands::set_shortcut_capture_paused,
             commands::set_dictionary,
+            commands::set_snippets,
             commands::set_default_mode_cleanup_enabled,
             commands::add_mode,
             commands::update_mode,

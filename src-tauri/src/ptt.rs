@@ -2,6 +2,7 @@ use crate::config::TranscriptionProvider;
 use crate::deepgram_session::DeepgramSession;
 use crate::dictionary::apply_dictionary;
 use crate::groq_session::GroqSession;
+use crate::snippets::expand_snippets;
 use crate::history::{self, CleanupStatus, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::recorder::Recorder;
 use crate::state::{AppState, ModifierState};
@@ -330,15 +331,22 @@ async fn run_session(
 
     let default_mode = config::get_default_mode(&settings);
     let mode_cleanup_enabled = default_mode.ai_cleanup.enabled;
+    let mode_use_snippets = default_mode.use_snippets;
     let mode_use_dictionary = default_mode.use_dictionary;
 
     let (replaced_text, cleanup_status, notice) =
         maybe_cleanup(app, &settings, mode_cleanup_enabled, &raw_text, speak_duration).await;
 
-    let final_text = if mode_use_dictionary {
-        apply_dictionary(&replaced_text, &settings.dictionary)
+    let snippet_text = if mode_use_snippets {
+        expand_snippets(&replaced_text, &settings.snippets)
     } else {
         replaced_text.clone()
+    };
+
+    let final_text = if mode_use_dictionary {
+        apply_dictionary(&snippet_text, &settings.dictionary)
+    } else {
+        snippet_text
     };
 
     let words = final_text.split_whitespace().count() as u64;

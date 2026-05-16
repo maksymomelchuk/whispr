@@ -11,6 +11,7 @@ import type {
   Mode,
   Settings,
   Shortcut,
+  Snippet,
   StatsRow,
   TranscriptionProvider,
 } from "./types";
@@ -43,6 +44,9 @@ export const setShortcutCapturePaused = (paused: boolean) =>
 
 export const setDictionary = (dictionary: DictionaryEntry[]) =>
   invoke<void>("set_dictionary", { dictionary });
+
+export const setSnippets = (snippets: Snippet[]) =>
+  invoke<void>("set_snippets", { snippets });
 
 export const setDefaultModeCleanupEnabled = (enabled: boolean) =>
   invoke<void>("set_default_mode_cleanup_enabled", { enabled });
