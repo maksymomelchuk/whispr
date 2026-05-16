@@ -8,6 +8,7 @@ import type {
   GroqSettings,
   HistoryEntry,
   HistoryLimit,
+  HotkeyBinding,
   Mode,
   Settings,
   Shortcut,
@@ -35,8 +36,8 @@ export const validateDeepgramApiKey = (apiKey: string) =>
 export const validateGroqApiKey = (apiKey: string) =>
   invoke<ApiKeyValidation>("validate_groq_api_key", { apiKey });
 
-export const setShortcut = (shortcut: Shortcut) =>
-  invoke<void>("set_shortcut", { shortcut });
+export const setHotkeyBindings = (bindings: HotkeyBinding[]) =>
+  invoke<void>("set_hotkey_bindings", { bindings });
 
 export const setShortcutCapturePaused = (paused: boolean) =>
   invoke<void>("set_shortcut_capture_paused", { paused });

@@ -1,7 +1,8 @@
 use crate::api_key_validation::{self, ApiKeyValidation};
 use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
 use crate::config::{
-    self, CleanupAuthMode, DictionaryEntry, GroqSettings, Settings, Shortcut, TranscriptionProvider,
+    self, CleanupAuthMode, DictionaryEntry, GroqSettings, HotkeyBinding, Settings,
+    TranscriptionProvider,
 };
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::mode::{Mode, ModeId};
@@ -19,7 +20,7 @@ pub struct SettingsView {
     pub transcription_provider: TranscriptionProvider,
     pub deepgram_api_key_configured: bool,
     pub groq_api_key_configured: bool,
-    pub shortcut: Shortcut,
+    pub hotkey_bindings: Vec<HotkeyBinding>,
     pub dictionary: Vec<DictionaryEntry>,
     pub groq: GroqSettings,
     pub modes: Vec<Mode>,
@@ -49,7 +50,7 @@ impl From<Settings> for SettingsView {
             transcription_provider: s.transcription_provider,
             deepgram_api_key_configured,
             groq_api_key_configured,
-            shortcut: s.shortcut,
+            hotkey_bindings: s.hotkey_bindings,
             dictionary: s.dictionary,
             groq: s.groq,
             modes: s.modes,
@@ -121,15 +122,15 @@ pub async fn validate_groq_api_key(app: AppHandle, api_key: String) -> ApiKeyVal
 }
 
 #[tauri::command]
-pub fn set_shortcut(
+pub fn set_hotkey_bindings(
     app: AppHandle,
     state: State<'_, AppState>,
-    shortcut: Shortcut,
+    bindings: Vec<HotkeyBinding>,
 ) -> Result<(), String> {
-    config::update(&app, |s| s.shortcut = shortcut.clone())?;
-    // Live-update the listener's view of the shortcut so the change takes
-    // effect immediately — no app restart needed.
-    *state.shortcut.lock().unwrap() = shortcut;
+    config::check_hotkey_conflicts(&bindings)?;
+    config::update(&app, |s| s.hotkey_bindings = bindings.clone())?;
+    // Live-update the PTT listener so the change takes effect immediately.
+    *state.hotkey_bindings.lock().unwrap() = bindings;
     Ok(())
 }
 
@@ -174,12 +175,20 @@ pub fn update_mode(app: AppHandle, mode: Mode) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn delete_mode(app: AppHandle, id: ModeId) -> Result<(), String> {
+pub fn delete_mode(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: ModeId,
+) -> Result<(), String> {
     config::update_fallible(&app, |s| {
         config::check_delete_mode(s, &id)?;
         s.modes.retain(|m| m.id != id);
+        s.hotkey_bindings.retain(|b| b.mode_id != id);
         Ok(())
-    })
+    })?;
+    // Live-update the PTT listener.
+    state.hotkey_bindings.lock().unwrap().retain(|b| b.mode_id != id);
+    Ok(())
 }
 
 #[tauri::command]
@@ -352,6 +361,8 @@ mod tests {
         assert!(!view.deepgram_api_key_configured);
         assert!(!view.groq_api_key_configured);
         assert_eq!(view.groq.model, GroqModel::WhisperLargeV3Turbo);
+        assert_eq!(view.hotkey_bindings.len(), 1);
+        assert_eq!(view.hotkey_bindings[0].shortcut.key, "AltRight");
     }
 
     #[test]

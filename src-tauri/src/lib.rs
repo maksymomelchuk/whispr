@@ -27,8 +27,6 @@ mod cleanup_stats;
 #[cfg(target_os = "macos")]
 mod deepgram_session;
 #[cfg(target_os = "macos")]
-mod dictionary;
-#[cfg(target_os = "macos")]
 mod groq_session;
 #[cfg(target_os = "macos")]
 mod transcription_session;
@@ -95,7 +93,7 @@ pub fn run() {
 
             let settings = config::load(&app.handle());
             let app_state = AppState::default();
-            *app_state.shortcut.lock().unwrap() = settings.shortcut;
+            *app_state.hotkey_bindings.lock().unwrap() = settings.hotkey_bindings;
             *app_state.input_device.lock().unwrap() = settings.input_device;
             *app_state.pause_media_on_record.lock().unwrap() =
                 settings.pause_media_on_record;
@@ -138,7 +136,7 @@ pub fn run() {
             commands::set_groq_settings,
             commands::validate_deepgram_api_key,
             commands::validate_groq_api_key,
-            commands::set_shortcut,
+            commands::set_hotkey_bindings,
             commands::set_shortcut_capture_paused,
             commands::set_dictionary,
             commands::set_default_mode_cleanup_enabled,

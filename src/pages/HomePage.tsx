@@ -26,7 +26,11 @@ export function HomePage() {
             </span>
           </div>
           <p className="text-2xl font-semibold text-foreground font-mono tracking-wide">
-            {formatShortcut(settings.shortcut)}
+            {settings.hotkey_bindings.length > 0
+              ? settings.hotkey_bindings
+                  .map((b) => formatShortcut(b.shortcut))
+                  .join("  ·  ")
+              : "No hotkeys set"}
           </p>
           <p className="text-sm text-muted-foreground mt-1">
             Hold to dictate, release to transcribe and paste

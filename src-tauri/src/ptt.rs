@@ -1,4 +1,4 @@
-use crate::config::TranscriptionProvider;
+use crate::config::{Shortcut, TranscriptionProvider};
 use crate::deepgram_session::DeepgramSession;
 use crate::dictionary::apply_dictionary;
 use crate::groq_session::GroqSession;
@@ -240,6 +240,21 @@ fn macos_keycode_to_code(kc: u16) -> Option<&'static str> {
     })
 }
 
+/// True if `code` is the shortcut's key or one of its required modifiers.
+/// Used to decide whether an event is worth processing for PTT.
+fn shortcut_is_relevant(code: &str, shortcut: &Shortcut) -> bool {
+    if code == shortcut.key {
+        return true;
+    }
+    shortcut.modifiers.iter().any(|m| match m.as_str() {
+        "Meta" => matches!(code, "MetaLeft" | "MetaRight"),
+        "Control" => matches!(code, "ControlLeft" | "ControlRight"),
+        "Alt" => matches!(code, "AltLeft" | "AltRight"),
+        "Shift" => matches!(code, "ShiftLeft" | "ShiftRight"),
+        _ => false,
+    })
+}
+
 fn is_modifier_code(code: &str) -> bool {
     matches!(
         code,
@@ -281,9 +296,9 @@ fn maybe_resume_media(state: &AppState) {
 /// with the user's first words. Release closes the chunk channel; this task
 /// drains STT, runs optional LLM cleanup, pastes, and only then hides the
 /// overlay so it bridges the post-release processing.
-fn spawn_session(app: AppHandle, recorder: Recorder, device: Option<String>) {
+fn spawn_session(app: AppHandle, recorder: Recorder, device: Option<String>, mode_id: String) {
     tauri::async_runtime::spawn(async move {
-        let result = run_session(&app, recorder, device).await;
+        let result = run_session(&app, recorder, device, &mode_id).await;
         if let Err(e) = result {
             eprintln!("[pipeline] {e}");
             notify_error(&app, e);
@@ -296,6 +311,7 @@ async fn run_session(
     app: &AppHandle,
     recorder: Recorder,
     device: Option<String>,
+    mode_id: &str,
 ) -> Result<(), String> {
     let (chunk_tx, chunk_rx) = tokio::sync::mpsc::unbounded_channel();
     let (format_tx, format_rx) = tokio::sync::oneshot::channel();
@@ -328,9 +344,13 @@ async fn run_session(
         return Ok(());
     }
 
-    let default_mode = config::get_default_mode(&settings);
-    let mode_cleanup_enabled = default_mode.ai_cleanup.enabled;
-    let mode_use_dictionary = default_mode.use_dictionary;
+    let active_mode = settings
+        .modes
+        .iter()
+        .find(|m| m.id == mode_id)
+        .unwrap_or_else(|| config::get_default_mode(&settings));
+    let mode_cleanup_enabled = active_mode.ai_cleanup.enabled;
+    let mode_use_dictionary = active_mode.use_dictionary;
 
     let (replaced_text, cleanup_status, notice) =
         maybe_cleanup(app, &settings, mode_cleanup_enabled, &raw_text, speak_duration).await;
@@ -548,37 +568,51 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                     return None;
                 }
 
-                let shortcut = state.shortcut.lock().unwrap().clone();
-
-                // Press requires the exact shortcut (key + modifiers) to be
-                // held. Release is permissive: if PTT is active, any part of
-                // the shortcut going up ends the session. Without this, a
-                // user releasing the modifier a tick before the key would
-                // leave PTT stuck because the modifier-match check fails at
-                // the moment of the key's KeyUp.
-                let is_shortcut_key = code == shortcut.key;
-                let is_required_modifier =
-                    shortcut.modifiers.iter().any(|m| match m.as_str() {
-                        "Meta" => matches!(code, "MetaLeft" | "MetaRight"),
-                        "Control" => matches!(code, "ControlLeft" | "ControlRight"),
-                        "Alt" => matches!(code, "AltLeft" | "AltRight"),
-                        "Shift" => matches!(code, "ShiftLeft" | "ShiftRight"),
-                        _ => false,
-                    });
-                if !is_shortcut_key && !is_required_modifier {
+                // For release events, check only against the shortcut that
+                // started the active session so unrelated bindings don't
+                // cause spurious releases.
+                let ptt_active_now = *state.ptt_active.lock().unwrap();
+                let relevant = if ptt_active_now {
+                    state
+                        .active_shortcut
+                        .lock()
+                        .unwrap()
+                        .as_ref()
+                        .map(|sc| shortcut_is_relevant(code, sc))
+                        .unwrap_or(false)
+                } else {
+                    state
+                        .hotkey_bindings
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .any(|b| shortcut_is_relevant(code, &b.shortcut))
+                };
+                if !relevant {
                     return None;
                 }
 
                 let mut active = state.ptt_active.lock().unwrap();
 
-                if is_press && !*active && is_shortcut_key {
-                    let modifiers_ok = if is_modifier_code(&shortcut.key) {
-                        true
-                    } else {
-                        state.modifiers.lock().unwrap().matches(&shortcut.modifiers)
-                    };
-                    if modifiers_ok {
+                if is_press && !*active {
+                    // Find the first binding whose key matches and whose
+                    // modifiers are all satisfied.
+                    let bindings = state.hotkey_bindings.lock().unwrap().clone();
+                    let matched = bindings.iter().find(|b| {
+                        if code != b.shortcut.key {
+                            return false;
+                        }
+                        if is_modifier_code(&b.shortcut.key) {
+                            true
+                        } else {
+                            state.modifiers.lock().unwrap().matches(&b.shortcut.modifiers)
+                        }
+                    });
+                    if let Some(binding) = matched {
+                        let mode_id = binding.mode_id.clone();
+                        let shortcut = binding.shortcut.clone();
                         *active = true;
+                        *state.active_shortcut.lock().unwrap() = Some(shortcut);
                         let device = state.input_device.lock().unwrap().clone();
                         // Capture frontmost app before overlay::show so the
                         // worker's frontmostApplication() lookup can't race
@@ -586,13 +620,14 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                         target_app::capture(app.clone());
                         // Spawn up front so the WS handshake overlaps with
                         // capture rather than waiting for PTT release.
-                        spawn_session(app.clone(), recorder.clone(), device);
+                        spawn_session(app.clone(), recorder.clone(), device, mode_id);
                         overlay::show(&app);
                         let _ = app.emit(PTT_PRESSED_EVENT, ());
                         maybe_pause_media(&state);
                     }
                 } else if !is_press && *active {
                     *active = false;
+                    *state.active_shortcut.lock().unwrap() = None;
                     // Overlay stays visible — spawn_session hides it after
                     // paste so the "still processing" state bridges STT
                     // drain and any LLM cleanup pass.
