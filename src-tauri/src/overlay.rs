@@ -10,7 +10,7 @@ const OVERLAY_WIDTH: f64 = 640.0;
 const OVERLAY_HEIGHT: f64 = 120.0;
 /// Distance from monitor bottom to window bottom — the pill anchors to the
 /// window bottom in CSS so this also fixes the pill's resting position.
-const BOTTOM_MARGIN: f64 = 28.0;
+const BOTTOM_MARGIN: f64 = 16.0;
 
 pub fn create(app: &AppHandle) -> Result<(), String> {
     if app.get_webview_window(OVERLAY_LABEL).is_some() {
