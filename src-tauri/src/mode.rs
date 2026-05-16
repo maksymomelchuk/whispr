@@ -272,8 +272,6 @@ mod tests {
 
     #[test]
     fn mode_cleanup_disabled_with_prompt_override_carries_both_fields() {
-        // When enabled=false the pipeline skips cleanup regardless of prompt_override.
-        // This test verifies the struct correctly stores both fields independently.
         let c = ModeCleanup {
             enabled: false,
             prompt_override: Some("custom prompt".to_string()),
