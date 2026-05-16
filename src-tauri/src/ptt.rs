@@ -1,4 +1,4 @@
-use crate::config::{Shortcut, TranscriptionProvider};
+use crate::config::{HotkeyBinding, Shortcut, TranscriptionProvider};
 use crate::deepgram_session::DeepgramSession;
 use crate::dictionary::apply_dictionary;
 use crate::groq_session::GroqSession;
@@ -50,15 +50,20 @@ pub enum Dispatch {
 pub struct TapState {
     pub tap_count: u8,
     pub last_tap_up_time: Option<Instant>,
+    /// Bumped on every state-mutating event. Pending coexistence timers capture
+    /// the post-event value at schedule time and abort on wake if it no longer
+    /// matches — wrapping is fine, u64 collisions are not realistic.
+    pub generation: u64,
 }
 
 pub fn advance_tap_state(state: &mut TapState, event: TapEvent, now: Instant) -> Dispatch {
-    match event {
+    let dispatch = match event {
         TapEvent::Down => {
             if state.tap_count == 1 {
                 if let Some(t) = state.last_tap_up_time {
                     if now.duration_since(t) < DOUBLE_TAP_THRESHOLD {
                         state.tap_count = 2;
+                        state.generation = state.generation.wrapping_add(1);
                         return Dispatch::StartPtt;
                     }
                 }
@@ -71,6 +76,7 @@ pub fn advance_tap_state(state: &mut TapState, event: TapEvent, now: Instant) ->
             if state.tap_count == 2 {
                 state.tap_count = 0;
                 state.last_tap_up_time = None;
+                state.generation = state.generation.wrapping_add(1);
                 return Dispatch::StopPtt;
             }
             if state.tap_count == 1 {
@@ -85,7 +91,50 @@ pub fn advance_tap_state(state: &mut TapState, event: TapEvent, now: Instant) ->
             }
             Dispatch::Nothing
         }
+    };
+    state.generation = state.generation.wrapping_add(1);
+    dispatch
+}
+
+/// Outcome of a key-down on a key that has both a single-press and a double-tap
+/// binding. State is mutated; the timer-arming variant carries the generation
+/// the caller must capture so the timer can detect later events that invalidate it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CoexDown {
+    FireDoubleTap,
+    ScheduleSinglePress { captured_generation: u64 },
+}
+
+pub fn coex_advance_down(state: &mut TapState, now: Instant) -> CoexDown {
+    match advance_tap_state(state, TapEvent::Down, now) {
+        Dispatch::StartPtt => CoexDown::FireDoubleTap,
+        _ => CoexDown::ScheduleSinglePress {
+            captured_generation: state.generation,
+        },
     }
+}
+
+pub fn coex_timer_should_fire(state: &TapState, captured: u64) -> bool {
+    state.generation == captured
+        && state.tap_count == 1
+        && state.last_tap_up_time.is_none()
+}
+
+/// True iff `bindings` contains both a single-press and a double-tap binding
+/// for the same `(key, modifiers)` as `shortcut`.
+pub fn key_has_both_kinds(bindings: &[HotkeyBinding], shortcut: &Shortcut) -> bool {
+    let mut has_single = false;
+    let mut has_double = false;
+    for b in bindings {
+        if b.shortcut.key == shortcut.key && b.shortcut.modifiers == shortcut.modifiers {
+            if b.shortcut.is_double_tap {
+                has_double = true;
+            } else {
+                has_single = true;
+            }
+        }
+    }
+    has_single && has_double
 }
 
 /// No window focus — caller still owns the target app's focus for paste.
@@ -623,6 +672,31 @@ async fn maybe_cleanup(
     }
 }
 
+/// Acquires `ptt_active`, double-checks it's still false, then drives the full
+/// PTT-start sequence: mark active, capture the target app, spawn the STT
+/// session, show the overlay, notify the UI, and (optionally) pause media.
+/// Safe to call from the CGEventTap callback or from a tokio task.
+fn start_ptt(app: &AppHandle, state: &AppState, recorder: &Recorder, binding: &HotkeyBinding) {
+    let mut active = state.ptt_active.lock().unwrap();
+    if *active {
+        return;
+    }
+    *active = true;
+    *state.active_shortcut.lock().unwrap() = Some(binding.shortcut.clone());
+    let mode_id = binding.mode_id.clone();
+    let device = state.input_device.lock().unwrap().clone();
+    // Capture frontmost app before overlay::show so the worker's
+    // frontmostApplication() lookup can't race any window-server bookkeeping
+    // that show() triggers.
+    target_app::capture(app.clone());
+    // Spawn up front so the WS handshake overlaps with capture rather than
+    // waiting for PTT release.
+    spawn_session(app.clone(), recorder.clone(), device, mode_id);
+    overlay::show(app);
+    let _ = app.emit(PTT_PRESSED_EVENT, &binding.shortcut);
+    maybe_pause_media(state);
+}
+
 pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
     std::thread::spawn(move || {
 
@@ -631,9 +705,11 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
         // itself. Populated after CGEventTap::new returns.
         let tap_port: Arc<AtomicPtr<c_void>> = Arc::new(AtomicPtr::new(std::ptr::null_mut()));
         let tap_port_cb = tap_port.clone();
-        // Per double-tap binding state, keyed by (key, modifiers).
-        // Single-press bindings never touch this map.
-        let mut tap_states: HashMap<(String, Vec<String>), TapState> = HashMap::new();
+        // Per-shortcut tap state, keyed by (key, modifiers). Shared with
+        // spawned coexistence timer tasks via Arc; single-press-only keys with
+        // no double-tap sibling never touch this map.
+        let tap_states: Arc<Mutex<HashMap<(String, Vec<String>), TapState>>> =
+            Arc::new(Mutex::new(HashMap::new()));
 
         let tap_result = CGEventTap::new(
             CGEventTapLocation::HID,
@@ -668,6 +744,17 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                 let Some(code) = macos_keycode_to_code(keycode) else {
                     return None;
                 };
+
+                // KeyDown auto-repeat re-asserts a held key every ~30 ms once
+                // the OS repeat delay elapses. Treating each repeat as a fresh
+                // tap would defeat the coexistence timer (every repeat would
+                // bump the generation and reschedule a new 400 ms timer that
+                // never fires).
+                if matches!(event_type, CGEventType::KeyDown)
+                    && event.get_integer_value_field(EventField::KEYBOARD_EVENT_AUTOREPEAT) != 0
+                {
+                    return None;
+                }
 
                 let is_press = match event_type {
                     CGEventType::KeyDown => true,
@@ -709,12 +796,17 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                 let bindings = state.hotkey_bindings.lock().unwrap().clone();
                 let modifiers_val = *state.modifiers.lock().unwrap();
 
-                // Reset pending double-tap state for any binding whose key
-                // this event doesn't match — "other key" cancels the gesture.
+                // Reset pending tap-state for any shortcut whose key this event
+                // doesn't match — "other key" cancels the gesture. Touches the
+                // shared map: covers both bare double-tap bindings and the
+                // coexistence pair (which keys on the same dt shortcut).
                 if is_press && !ptt_active_now {
+                    let mut tap_states_guard = tap_states.lock().unwrap();
                     for b in bindings.iter().filter(|b| b.shortcut.is_double_tap) {
                         if !shortcut_matches(code, &b.shortcut, modifiers_val) {
-                            if let Some(ts) = tap_states.get_mut(&tap_state_key(&b.shortcut)) {
+                            if let Some(ts) =
+                                tap_states_guard.get_mut(&tap_state_key(&b.shortcut))
+                            {
                                 advance_tap_state(ts, TapEvent::OtherKey, now);
                             }
                         }
@@ -739,75 +831,115 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                     return None;
                 }
 
-                let mut active = state.ptt_active.lock().unwrap();
+                if is_press && !ptt_active_now {
+                    let sp = bindings.iter().find(|b| {
+                        !b.shortcut.is_double_tap
+                            && shortcut_matches(code, &b.shortcut, modifiers_val)
+                    });
+                    let dt = bindings.iter().find(|b| {
+                        b.shortcut.is_double_tap
+                            && shortcut_matches(code, &b.shortcut, modifiers_val)
+                    });
 
-                if is_press && !*active {
-                    // Advance double-tap state machines; fire if second tap within window.
-                    let mut dt_start_idx: Option<usize> = None;
-                    for (i, b) in bindings.iter().enumerate() {
-                        if !b.shortcut.is_double_tap {
-                            continue;
-                        }
-                        if shortcut_matches(code, &b.shortcut, modifiers_val) {
-                            let ts = tap_states.entry(tap_state_key(&b.shortcut)).or_default();
-                            if advance_tap_state(ts, TapEvent::Down, now) == Dispatch::StartPtt {
-                                dt_start_idx = Some(i);
-                                break;
+                    match (sp, dt) {
+                        (Some(sp_b), Some(dt_b))
+                            if key_has_both_kinds(&bindings, &dt_b.shortcut) =>
+                        {
+                            let key = tap_state_key(&dt_b.shortcut);
+                            let outcome = {
+                                let mut guard = tap_states.lock().unwrap();
+                                let ts = guard.entry(key.clone()).or_default();
+                                coex_advance_down(ts, now)
+                            };
+                            match outcome {
+                                CoexDown::FireDoubleTap => {
+                                    start_ptt(&app, &state, &recorder, dt_b);
+                                }
+                                CoexDown::ScheduleSinglePress { captured_generation } => {
+                                    let tap_states_for_timer = tap_states.clone();
+                                    let app_for_timer = app.clone();
+                                    let state_for_timer = state.clone();
+                                    let recorder_for_timer = recorder.clone();
+                                    let sp_for_timer = sp_b.clone();
+                                    tauri::async_runtime::spawn(async move {
+                                        tokio::time::sleep(DOUBLE_TAP_THRESHOLD).await;
+                                        let should_fire = {
+                                            let mut guard =
+                                                tap_states_for_timer.lock().unwrap();
+                                            let Some(ts) = guard.get_mut(&key) else {
+                                                return;
+                                            };
+                                            if !coex_timer_should_fire(ts, captured_generation)
+                                            {
+                                                return;
+                                            }
+                                            ts.generation = ts.generation.wrapping_add(1);
+                                            true
+                                        };
+                                        if should_fire {
+                                            start_ptt(
+                                                &app_for_timer,
+                                                &state_for_timer,
+                                                &recorder_for_timer,
+                                                &sp_for_timer,
+                                            );
+                                        }
+                                    });
+                                }
                             }
                         }
-                    }
-
-                    let matched = if let Some(i) = dt_start_idx {
-                        Some(&bindings[i])
-                    } else {
-                        bindings.iter().find(|b| {
-                            !b.shortcut.is_double_tap
-                                && shortcut_matches(code, &b.shortcut, modifiers_val)
-                        })
-                    };
-
-                    if let Some(binding) = matched {
-                        *active = true;
-                        *state.active_shortcut.lock().unwrap() = Some(binding.shortcut.clone());
-                        let mode_id = binding.mode_id.clone();
-                        let device = state.input_device.lock().unwrap().clone();
-                        // Capture frontmost app before overlay::show so the
-                        // worker's frontmostApplication() lookup can't race
-                        // any window-server bookkeeping that show() triggers.
-                        target_app::capture(app.clone());
-                        // Spawn up front so the WS handshake overlaps with
-                        // capture rather than waiting for PTT release.
-                        spawn_session(app.clone(), recorder.clone(), device, mode_id);
-                        overlay::show(&app);
-                        let _ = app.emit(PTT_PRESSED_EVENT, ());
-                        maybe_pause_media(&state);
-                    }
-                } else if !is_press && *active {
-                    let sc_opt = state.active_shortcut.lock().unwrap().clone();
-                    let should_stop = match sc_opt {
-                        Some(ref sc) if sc.is_double_tap => {
-                            let ts = tap_states.entry(tap_state_key(sc)).or_default();
-                            advance_tap_state(ts, TapEvent::Up, now) == Dispatch::StopPtt
+                        (_, Some(dt_b)) => {
+                            // Double-tap only: existing #40 behavior.
+                            let dispatch = {
+                                let mut guard = tap_states.lock().unwrap();
+                                let ts = guard.entry(tap_state_key(&dt_b.shortcut)).or_default();
+                                advance_tap_state(ts, TapEvent::Down, now)
+                            };
+                            if dispatch == Dispatch::StartPtt {
+                                start_ptt(&app, &state, &recorder, dt_b);
+                            }
                         }
-                        _ => true,
-                    };
-                    if should_stop {
-                        *active = false;
-                        *state.active_shortcut.lock().unwrap() = None;
-                        // Overlay stays visible — spawn_session hides it after
-                        // paste so the "still processing" state bridges STT
-                        // drain and any LLM cleanup pass.
-                        let _ = app.emit(PTT_RELEASED_EVENT, ());
-                        maybe_resume_media(&state);
-                        recorder.stop();
+                        (Some(sp_b), None) => {
+                            // Single-press only: fire immediately, no regression.
+                            start_ptt(&app, &state, &recorder, sp_b);
+                        }
+                        (None, None) => {}
                     }
-                } else if !is_press && !*active {
-                    // Key-up while idle: record first-tap-up time for double-tap bindings.
-                    for b in bindings.iter().filter(|b| b.shortcut.is_double_tap) {
-                        if shortcut_matches(code, &b.shortcut, modifiers_val) {
-                            if let Some(ts) = tap_states.get_mut(&tap_state_key(&b.shortcut)) {
-                                if ts.tap_count > 0 {
-                                    advance_tap_state(ts, TapEvent::Up, now);
+                } else if !is_press {
+                    let mut active = state.ptt_active.lock().unwrap();
+                    if *active {
+                        let sc_opt = state.active_shortcut.lock().unwrap().clone();
+                        let should_stop = match sc_opt {
+                            Some(ref sc) if sc.is_double_tap => {
+                                let mut tap_states_guard = tap_states.lock().unwrap();
+                                let ts =
+                                    tap_states_guard.entry(tap_state_key(sc)).or_default();
+                                advance_tap_state(ts, TapEvent::Up, now) == Dispatch::StopPtt
+                            }
+                            _ => true,
+                        };
+                        if should_stop {
+                            *active = false;
+                            *state.active_shortcut.lock().unwrap() = None;
+                            // Overlay stays visible — spawn_session hides it
+                            // after paste so the "still processing" state
+                            // bridges STT drain and any LLM cleanup pass.
+                            let _ = app.emit(PTT_RELEASED_EVENT, ());
+                            maybe_resume_media(&state);
+                            recorder.stop();
+                        }
+                    } else {
+                        // Key-up while idle: record first-tap-up time for any
+                        // double-tap (or coexistence) shortcut on this key.
+                        let mut tap_states_guard = tap_states.lock().unwrap();
+                        for b in bindings.iter().filter(|b| b.shortcut.is_double_tap) {
+                            if shortcut_matches(code, &b.shortcut, modifiers_val) {
+                                if let Some(ts) =
+                                    tap_states_guard.get_mut(&tap_state_key(&b.shortcut))
+                                {
+                                    if ts.tap_count > 0 {
+                                        advance_tap_state(ts, TapEvent::Up, now);
+                                    }
                                 }
                             }
                         }
@@ -926,5 +1058,237 @@ mod tests {
         assert_eq!(advance_tap_state(&mut state, TapEvent::Up, Instant::now()), Dispatch::Nothing);
         assert_eq!(state.tap_count, 0);
         assert!(state.last_tap_up_time.is_none());
+    }
+
+    fn sp_binding(key: &str) -> HotkeyBinding {
+        HotkeyBinding {
+            shortcut: Shortcut {
+                key: key.to_string(),
+                modifiers: vec![],
+                is_double_tap: false,
+            },
+            mode_id: "mode-a".to_string(),
+        }
+    }
+
+    fn dt_binding(key: &str) -> HotkeyBinding {
+        HotkeyBinding {
+            shortcut: Shortcut {
+                key: key.to_string(),
+                modifiers: vec![],
+                is_double_tap: true,
+            },
+            mode_id: "mode-b".to_string(),
+        }
+    }
+
+    #[test]
+    fn key_has_both_kinds_detects_coexistence_pair() {
+        let bindings = vec![sp_binding("AltRight"), dt_binding("AltRight")];
+        assert!(key_has_both_kinds(&bindings, &bindings[0].shortcut));
+        assert!(key_has_both_kinds(&bindings, &bindings[1].shortcut));
+    }
+
+    #[test]
+    fn key_has_both_kinds_false_for_single_press_only() {
+        let bindings = vec![sp_binding("AltRight")];
+        assert!(!key_has_both_kinds(&bindings, &bindings[0].shortcut));
+    }
+
+    #[test]
+    fn key_has_both_kinds_false_for_double_tap_only() {
+        let bindings = vec![dt_binding("AltRight")];
+        assert!(!key_has_both_kinds(&bindings, &bindings[0].shortcut));
+    }
+
+    #[test]
+    fn key_has_both_kinds_distinguishes_by_modifiers() {
+        let with_shift = HotkeyBinding {
+            shortcut: Shortcut {
+                key: "AltRight".to_string(),
+                modifiers: vec!["Shift".to_string()],
+                is_double_tap: true,
+            },
+            mode_id: "mode-x".to_string(),
+        };
+        let bindings = vec![sp_binding("AltRight"), with_shift];
+        assert!(!key_has_both_kinds(&bindings, &bindings[0].shortcut));
+        assert!(!key_has_both_kinds(&bindings, &bindings[1].shortcut));
+    }
+
+    #[test]
+    fn advance_tap_state_bumps_generation_on_every_event() {
+        let base = Instant::now();
+        let mut state = TapState::default();
+        let g0 = state.generation;
+
+        advance_tap_state(&mut state, TapEvent::Down, base);
+        let g1 = state.generation;
+        assert_ne!(g0, g1, "Down must bump generation");
+
+        advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(50));
+        let g2 = state.generation;
+        assert_ne!(g1, g2, "Up must bump generation");
+
+        advance_tap_state(&mut state, TapEvent::OtherKey, base + Duration::from_millis(100));
+        let g3 = state.generation;
+        assert_ne!(g2, g3, "OtherKey must bump generation");
+    }
+
+    // ── Coexistence edge-case 1: tap-and-hold past 400 ms → Mode A fires ────
+    #[test]
+    fn coex_tap_and_hold_fires_single_press_at_threshold() {
+        let base = Instant::now();
+        let mut state = TapState::default();
+
+        let outcome = coex_advance_down(&mut state, base);
+        let CoexDown::ScheduleSinglePress { captured_generation } = outcome else {
+            panic!("first down should schedule single-press timer");
+        };
+        assert!(coex_timer_should_fire(&state, captured_generation));
+    }
+
+    // ── Edge-case 2: tap-tap-and-hold → Mode B on 2nd down ───────────────────
+    #[test]
+    fn coex_tap_tap_and_hold_fires_double_tap_on_second_down() {
+        let base = Instant::now();
+        let mut state = TapState::default();
+
+        let CoexDown::ScheduleSinglePress { captured_generation: g1 } =
+            coex_advance_down(&mut state, base)
+        else {
+            panic!();
+        };
+
+        // First up records last_tap_up_time and invalidates the SP timer.
+        advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(50));
+        assert!(!coex_timer_should_fire(&state, g1));
+
+        // Second down within window fires the double-tap immediately.
+        let outcome = coex_advance_down(&mut state, base + Duration::from_millis(150));
+        assert_eq!(outcome, CoexDown::FireDoubleTap);
+
+        let stop = advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(300));
+        assert_eq!(stop, Dispatch::StopPtt);
+    }
+
+    // ── Edge-case 3: tap-and-release within 400 ms, then silence ─────────────
+    #[test]
+    fn coex_tap_release_within_window_then_silence_fires_nothing() {
+        let base = Instant::now();
+        let mut state = TapState::default();
+
+        let CoexDown::ScheduleSinglePress { captured_generation } =
+            coex_advance_down(&mut state, base)
+        else {
+            panic!();
+        };
+        advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(100));
+        assert!(!coex_timer_should_fire(&state, captured_generation));
+    }
+
+    // ── Edge-case 4: tap, release, 1 s pause, another tap-and-release ───────
+    #[test]
+    fn coex_two_separated_taps_with_gap_over_window_fire_nothing() {
+        let base = Instant::now();
+        let mut state = TapState::default();
+
+        let CoexDown::ScheduleSinglePress { captured_generation: g1 } =
+            coex_advance_down(&mut state, base)
+        else {
+            panic!();
+        };
+        advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(100));
+        assert!(!coex_timer_should_fire(&state, g1));
+
+        let outcome2 = coex_advance_down(&mut state, base + Duration::from_millis(1100));
+        let CoexDown::ScheduleSinglePress { captured_generation: g2 } = outcome2 else {
+            panic!("gap > window should schedule a fresh SP timer, not fire DT");
+        };
+        advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(1200));
+        assert!(!coex_timer_should_fire(&state, g2));
+    }
+
+    // ── Edge-case 5: rapid triple tap (2nd fires Mode B; 3rd ignored) ───────
+    #[test]
+    fn coex_rapid_triple_tap_fires_double_tap_then_resets() {
+        let base = Instant::now();
+        let mut state = TapState::default();
+
+        let _ = coex_advance_down(&mut state, base);
+        advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(50));
+        assert_eq!(
+            coex_advance_down(&mut state, base + Duration::from_millis(150)),
+            CoexDown::FireDoubleTap,
+        );
+        assert_eq!(
+            advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(250)),
+            Dispatch::StopPtt,
+        );
+
+        // A 3rd down after dt completes is a fresh first tap, NOT another
+        // double-tap (state was reset on StopPtt).
+        let outcome3 = coex_advance_down(&mut state, base + Duration::from_millis(350));
+        assert!(matches!(outcome3, CoexDown::ScheduleSinglePress { .. }));
+    }
+
+    // ── Edge-case 6: hold 600 ms past threshold, then release → standard stop
+    #[test]
+    fn coex_hold_past_threshold_keeps_timer_eligible_until_event_arrives() {
+        let base = Instant::now();
+        let mut state = TapState::default();
+
+        let CoexDown::ScheduleSinglePress { captured_generation } =
+            coex_advance_down(&mut state, base)
+        else {
+            panic!();
+        };
+        assert!(coex_timer_should_fire(&state, captured_generation));
+
+        // A subsequent fresh first-tap correctly transitions through the
+        // state machine even though tap_count was still 1 from the prior
+        // press (sp fired without resetting it — that's intentional).
+        let outcome2 = coex_advance_down(&mut state, base + Duration::from_millis(800));
+        assert!(matches!(outcome2, CoexDown::ScheduleSinglePress { .. }));
+        assert_eq!(state.tap_count, 1);
+    }
+
+    // ── Edge-case 9: only sp binding → key_has_both_kinds is false ──────────
+    #[test]
+    fn coex_helper_says_no_for_single_press_only_key() {
+        let bindings = vec![sp_binding("AltRight")];
+        let other = Shortcut {
+            key: "AltRight".to_string(),
+            modifiers: vec![],
+            is_double_tap: false,
+        };
+        assert!(!key_has_both_kinds(&bindings, &other));
+    }
+
+    // ── Edge-case 10: only dt binding → key_has_both_kinds is false ─────────
+    #[test]
+    fn coex_helper_says_no_for_double_tap_only_key() {
+        let bindings = vec![dt_binding("AltRight")];
+        let other = Shortcut {
+            key: "AltRight".to_string(),
+            modifiers: vec![],
+            is_double_tap: true,
+        };
+        assert!(!key_has_both_kinds(&bindings, &other));
+    }
+
+    // ── Timer cancellation: stale generation never fires ────────────────────
+    #[test]
+    fn coex_timer_with_stale_generation_does_not_fire() {
+        let base = Instant::now();
+        let mut state = TapState::default();
+        let CoexDown::ScheduleSinglePress { captured_generation } =
+            coex_advance_down(&mut state, base)
+        else {
+            panic!();
+        };
+
+        advance_tap_state(&mut state, TapEvent::OtherKey, base + Duration::from_millis(10));
+        assert!(!coex_timer_should_fire(&state, captured_generation));
     }
 }
