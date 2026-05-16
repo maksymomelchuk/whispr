@@ -446,11 +446,34 @@ async fn run_session(
     };
 
     let settings = config::load(app);
+
+    // Resolve the active mode up front: the STT call needs its language hint,
+    // otherwise the provider falls back to the default mode's language and
+    // transcribes (e.g.) Ukrainian audio as English.
+    let active_mode = settings
+        .modes
+        .iter()
+        .find(|m| m.id == mode_id)
+        .unwrap_or_else(|| config::get_default_mode(&settings));
+    let mode_cleanup_enabled = active_mode.ai_cleanup.enabled;
+    let mode_use_snippets = active_mode.use_snippets;
+    let mode_use_dictionary = active_mode.use_dictionary;
+    let mode_translate = active_mode.translate.clone();
+    let mode_language = active_mode.language.clone();
+    let mode_source_lang = active_mode.language.as_code().map(str::to_string);
+    let mode_prompt_override = active_mode.ai_cleanup.prompt_override.clone();
+
     let session_result = match settings.transcription_provider {
         TranscriptionProvider::Deepgram => {
-            DeepgramSession.run(app.clone(), format, chunk_rx).await
+            DeepgramSession
+                .run(app.clone(), format, chunk_rx, mode_language)
+                .await
         }
-        TranscriptionProvider::Groq => GroqSession.run(app.clone(), format, chunk_rx).await,
+        TranscriptionProvider::Groq => {
+            GroqSession
+                .run(app.clone(), format, chunk_rx, mode_language)
+                .await
+        }
     };
 
     let (raw_text, speak_duration) = match session_result {
@@ -465,18 +488,6 @@ async fn run_session(
     if raw_text.is_empty() {
         return Ok(());
     }
-
-    let active_mode = settings
-        .modes
-        .iter()
-        .find(|m| m.id == mode_id)
-        .unwrap_or_else(|| config::get_default_mode(&settings));
-    let mode_cleanup_enabled = active_mode.ai_cleanup.enabled;
-    let mode_use_snippets = active_mode.use_snippets;
-    let mode_use_dictionary = active_mode.use_dictionary;
-    let mode_translate = active_mode.translate.clone();
-    let mode_source_lang = active_mode.language.as_code().map(str::to_string);
-    let mode_prompt_override = active_mode.ai_cleanup.prompt_override.clone();
 
     let (translated_text, translate_notice) =
         maybe_translate(app, &raw_text, &mode_translate, mode_source_lang.as_deref()).await;

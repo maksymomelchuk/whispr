@@ -1,3 +1,4 @@
+use crate::mode::ModeLanguage;
 use crate::recorder::AudioFormat;
 use std::time::Duration;
 use tauri::AppHandle;
@@ -20,5 +21,6 @@ pub trait TranscriptionSession {
         app: AppHandle,
         format: AudioFormat,
         chunks: UnboundedReceiver<Vec<i16>>,
+        language: ModeLanguage,
     ) -> Result<(String, Duration), String>;
 }

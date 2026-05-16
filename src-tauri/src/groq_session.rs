@@ -15,6 +15,7 @@ use crate::config::{self, GroqModel};
 use crate::dictionary;
 use crate::groq_audio::encode_to_flac_16k_mono;
 use crate::groq_session_state::{self, Action, Event, Phase, PollFailure, State};
+use crate::mode::ModeLanguage;
 use crate::recorder::AudioFormat;
 use crate::transcription_session::TranscriptionSession;
 use serde_json::Value;
@@ -56,6 +57,7 @@ impl TranscriptionSession for GroqSession {
         app: AppHandle,
         format: AudioFormat,
         mut chunks: UnboundedReceiver<Vec<i16>>,
+        language: ModeLanguage,
     ) -> Result<(String, Duration), String> {
         let speak_start = Instant::now();
         let settings = config::load(&app);
@@ -65,10 +67,7 @@ impl TranscriptionSession for GroqSession {
             .filter(|k| !k.is_empty())
             .ok_or_else(|| "Groq API key not configured".to_string())?;
         let model = groq_model_api_id(settings.groq.model);
-        let language = config::get_default_mode(&settings)
-            .language
-            .as_code()
-            .map(str::to_string);
+        let language = language.as_code().map(str::to_string);
         let prompt = dictionary::groq_prompt_hint(&settings.dictionary);
         let show_live_preview = settings.show_live_preview;
 

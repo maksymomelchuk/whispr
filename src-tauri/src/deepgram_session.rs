@@ -36,6 +36,7 @@ impl TranscriptionSession for DeepgramSession {
         app: AppHandle,
         format: AudioFormat,
         mut chunks: UnboundedReceiver<Vec<i16>>,
+        language: ModeLanguage,
     ) -> Result<(String, Duration), String> {
         let speak_start = Instant::now();
         let settings = config::load(&app);
@@ -50,8 +51,7 @@ impl TranscriptionSession for DeepgramSession {
         let show_live_preview = settings.show_live_preview;
         let dictionary = settings.dictionary.clone();
 
-        let mode_language = config::get_default_mode(&settings).language.clone();
-        let url = build_ws_url(&mode_language, format, &dictionary)?;
+        let url = build_ws_url(&language, format, &dictionary)?;
         let mut req = url
             .as_str()
             .into_client_request()
