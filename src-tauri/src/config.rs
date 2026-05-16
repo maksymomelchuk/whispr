@@ -1,4 +1,7 @@
-use crate::mode::{Mode, ModeId, ModeLanguage, SEED_MODE_DEFAULT_EN};
+use crate::mode::{
+    Mode, ModeId, ModeLanguage, SEED_MODE_CLEANED_EN, SEED_MODE_DEFAULT_EN, SEED_MODE_UA_EN,
+    SEED_MODE_UKRAINIAN,
+};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -215,7 +218,12 @@ impl Default for Settings {
             deepgram: DeepgramSettings::default(),
             groq: GroqSettings::default(),
             ai_cleanup: AiCleanupSettings::default(),
-            modes: vec![Mode::seed_default_en(false)],
+            modes: vec![
+                Mode::seed_default_en(false),
+                Mode::seed_cleaned_en(),
+                Mode::seed_ukrainian(),
+                Mode::seed_ua_en(),
+            ],
             default_mode_id: default_mode_id(),
             input_device: None,
             pause_media_on_record: true,
@@ -260,7 +268,7 @@ fn migrate(s: &mut Settings) -> bool {
         changed = true;
     }
 
-    // ── Seed the default mode if none exist ──────────────────────────────
+    // ── Seed predefined modes ─────────────────────────────────────────────
     if s.modes.is_empty() {
         // Prefer the active provider's language, then the other provider's.
         // An empty/whitespace value is treated as missing.
@@ -278,8 +286,24 @@ fn migrate(s: &mut Settings) -> bool {
             mode.language = ModeLanguage::exact(code);
         }
         s.modes.push(mode);
+        s.modes.push(Mode::seed_cleaned_en());
+        s.modes.push(Mode::seed_ukrainian());
+        s.modes.push(Mode::seed_ua_en());
         s.default_mode_id = SEED_MODE_DEFAULT_EN.to_string();
         changed = true;
+    } else {
+        // For any predefined mode that's absent, add it — idempotent across upgrades.
+        for (id, seed) in [
+            (SEED_MODE_DEFAULT_EN, Mode::seed_default_en(false)),
+            (SEED_MODE_CLEANED_EN, Mode::seed_cleaned_en()),
+            (SEED_MODE_UKRAINIAN, Mode::seed_ukrainian()),
+            (SEED_MODE_UA_EN, Mode::seed_ua_en()),
+        ] {
+            if !s.modes.iter().any(|m| m.id == id) {
+                s.modes.push(seed);
+                changed = true;
+            }
+        }
     }
 
     // Drop the legacy flat cleanup toggle; it's now in the mode.
@@ -294,6 +318,27 @@ fn migrate(s: &mut Settings) -> bool {
     }
 
     changed
+}
+
+/// Returns `Err` if deleting `id` would violate an invariant.
+pub fn check_delete_mode(s: &Settings, id: &str) -> Result<(), String> {
+    if s.modes.len() <= 1 {
+        return Err("Cannot delete the last mode.".to_string());
+    }
+    if s.default_mode_id == id {
+        return Err("Set a different default mode before deleting this one.".to_string());
+    }
+    Ok(())
+}
+
+/// Like [`update`] but the closure may return an error to abort the save.
+pub fn update_fallible<F>(app: &tauri::AppHandle, f: F) -> Result<(), String>
+where
+    F: FnOnce(&mut Settings) -> Result<(), String>,
+{
+    let mut settings = load(app);
+    f(&mut settings)?;
+    save(app, &settings)
 }
 
 fn settings_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -377,11 +422,15 @@ mod tests {
     }
 
     #[test]
-    fn default_settings_seed_one_default_mode() {
+    fn default_settings_seed_four_predefined_modes() {
         let s = Settings::default();
-        assert_eq!(s.modes.len(), 1);
-        assert_eq!(s.modes[0].id, SEED_MODE_DEFAULT_EN);
+        assert_eq!(s.modes.len(), 4);
         assert_eq!(s.default_mode_id, SEED_MODE_DEFAULT_EN);
+        let ids: Vec<&str> = s.modes.iter().map(|m| m.id.as_str()).collect();
+        assert!(ids.contains(&SEED_MODE_DEFAULT_EN));
+        assert!(ids.contains(&crate::mode::SEED_MODE_CLEANED_EN));
+        assert!(ids.contains(&crate::mode::SEED_MODE_UKRAINIAN));
+        assert!(ids.contains(&crate::mode::SEED_MODE_UA_EN));
     }
 
     #[test]
@@ -458,9 +507,9 @@ mod tests {
 
         let changed = migrate(&mut s);
         assert!(changed);
-        assert_eq!(s.modes.len(), 1);
-        assert_eq!(s.modes[0].id, SEED_MODE_DEFAULT_EN);
-        assert_eq!(s.modes[0].language, ModeLanguage::exact("fr"));
+        assert_eq!(s.modes.len(), 4);
+        let default = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        assert_eq!(default.language, ModeLanguage::exact("fr"));
     }
 
     #[test]
@@ -472,8 +521,9 @@ mod tests {
         let mut s: Settings = serde_json::from_str(json).unwrap();
         let changed = migrate(&mut s);
         assert!(changed);
-        assert_eq!(s.modes.len(), 1);
-        assert_eq!(s.modes[0].language, ModeLanguage::exact("uk"));
+        assert_eq!(s.modes.len(), 4);
+        let default = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        assert_eq!(default.language, ModeLanguage::exact("uk"));
     }
 
     #[test]
@@ -481,7 +531,8 @@ mod tests {
         let json = r#"{}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
-        assert_eq!(s.modes[0].language, ModeLanguage::exact("en"));
+        let default = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        assert_eq!(default.language, ModeLanguage::exact("en"));
     }
 
     #[test]
@@ -489,14 +540,14 @@ mod tests {
         let json = r#"{"ai_cleanup_enabled": true}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
-        assert!(s.modes[0].ai_cleanup.enabled);
+        let default = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        assert!(default.ai_cleanup.enabled);
         // The flat field must be gone from subsequent saves.
         let reserialized = serde_json::to_string(&s).unwrap();
         let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
         assert!(v.get("ai_cleanup_enabled").is_none());
     }
 
-    #[test]
     fn migration_renames_legacy_replacements_to_dictionary() {
         let json = r#"{"replacements": [{"from": "dot", "to": "."}]}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
@@ -514,16 +565,79 @@ mod tests {
     }
 
     #[test]
-    fn migration_is_idempotent_when_modes_already_present() {
+    fn migration_is_idempotent_when_all_four_modes_already_present() {
+        let mut s = Settings::default();
+        assert_eq!(s.modes.len(), 4);
+        // Running migration on already-seeded settings must be a no-op.
+        migrate(&mut s);
+        assert_eq!(s.modes.len(), 4, "second migration must not duplicate modes");
+    }
+
+    #[test]
+    fn migrate_seeds_all_four_modes_when_modes_empty() {
+        let json = r#"{}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        assert!(s.modes.is_empty());
+
+        let changed = migrate(&mut s);
+        assert!(changed);
+        assert_eq!(s.modes.len(), 4);
+
+        let ids: Vec<&str> = s.modes.iter().map(|m| m.id.as_str()).collect();
+        assert!(ids.contains(&SEED_MODE_DEFAULT_EN));
+        assert!(ids.contains(&crate::mode::SEED_MODE_CLEANED_EN));
+        assert!(ids.contains(&crate::mode::SEED_MODE_UKRAINIAN));
+        assert!(ids.contains(&crate::mode::SEED_MODE_UA_EN));
+    }
+
+    #[test]
+    fn migrate_adds_missing_seeds_to_existing_mode_default_en() {
         let json = r#"{
-            "modes": [{"id":"mode-default-en","name":"Default","language":{"kind":"exact","code":"en"},"translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_dictionary":true,"use_snippets":true}],
+            "modes": [{"id":"mode-default-en","name":"My Custom Name","language":{"kind":"exact","code":"en"},"translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_dictionary":true,"use_snippets":true}],
             "default_mode_id": "mode-default-en"
         }"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         assert_eq!(s.modes.len(), 1);
-        // Simulate running migration twice.
-        migrate(&mut s);
-        assert_eq!(s.modes.len(), 1, "second migration must not add another mode");
+
+        let changed = migrate(&mut s);
+        assert!(changed);
+        assert_eq!(s.modes.len(), 4);
+
+        // User-edited name is preserved, not overwritten.
+        let default = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        assert_eq!(default.name, "My Custom Name");
+    }
+
+    #[test]
+    fn migrate_is_fully_idempotent_with_all_four_seeds() {
+        let mut s = Settings::default();
+        assert_eq!(s.modes.len(), 4);
+
+        let changed = migrate(&mut s);
+        assert!(!changed, "migrate on fully-seeded settings must return false");
+        assert_eq!(s.modes.len(), 4);
+    }
+
+    #[test]
+    fn check_delete_mode_rejects_last_mode() {
+        let s = Settings {
+            modes: vec![Mode::seed_default_en(false)],
+            default_mode_id: SEED_MODE_DEFAULT_EN.to_string(),
+            ..Settings::default()
+        };
+        assert!(check_delete_mode(&s, SEED_MODE_DEFAULT_EN).is_err());
+    }
+
+    #[test]
+    fn check_delete_mode_rejects_default_mode() {
+        let s = Settings::default();
+        assert!(check_delete_mode(&s, SEED_MODE_DEFAULT_EN).is_err());
+    }
+
+    #[test]
+    fn check_delete_mode_allows_non_default_non_last_mode() {
+        let s = Settings::default();
+        assert!(check_delete_mode(&s, crate::mode::SEED_MODE_CLEANED_EN).is_ok());
     }
 
     #[test]
@@ -579,8 +693,9 @@ mod tests {
         }"#;
         let mut s: Settings = serde_json::from_str(legacy).unwrap();
         migrate(&mut s);
-        // Language moved to the mode; old option knobs silently ignored.
-        assert_eq!(s.modes[0].language, ModeLanguage::exact("fr"));
+        // Language moved to the default mode; old option knobs silently ignored.
+        let default = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        assert_eq!(default.language, ModeLanguage::exact("fr"));
         assert_eq!(s.deepgram_api_key.as_deref(), Some("dg-key"));
         // Serialized form must not contain deepgram.language.
         let json = serde_json::to_string(&s).unwrap();

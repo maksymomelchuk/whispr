@@ -32,7 +32,9 @@ export type ModeLanguage =
   | { kind: "auto" }
   | { kind: "exact"; code: string };
 
-export type TranslateTarget = { kind: "off" };
+export type TranslateTarget =
+  | { kind: "off" }
+  | { kind: "apple"; target: string };
 
 export interface ModeCleanup {
   enabled: boolean;
