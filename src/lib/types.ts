@@ -8,12 +8,7 @@ export interface Replacement {
   to: string;
 }
 
-export interface DeepgramSettings {
-  smart_format: boolean;
-  dictation: boolean;
-  numerals: boolean;
-  keyterms: string[];
-}
+export interface DeepgramSettings {}
 
 export type TranscriptionProvider = "deepgram" | "groq";
 

@@ -50,30 +50,10 @@ pub fn default_replacements() -> Vec<Replacement> {
 
 /// Language is now owned by Mode; this field is read from legacy JSON during
 /// migration and never written back (skip_serializing).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DeepgramSettings {
     #[serde(default, skip_serializing)]
     pub language: Option<String>,
-    #[serde(default)]
-    pub smart_format: bool,
-    #[serde(default)]
-    pub dictation: bool,
-    #[serde(default)]
-    pub numerals: bool,
-    #[serde(default)]
-    pub keyterms: Vec<String>,
-}
-
-impl Default for DeepgramSettings {
-    fn default() -> Self {
-        Self {
-            language: None,
-            smart_format: false,
-            dictation: false,
-            numerals: false,
-            keyterms: Vec::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -572,10 +552,8 @@ mod tests {
         }"#;
         let mut s: Settings = serde_json::from_str(legacy).unwrap();
         migrate(&mut s);
-        // Language moved to the mode.
+        // Language moved to the mode; old option knobs silently ignored.
         assert_eq!(s.modes[0].language, ModeLanguage::exact("fr"));
-        // Smart format etc. still readable for this slice.
-        assert!(s.deepgram.smart_format);
         assert_eq!(s.deepgram_api_key.as_deref(), Some("dg-key"));
         // Serialized form must not contain deepgram.language.
         let json = serde_json::to_string(&s).unwrap();

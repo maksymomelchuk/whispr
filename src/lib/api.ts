@@ -4,7 +4,6 @@ import type {
   ApiKeyValidation,
   CleanupAuthMode,
   CleanupStats,
-  DeepgramSettings,
   GroqSettings,
   HistoryEntry,
   HistoryLimit,
@@ -43,9 +42,6 @@ export const setShortcutCapturePaused = (paused: boolean) =>
 
 export const setReplacements = (replacements: Replacement[]) =>
   invoke<void>("set_replacements", { replacements });
-
-export const setDeepgramSettings = (deepgram: DeepgramSettings) =>
-  invoke<void>("set_deepgram_settings", { deepgram });
 
 export const setDefaultModeCleanupEnabled = (enabled: boolean) =>
   invoke<void>("set_default_mode_cleanup_enabled", { enabled });

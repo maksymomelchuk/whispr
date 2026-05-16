@@ -51,7 +51,7 @@ impl TranscriptionSession for DeepgramSession {
         let replacements = settings.replacements.clone();
 
         let mode_language = config::get_default_mode(&settings).language.clone();
-        let url = build_ws_url(&settings.deepgram, &mode_language, format)?;
+        let url = build_ws_url(&mode_language, format)?;
         let mut req = url
             .as_str()
             .into_client_request()
@@ -205,11 +205,7 @@ fn compose_preview(
     apply_replacements(&preview, replacements)
 }
 
-fn build_ws_url(
-    dg: &config::DeepgramSettings,
-    language: &ModeLanguage,
-    format: AudioFormat,
-) -> Result<Url, String> {
+fn build_ws_url(language: &ModeLanguage, format: AudioFormat) -> Result<Url, String> {
     let mut url = Url::parse(DEEPGRAM_WS_BASE).map_err(|e| format!("base URL parse: {e}"))?;
     {
         let mut q = url.query_pairs_mut();
@@ -221,21 +217,8 @@ fn build_ws_url(
         q.append_pair("encoding", "linear16");
         q.append_pair("sample_rate", &format.sample_rate.to_string());
         q.append_pair("channels", &format.channels.to_string());
-        if dg.smart_format {
-            q.append_pair("smart_format", "true");
-        }
-        if dg.dictation {
-            q.append_pair("dictation", "true");
-        }
-        if dg.numerals {
-            q.append_pair("numerals", "true");
-        }
-        for kt in &dg.keyterms {
-            let trimmed = kt.trim();
-            if !trimmed.is_empty() {
-                q.append_pair("keyterm", trimmed);
-            }
-        }
+        q.append_pair("smart_format", "true");
+        q.append_pair("numerals", "true");
     }
     Ok(url)
 }
@@ -277,4 +260,22 @@ fn pcm_bytes(samples: &[i16]) -> Vec<u8> {
         bytes.extend_from_slice(&s.to_le_bytes());
     }
     bytes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mode::ModeLanguage;
+    use crate::recorder::AudioFormat;
+
+    #[test]
+    fn build_ws_url_hardcodes_smart_format_and_numerals() {
+        let fmt = AudioFormat { sample_rate: 16000, channels: 1 };
+        let url = build_ws_url(&ModeLanguage::Auto, fmt).unwrap();
+        let query = url.query().unwrap_or("");
+        assert!(query.contains("smart_format=true"), "URL must contain smart_format=true");
+        assert!(query.contains("numerals=true"), "URL must contain numerals=true");
+        assert!(!query.contains("dictation"), "URL must not contain dictation");
+        assert!(!query.contains("keyterm"), "URL must not contain keyterm");
+    }
 }
