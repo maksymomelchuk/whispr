@@ -214,8 +214,10 @@ export function AiCleanupField({
 
       {enabledToggle.enabled && (
         <>
-          <div className="field-group">
-            <span className="field-label">Authentication</span>
+          <div className="mb-4 flex flex-col gap-1">
+            <span className="text-xs font-semibold text-foreground">
+              Authentication
+            </span>
             <ToggleGroup
               type="single"
               variant="outline"
@@ -224,13 +226,13 @@ export function AiCleanupField({
               className="w-full"
             >
               <ToggleGroupItem value="api_key" className="flex-1 text-xs">
-                <span className="label-with-info">
+                <span className="inline-flex items-center gap-2">
                   Anthropic API Key
                   <InfoTip text="Pay-as-you-go via console.anthropic.com." />
                 </span>
               </ToggleGroupItem>
               <ToggleGroupItem value="oauth" className="flex-1 text-xs">
-                <span className="label-with-info">
+                <span className="inline-flex items-center gap-2">
                   Claude Code OAuth
                   <InfoTip text="Uses your Claude subscription. Mint with `claude setup-token`." />
                 </span>
@@ -238,9 +240,9 @@ export function AiCleanupField({
             </ToggleGroup>
           </div>
 
-          <div className="field-group">
-            <div className="row" style={{ alignItems: "baseline", gap: 8 }}>
-              <span className="field-label" style={{ margin: 0 }}>
+          <div className="mb-4 flex flex-col gap-1">
+            <div className="flex items-baseline gap-2">
+              <span className="text-xs font-semibold text-foreground">
                 {copy.fieldLabel}
               </span>
               {configured ? (
@@ -259,7 +261,7 @@ export function AiCleanupField({
                   render={({ field }) => (
                     <FormItem>
                       <FormControl>
-                        <div className="row">
+                        <div className="flex items-center gap-2">
                           <Input
                             {...field}
                             type="password"
@@ -301,35 +303,37 @@ export function AiCleanupField({
               </Alert>
             )}
             {showWarning && !credentialForm.formState.errors.credential && (
-              <p className="hint-sm">
+              <p className="m-0 text-center text-[11px] text-muted-foreground/70">
                 Cleanup is bypassed until a credential is set.
               </p>
             )}
           </div>
 
-          <div className="field-group">
-            <div className="label-with-info" style={{ marginBottom: 0 }}>
-              <span className="field-label" style={{ margin: 0 }}>
+          <div className="mb-4 flex flex-col gap-1">
+            <div className="inline-flex items-center gap-2">
+              <span className="text-xs font-semibold text-foreground">
                 Trigger thresholds
               </span>
               <InfoTip text="Both must be met for cleanup to run." />
             </div>
             <Form {...thresholdsForm}>
               <form onSubmit={thresholdsForm.handleSubmit(onThresholdsSubmit)}>
-                <div className="row" style={{ alignItems: "flex-end" }}>
+                <div className="flex items-end gap-2">
                   <FormField
                     control={thresholdsForm.control}
                     name="minWords"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="hint-sm">Min words</FormLabel>
+                        <FormLabel className="text-[11px] text-muted-foreground/70">
+                          Min words
+                        </FormLabel>
                         <FormControl>
                           <Input
                             {...field}
                             type="number"
                             min={0}
                             step={1}
-                            style={{ minWidth: 120 }}
+                            className="min-w-[120px]"
                           />
                         </FormControl>
                         <FormMessage />
@@ -341,7 +345,7 @@ export function AiCleanupField({
                     name="minDurationSec"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="hint-sm">
+                        <FormLabel className="text-[11px] text-muted-foreground/70">
                           Min duration (s)
                         </FormLabel>
                         <FormControl>
@@ -350,7 +354,7 @@ export function AiCleanupField({
                             type="number"
                             min={0}
                             step={0.5}
-                            style={{ minWidth: 160 }}
+                            className="min-w-[160px]"
                           />
                         </FormControl>
                         <FormMessage />

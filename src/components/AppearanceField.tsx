@@ -75,7 +75,9 @@ export function AppearanceField({
           name="theme"
           render={({ field }) => (
             <FormItem className="mt-2.5 gap-[6px]">
-              <FormLabel className="field-label">Theme</FormLabel>
+              <FormLabel className="text-[11px] font-medium tracking-[0.2px] text-muted-foreground">
+                Theme
+              </FormLabel>
               <FormControl>
                 <ToggleGroup
                   type="single"

@@ -113,8 +113,8 @@ export function TranscriptionProviderField({
             name="provider"
             render={({ field }) => (
               <FormItem className="gap-[6px]">
-                <div className="label-with-info">
-                  <FormLabel className="field-label" style={{ margin: 0 }}>
+                <div className="inline-flex items-center gap-2">
+                  <FormLabel className="m-0 text-[11px] font-medium tracking-[0.2px] text-muted-foreground">
                     Transcription provider
                   </FormLabel>
                   <InfoTip text="Provider used for the next dictation. Each provider keeps its own API key and options." />
@@ -228,14 +228,14 @@ function GroqOptions({ initial, onSaved }: GroqOptionsProps) {
       info="Whisper Large via Groq's transcription endpoint."
     >
       <Form {...form}>
-        <div className="field-group">
+        <div className="mb-4 flex flex-col gap-1">
           <FormField
             control={form.control}
             name="model"
             render={({ field }) => (
               <FormItem className="gap-[6px]">
-                <div className="label-with-info">
-                  <FormLabel className="field-label" style={{ margin: 0 }}>
+                <div className="inline-flex items-center gap-2">
+                  <FormLabel className="m-0 text-xs font-semibold text-foreground">
                     Model
                   </FormLabel>
                   <InfoTip text="v3-turbo is the cheapest and fastest. v3 is slightly more accurate." />
@@ -258,14 +258,14 @@ function GroqOptions({ initial, onSaved }: GroqOptionsProps) {
             )}
           />
         </div>
-        <div className="field-group">
+        <div className="mb-4 flex flex-col gap-1">
           <FormField
             control={form.control}
             name="language"
             render={({ field }) => (
               <FormItem className="gap-[6px]">
-                <div className="label-with-info">
-                  <FormLabel className="field-label" style={{ margin: 0 }}>
+                <div className="inline-flex items-center gap-2">
+                  <FormLabel className="m-0 text-xs font-semibold text-foreground">
                     Language
                   </FormLabel>
                   <InfoTip text="ISO-639-1 language code (e.g. en, fr, es). Defaults to en." />

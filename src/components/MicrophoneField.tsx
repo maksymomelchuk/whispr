@@ -129,7 +129,9 @@ export function MicrophoneField({
           name="device"
           render={({ field }) => (
             <FormItem className="mt-2.5 gap-[6px]">
-              <FormLabel className="field-label">Input device</FormLabel>
+              <FormLabel className="text-[11px] font-medium tracking-[0.2px] text-muted-foreground">
+                Input device
+              </FormLabel>
               <FormControl>
                 <Select
                   value={field.value}

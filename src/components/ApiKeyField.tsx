@@ -138,7 +138,7 @@ export function ApiKeyField({
             render={({ field }) => (
               <FormItem>
                 <FormControl>
-                  <div className="row">
+                  <div className="flex items-center gap-2">
                     <Input
                       {...field}
                       type="password"

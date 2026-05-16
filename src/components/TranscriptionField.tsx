@@ -132,9 +132,9 @@ export function TranscriptionField({
             control={form.control}
             name="language"
             render={({ field }) => (
-              <FormItem className="field-group">
-                <div className="label-with-info" style={{ marginBottom: 4 }}>
-                  <FormLabel className="field-label" style={{ margin: 0 }}>
+              <FormItem className="mb-4 flex flex-col gap-1">
+                <div className="mb-1 inline-flex items-center gap-2">
+                  <FormLabel className="m-0 text-xs font-semibold text-foreground">
                     Language
                   </FormLabel>
                   <InfoTip text="Language code (e.g. en, multi, es, de)." />

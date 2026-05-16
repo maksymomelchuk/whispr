@@ -41,7 +41,7 @@ function App() {
 
   if (loadError) {
     return (
-      <main className="app">
+      <main className="mx-auto flex max-w-[480px] flex-col gap-4 p-5">
         <Alert variant="destructive">
           <AlertDescription>
             Failed to load settings: {loadError}
@@ -53,8 +53,8 @@ function App() {
 
   if (!settings) {
     return (
-      <main className="app">
-        <div className="loading">Loading…</div>
+      <main className="mx-auto flex max-w-[480px] flex-col gap-4 p-5">
+        <div className="py-10 text-center text-muted-foreground">Loading…</div>
       </main>
     );
   }
