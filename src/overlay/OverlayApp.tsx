@@ -143,6 +143,13 @@ export function OverlayApp() {
       listen<number>("audio-level", (e) => {
         applyLevel(typeof e.payload === "number" ? e.payload : 0);
       }),
+      // Release flips to the processing UI immediately. Without this the
+      // overlay still shows the recording state through STT drain and any
+      // translation step, which looks like recording never stopped.
+      listen("ptt-released", () => {
+        setMode("thinking");
+        setPartial("");
+      }),
       listen("ptt-thinking", () => {
         setMode("thinking");
         setPartial("");
