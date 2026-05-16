@@ -1,6 +1,7 @@
 export interface Shortcut {
   key: string;
   modifiers: string[];
+  is_double_tap?: boolean;
 }
 
 export interface HotkeyBinding {

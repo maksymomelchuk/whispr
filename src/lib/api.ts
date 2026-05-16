@@ -149,5 +149,6 @@ const displayKey = (code: string): string => {
 export const formatShortcut = (s: Shortcut): string => {
   const mods = s.modifiers.map((m) => MOD_MAP[m] ?? m).join(" + ");
   const key = displayKey(s.key);
-  return mods ? `${mods} + ${key}` : key;
+  const base = mods ? `${mods} + ${key}` : key;
+  return s.is_double_tap ? `${base} (double-tap)` : base;
 };

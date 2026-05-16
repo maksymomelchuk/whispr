@@ -10,10 +10,12 @@ use tauri::Manager;
 
 const SETTINGS_FILE: &str = "settings.json";
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Shortcut {
     pub key: String,
     pub modifiers: Vec<String>,
+    #[serde(default)]
+    pub is_double_tap: bool,
 }
 
 impl Default for Shortcut {
@@ -21,6 +23,7 @@ impl Default for Shortcut {
         Self {
             key: "AltRight".to_string(),
             modifiers: vec![],
+            is_double_tap: false,
         }
     }
 }
@@ -38,12 +41,13 @@ pub fn default_hotkey_bindings() -> Vec<HotkeyBinding> {
     }]
 }
 
-/// Returns `Err` if any two bindings share the same shortcut key + modifiers.
+/// Returns `Err` if any two bindings share the same (key, modifiers, is_double_tap) triple.
+/// Same key+modifiers with different is_double_tap are distinct shortcuts and allowed.
 pub fn check_hotkey_conflicts(bindings: &[HotkeyBinding]) -> Result<(), String> {
-    let mut seen: HashSet<(&str, Vec<&str>)> = HashSet::new();
+    let mut seen: HashSet<(&str, Vec<&str>, bool)> = HashSet::new();
     for b in bindings {
         let mods: Vec<&str> = b.shortcut.modifiers.iter().map(String::as_str).collect();
-        if !seen.insert((b.shortcut.key.as_str(), mods)) {
+        if !seen.insert((b.shortcut.key.as_str(), mods, b.shortcut.is_double_tap)) {
             return Err(
                 "Shortcut conflict: the same key combination is used by more than one binding."
                     .to_string(),
@@ -804,6 +808,7 @@ mod tests {
             shortcut: Shortcut {
                 key: "MetaRight".to_string(),
                 modifiers: vec![],
+                is_double_tap: false,
             },
             mode_id: "mode-nonexistent".to_string(),
         });
@@ -826,11 +831,11 @@ mod tests {
     fn check_hotkey_conflicts_allows_distinct_shortcuts() {
         let bindings = vec![
             HotkeyBinding {
-                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![] },
+                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
                 mode_id: "mode-default-en".to_string(),
             },
             HotkeyBinding {
-                shortcut: Shortcut { key: "MetaRight".to_string(), modifiers: vec![] },
+                shortcut: Shortcut { key: "MetaRight".to_string(), modifiers: vec![], is_double_tap: false },
                 mode_id: "mode-cleaned-en".to_string(),
             },
         ];
@@ -841,11 +846,49 @@ mod tests {
     fn check_hotkey_conflicts_rejects_duplicate_shortcuts() {
         let bindings = vec![
             HotkeyBinding {
-                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![] },
+                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
                 mode_id: "mode-default-en".to_string(),
             },
             HotkeyBinding {
-                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![] },
+                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                mode_id: "mode-cleaned-en".to_string(),
+            },
+        ];
+        assert!(check_hotkey_conflicts(&bindings).is_err());
+    }
+
+    #[test]
+    fn shortcut_deserializes_without_is_double_tap_defaults_to_false() {
+        let json = r#"{"key": "AltRight", "modifiers": []}"#;
+        let s: Shortcut = serde_json::from_str(json).unwrap();
+        assert_eq!(s.key, "AltRight");
+        assert!(!s.is_double_tap);
+    }
+
+    #[test]
+    fn check_hotkey_conflicts_allows_single_press_and_double_tap_same_key() {
+        let bindings = vec![
+            HotkeyBinding {
+                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                mode_id: "mode-default-en".to_string(),
+            },
+            HotkeyBinding {
+                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
+                mode_id: "mode-cleaned-en".to_string(),
+            },
+        ];
+        assert!(check_hotkey_conflicts(&bindings).is_ok());
+    }
+
+    #[test]
+    fn check_hotkey_conflicts_rejects_two_double_tap_same_key() {
+        let bindings = vec![
+            HotkeyBinding {
+                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
+                mode_id: "mode-default-en".to_string(),
+            },
+            HotkeyBinding {
+                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
                 mode_id: "mode-cleaned-en".to_string(),
             },
         ];

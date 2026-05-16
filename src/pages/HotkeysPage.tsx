@@ -2,6 +2,7 @@ import { Plus, Trash } from "@phosphor-icons/react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
   TooltipContent,
@@ -19,7 +20,7 @@ const CONFLICT_MESSAGE =
 const DEFAULT_SHORTCUT: Shortcut = { key: "AltRight", modifiers: [] };
 
 function shortcutKey(shortcut: Shortcut): string {
-  return `${shortcut.key}|${shortcut.modifiers.join(",")}`;
+  return `${shortcut.key}|${shortcut.modifiers.join(",")}|${shortcut.is_double_tap ?? false}`;
 }
 
 function hasConflict(bindings: HotkeyBinding[], index: number): boolean {
@@ -75,7 +76,9 @@ export function HotkeysPage() {
       next = [...bindings, { shortcut, mode_id: modeId }];
     } else {
       next = bindings.map((b, i) =>
-        i === bindingIndex ? { ...b, shortcut } : b,
+        i === bindingIndex
+          ? { ...b, shortcut: { ...shortcut, is_double_tap: b.shortcut.is_double_tap ?? false } }
+          : b,
       );
     }
     await persist(next);
@@ -123,6 +126,21 @@ export function HotkeysPage() {
                       </span>
                     )}
                   </span>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <Switch
+                      size="sm"
+                      checked={binding.shortcut.is_double_tap ?? false}
+                      onCheckedChange={(checked) => {
+                        const next = bindings.map((b, i) =>
+                          i === index
+                            ? { ...b, shortcut: { ...b.shortcut, is_double_tap: checked } }
+                            : b,
+                        );
+                        persist(next);
+                      }}
+                    />
+                    <span className="text-xs text-muted-foreground">Double-tap</span>
+                  </label>
                   <Button
                     variant="outline"
                     size="sm"
