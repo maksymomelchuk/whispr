@@ -8,6 +8,7 @@ import {
   FormItem,
   FormLabel,
 } from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -161,12 +162,16 @@ export function MicrophoneField({
         />
       </Form>
 
-      <label className="toggle-row">
-        <span className="toggle-row-label">
+      <div className="toggle-row">
+        <Label htmlFor="mute-system-audio" className="toggle-row-label">
           Mute system audio while recording
-        </span>
-        <Switch checked={pauseEnabled} onCheckedChange={togglePauseMedia} />
-      </label>
+        </Label>
+        <Switch
+          id="mute-system-audio"
+          checked={pauseEnabled}
+          onCheckedChange={togglePauseMedia}
+        />
+      </div>
 
       {loadState === "loading" && (
         <div className="status">Enumerating devices…</div>

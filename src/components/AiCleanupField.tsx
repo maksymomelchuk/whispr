@@ -13,6 +13,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
@@ -203,16 +204,20 @@ export function AiCleanupField({
 
   return (
     <CollapsibleCard title="AI Cleanup" defaultOpen={defaultOpen}>
-      <label className="toggle-row">
-        <span className="toggle-row-label label-with-info">
+      <div className="toggle-row">
+        <Label
+          htmlFor="ai-cleanup-enabled"
+          className="toggle-row-label label-with-info"
+        >
           Enable AI post-processing
           <InfoTip text="Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Adds ~500ms." />
-        </span>
+        </Label>
         <Switch
+          id="ai-cleanup-enabled"
           checked={enabledToggle.enabled}
           onCheckedChange={enabledToggle.toggle}
         />
-      </label>
+      </div>
 
       {enabledToggle.enabled && (
         <>

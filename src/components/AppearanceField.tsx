@@ -9,6 +9,7 @@ import {
   FormItem,
   FormLabel,
 } from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
@@ -101,17 +102,27 @@ export function AppearanceField({
         />
       </Form>
 
-      <label className="toggle-row">
-        <span className="toggle-row-label">Show in Dock & Cmd-Tab</span>
-        <Switch checked={dock.enabled} onCheckedChange={dock.toggle} />
-      </label>
+      <div className="toggle-row">
+        <Label htmlFor="show-in-dock" className="toggle-row-label">
+          Show in Dock & Cmd-Tab
+        </Label>
+        <Switch
+          id="show-in-dock"
+          checked={dock.enabled}
+          onCheckedChange={dock.toggle}
+        />
+      </div>
 
-      <label className="toggle-row">
-        <span className="toggle-row-label">
+      <div className="toggle-row">
+        <Label htmlFor="show-live-preview" className="toggle-row-label">
           Show live preview while dictating
-        </span>
-        <Switch checked={preview.enabled} onCheckedChange={preview.toggle} />
-      </label>
+        </Label>
+        <Switch
+          id="show-live-preview"
+          checked={preview.enabled}
+          onCheckedChange={preview.toggle}
+        />
+      </div>
 
       {saveError && <div className="status err">{saveError}</div>}
     </section>
