@@ -12,6 +12,7 @@
 //! owns the buffer, the timer, and the HTTP requests.
 
 use crate::config::{self, GroqModel};
+use crate::dictionary;
 use crate::groq_audio::encode_to_flac_16k_mono;
 use crate::groq_session_state::{self, Action, Event, Phase, PollFailure, State};
 use crate::recorder::AudioFormat;
@@ -69,6 +70,7 @@ impl TranscriptionSession for GroqSession {
             .as_code()
             .unwrap_or("en")
             .to_string();
+        let prompt = dictionary::groq_prompt_hint(&settings.replacements);
         let show_live_preview = settings.show_live_preview;
 
         let buffered: Arc<Mutex<Vec<i16>>> = Arc::new(Mutex::new(Vec::new()));
@@ -87,6 +89,7 @@ impl TranscriptionSession for GroqSession {
             key,
             model,
             language,
+            prompt,
             show_live_preview,
             outcome_tx: outcome_tx.clone(),
         };
@@ -183,6 +186,7 @@ struct Runner {
     key: String,
     model: &'static str,
     language: String,
+    prompt: Option<String>,
     show_live_preview: bool,
     outcome_tx: UnboundedSender<Outcome>,
 }
@@ -208,6 +212,7 @@ impl Runner {
                     self.key.clone(),
                     self.model,
                     self.language.clone(),
+                    self.prompt.clone(),
                     self.outcome_tx.clone(),
                 );
             }
@@ -223,6 +228,7 @@ impl Runner {
                     self.key.clone(),
                     self.model,
                     self.language.clone(),
+                    self.prompt.clone(),
                     self.outcome_tx.clone(),
                 );
             }
@@ -264,6 +270,7 @@ fn spawn_poll(
     key: String,
     model: &'static str,
     language: String,
+    prompt: Option<String>,
     outcome_tx: UnboundedSender<Outcome>,
 ) {
     tauri::async_runtime::spawn(async move {
@@ -281,7 +288,7 @@ fn spawn_poll(
         }
         let result = match encode_to_flac_16k_mono(&snapshot, format.sample_rate, format.channels)
         {
-            Ok(flac) => match post_to_groq(&key, model, &language, flac).await {
+            Ok(flac) => match post_to_groq(&key, model, &language, prompt.as_deref(), flac).await {
                 Ok(text) => Ok(text),
                 Err(GroqHttpError::RateLimited) => Err(PollFailure::RateLimited),
                 Err(GroqHttpError::Other(msg)) => {
@@ -304,6 +311,7 @@ fn spawn_final_post(
     key: String,
     model: &'static str,
     language: String,
+    prompt: Option<String>,
     outcome_tx: UnboundedSender<Outcome>,
 ) {
     tauri::async_runtime::spawn(async move {
@@ -314,7 +322,7 @@ fn spawn_final_post(
         }
         let result = match encode_to_flac_16k_mono(&snapshot, format.sample_rate, format.channels)
         {
-            Ok(flac) => match post_to_groq(&key, model, &language, flac).await {
+            Ok(flac) => match post_to_groq(&key, model, &language, prompt.as_deref(), flac).await {
                 Ok(text) => Ok(text),
                 Err(GroqHttpError::RateLimited) => {
                     Err("Groq rate-limited the final POST".to_string())
@@ -343,17 +351,21 @@ async fn post_to_groq(
     key: &str,
     model: &str,
     language: &str,
+    prompt: Option<&str>,
     flac: Vec<u8>,
 ) -> Result<String, GroqHttpError> {
     let part = reqwest::multipart::Part::bytes(flac)
         .file_name("audio.flac")
         .mime_str("audio/flac")
         .map_err(|e| GroqHttpError::Other(format!("Groq mime build failed: {e}")))?;
-    let form = reqwest::multipart::Form::new()
+    let mut form = reqwest::multipart::Form::new()
         .text("model", model.to_string())
         .text("response_format", "json")
         .text("language", language.to_string())
         .part("file", part);
+    if let Some(p) = prompt {
+        form = form.text("prompt", p.to_string());
+    }
 
     let resp = http_client()
         .post(GROQ_URL)
