@@ -93,7 +93,7 @@ export function AppShell() {
         </Sidebar>
 
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-          <UpdateBanner inline />
+          <UpdateBanner />
 
           <main className="flex-1 overflow-y-auto bg-background scrollbar-gutter-stable">
             <Routes>

@@ -1,48 +1,42 @@
-import { cn } from "../lib/utils";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+
 import { useAppUpdate } from "../hooks/useAppUpdate";
-import { Button } from "./ui/button";
 
-interface Props {
-  inline?: boolean;
-}
-
-export function UpdateBanner({ inline }: Props) {
+export function UpdateBanner() {
   const { state, installAndRestart } = useAppUpdate();
 
   if (state.status === "idle") return null;
 
-  const baseClass = inline ? "update-banner-inline" : "update-banner";
-
   if (state.status === "error") {
     return (
-      <div className={`${baseClass} err`} role="alert">
-        Update failed: {state.message}
-      </div>
+      <Alert variant="destructive" className="rounded-none border-x-0 border-t-0">
+        <AlertDescription>Update failed: {state.message}</AlertDescription>
+      </Alert>
     );
   }
 
   if (state.status === "downloading") {
     return (
-      <div className={baseClass} role="status">
-        Downloading update…
-      </div>
+      <Alert className="rounded-none border-x-0 border-t-0">
+        <AlertDescription>Downloading update…</AlertDescription>
+      </Alert>
     );
   }
 
   const { version } = state.update;
   return (
-    <div className={baseClass} role="status">
-      <span>
-        Update available (
-        <span className="update-banner-version">v{version}</span>)
-      </span>
+    <Alert className="flex items-center gap-2 rounded-none border-x-0 border-t-0">
+      <AlertDescription className="flex-1">
+        Update available (<span className="font-variant-numeric-tabular">v{version}</span>)
+      </AlertDescription>
       <Button
         size="sm"
-        className={cn("rounded-full text-xs", inline && "ml-auto")}
+        className="ml-auto rounded-full text-xs"
         onClick={installAndRestart}
       >
         Install &amp; restart
       </Button>
-    </div>
+    </Alert>
   );
 }
