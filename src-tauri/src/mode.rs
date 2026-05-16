@@ -32,6 +32,7 @@ impl ModeLanguage {
         ModeLanguage::Exact { code: code.into() }
     }
 
+    #[cfg(test)]
     pub fn hints(codes: Vec<String>) -> Self {
         ModeLanguage::Hints { codes }
     }

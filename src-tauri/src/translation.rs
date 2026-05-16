@@ -10,7 +10,8 @@ pub enum TranslationError {
     // Language pack not downloaded; user needs System Settings > Language & Region.
     ModelNotInstalled,
     UnsupportedPair,
-    RequiresMacOS15,
+    RequiresMacOS26,
+    SourceRequired,
     Failed(String),
     Io(String),
 }
@@ -27,9 +28,14 @@ impl std::fmt::Display for TranslationError {
             TranslationError::UnsupportedPair => {
                 write!(f, "Apple Translate does not support this language pair")
             }
-            TranslationError::RequiresMacOS15 => {
-                write!(f, "Apple Translate requires macOS 15 (Sequoia) or later")
+            TranslationError::RequiresMacOS26 => {
+                write!(f, "Apple Translate requires macOS 26 (Tahoe) or later")
             }
+            TranslationError::SourceRequired => write!(
+                f,
+                "Apple Translate requires an explicit source language — set the mode's Spoken \
+                 Language to a specific language (not Auto)"
+            ),
             TranslationError::Failed(msg) => write!(f, "Translation failed: {msg}"),
             TranslationError::Io(msg) => write!(f, "Translation I/O error: {msg}"),
         }
@@ -95,7 +101,8 @@ pub fn translate(
     Err(match response.error_code.as_deref() {
         Some("model_not_installed") => TranslationError::ModelNotInstalled,
         Some("unsupported_pair") => TranslationError::UnsupportedPair,
-        Some("requires_macos_15") => TranslationError::RequiresMacOS15,
+        Some("requires_macos_26") => TranslationError::RequiresMacOS26,
+        Some("source_required") => TranslationError::SourceRequired,
         _ => TranslationError::Failed(
             response.error.unwrap_or_else(|| "Unknown error".to_string()),
         ),
@@ -168,10 +175,17 @@ mod tests {
     }
 
     #[test]
-    fn translate_response_parses_requires_macos_15() {
-        let json = r#"{"translated":null,"error_code":"requires_macos_15","error":"Need 15+"}"#;
+    fn translate_response_parses_requires_macos_26() {
+        let json = r#"{"translated":null,"error_code":"requires_macos_26","error":"Need 26+"}"#;
         let r: TranslateResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(r.error_code.as_deref(), Some("requires_macos_15"));
+        assert_eq!(r.error_code.as_deref(), Some("requires_macos_26"));
+    }
+
+    #[test]
+    fn translate_response_parses_source_required() {
+        let json = r#"{"translated":null,"error_code":"source_required","error":"Set source"}"#;
+        let r: TranslateResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(r.error_code.as_deref(), Some("source_required"));
     }
 
     #[test]
@@ -186,7 +200,8 @@ mod tests {
         assert!(TranslationError::BinaryNotFound.to_string().contains("binary"));
         assert!(TranslationError::ModelNotInstalled.to_string().contains("System Settings"));
         assert!(TranslationError::UnsupportedPair.to_string().contains("language pair"));
-        assert!(TranslationError::RequiresMacOS15.to_string().contains("macOS 15"));
+        assert!(TranslationError::RequiresMacOS26.to_string().contains("macOS 26"));
+        assert!(TranslationError::SourceRequired.to_string().contains("source language"));
         assert!(TranslationError::Failed("x".into()).to_string().contains("x"));
         assert!(TranslationError::Io("y".into()).to_string().contains("y"));
     }

@@ -1,8 +1,8 @@
 fn main() {
-    tauri_build::build();
-
     #[cfg(target_os = "macos")]
     compile_apple_translate_sidecar();
+
+    tauri_build::build();
 }
 
 /// Compile the Swift sidecar that wraps Apple's Translation.framework.
@@ -21,14 +21,14 @@ fn compile_apple_translate_sidecar() {
     let swift_src = format!("{manifest_dir}/swift/apple-translate.swift");
     let target = std::env::var("TARGET").unwrap_or_else(|_| "aarch64-apple-darwin".to_string());
 
-    let binaries_dir = format!("{manifest_dir}/binaries");
+    let binaries_dir = format!("{manifest_dir}/../binaries");
     std::fs::create_dir_all(&binaries_dir).ok();
     let output = format!("{binaries_dir}/apple-translate-{target}");
 
     let swift_target = if target.starts_with("aarch64") {
-        "arm64-apple-macosx14.0"
+        "arm64-apple-macosx26.0"
     } else {
-        "x86_64-apple-macosx14.0"
+        "x86_64-apple-macosx26.0"
     };
 
     let status = std::process::Command::new("swiftc")
