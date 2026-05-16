@@ -1,12 +1,12 @@
 use crate::config::Replacement;
 
-// 4 KB ceiling — Deepgram's documented maximum is ~8 KB; halving gives
-// comfortable headroom for the base URL and engine parameters that precede
-// any keyterm pairs.
+/// 4 KB ceiling — Deepgram's documented maximum is ~8 KB; halving gives
+/// comfortable headroom for the base URL and engine parameters that precede
+/// any keyterm pairs.
 pub const DEEPGRAM_KEYTERM_BUDGET_BYTES: usize = 4096;
 
-// Whisper's prompt parameter is documented as up to 224 tokens; 800 chars
-// stays well within that window for typical English vocabulary lists.
+/// Whisper's prompt parameter is documented as up to 224 tokens; 800 chars
+/// stays well within that window for typical English vocabulary lists.
 pub const GROQ_PROMPT_BUDGET_CHARS: usize = 800;
 
 /// Returns true if `entry` is a punctuation-cue that should be excluded
@@ -17,27 +17,32 @@ pub fn is_punctuation_cue(entry: &Replacement) -> bool {
     to.len() < 3 && to.chars().all(|c| c.is_ascii_punctuation())
 }
 
+/// Yields trimmed `from` terms that are eligible to send as engine hints —
+/// drops punctuation-cue and blank-`from` entries. Preserves insertion order.
+fn eligible_terms(replacements: &[Replacement]) -> impl Iterator<Item = &str> {
+    replacements.iter().filter_map(|entry| {
+        if is_punctuation_cue(entry) {
+            return None;
+        }
+        let term = entry.from.trim();
+        (!term.is_empty()).then_some(term)
+    })
+}
+
 /// Returns the `from` terms suitable for Deepgram `keyterm` query params.
 /// Filters out punctuation cues and blank entries; truncates in insertion
 /// order once the next term would push the consumed bytes past
 /// `remaining_budget`. Pass `DEEPGRAM_KEYTERM_BUDGET_BYTES - url_base_len`
 /// as the budget so the final URL stays within the 4 KB ceiling.
 pub fn deepgram_keyterms(replacements: &[Replacement], remaining_budget: usize) -> Vec<String> {
+    // Size each encoded value the way `url::Url::query_pairs_mut().append_pair`
+    // will, so the running total matches the bytes the final URL actually gains.
+    const KEY_PREFIX_BYTES: usize = "&keyterm=".len();
     let mut terms = Vec::new();
     let mut used = 0usize;
-    for entry in replacements {
-        if is_punctuation_cue(entry) {
-            continue;
-        }
-        let term = entry.from.trim();
-        if term.is_empty() {
-            continue;
-        }
-        // "&keyterm=" = 9 bytes; use form_urlencoded to size the encoded value
-        // the same way the url crate will when we call append_pair.
-        let encoded: String =
-            url::form_urlencoded::byte_serialize(term.as_bytes()).collect();
-        let needed = 9 + encoded.len();
+    for term in eligible_terms(replacements) {
+        let encoded: String = url::form_urlencoded::byte_serialize(term.as_bytes()).collect();
+        let needed = KEY_PREFIX_BYTES + encoded.len();
         if used + needed > remaining_budget {
             break;
         }
@@ -52,33 +57,17 @@ pub fn deepgram_keyterms(replacements: &[Replacement], remaining_budget: usize) 
 /// result stays within `GROQ_PROMPT_BUDGET_CHARS`. Returns `None` when no
 /// eligible entries exist.
 pub fn groq_prompt_hint(replacements: &[Replacement]) -> Option<String> {
-    let prefix = "Vocabulary: ";
-    let mut result = prefix.to_string();
-    let mut first = true;
-    for entry in replacements {
-        if is_punctuation_cue(entry) {
-            continue;
-        }
-        let term = entry.from.trim();
-        if term.is_empty() {
-            continue;
-        }
-        let addition = if first {
-            term.to_string()
-        } else {
-            format!(", {}", term)
-        };
-        if result.len() + addition.len() > GROQ_PROMPT_BUDGET_CHARS {
+    const PREFIX: &str = "Vocabulary: ";
+    let mut result = PREFIX.to_string();
+    for term in eligible_terms(replacements) {
+        let sep = if result.len() == PREFIX.len() { "" } else { ", " };
+        if result.len() + sep.len() + term.len() > GROQ_PROMPT_BUDGET_CHARS {
             break;
         }
-        result.push_str(&addition);
-        first = false;
+        result.push_str(sep);
+        result.push_str(term);
     }
-    if first {
-        None
-    } else {
-        Some(result)
-    }
+    (result.len() > PREFIX.len()).then_some(result)
 }
 
 #[cfg(test)]
