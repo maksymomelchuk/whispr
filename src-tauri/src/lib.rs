@@ -23,9 +23,9 @@ mod cleanup_stats;
 #[cfg(target_os = "macos")]
 mod deepgram_session;
 #[cfg(target_os = "macos")]
-mod groq_session;
-#[cfg(target_os = "macos")]
 mod dictionary;
+#[cfg(target_os = "macos")]
+mod groq_session;
 #[cfg(target_os = "macos")]
 mod transcription_session;
 

@@ -1,9 +1,9 @@
 use crate::config::TranscriptionProvider;
 use crate::deepgram_session::DeepgramSession;
+use crate::dictionary::apply_dictionary;
 use crate::groq_session::GroqSession;
 use crate::history::{self, CleanupStatus, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::recorder::Recorder;
-use crate::dictionary::apply_dictionary;
 use crate::state::{AppState, ModifierState};
 use crate::transcription_session::TranscriptionSession;
 use crate::{cleanup, cleanup_stats, config, media, overlay, paste, stats, target_app};
