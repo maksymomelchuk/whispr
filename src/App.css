@@ -3,7 +3,6 @@
 
   --bg: #f6f6f6;
   --bg-elevated: #ffffff;
-  --bg-elevated-2: #fafafa;
   --bg-subtle: #f3f4f6;
   --bg-hover: #f3f3f3;
   --bg-header-hover: #f7f7f7;
@@ -16,12 +15,9 @@
   --text: #0f0f0f;
   --text-secondary: #6b6b6b;
   --text-tertiary: #9ca3af;
-  --text-on-primary: #ffffff;
 
   --primary: #0a84ff;
   --primary-hover: #0077ee;
-  --primary-strong: #0070e0;
-  --primary-accent: #0a84ff;
 
   --success: #15803d;
 
@@ -35,21 +31,11 @@
   --warning: #f59e0b;
   --warning-halo: rgba(245, 158, 11, 0.15);
 
-  --toggle-off: #d1d5db;
-  --toggle-off-hover: #b8bfc9;
-  --toggle-knob: #ffffff;
-  --toggle-knob-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-
   --banner-bg: #eef2ff;
   --banner-border: #c7d2fe;
   --banner-text: #1e1b4b;
 
-  --modal-backdrop: rgba(0, 0, 0, 0.35);
-  --shadow-modal: 0 10px 40px rgba(0, 0, 0, 0.2);
-  --shadow-toast: 0 4px 16px rgba(0, 0, 0, 0.12);
   --shadow-banner: 0 4px 16px rgba(0, 0, 0, 0.1);
-
-  --select-arrow: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='10' height='10'><path d='M2.5 4l3.5 4 3.5-4' fill='none' stroke='%239ca3af' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
 
   font-family:
     -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
@@ -66,7 +52,6 @@
 :root.dark {
   --bg: #1e1e1e;
   --bg-elevated: #2a2a2a;
-  --bg-elevated-2: #252525;
   --bg-subtle: #1e1e1e;
   --bg-hover: #333333;
   --bg-header-hover: #313131;
@@ -82,8 +67,6 @@
 
   --primary: #0a84ff;
   --primary-hover: #3793ff;
-  --primary-strong: #0077ee;
-  --primary-accent: #4ca3ff;
 
   --success: #4ade80;
 
@@ -97,21 +80,11 @@
   --warning: #fbbf24;
   --warning-halo: rgba(251, 191, 36, 0.2);
 
-  --toggle-off: #3a3a3a;
-  --toggle-off-hover: #4a4a4a;
-  --toggle-knob: #f1f1f1;
-  --toggle-knob-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-
   --banner-bg: #1e1b4b;
   --banner-border: #3730a3;
   --banner-text: #c7d2fe;
 
-  --modal-backdrop: rgba(0, 0, 0, 0.55);
-  --shadow-modal: 0 10px 40px rgba(0, 0, 0, 0.55);
-  --shadow-toast: 0 4px 16px rgba(0, 0, 0, 0.35);
   --shadow-banner: 0 4px 16px rgba(0, 0, 0, 0.35);
-
-  --select-arrow: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='10' height='10'><path d='M2.5 4l3.5 4 3.5-4' fill='none' stroke='%238a8a8a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
 
   color-scheme: dark;
 }
@@ -210,69 +183,6 @@
   user-select: none;
 }
 
-/* Switch built on input[type=checkbox role=switch]. Keyboard- and
-   screen-reader-native; appearance:none gives us a clean canvas. */
-.toggle-row input[type="checkbox"] {
-  appearance: none;
-  -webkit-appearance: none;
-  position: relative;
-  width: 32px;
-  height: 18px;
-  margin: 0;
-  border-radius: 999px;
-  background: var(--toggle-off);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background-color 180ms ease-out;
-}
-
-.toggle-row input[type="checkbox"]::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 14px;
-  height: 14px;
-  background: var(--toggle-knob);
-  border-radius: 50%;
-  box-shadow: var(--toggle-knob-shadow);
-  transition: transform 180ms ease-out;
-}
-
-.toggle-row input[type="checkbox"]:checked {
-  background: var(--primary);
-}
-
-.toggle-row input[type="checkbox"]:checked::after {
-  transform: translateX(14px);
-}
-
-.toggle-row input[type="checkbox"]:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-.toggle-row input[type="checkbox"]:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-@media (hover: hover) {
-  .toggle-row:hover input[type="checkbox"]:not(:checked):not(:disabled) {
-    background: var(--toggle-off-hover);
-  }
-  .toggle-row:hover input[type="checkbox"]:checked:not(:disabled) {
-    background: var(--primary-hover);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .toggle-row input[type="checkbox"],
-  .toggle-row input[type="checkbox"]::after {
-    transition: none;
-  }
-}
-
 .status {
   margin-top: 8px;
   font-size: 12px;
@@ -348,15 +258,6 @@
 
 .option-row:hover {
   background: var(--bg-subtle);
-}
-
-.option-row input[type="checkbox"] {
-  margin-top: 2px;
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  accent-color: var(--primary);
-  cursor: pointer;
 }
 
 .option-text {
