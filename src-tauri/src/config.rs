@@ -3,6 +3,7 @@ use crate::mode::{
     SEED_MODE_UKRAINIAN,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 use tauri::Manager;
@@ -22,6 +23,34 @@ impl Default for Shortcut {
             modifiers: vec![],
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HotkeyBinding {
+    pub shortcut: Shortcut,
+    pub mode_id: ModeId,
+}
+
+pub fn default_hotkey_bindings() -> Vec<HotkeyBinding> {
+    vec![HotkeyBinding {
+        shortcut: Shortcut::default(),
+        mode_id: SEED_MODE_DEFAULT_EN.to_string(),
+    }]
+}
+
+/// Returns `Err` if any two bindings share the same shortcut key + modifiers.
+pub fn check_hotkey_conflicts(bindings: &[HotkeyBinding]) -> Result<(), String> {
+    let mut seen: HashSet<(&str, Vec<&str>)> = HashSet::new();
+    for b in bindings {
+        let mods: Vec<&str> = b.shortcut.modifiers.iter().map(String::as_str).collect();
+        if !seen.insert((b.shortcut.key.as_str(), mods)) {
+            return Err(
+                "Shortcut conflict: the same key combination is used by more than one binding."
+                    .to_string(),
+            );
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -185,8 +214,11 @@ pub struct Settings {
     pub deepgram_api_key: Option<String>,
     #[serde(default)]
     pub groq_api_key: Option<String>,
-    #[serde(default)]
-    pub shortcut: Shortcut,
+    /// Legacy single-shortcut field; converted to a HotkeyBinding on first load.
+    #[serde(rename = "shortcut", default, skip_serializing)]
+    pub legacy_shortcut: Shortcut,
+    #[serde(default = "default_hotkey_bindings")]
+    pub hotkey_bindings: Vec<HotkeyBinding>,
     #[serde(default = "default_dictionary")]
     pub dictionary: Vec<DictionaryEntry>,
     #[serde(default)]
@@ -222,7 +254,8 @@ impl Default for Settings {
             transcription_provider: TranscriptionProvider::default(),
             deepgram_api_key: None,
             groq_api_key: None,
-            shortcut: Shortcut::default(),
+            legacy_shortcut: Shortcut::default(),
+            hotkey_bindings: default_hotkey_bindings(),
             dictionary: default_dictionary(),
             snippets: vec![],
             deepgram: DeepgramSettings::default(),
@@ -325,6 +358,28 @@ fn migrate(s: &mut Settings) -> bool {
     if let Some(legacy) = s.legacy_replacements.take() {
         s.dictionary = legacy;
         changed = true;
+    }
+
+    // ── Legacy shortcut → hotkey_bindings ────────────────────────────────
+    // On first load after this upgrade the bindings list will be empty
+    // (the old JSON only has "shortcut"). Seed it from the legacy field.
+    if s.hotkey_bindings.is_empty() {
+        s.hotkey_bindings.push(HotkeyBinding {
+            shortcut: s.legacy_shortcut.clone(),
+            mode_id: s.default_mode_id.clone(),
+        });
+        changed = true;
+    }
+
+    // Drop bindings that reference a mode that no longer exists.
+    {
+        let mode_ids: HashSet<&str> = s.modes.iter().map(|m| m.id.as_str()).collect();
+        let before = s.hotkey_bindings.len();
+        s.hotkey_bindings
+            .retain(|b| mode_ids.contains(b.mode_id.as_str()));
+        if s.hotkey_bindings.len() != before {
+            changed = true;
+        }
     }
 
     changed
@@ -711,5 +766,89 @@ mod tests {
         let json = serde_json::to_string(&s).unwrap();
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(v["deepgram"].get("language").is_none());
+    }
+
+    #[test]
+    fn migration_converts_legacy_shortcut_to_hotkey_binding() {
+        let json = r#"{"shortcut": {"key": "MetaRight", "modifiers": []}}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        assert!(s.hotkey_bindings.is_empty());
+        let changed = migrate(&mut s);
+        assert!(changed);
+        assert_eq!(s.hotkey_bindings.len(), 1);
+        assert_eq!(s.hotkey_bindings[0].shortcut.key, "MetaRight");
+        assert_eq!(s.hotkey_bindings[0].mode_id, SEED_MODE_DEFAULT_EN);
+        // Serialized form must not contain legacy "shortcut" key.
+        let reserialized = serde_json::to_string(&s).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
+        assert!(
+            v.get("shortcut").is_none(),
+            "legacy shortcut must drop out of subsequent saves"
+        );
+        assert!(v.get("hotkey_bindings").is_some());
+    }
+
+    #[test]
+    fn migration_hotkey_bindings_is_idempotent() {
+        let mut s = Settings::default();
+        assert_eq!(s.hotkey_bindings.len(), 1);
+        let changed = migrate(&mut s);
+        assert!(!changed, "migrate on already-migrated settings must return false");
+        assert_eq!(s.hotkey_bindings.len(), 1);
+    }
+
+    #[test]
+    fn migration_drops_orphaned_bindings_for_deleted_modes() {
+        let mut s = Settings::default();
+        s.hotkey_bindings.push(HotkeyBinding {
+            shortcut: Shortcut {
+                key: "MetaRight".to_string(),
+                modifiers: vec![],
+            },
+            mode_id: "mode-nonexistent".to_string(),
+        });
+        assert_eq!(s.hotkey_bindings.len(), 2);
+        let changed = migrate(&mut s);
+        assert!(changed);
+        assert_eq!(s.hotkey_bindings.len(), 1);
+        assert_eq!(s.hotkey_bindings[0].mode_id, SEED_MODE_DEFAULT_EN);
+    }
+
+    #[test]
+    fn default_settings_have_one_hotkey_binding_for_default_mode() {
+        let s = Settings::default();
+        assert_eq!(s.hotkey_bindings.len(), 1);
+        assert_eq!(s.hotkey_bindings[0].shortcut.key, "AltRight");
+        assert_eq!(s.hotkey_bindings[0].mode_id, SEED_MODE_DEFAULT_EN);
+    }
+
+    #[test]
+    fn check_hotkey_conflicts_allows_distinct_shortcuts() {
+        let bindings = vec![
+            HotkeyBinding {
+                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![] },
+                mode_id: "mode-default-en".to_string(),
+            },
+            HotkeyBinding {
+                shortcut: Shortcut { key: "MetaRight".to_string(), modifiers: vec![] },
+                mode_id: "mode-cleaned-en".to_string(),
+            },
+        ];
+        assert!(check_hotkey_conflicts(&bindings).is_ok());
+    }
+
+    #[test]
+    fn check_hotkey_conflicts_rejects_duplicate_shortcuts() {
+        let bindings = vec![
+            HotkeyBinding {
+                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![] },
+                mode_id: "mode-default-en".to_string(),
+            },
+            HotkeyBinding {
+                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![] },
+                mode_id: "mode-cleaned-en".to_string(),
+            },
+        ];
+        assert!(check_hotkey_conflicts(&bindings).is_err());
     }
 }

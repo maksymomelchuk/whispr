@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Copy,
   PencilSimple,
@@ -35,11 +36,12 @@ import {
   addMode,
   deleteMode,
   duplicateMode,
+  formatShortcut,
   getSettings,
   setDefaultMode,
   updateMode,
 } from "../lib/api";
-import type { Mode, ModeLanguage } from "../lib/types";
+import type { HotkeyBinding, Mode, ModeLanguage } from "../lib/types";
 import { ToggleRow } from "../components/ToggleRow";
 
 function languageSummary(lang: ModeLanguage): string {
@@ -56,6 +58,7 @@ function ModeRow({
   mode,
   isDefault,
   isLast,
+  bindings,
   onEdit,
   onDuplicate,
   onDelete,
@@ -64,6 +67,7 @@ function ModeRow({
   mode: Mode;
   isDefault: boolean;
   isLast: boolean;
+  bindings: HotkeyBinding[];
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -94,6 +98,9 @@ function ModeRow({
           {languageSummary(mode.language)}
           {mode.translate.kind !== "off" && (
             <> · {translateSummary(mode)}</>
+          )}
+          {bindings.length > 0 && (
+            <> · {bindings.map((b) => formatShortcut(b.shortcut)).join(", ")}</>
           )}
         </span>
       </div>
@@ -336,6 +343,7 @@ type EditorState = { mode: Mode; isNew: boolean };
 
 export function ModesPage() {
   const { settings, setSettings } = useSettings();
+  const navigate = useNavigate();
   const [editor, setEditor] = useState<EditorState | null>(null);
 
   if (!settings) return null;
@@ -408,6 +416,9 @@ export function ModesPage() {
             mode={mode}
             isDefault={mode.id === settings.default_mode_id}
             isLast={settings.modes.length === 1}
+            bindings={settings.hotkey_bindings.filter(
+              (b) => b.mode_id === mode.id,
+            )}
             onEdit={() => openEditor(mode)}
             onDuplicate={() => handleDuplicate(mode.id)}
             onDelete={() => handleDelete(mode.id)}
@@ -416,9 +427,17 @@ export function ModesPage() {
         ))}
       </div>
 
-      <div>
+      <div className="flex items-center gap-3">
         <Button variant="outline" size="sm" onClick={handleAddMode}>
           + Add mode
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground"
+          onClick={() => navigate("/hotkeys")}
+        >
+          Manage hotkeys →
         </Button>
       </div>
 

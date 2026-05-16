@@ -1,4 +1,4 @@
-use crate::config::Shortcut;
+use crate::config::{HotkeyBinding, Shortcut};
 use std::sync::{Arc, Mutex};
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -27,7 +27,10 @@ impl ModifierState {
 /// CGEventTap listener thread and the command handlers share the same data.
 #[derive(Clone, Default)]
 pub struct AppState {
-    pub shortcut: Arc<Mutex<Shortcut>>,
+    pub hotkey_bindings: Arc<Mutex<Vec<HotkeyBinding>>>,
+    /// The shortcut that activated the current PTT session. Cleared when PTT ends.
+    /// Kept separate so release detection uses only the active binding's keys.
+    pub active_shortcut: Arc<Mutex<Option<Shortcut>>>,
     pub modifiers: Arc<Mutex<ModifierState>>,
     pub ptt_active: Arc<Mutex<bool>>,
     pub input_device: Arc<Mutex<Option<String>>>,

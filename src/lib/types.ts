@@ -3,6 +3,11 @@ export interface Shortcut {
   modifiers: string[];
 }
 
+export interface HotkeyBinding {
+  shortcut: Shortcut;
+  mode_id: string;
+}
+
 export interface DictionaryEntry {
   from: string;
   to: string;
@@ -64,7 +69,7 @@ export interface Settings {
   transcription_provider: TranscriptionProvider;
   deepgram_api_key_configured: boolean;
   groq_api_key_configured: boolean;
-  shortcut: Shortcut;
+  hotkey_bindings: HotkeyBinding[];
   dictionary: DictionaryEntry[];
   snippets: Snippet[];
   groq: GroqSettings;
