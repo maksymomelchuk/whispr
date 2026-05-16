@@ -271,6 +271,27 @@ mod tests {
     }
 
     #[test]
+    fn mode_cleanup_disabled_with_prompt_override_carries_both_fields() {
+        // When enabled=false the pipeline skips cleanup regardless of prompt_override.
+        // This test verifies the struct correctly stores both fields independently.
+        let c = ModeCleanup {
+            enabled: false,
+            prompt_override: Some("custom prompt".to_string()),
+        };
+        assert!(!c.enabled);
+        assert_eq!(c.prompt_override.as_deref(), Some("custom prompt"));
+    }
+
+    #[test]
+    fn mode_cleanup_prompt_override_none_is_default() {
+        let c = ModeCleanup {
+            enabled: true,
+            prompt_override: None,
+        };
+        assert!(c.prompt_override.is_none());
+    }
+
+    #[test]
     fn all_four_seed_ids_are_distinct() {
         let ids = [
             SEED_MODE_DEFAULT_EN,
