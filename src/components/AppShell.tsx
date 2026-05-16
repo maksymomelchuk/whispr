@@ -8,7 +8,14 @@ import {
   Microphone,
   Sliders,
 } from "@phosphor-icons/react";
-import { NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { useEffect } from "react";
+import {
+  NavLink,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 
 import { GeneralPage } from "../pages/GeneralPage";
 import { HistoryPage } from "../pages/HistoryPage";
@@ -26,6 +33,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
+  useSidebar,
 } from "./ui/sidebar";
 import { UpdateBanner } from "./UpdateBanner";
 
@@ -35,16 +43,39 @@ interface NavItem {
   path: string;
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { label: "Home", icon: House, path: "/" },
-  { label: "General", icon: Gear, path: "/general" },
-  { label: "Hotkeys", icon: Keyboard, path: "/hotkeys" },
-  { label: "Transcription", icon: Microphone, path: "/transcription" },
-  { label: "Modes", icon: Sliders, path: "/modes" },
-  { label: "Snippets", icon: Lightning, path: "/snippets" },
-  { label: "History", icon: ClockCounterClockwise, path: "/history" },
-  { label: "Stats", icon: ChartBar, path: "/stats" },
+interface NavSection {
+  label: string;
+  items: NavItem[];
+}
+
+const NAV_SECTIONS: NavSection[] = [
+  {
+    label: "Workspace",
+    items: [{ label: "Home", icon: House, path: "/" }],
+  },
+  {
+    label: "Pipeline",
+    items: [
+      { label: "Hotkeys", icon: Keyboard, path: "/hotkeys" },
+      { label: "Transcription", icon: Microphone, path: "/transcription" },
+      { label: "Modes", icon: Sliders, path: "/modes" },
+      { label: "Snippets", icon: Lightning, path: "/snippets" },
+    ],
+  },
+  {
+    label: "Insights",
+    items: [
+      { label: "History", icon: ClockCounterClockwise, path: "/history" },
+      { label: "Stats", icon: ChartBar, path: "/stats" },
+    ],
+  },
+  {
+    label: "System",
+    items: [{ label: "General", icon: Gear, path: "/general" }],
+  },
 ];
+
+const FLAT_NAV: NavItem[] = NAV_SECTIONS.flatMap((s) => s.items);
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 
@@ -55,26 +86,71 @@ function getInitialOpen(): boolean {
   return match ? match[1] === "true" : true;
 }
 
-function NavMenuButton({ label, icon: Icon, path }: NavItem) {
+function NavMenuButton({
+  label,
+  icon: Icon,
+  path,
+  shortcut,
+}: NavItem & { shortcut: string }) {
   const { pathname } = useLocation();
+  const { state } = useSidebar();
   const isActive = path === "/" ? pathname === "/" : pathname.startsWith(path);
+  const collapsed = state === "collapsed";
 
   return (
-    <SidebarMenuButton asChild isActive={isActive} tooltip={label}>
+    <SidebarMenuButton
+      asChild
+      isActive={isActive}
+      tooltip={collapsed ? `${label}  ${shortcut}` : undefined}
+      className="group/nav-item h-8 gap-2.5"
+    >
       <NavLink to={path} end={path === "/"}>
-        <Icon size={15} className="shrink-0" />
-        <span>{label}</span>
+        <Icon
+          size={15}
+          className="shrink-0 text-muted-foreground group-data-[active=true]/nav-item:text-foreground"
+        />
+        <span className="flex-1 text-[13px] group-data-[active=true]/nav-item:font-medium">
+          {label}
+        </span>
+        {!collapsed && (
+          <kbd
+            aria-hidden
+            className={
+              "ml-auto font-mono text-[10.5px] tabular-nums text-muted-foreground/65 transition-opacity " +
+              "opacity-0 group-hover/nav-item:opacity-100 group-focus-visible/nav-item:opacity-100 " +
+              "group-data-[active=true]/nav-item:opacity-100"
+            }
+          >
+            {shortcut}
+          </kbd>
+        )}
       </NavLink>
     </SidebarMenuButton>
   );
 }
 
-export function AppShell() {
+function useNavShortcuts() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.altKey || e.shiftKey) return;
+      const idx = Number.parseInt(e.key, 10);
+      if (Number.isNaN(idx) || idx < 1 || idx > FLAT_NAV.length) return;
+      e.preventDefault();
+      navigate(FLAT_NAV[idx - 1].path);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [navigate]);
+}
+
+function ShellInner() {
+  useNavShortcuts();
+  let counter = 0;
+
   return (
-    <SidebarProvider
-      className="h-svh w-full overflow-hidden bg-background text-foreground flex-col"
-      defaultOpen={getInitialOpen()}
-    >
+    <>
       <header
         data-tauri-drag-region=""
         className="relative z-20 h-11 shrink-0 flex items-center pl-28 border-b border-sidebar-border"
@@ -87,14 +163,33 @@ export function AppShell() {
           collapsible="icon"
           className="top-11! h-auto! group-data-[side=left]:border-sidebar-border"
         >
-          <SidebarContent className="px-2 py-2 ">
-            <SidebarMenu>
-              {NAV_ITEMS.map((item) => (
-                <SidebarMenuItem key={item.path}>
-                  <NavMenuButton {...item} />
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
+          <SidebarContent className="px-2 py-3 gap-4">
+            {NAV_SECTIONS.map((section, sectionIdx) => (
+              <div key={section.label} className="flex flex-col gap-1">
+                <div
+                  aria-hidden
+                  className={
+                    "px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/60 " +
+                    "transition-opacity duration-150 " +
+                    "group-data-[collapsible=icon]:opacity-0 " +
+                    (sectionIdx === 0 ? "" : "mt-1")
+                  }
+                >
+                  {section.label}
+                </div>
+                <SidebarMenu>
+                  {section.items.map((item) => {
+                    counter += 1;
+                    const shortcut = `⌘${counter}`;
+                    return (
+                      <SidebarMenuItem key={item.path}>
+                        <NavMenuButton {...item} shortcut={shortcut} />
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </div>
+            ))}
           </SidebarContent>
         </Sidebar>
 
@@ -115,6 +210,17 @@ export function AppShell() {
           </main>
         </div>
       </div>
+    </>
+  );
+}
+
+export function AppShell() {
+  return (
+    <SidebarProvider
+      className="h-svh w-full overflow-hidden bg-background text-foreground flex-col"
+      defaultOpen={getInitialOpen()}
+    >
+      <ShellInner />
     </SidebarProvider>
   );
 }
