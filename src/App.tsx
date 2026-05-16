@@ -4,10 +4,11 @@ import { BrowserRouter } from "react-router-dom";
 import { toast } from "sonner";
 
 import { AppShell } from "./components/AppShell";
+import { Alert, AlertDescription } from "./components/ui/alert";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
-import { Alert, AlertDescription } from "./components/ui/alert";
 import { SettingsContext } from "./context/SettingsContext";
+import { useAccent } from "./hooks/useAccent";
 import { useTheme } from "./hooks/useTheme";
 import { getSettings } from "./lib/api";
 import type { Settings } from "./lib/types";
@@ -19,6 +20,7 @@ function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const { preference: themePreference, setPreference: setThemePreference } =
     useTheme();
+  const { accent, setAccent } = useAccent();
 
   useEffect(() => {
     getSettings()
@@ -60,7 +62,14 @@ function App() {
 
   return (
     <SettingsContext.Provider
-      value={{ settings, setSettings, themePreference, setThemePreference }}
+      value={{
+        settings,
+        setSettings,
+        themePreference,
+        setThemePreference,
+        accent,
+        setAccent,
+      }}
     >
       <TooltipProvider>
         <BrowserRouter>

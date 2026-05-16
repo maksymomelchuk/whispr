@@ -1,12 +1,16 @@
 @import "tailwindcss";
 
-/* Class-based dark mode: applies dark: utilities when .dark is on any ancestor */
 @custom-variant dark (&:is(.dark, .dark *));
 
 :root {
   color-scheme: light dark;
-  font-family:
+
+  --font-sans:
     -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --font-mono:
+    "SF Mono", ui-monospace, "Menlo", "Cascadia Mono", "Consolas", monospace;
+
+  font-family: var(--font-sans);
   font-size: 14px;
   line-height: 1.4;
   font-synthesis: none;
@@ -24,7 +28,6 @@ body {
   background-color: hsl(var(--background));
 }
 
-/* Map Tailwind color utilities to shadcn CSS variable tokens */
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -51,77 +54,140 @@ body {
   --color-sidebar-accent: hsl(var(--sidebar-accent));
   --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
   --color-sidebar-border: hsl(var(--sidebar-border));
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar: var(--sidebar);
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.4rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
 }
 
-/* Light theme */
+/* ── Tinted neutrals — cool 220° hue, very low chroma ─────────────────────── */
+
 :root {
-  --background: 0 0% 96.5%;
-  --foreground: 0 0% 6%;
+  --background: 220 14% 97%;
+  --foreground: 220 20% 8%;
   --card: 0 0% 100%;
-  --card-foreground: 0 0% 6%;
+  --card-foreground: 220 20% 8%;
   --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 6%;
-  --shadcn-primary: 213 100% 53%;
-  --shadcn-primary-foreground: 0 0% 100%;
-  --secondary: 0 0% 95%;
-  --secondary-foreground: 0 0% 6%;
-  --muted: 0 0% 95%;
-  --muted-foreground: 0 0% 42%;
-  --accent: 0 0% 92%;
-  --accent-foreground: 0 0% 6%;
-  --destructive: 0 72% 40%;
-  --border-shadcn: 0 0% 90%;
-  --input: 0 0% 90%;
-  --ring: 213 100% 53%;
-  --sidebar-bg: 0 0% 97%;
-  --sidebar-foreground: 0 0% 6%;
-  --sidebar-accent: 0 0% 91%;
-  --sidebar-accent-foreground: 0 0% 6%;
-  --sidebar-border: 0 0% 89%;
-  --radius: 0.5rem;
-  --sidebar: hsl(0 0% 97%);
-  --sidebar-primary: hsl(213 100% 53%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-ring: hsl(213 100% 53%);
+  --popover-foreground: 220 20% 8%;
+
+  --secondary: 220 12% 94%;
+  --secondary-foreground: 220 20% 8%;
+  --muted: 220 12% 94%;
+  --muted-foreground: 220 8% 42%;
+  --accent: 220 12% 91%;
+  --accent-foreground: 220 20% 8%;
+  --destructive: 0 72% 42%;
+  --border-shadcn: 220 14% 89%;
+  --input: 220 14% 89%;
+
+  --sidebar-bg: 220 14% 95.5%;
+  --sidebar-foreground: 220 20% 8%;
+  --sidebar-accent: 220 12% 89%;
+  --sidebar-accent-foreground: 220 22% 6%;
+  --sidebar-border: 220 14% 88%;
+  --radius: 0.625rem;
+  --sidebar: hsl(220 14% 95.5%);
+  --sidebar-primary: hsl(var(--shadcn-primary));
+  --sidebar-primary-foreground: hsl(var(--shadcn-primary-foreground));
+  --sidebar-ring: hsl(var(--ring));
 }
 
-/* Dark theme */
 .dark {
-  --background: 0 0% 11.8%;
-  --foreground: 0 0% 96.5%;
-  --card: 0 0% 16.5%;
-  --card-foreground: 0 0% 96.5%;
-  --popover: 0 0% 16.5%;
-  --popover-foreground: 0 0% 96.5%;
-  --shadcn-primary: 213 100% 53%;
+  --background: 220 14% 9%;
+  --foreground: 220 12% 96%;
+  --card: 220 14% 12.5%;
+  --card-foreground: 220 12% 96%;
+  --popover: 220 14% 12.5%;
+  --popover-foreground: 220 12% 96%;
+
+  --secondary: 220 12% 17%;
+  --secondary-foreground: 220 12% 96%;
+  --muted: 220 12% 17%;
+  --muted-foreground: 220 8% 64%;
+  --accent: 220 12% 20%;
+  --accent-foreground: 220 12% 96%;
+  --destructive: 0 65% 60%;
+  --border-shadcn: 220 12% 20%;
+  --input: 220 12% 22%;
+
+  --sidebar-bg: 220 14% 10.5%;
+  --sidebar-foreground: 220 12% 96%;
+  --sidebar-accent: 220 12% 19%;
+  --sidebar-accent-foreground: 0 0% 100%;
+  --sidebar-border: 220 12% 17%;
+  --sidebar: hsl(220 14% 10.5%);
+}
+
+/* ── Accent palette ──────────────────────────────────────────────────────────
+   Selected via `data-accent="<name>"` on <html>. Default = indigo when no
+   attribute is set, so existing markup keeps working. */
+
+:root,
+:root[data-accent="indigo"] {
+  --shadcn-primary: 224 76% 56%;
   --shadcn-primary-foreground: 0 0% 100%;
-  --secondary: 0 0% 19%;
-  --secondary-foreground: 0 0% 96.5%;
-  --muted: 0 0% 19%;
-  --muted-foreground: 0 0% 67%;
-  --accent: 0 0% 23%;
-  --accent-foreground: 0 0% 96.5%;
-  --destructive: 0 62% 60%;
-  --border-shadcn: 0 0% 23%;
-  --input: 0 0% 23%;
-  --ring: 213 100% 53%;
-  --sidebar-bg: 0 0% 13%;
-  --sidebar-foreground: 0 0% 96.5%;
-  --sidebar-accent: 0 0% 20%;
-  --sidebar-accent-foreground: 0 0% 96.5%;
-  --sidebar-border: 0 0% 20%;
-  --sidebar: hsl(0 0% 13%);
-  --sidebar-primary: hsl(213 100% 53%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-ring: hsl(213 100% 53%);
+  --ring: 224 76% 56%;
+}
+.dark,
+.dark[data-accent="indigo"] {
+  --shadcn-primary: 224 88% 66%;
+  --shadcn-primary-foreground: 220 22% 6%;
+  --ring: 224 88% 66%;
+}
+
+:root[data-accent="violet"] {
+  --shadcn-primary: 262 70% 58%;
+  --shadcn-primary-foreground: 0 0% 100%;
+  --ring: 262 70% 58%;
+}
+.dark[data-accent="violet"] {
+  --shadcn-primary: 262 80% 68%;
+  --shadcn-primary-foreground: 262 30% 8%;
+  --ring: 262 80% 68%;
+}
+
+:root[data-accent="coral"] {
+  --shadcn-primary: 15 80% 55%;
+  --shadcn-primary-foreground: 0 0% 100%;
+  --ring: 15 80% 55%;
+}
+.dark[data-accent="coral"] {
+  --shadcn-primary: 15 85% 65%;
+  --shadcn-primary-foreground: 15 30% 8%;
+  --ring: 15 85% 65%;
+}
+
+:root[data-accent="emerald"] {
+  --shadcn-primary: 155 55% 38%;
+  --shadcn-primary-foreground: 0 0% 100%;
+  --ring: 155 55% 38%;
+}
+.dark[data-accent="emerald"] {
+  --shadcn-primary: 155 48% 54%;
+  --shadcn-primary-foreground: 155 30% 8%;
+  --ring: 155 48% 54%;
+}
+
+/* Graphite — the disciplined choice. Primary becomes a near-neutral tied
+   to the chrome; focus ring stays slightly chromatic so it remains visible
+   on the now-monochrome primary surface. */
+:root[data-accent="graphite"] {
+  --shadcn-primary: 220 16% 18%;
+  --shadcn-primary-foreground: 220 14% 97%;
+  --ring: 220 36% 42%;
+}
+.dark[data-accent="graphite"] {
+  --shadcn-primary: 220 10% 88%;
+  --shadcn-primary-foreground: 220 22% 6%;
+  --ring: 220 24% 70%;
 }
 
 main::-webkit-scrollbar {
@@ -152,8 +218,6 @@ main {
   scrollbar-color: hsl(var(--muted-foreground) / 0.25) transparent;
 }
 
-/* Applied briefly during a theme flip so background/color transitions don't
-   animate the old → new token value. Removed on the next animation frame. */
 .no-theme-transition,
 .no-theme-transition *,
 .no-theme-transition *::before,
@@ -161,7 +225,6 @@ main {
   transition: none !important;
 }
 
-/* Divider between adjacent toggle rows (or after a preceding form item). */
 [data-slot="toggle-row"] + [data-slot="toggle-row"],
 [data-slot="form-item"] + [data-slot="toggle-row"] {
   margin-top: 14px;
@@ -169,7 +232,6 @@ main {
   border-top: 1px solid hsl(var(--border-shadcn));
 }
 
-/* CollapsibleCard content open/close animation via Radix height var */
 [data-slot="collapsible-content"] {
   overflow: hidden;
 }

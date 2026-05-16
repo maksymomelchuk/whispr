@@ -16,6 +16,12 @@
             (pref === "system" &&
               window.matchMedia("(prefers-color-scheme: dark)").matches);
           if (isDark) document.documentElement.classList.add("dark");
+
+          var accent = localStorage.getItem("whispr.accent");
+          var valid = ["indigo", "violet", "coral", "emerald", "graphite"];
+          if (valid.indexOf(accent) !== -1) {
+            document.documentElement.setAttribute("data-accent", accent);
+          }
         } catch (_) {}
       })();
     </script>

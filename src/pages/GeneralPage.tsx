@@ -3,8 +3,14 @@ import { MicrophoneField } from "../components/MicrophoneField";
 import { useSettings } from "../context/SettingsContext";
 
 export function GeneralPage() {
-  const { settings, setSettings, themePreference, setThemePreference } =
-    useSettings();
+  const {
+    settings,
+    setSettings,
+    themePreference,
+    setThemePreference,
+    accent,
+    setAccent,
+  } = useSettings();
 
   if (!settings) return null;
 
@@ -23,6 +29,8 @@ export function GeneralPage() {
       <AppearanceField
         preference={themePreference}
         onChange={setThemePreference}
+        accent={accent}
+        onAccentChange={setAccent}
         showInDock={settings.show_in_dock}
         onShowInDockChange={(show_in_dock) =>
           setSettings((s) => (s ? { ...s, show_in_dock } : s))

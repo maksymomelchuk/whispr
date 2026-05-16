@@ -11,15 +11,17 @@ import {
   FormLabel,
 } from "@/components/ui/form";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { cn } from "@/lib/utils";
 
+import { ACCENTS, type Accent } from "../hooks/useAccent";
 import { usePersistedToggle } from "../hooks/usePersistedToggle";
 import type { ThemePreference } from "../hooks/useTheme";
-import { SectionCard } from "./SectionCard";
-import { ToggleRow } from "./ToggleRow";
 import {
   setShowInDock as persistShowInDock,
   setShowLivePreview as persistShowLivePreview,
 } from "../lib/api";
+import { SectionCard } from "./SectionCard";
+import { ToggleRow } from "./ToggleRow";
 
 const themeSchema = z.object({
   theme: z.enum(["system", "light", "dark"]),
@@ -33,9 +35,38 @@ const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: "dark", label: "Dark" },
 ];
 
+const ACCENT_SWATCH: Record<
+  Accent,
+  { label: string; light: string; dark: string }
+> = {
+  indigo: {
+    label: "Indigo",
+    light: "hsl(224 76% 56%)",
+    dark: "hsl(224 88% 66%)",
+  },
+  violet: {
+    label: "Violet",
+    light: "hsl(262 70% 58%)",
+    dark: "hsl(262 80% 68%)",
+  },
+  coral: { label: "Coral", light: "hsl(15 80% 55%)", dark: "hsl(15 85% 65%)" },
+  emerald: {
+    label: "Emerald",
+    light: "hsl(155 55% 38%)",
+    dark: "hsl(155 48% 54%)",
+  },
+  graphite: {
+    label: "Graphite",
+    light: "hsl(220 16% 18%)",
+    dark: "hsl(220 10% 88%)",
+  },
+};
+
 interface Props {
   preference: ThemePreference;
   onChange: (next: ThemePreference) => void;
+  accent: Accent;
+  onAccentChange: (next: Accent) => void;
   showInDock: boolean;
   onShowInDockChange: (next: boolean) => void;
   showLivePreview: boolean;
@@ -45,11 +76,18 @@ interface Props {
 export function AppearanceField({
   preference,
   onChange,
+  accent,
+  onAccentChange,
   showInDock,
   onShowInDockChange,
   showLivePreview,
   onShowLivePreviewChange,
 }: Props) {
+  const isDark =
+    preference === "dark" ||
+    (preference === "system" &&
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches);
   const form = useForm<ThemeFormValues>({
     resolver: zodResolver(themeSchema),
     values: { theme: preference },
@@ -103,6 +141,44 @@ export function AppearanceField({
           )}
         />
       </Form>
+
+      <div
+        data-slot="form-item"
+        className="mt-3.5 flex flex-col gap-[6px]"
+      >
+        <span className="text-[11px] font-medium tracking-[0.2px] text-muted-foreground">
+          Accent
+        </span>
+        <div
+          role="radiogroup"
+          aria-label="Accent color"
+          className="flex items-center gap-2.5"
+        >
+          {ACCENTS.map((name) => {
+            const selected = accent === name;
+            const swatch = ACCENT_SWATCH[name];
+            return (
+              <button
+                key={name}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                aria-label={swatch.label}
+                title={swatch.label}
+                onClick={() => onAccentChange(name)}
+                className={cn(
+                  "relative size-[22px] rounded-full outline-none transition-[box-shadow,transform] duration-150",
+                  "focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+                  selected
+                    ? "ring-2 ring-foreground/70 ring-offset-2 ring-offset-card"
+                    : "hover:scale-[1.08]",
+                )}
+                style={{ backgroundColor: isDark ? swatch.dark : swatch.light }}
+              />
+            );
+          })}
+        </div>
+      </div>
 
       <ToggleRow
         id="show-in-dock"

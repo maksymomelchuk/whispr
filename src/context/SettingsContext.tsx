@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
 
+import type { Accent } from "../hooks/useAccent";
 import type { ThemePreference } from "../hooks/useTheme";
 import type { Settings } from "../lib/types";
 
@@ -8,6 +9,8 @@ interface SettingsContextValue {
   setSettings: React.Dispatch<React.SetStateAction<Settings | null>>;
   themePreference: ThemePreference;
   setThemePreference: (next: ThemePreference) => void;
+  accent: Accent;
+  setAccent: (next: Accent) => void;
 }
 
 export const SettingsContext = createContext<SettingsContextValue | null>(null);
