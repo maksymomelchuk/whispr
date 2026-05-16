@@ -8,8 +8,6 @@ export interface Replacement {
   to: string;
 }
 
-export interface DeepgramSettings {}
-
 export type TranscriptionProvider = "deepgram" | "groq";
 
 export type GroqModel = "whisper_large_v3" | "whisper_large_v3_turbo";
@@ -60,7 +58,6 @@ export interface Settings {
   groq_api_key_configured: boolean;
   shortcut: Shortcut;
   replacements: Replacement[];
-  deepgram: DeepgramSettings;
   groq: GroqSettings;
   modes: Mode[];
   default_mode_id: string;

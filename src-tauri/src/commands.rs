@@ -1,8 +1,7 @@
 use crate::api_key_validation::{self, ApiKeyValidation};
 use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
 use crate::config::{
-    self, CleanupAuthMode, DeepgramSettings, GroqSettings, Replacement, Settings, Shortcut,
-    TranscriptionProvider,
+    self, CleanupAuthMode, GroqSettings, Replacement, Settings, Shortcut, TranscriptionProvider,
 };
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::mode::{Mode, ModeId};
@@ -22,7 +21,6 @@ pub struct SettingsView {
     pub groq_api_key_configured: bool,
     pub shortcut: Shortcut,
     pub replacements: Vec<Replacement>,
-    pub deepgram: DeepgramSettings,
     pub groq: GroqSettings,
     pub modes: Vec<Mode>,
     pub default_mode_id: ModeId,
@@ -53,7 +51,6 @@ impl From<Settings> for SettingsView {
             groq_api_key_configured,
             shortcut: s.shortcut,
             replacements: s.replacements,
-            deepgram: s.deepgram,
             groq: s.groq,
             modes: s.modes,
             default_mode_id: s.default_mode_id,
@@ -147,14 +144,6 @@ pub fn set_replacements(
     replacements: Vec<Replacement>,
 ) -> Result<(), String> {
     config::update(&app, |s| s.replacements = replacements)
-}
-
-#[tauri::command]
-pub fn set_deepgram_settings(
-    app: AppHandle,
-    deepgram: DeepgramSettings,
-) -> Result<(), String> {
-    config::update(&app, |s| s.deepgram = deepgram)
 }
 
 /// Sets `ai_cleanup.enabled` on the mode identified by `default_mode_id`.

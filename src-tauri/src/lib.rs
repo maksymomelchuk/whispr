@@ -137,7 +137,6 @@ pub fn run() {
             commands::set_shortcut,
             commands::set_shortcut_capture_paused,
             commands::set_replacements,
-            commands::set_deepgram_settings,
             commands::set_default_mode_cleanup_enabled,
             commands::set_anthropic_api_key,
             commands::set_anthropic_oauth_token,
