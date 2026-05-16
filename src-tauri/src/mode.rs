@@ -3,6 +3,9 @@ use serde::{Deserialize, Serialize};
 pub type ModeId = String;
 
 pub const SEED_MODE_DEFAULT_EN: &str = "mode-default-en";
+pub const SEED_MODE_CLEANED_EN: &str = "mode-cleaned-en";
+pub const SEED_MODE_UKRAINIAN: &str = "mode-ukrainian";
+pub const SEED_MODE_UA_EN: &str = "mode-ua-en";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -38,6 +41,7 @@ impl ModeLanguage {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum TranslateTarget {
     Off,
+    Apple { target: String },
 }
 
 impl Default for TranslateTarget {
@@ -81,16 +85,68 @@ pub struct Mode {
 }
 
 impl Mode {
-    /// Creates the seeded default-English mode.
+    /// Creates the seeded default-English mode. `cleanup_enabled` is carried
+    /// over from the legacy flat toggle during migration; fresh installs pass false.
     pub fn seed_default_en(cleanup_enabled: bool) -> Self {
         Mode {
             id: SEED_MODE_DEFAULT_EN.to_string(),
-            name: "Default".to_string(),
+            name: "Default English".to_string(),
             icon: None,
             language: ModeLanguage::exact("en"),
             translate: TranslateTarget::Off,
             ai_cleanup: ModeCleanup {
                 enabled: cleanup_enabled,
+                prompt_override: None,
+            },
+            use_dictionary: true,
+            use_snippets: true,
+        }
+    }
+
+    pub fn seed_cleaned_en() -> Self {
+        Mode {
+            id: SEED_MODE_CLEANED_EN.to_string(),
+            name: "Cleaned English".to_string(),
+            icon: None,
+            language: ModeLanguage::exact("en"),
+            translate: TranslateTarget::Off,
+            ai_cleanup: ModeCleanup {
+                enabled: true,
+                prompt_override: None,
+            },
+            use_dictionary: true,
+            use_snippets: true,
+        }
+    }
+
+    pub fn seed_ukrainian() -> Self {
+        Mode {
+            id: SEED_MODE_UKRAINIAN.to_string(),
+            name: "Ukrainian".to_string(),
+            icon: None,
+            language: ModeLanguage::exact("uk"),
+            translate: TranslateTarget::Off,
+            ai_cleanup: ModeCleanup {
+                enabled: false,
+                prompt_override: None,
+            },
+            use_dictionary: true,
+            use_snippets: true,
+        }
+    }
+
+    pub fn seed_ua_en() -> Self {
+        Mode {
+            id: SEED_MODE_UA_EN.to_string(),
+            name: "UA \u{2192} EN".to_string(),
+            icon: None,
+            language: ModeLanguage::exact("uk"),
+            // Target preset; UI disables editing until translation slice lands.
+            translate: TranslateTarget::Apple {
+                target: "en".to_string(),
+            },
+            ai_cleanup: ModeCleanup {
+                enabled: true,
                 prompt_override: None,
             },
             use_dictionary: true,
@@ -155,12 +211,38 @@ mod tests {
     }
 
     #[test]
+    fn translate_target_apple_serializes_with_kind_and_target() {
+        let t = TranslateTarget::Apple {
+            target: "en".to_string(),
+        };
+        let json = serde_json::to_string(&t).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(v["kind"], "apple");
+        assert_eq!(v["target"], "en");
+    }
+
+    #[test]
+    fn translate_target_round_trips() {
+        let cases = vec![
+            TranslateTarget::Off,
+            TranslateTarget::Apple {
+                target: "en".to_string(),
+            },
+        ];
+        for case in cases {
+            let json = serde_json::to_string(&case).unwrap();
+            let decoded: TranslateTarget = serde_json::from_str(&json).unwrap();
+            assert_eq!(decoded, case);
+        }
+    }
+
+    #[test]
     fn mode_round_trips() {
         let mode = Mode::seed_default_en(false);
         let json = serde_json::to_string(&mode).unwrap();
         let decoded: Mode = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.id, SEED_MODE_DEFAULT_EN);
-        assert_eq!(decoded.name, "Default");
+        assert_eq!(decoded.name, "Default English");
         assert_eq!(decoded.language, ModeLanguage::exact("en"));
         assert!(!decoded.ai_cleanup.enabled);
         assert!(decoded.use_dictionary);
@@ -173,5 +255,31 @@ mod tests {
         assert!(on.ai_cleanup.enabled);
         let off = Mode::seed_default_en(false);
         assert!(!off.ai_cleanup.enabled);
+    }
+
+    #[test]
+    fn seed_ua_en_has_apple_translate_target() {
+        let m = Mode::seed_ua_en();
+        assert_eq!(m.id, SEED_MODE_UA_EN);
+        assert_eq!(m.language, ModeLanguage::exact("uk"));
+        assert_eq!(
+            m.translate,
+            TranslateTarget::Apple {
+                target: "en".to_string()
+            }
+        );
+        assert!(m.ai_cleanup.enabled);
+    }
+
+    #[test]
+    fn all_four_seed_ids_are_distinct() {
+        let ids = [
+            SEED_MODE_DEFAULT_EN,
+            SEED_MODE_CLEANED_EN,
+            SEED_MODE_UKRAINIAN,
+            SEED_MODE_UA_EN,
+        ];
+        let unique: std::collections::HashSet<&str> = ids.iter().copied().collect();
+        assert_eq!(unique.len(), ids.len());
     }
 }

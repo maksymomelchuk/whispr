@@ -8,6 +8,7 @@ import type {
   GroqSettings,
   HistoryEntry,
   HistoryLimit,
+  Mode,
   Replacement,
   Settings,
   Shortcut,
@@ -49,6 +50,18 @@ export const setDeepgramSettings = (deepgram: DeepgramSettings) =>
 
 export const setDefaultModeCleanupEnabled = (enabled: boolean) =>
   invoke<void>("set_default_mode_cleanup_enabled", { enabled });
+
+export const addMode = (mode: Mode) => invoke<void>("add_mode", { mode });
+
+export const updateMode = (mode: Mode) => invoke<void>("update_mode", { mode });
+
+export const deleteMode = (id: string) => invoke<void>("delete_mode", { id });
+
+export const duplicateMode = (id: string) =>
+  invoke<void>("duplicate_mode", { id });
+
+export const setDefaultMode = (id: string) =>
+  invoke<void>("set_default_mode", { id });
 
 export const setAnthropicApiKey = (apiKey: string) =>
   invoke<void>("set_anthropic_api_key", { apiKey });

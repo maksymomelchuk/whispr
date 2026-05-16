@@ -170,6 +170,61 @@ pub fn set_default_mode_cleanup_enabled(app: AppHandle, enabled: bool) -> Result
 }
 
 #[tauri::command]
+pub fn add_mode(app: AppHandle, mode: Mode) -> Result<(), String> {
+    config::update(&app, |s| s.modes.push(mode))
+}
+
+#[tauri::command]
+pub fn update_mode(app: AppHandle, mode: Mode) -> Result<(), String> {
+    config::update(&app, |s| {
+        let id = mode.id.clone();
+        if let Some(m) = s.modes.iter_mut().find(|m| m.id == id) {
+            *m = mode;
+        }
+    })
+}
+
+#[tauri::command]
+pub fn delete_mode(app: AppHandle, id: ModeId) -> Result<(), String> {
+    config::update_fallible(&app, |s| {
+        config::check_delete_mode(s, &id)?;
+        s.modes.retain(|m| m.id != id);
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn duplicate_mode(app: AppHandle, id: ModeId) -> Result<(), String> {
+    config::update(&app, |s| {
+        if let Some(source) = s.modes.iter().find(|m| m.id == id).cloned() {
+            let new_id = {
+                let ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis();
+                format!("mode-{ms}")
+            };
+            s.modes.push(Mode {
+                id: new_id,
+                name: format!("{} (copy)", source.name),
+                ..source
+            });
+        }
+    })
+}
+
+#[tauri::command]
+pub fn set_default_mode(app: AppHandle, id: ModeId) -> Result<(), String> {
+    config::update_fallible(&app, |s| {
+        if !s.modes.iter().any(|m| m.id == id) {
+            return Err(format!("Mode '{id}' not found."));
+        }
+        s.default_mode_id = id;
+        Ok(())
+    })
+}
+
+#[tauri::command]
 pub fn set_anthropic_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
     config::update(&app, |s| {
         s.ai_cleanup.anthropic_api_key = config::non_empty(api_key)
@@ -316,9 +371,10 @@ mod tests {
     #[test]
     fn settings_view_exposes_modes_and_default_mode_id() {
         let view: SettingsView = Settings::default().into();
-        assert_eq!(view.modes.len(), 1);
+        assert_eq!(view.modes.len(), 4);
         assert_eq!(view.default_mode_id, crate::mode::SEED_MODE_DEFAULT_EN);
-        assert_eq!(view.modes[0].language, ModeLanguage::exact("en"));
+        let default = view.modes.iter().find(|m| m.id == crate::mode::SEED_MODE_DEFAULT_EN).unwrap();
+        assert_eq!(default.language, ModeLanguage::exact("en"));
     }
 
     #[test]
