@@ -70,11 +70,9 @@ function ModeRow({
   onSetDefault: () => void;
 }) {
   const deleteDisabled = isLast || isDefault;
-  const deleteTooltip = isLast
-    ? "Cannot delete the only remaining mode"
-    : isDefault
-      ? "Set a different default before deleting"
-      : null;
+  let deleteTooltip: string | null = null;
+  if (isLast) deleteTooltip = "Cannot delete the only remaining mode";
+  else if (isDefault) deleteTooltip = "Set a different default before deleting";
 
   return (
     <div className="flex items-center gap-3 rounded-[10px] border border-border bg-card px-4 py-3">
@@ -334,27 +332,22 @@ function ModeEditor({
   );
 }
 
+type EditorState = { mode: Mode; isNew: boolean };
+
 export function ModesPage() {
   const { settings, setSettings } = useSettings();
-  const [editingMode, setEditingMode] = useState<Mode | null>(null);
-  const [isNew, setIsNew] = useState(false);
+  const [editor, setEditor] = useState<EditorState | null>(null);
 
   if (!settings) return null;
 
-  const openEditor = (mode: Mode, newMode = false) => {
-    setEditingMode(mode);
-    setIsNew(newMode);
-  };
-
-  const closeEditor = () => {
-    setEditingMode(null);
-    setIsNew(false);
-  };
+  const openEditor = (mode: Mode, isNew = false) => setEditor({ mode, isNew });
+  const closeEditor = () => setEditor(null);
 
   const handleSaved = (saved: Mode) => {
+    const wasNew = editor?.isNew ?? false;
     setSettings((s) => {
       if (!s) return s;
-      if (isNew) {
+      if (wasNew) {
         return { ...s, modes: [...s.modes, saved] };
       }
       return { ...s, modes: s.modes.map((m) => (m.id === saved.id ? saved : m)) };
@@ -429,13 +422,13 @@ export function ModesPage() {
         </Button>
       </div>
 
-      <Sheet open={editingMode !== null} onOpenChange={(open) => !open && closeEditor()}>
+      <Sheet open={editor !== null} onOpenChange={(open) => !open && closeEditor()}>
         <SheetContent side="right" className="w-80 sm:max-w-80 flex flex-col gap-4">
-          {editingMode && (
+          {editor && (
             <ModeEditor
-              key={editingMode.id}
-              mode={editingMode}
-              isNew={isNew}
+              key={editor.mode.id}
+              mode={editor.mode}
+              isNew={editor.isNew}
               onClose={closeEditor}
               onSaved={handleSaved}
             />

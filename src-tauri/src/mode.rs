@@ -141,7 +141,6 @@ impl Mode {
             name: "UA \u{2192} EN".to_string(),
             icon: None,
             language: ModeLanguage::exact("uk"),
-            // Target preset; UI disables editing until translation slice lands.
             translate: TranslateTarget::Apple {
                 target: "en".to_string(),
             },

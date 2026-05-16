@@ -197,15 +197,12 @@ pub fn delete_mode(app: AppHandle, id: ModeId) -> Result<(), String> {
 pub fn duplicate_mode(app: AppHandle, id: ModeId) -> Result<(), String> {
     config::update(&app, |s| {
         if let Some(source) = s.modes.iter().find(|m| m.id == id).cloned() {
-            let new_id = {
-                let ms = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis();
-                format!("mode-{ms}")
-            };
+            let ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis();
             s.modes.push(Mode {
-                id: new_id,
+                id: format!("mode-{ms}"),
                 name: format!("{} (copy)", source.name),
                 ..source
             });
