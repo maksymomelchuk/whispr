@@ -331,7 +331,6 @@ async fn run_session(
     let default_mode = config::get_default_mode(&settings);
     let mode_cleanup_enabled = default_mode.ai_cleanup.enabled;
     let mode_use_dictionary = default_mode.use_dictionary;
-    let prompt_override = default_mode.ai_cleanup.prompt_override.clone();
 
     let (replaced_text, cleanup_status, notice) = maybe_cleanup(
         app,
@@ -339,7 +338,7 @@ async fn run_session(
         mode_cleanup_enabled,
         &raw_text,
         speak_duration,
-        prompt_override.as_deref(),
+        default_mode.ai_cleanup.prompt_override.as_deref(),
     )
     .await;
 

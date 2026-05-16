@@ -121,7 +121,6 @@ impl std::fmt::Display for CleanupError {
     }
 }
 
-/// Returns `override_prompt` if non-empty after trimming, otherwise `DEFAULT_SYSTEM_PROMPT`.
 pub fn effective_prompt(override_prompt: Option<&str>) -> &str {
     match override_prompt {
         Some(p) if !p.trim().is_empty() => p,
