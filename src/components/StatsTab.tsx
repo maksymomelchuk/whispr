@@ -1,5 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -183,7 +184,9 @@ export function StatsTab() {
   }, []);
 
   if (loadState === "loading") {
-    return <div className="loading">Loading…</div>;
+    return (
+      <div className="py-10 text-center text-muted-foreground">Loading…</div>
+    );
   }
 
   if (loadState === "error") {
@@ -195,12 +198,15 @@ export function StatsTab() {
   }
 
   const hasAny = rows.length > 0;
+  const hasCleanup =
+    cleanup !== null &&
+    (cleanup.overall.input_tokens > 0 || cleanup.overall.output_tokens > 0);
 
   return (
-    <section className="stats">
-      <div className="stats-header">
-        <div className="label-with-info">
-          <h2 className="stats-title">Dictation stats</h2>
+    <section className="flex flex-col gap-3.5">
+      <div className="flex items-start justify-between gap-3 px-0.5">
+        <div className="inline-flex items-center gap-2">
+          <h2 className="m-0 text-[13px] font-semibold">Dictation stats</h2>
           <InfoTip text="Words dictated and your effective words per minute." />
         </div>
         {hasAny && (
@@ -216,77 +222,69 @@ export function StatsTab() {
 
       {!hasAny && <EmptyState />}
       {hasAny && (
-        <ul className="stats-list">
+        <ul className="m-0 list-none overflow-hidden rounded-[10px] border border-border bg-card p-0">
           {aggregates.map(({ spec, agg }) => (
-            <li key={spec.label} className="stats-row">
-              <div className="stats-row-head">
-                <span className="stats-row-label">{spec.label}</span>
-                <span className="stats-wpm">
-                  <span className="stats-wpm-num">
+            <StatRow
+              key={spec.label}
+              label={spec.label}
+              metric={
+                <>
+                  <span className="text-lg font-semibold leading-none text-foreground">
                     {formatWpm(agg.words, agg.seconds)}
                   </span>
-                  <span className="stats-wpm-unit">WPM</span>
-                </span>
-              </div>
-              <div className="stats-row-detail">
-                <span className="stats-metric">
-                  {formatCount(agg.words)} words
-                </span>
-                <span className="stats-dot" aria-hidden="true">
-                  ·
-                </span>
-                <span className="stats-metric">
-                  {formatCount(agg.dictations)}{" "}
-                  {agg.dictations === 1 ? "dictation" : "dictations"}
-                </span>
-                <span className="stats-dot" aria-hidden="true">
-                  ·
-                </span>
-                <span className="stats-metric">
-                  {formatDuration(agg.seconds)}
-                </span>
-              </div>
-            </li>
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.04em] text-muted-foreground/70">
+                    WPM
+                  </span>
+                </>
+              }
+              detail={
+                <>
+                  <Metric>{formatCount(agg.words)} words</Metric>
+                  <Dot />
+                  <Metric>
+                    {formatCount(agg.dictations)}{" "}
+                    {agg.dictations === 1 ? "dictation" : "dictations"}
+                  </Metric>
+                  <Dot />
+                  <Metric>{formatDuration(agg.seconds)}</Metric>
+                </>
+              }
+            />
           ))}
         </ul>
       )}
 
-      {cleanup &&
-        (cleanup.overall.input_tokens > 0 ||
-          cleanup.overall.output_tokens > 0) && (
+      {hasCleanup && (
         <>
-          <div className="stats-header">
-            <div
-              style={{ display: "flex", alignItems: "center", gap: 8 }}
-            >
-              <h2 className="stats-title">AI Cleanup</h2>
+          <div className="flex items-start justify-between gap-3 px-0.5">
+            <div className="inline-flex items-center gap-2">
+              <h2 className="m-0 text-[13px] font-semibold">AI Cleanup</h2>
               <InfoTip text="Anthropic Claude Haiku 4.5 token usage and estimated cost." />
             </div>
           </div>
-          <ul className="stats-list">
+          <ul className="m-0 list-none overflow-hidden rounded-[10px] border border-border bg-card p-0">
             {cleanupRows.map((row) => (
-              <li key={row.label} className="stats-row">
-                <div className="stats-row-head">
-                  <span className="stats-row-label">{row.label}</span>
-                  <span className="stats-wpm">
-                    <span className="stats-wpm-num">
+              <StatRow
+                key={row.label}
+                label={row.label}
+                metric={
+                  <>
+                    <span className="text-lg font-semibold leading-none text-foreground">
                       {formatCost(estimateCostUsd(row.input, row.output))}
                     </span>
-                    <span className="stats-wpm-unit">est.</span>
-                  </span>
-                </div>
-                <div className="stats-row-detail">
-                  <span className="stats-metric">
-                    {formatCount(row.input)} input
-                  </span>
-                  <span className="stats-dot" aria-hidden="true">
-                    ·
-                  </span>
-                  <span className="stats-metric">
-                    {formatCount(row.output)} output
-                  </span>
-                </div>
-              </li>
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.04em] text-muted-foreground/70">
+                      est.
+                    </span>
+                  </>
+                }
+                detail={
+                  <>
+                    <Metric>{formatCount(row.input)} input</Metric>
+                    <Dot />
+                    <Metric>{formatCount(row.output)} output</Metric>
+                  </>
+                }
+              />
             ))}
           </ul>
         </>
@@ -295,9 +293,43 @@ export function StatsTab() {
   );
 }
 
+interface StatRowProps {
+  label: string;
+  metric: ReactNode;
+  detail: ReactNode;
+}
+
+function StatRow({ label, metric, detail }: StatRowProps) {
+  return (
+    <li className="flex flex-col gap-1 px-4 py-3.5 [&+li]:border-t [&+li]:border-border">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-[13px] font-medium text-foreground">{label}</span>
+        <span className="inline-flex items-baseline gap-1 tabular-nums">
+          {metric}
+        </span>
+      </div>
+      <div className="flex flex-wrap items-baseline gap-1.5 text-xs tabular-nums text-muted-foreground">
+        {detail}
+      </div>
+    </li>
+  );
+}
+
+function Metric({ children }: { children: ReactNode }) {
+  return <span className="whitespace-nowrap">{children}</span>;
+}
+
+function Dot() {
+  return (
+    <span aria-hidden="true" className="select-none text-muted-foreground/70">
+      ·
+    </span>
+  );
+}
+
 function EmptyState() {
   return (
-    <div className="stats-empty">
+    <div className="flex flex-col items-center justify-center gap-2 rounded-[10px] border border-border bg-card px-6 py-10 text-center text-muted-foreground/70">
       <svg
         width="32"
         height="32"
@@ -314,8 +346,10 @@ function EmptyState() {
         <path d="M12 16V8" />
         <path d="M17 16v-3" />
       </svg>
-      <div className="stats-empty-title">No dictations yet</div>
-      <div className="stats-empty-hint">
+      <div className="text-[13px] font-semibold text-muted-foreground">
+        No dictations yet
+      </div>
+      <div className="max-w-[280px] text-xs">
         Hold your shortcut and speak — your stats will start showing up here.
       </div>
     </div>
