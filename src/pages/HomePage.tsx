@@ -1,4 +1,5 @@
-import { Microphone, WarningCircle } from "@phosphor-icons/react";
+import { Keyboard, Microphone } from "@phosphor-icons/react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -6,39 +7,24 @@ import { ShortcutKeycaps } from "@/components/Keycap";
 
 import { PageHeader } from "../components/PageHeader";
 import { useSettings } from "../context/SettingsContext";
-
-interface StatusItem {
-  icon: React.ComponentType<{ size?: number; className?: string }>;
-  label: string;
-  action: { to: string; label: string };
-}
+import {
+  type PermissionsStatus,
+  checkPermissions,
+  openAccessibilitySettings,
+  openMicrophoneSettings,
+} from "../lib/api";
 
 export function HomePage() {
   const { settings } = useSettings();
+  const [permissions, setPermissions] = useState<PermissionsStatus | null>(
+    null,
+  );
+
+  useEffect(() => {
+    checkPermissions().then(setPermissions).catch(() => {});
+  }, []);
 
   if (!settings) return null;
-
-  const missingApiKey =
-    settings.transcription_provider === "deepgram"
-      ? !settings.deepgram_api_key_configured
-      : !settings.groq_api_key_configured;
-  const missingMic = !settings.input_device;
-
-  const statuses: StatusItem[] = [];
-  if (missingApiKey) {
-    statuses.push({
-      icon: WarningCircle,
-      label: `Set up your ${settings.transcription_provider === "deepgram" ? "Deepgram" : "Groq"} API key`,
-      action: { to: "/transcription", label: "Open Transcription" },
-    });
-  }
-  if (missingMic) {
-    statuses.push({
-      icon: Microphone,
-      label: "Select a microphone",
-      action: { to: "/general", label: "Open General" },
-    });
-  }
 
   const defaultBindings = settings.hotkey_bindings.filter(
     (b) => b.mode_id === settings.default_mode_id,
@@ -75,38 +61,57 @@ export function HomePage() {
         </p>
       </section>
 
-      {statuses.length > 0 && (
+      {permissions && (
         <section className="flex flex-col gap-2">
           <span className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
-            Needs attention
+            Permissions
           </span>
           <ul className="flex flex-col">
-            {statuses.map(({ icon: Icon, label, action }, i) => (
-              <li
-                key={i}
-                className="flex items-center gap-3 py-2.5 border-t border-border/60 last:border-b"
-              >
-                <span
-                  aria-hidden
-                  className="inline-flex size-1.5 rounded-full bg-[hsl(15_85%_55%)] shrink-0"
-                />
-                <Icon size={15} className="text-muted-foreground shrink-0" />
-                <span className="flex-1 text-[13px] text-foreground">
-                  {label}
-                </span>
-                <Button
-                  asChild
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-[12px]"
-                >
-                  <Link to={action.to}>{action.label}</Link>
-                </Button>
-              </li>
-            ))}
+            <PermissionRow
+              icon={Microphone}
+              label="Microphone"
+              granted={permissions.microphone}
+              onGrant={openMicrophoneSettings}
+            />
+            <PermissionRow
+              icon={Keyboard}
+              label="Accessibility"
+              granted={permissions.accessibility}
+              onGrant={openAccessibilitySettings}
+            />
           </ul>
         </section>
       )}
     </div>
+  );
+}
+
+interface PermissionRowProps {
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  label: string;
+  granted: boolean;
+  onGrant: () => void;
+}
+
+function PermissionRow({ icon: Icon, label, granted, onGrant }: PermissionRowProps) {
+  return (
+    <li className="flex items-center gap-3 py-2.5 border-t border-border/60 last:border-b">
+      <Icon size={15} className="text-muted-foreground shrink-0" />
+      <span className="flex-1 text-[13px] text-foreground">{label}</span>
+      {granted ? (
+        <span className="text-[12px] text-green-600 dark:text-green-500 font-medium">
+          Granted
+        </span>
+      ) : (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 text-[12px]"
+          onClick={onGrant}
+        >
+          Grant Permission
+        </Button>
+      )}
+    </li>
   );
 }

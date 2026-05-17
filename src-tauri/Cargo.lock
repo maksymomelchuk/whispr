@@ -5729,6 +5729,8 @@ dependencies = [
  "flacenc",
  "futures-util",
  "macos-accessibility-client",
+ "objc2",
+ "objc2-foundation",
  "proptest",
  "reqwest 0.12.28",
  "serde",

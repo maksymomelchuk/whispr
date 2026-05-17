@@ -1,4 +1,8 @@
 #[cfg(target_os = "macos")]
+#[link(name = "AVFoundation", kind = "framework")]
+extern "C" {}
+
+#[cfg(target_os = "macos")]
 pub fn ensure_accessibility_trust() {
     use macos_accessibility_client::accessibility;
 
@@ -18,6 +22,36 @@ pub fn ensure_accessibility_trust() {
 #[cfg(not(target_os = "macos"))]
 pub fn ensure_accessibility_trust() {}
 
+#[cfg(target_os = "macos")]
+pub fn check_accessibility_permission() -> bool {
+    use macos_accessibility_client::accessibility;
+    accessibility::application_is_trusted()
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn check_accessibility_permission() -> bool {
+    true
+}
+
+#[cfg(target_os = "macos")]
+pub fn check_microphone_permission() -> bool {
+    use objc2::msg_send;
+    use objc2::runtime::AnyClass;
+    use objc2_foundation::ns_string;
+
+    let Some(cls) = AnyClass::get(c"AVCaptureDevice") else {
+        return false;
+    };
+    // AVMediaTypeAudio = "soun"; AVAuthorizationStatusAuthorized = 3
+    let status: isize = unsafe { msg_send![cls, authorizationStatusForMediaType: ns_string!("soun")] };
+    status == 3
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn check_microphone_permission() -> bool {
+    true
+}
+
 /// Opens the Accessibility pane of System Settings. Useful as a fallback
 /// action in the UI if the user dismissed the initial prompt.
 #[cfg(target_os = "macos")]
@@ -29,3 +63,13 @@ pub fn open_accessibility_settings() {
 
 #[cfg(not(target_os = "macos"))]
 pub fn open_accessibility_settings() {}
+
+#[cfg(target_os = "macos")]
+pub fn open_microphone_settings() {
+    let _ = std::process::Command::new("open")
+        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+        .spawn();
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn open_microphone_settings() {}

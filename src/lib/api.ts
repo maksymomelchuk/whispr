@@ -112,3 +112,12 @@ export const getStats = () => invoke<StatsRow[]>("get_stats");
 export const clearStats = () => invoke<void>("clear_stats");
 
 export const getCleanupStats = () => invoke<CleanupStats>("get_cleanup_stats");
+
+export interface PermissionsStatus {
+  microphone: boolean;
+  accessibility: boolean;
+}
+
+export const checkPermissions = () => invoke<PermissionsStatus>("check_permissions");
+export const openMicrophoneSettings = () => invoke<void>("open_microphone_settings");
+export const openAccessibilitySettings = () => invoke<void>("open_accessibility_settings");

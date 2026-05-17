@@ -388,6 +388,25 @@ pub fn open_accessibility_settings() {
     permissions::open_accessibility_settings();
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct PermissionsStatus {
+    pub microphone: bool,
+    pub accessibility: bool,
+}
+
+#[tauri::command]
+pub fn check_permissions() -> PermissionsStatus {
+    PermissionsStatus {
+        microphone: permissions::check_microphone_permission(),
+        accessibility: permissions::check_accessibility_permission(),
+    }
+}
+
+#[tauri::command]
+pub fn open_microphone_settings() {
+    permissions::open_microphone_settings();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

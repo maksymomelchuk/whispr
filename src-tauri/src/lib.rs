@@ -179,6 +179,8 @@ pub fn run() {
             commands::clear_stats,
             commands::get_cleanup_stats,
             commands::open_accessibility_settings,
+            commands::check_permissions,
+            commands::open_microphone_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
