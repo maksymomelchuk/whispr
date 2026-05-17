@@ -462,6 +462,15 @@ fn migrate(s: &mut Settings) -> bool {
     changed
 }
 
+/// Parse `json` into a `Settings` value and apply any pending migrations.
+///
+/// Useful for testing migration behaviour without a live Tauri `AppHandle`.
+pub fn from_json(json: &str) -> Result<Settings, serde_json::Error> {
+    let mut s: Settings = serde_json::from_str(json)?;
+    migrate(&mut s);
+    Ok(s)
+}
+
 /// Returns `Err` if deleting `id` would violate an invariant.
 pub fn check_delete_mode(s: &Settings, id: &str) -> Result<(), String> {
     if s.modes.len() <= 1 {

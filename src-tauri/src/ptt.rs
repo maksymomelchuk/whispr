@@ -433,8 +433,8 @@ async fn run_session(
 
     let format = match format_rx.await {
         Ok(Ok(f)) => f,
-        Ok(Err(e)) => return Err(format!("Recording failed: {e}")),
-        Err(_) => return Err("Recording thread crashed".to_string()),
+        Ok(Err(e)) => return Err(pipeline::recorder_failed_error(&e)),
+        Err(_) => return Err(pipeline::RECORDER_THREAD_CRASHED_ERROR.to_string()),
     };
 
     let settings = config::load(app);
