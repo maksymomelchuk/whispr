@@ -169,13 +169,18 @@ function RecordingRow({
         {captured ? (
           <ShortcutKeycaps shortcut={captured} tone="accent" />
         ) : (
-          <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            <span className="relative inline-flex size-2">
-              <span className="motion-safe:animate-ping absolute inset-0 rounded-full bg-destructive/70" />
-              <span className="relative inline-flex size-2 rounded-full bg-destructive" />
-            </span>
-            Listening… press your shortcut
-          </span>
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <span className="relative inline-flex size-2">
+                  <span className="motion-safe:animate-ping absolute inset-0 rounded-full bg-destructive/70" />
+                  <span className="relative inline-flex size-2 rounded-full bg-destructive" />
+                </span>
+                Listening… press your shortcut
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>Press Esc to cancel</TooltipContent>
+          </Tooltip>
         )}
         <label className="ml-1 flex items-center gap-1.5 text-help text-muted-foreground cursor-pointer select-none">
           <Switch

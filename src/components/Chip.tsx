@@ -15,7 +15,7 @@ export function Chip({ label, onRemove }: Props) {
           e.stopPropagation();
           onRemove();
         }}
-        className="text-primary/60 hover:text-destructive transition-colors"
+        className="inline-flex items-center justify-center p-1.5 rounded-sm text-primary/60 hover:text-destructive transition-colors"
         aria-label={`Remove ${label}`}
       >
         <X size={10} weight="bold" />
