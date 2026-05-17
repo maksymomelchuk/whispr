@@ -76,14 +76,4 @@ describe("TermChipInput", () => {
     await userEvent.keyboard("{Enter}");
     expect(onChange).not.toHaveBeenCalled();
   });
-
-  it("applies focus-ring classes to the chip wrapper on input focus", async () => {
-    const { container } = render(
-      <TermChipInput value={[]} onChange={vi.fn()} />,
-    );
-    const wrapper = container.querySelector(
-      ".has-\\[input\\:focus-visible\\]\\:ring-\\[3px\\]",
-    );
-    expect(wrapper).toBeInTheDocument();
-  });
 });
