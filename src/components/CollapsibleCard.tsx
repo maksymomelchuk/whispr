@@ -56,7 +56,7 @@ export function CollapsibleCard({
         {info && <InfoTip text={info} />}
         {dirty && !open && (
           <span
-            className="ml-auto inline-block size-1.5 rounded-full bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.15)] dark:bg-amber-400 dark:shadow-[0_0_0_3px_rgba(251,191,36,0.2)]"
+            className="ml-auto inline-block size-1.5 rounded-full bg-primary ring-[3px] ring-primary/15"
             aria-label="Unsaved changes"
           />
         )}

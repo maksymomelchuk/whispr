@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, Trash } from "@phosphor-icons/react";
+import { Trash } from "@phosphor-icons/react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { RowCard, RowCardButton } from "@/components/RowCard";
+import { EmptyRowCard } from "@/components/EmptyRowCard";
+import { RowCard } from "@/components/RowCard";
 import { SectionHeader } from "@/components/SectionHeader";
 
 import { useSettings } from "../context/SettingsContext";
@@ -73,8 +74,8 @@ function SnippetRow({
       <div className="flex items-center gap-0.5 shrink-0 transform-gpu opacity-65 group-hover:opacity-100 transition-opacity">
         <Button
           variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-[12px] text-muted-foreground hover:text-foreground"
+          size="xs"
+          className="text-muted-foreground hover:text-foreground"
           onClick={onEdit}
         >
           Edit
@@ -203,16 +204,14 @@ function EditorRow({
         <div className="ml-auto flex items-center gap-1">
           <Button
             variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-[12px]"
+            size="xs"
             onClick={onCancel}
             disabled={saving}
           >
             Cancel
           </Button>
           <Button
-            size="sm"
-            className="h-7 px-3 text-[12px]"
+            size="xs"
             onClick={onSave}
             disabled={saving || !draft.trigger.trim()}
           >
@@ -229,20 +228,16 @@ function EditorRow({
 
 function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
-    <RowCardButton onClick={onAdd} className="justify-between px-4 py-6">
-      <div className="flex flex-col gap-1 text-left">
+    <EmptyRowCard
+      preview={
         <span className="font-mono text-[13px] font-semibold text-muted-foreground/70">
           [sample]
         </span>
-        <span className="text-xs text-muted-foreground/70">
-          Triggers in your dictation expand to their text after cleanup.
-        </span>
-      </div>
-      <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground/80 group-hover:text-foreground transition-colors">
-        <Plus size={13} />
-        Add snippet
-      </span>
-    </RowCardButton>
+      }
+      hint="Triggers in your dictation expand to their text after cleanup."
+      action="Add snippet"
+      onClick={onAdd}
+    />
   );
 }
 
@@ -389,18 +384,16 @@ export function SnippetsPage() {
           )}
 
           {!editingNew && (
-            <RowCardButton
+            <EmptyRowCard
+              preview={
+                <span className="font-mono text-[13px] font-semibold text-muted-foreground/55">
+                  trigger → expansion
+                </span>
+              }
+              action="Add snippet"
               onClick={startNew}
-              className="justify-between pr-4 py-4"
-            >
-              <span className="font-mono text-[13px] font-semibold text-muted-foreground/55">
-                trigger → expansion
-              </span>
-              <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground/80 group-hover:text-foreground transition-colors">
-                <Plus size={13} />
-                Add snippet
-              </span>
-            </RowCardButton>
+              className="py-4"
+            />
           )}
         </div>
       )}

@@ -1,8 +1,9 @@
-import { X } from "@phosphor-icons/react";
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+
+import { Chip } from "./Chip";
 
 interface TermChipInputProps {
   value: string[];
@@ -64,23 +65,11 @@ export function TermChipInput({ value, onChange }: TermChipInputProps) {
         onClick={() => inputRef.current?.focus()}
       >
         {value.map((term) => (
-          <span
+          <Chip
             key={term}
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary/10 text-primary text-[12px] leading-snug ring-1 ring-inset ring-primary/15"
-          >
-            {term}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onChange(value.filter((t) => t !== term));
-              }}
-              className="text-primary/60 hover:text-destructive transition-colors"
-              aria-label={`Remove ${term}`}
-            >
-              <X size={10} weight="bold" />
-            </button>
-          </span>
+            label={term}
+            onRemove={() => onChange(value.filter((t) => t !== term))}
+          />
         ))}
         <input
           ref={inputRef}

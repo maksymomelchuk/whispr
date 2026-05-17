@@ -1,4 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
+import { ChartBar } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -11,6 +12,7 @@ import {
   getStats,
 } from "../lib/api";
 import type { CleanupStats, StatsRow } from "../lib/types";
+import { EmptyPanel } from "./EmptyPanel";
 import { InfoTip } from "./InfoTip";
 
 type LoadState = "loading" | "ready" | "error";
@@ -329,29 +331,10 @@ function Dot() {
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-border bg-card px-6 py-10 text-center text-muted-foreground/70">
-      <svg
-        width="32"
-        height="32"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M3 20h18" />
-        <path d="M7 16v-5" />
-        <path d="M12 16V8" />
-        <path d="M17 16v-3" />
-      </svg>
-      <div className="text-[13px] font-semibold text-muted-foreground">
-        No dictations yet
-      </div>
-      <div className="max-w-[280px] text-xs">
-        Hold your shortcut and speak — your stats will start showing up here.
-      </div>
-    </div>
+    <EmptyPanel
+      icon={<ChartBar size={32} />}
+      title="No dictations yet"
+      hint="Hold your shortcut and speak — your stats will start showing up here."
+    />
   );
 }

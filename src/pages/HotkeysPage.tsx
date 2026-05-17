@@ -1,6 +1,7 @@
-import { Plus, Trash } from "@phosphor-icons/react";
+import { Trash } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
 
+import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -9,8 +10,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { EmptyRowCard } from "@/components/EmptyRowCard";
 import { Keycap, ShortcutKeycaps } from "@/components/Keycap";
-import { RowCard, RowCardButton } from "@/components/RowCard";
+import { RowCard } from "@/components/RowCard";
 import { SectionHeader } from "@/components/SectionHeader";
 
 import { useSettings } from "../context/SettingsContext";
@@ -75,10 +77,7 @@ function BindingRow({
       <div className="flex flex-1 min-w-0 items-center gap-2.5 flex-wrap">
         <ShortcutKeycaps shortcut={binding.shortcut} tone={tone} />
         {binding.shortcut.is_double_tap && (
-          <Badge
-            variant="neutral"
-            className="text-eyebrow uppercase bg-primary/12 text-primary border-transparent"
-          >
+          <Badge variant="accent" className="text-eyebrow uppercase">
             Double-tap
           </Badge>
         )}
@@ -90,8 +89,8 @@ function BindingRow({
       <div className="flex items-center gap-0.5 shrink-0 transform-gpu opacity-65 group-hover:opacity-100 transition-opacity">
         <Button
           variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-[12px] text-muted-foreground hover:text-foreground"
+          size="xs"
+          className="text-muted-foreground hover:text-foreground"
           onClick={onEdit}
         >
           Re-record
@@ -194,15 +193,13 @@ function RecordingRow({
       <div className="flex items-center gap-1 shrink-0">
         <Button
           variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-[12px]"
+          size="xs"
           onClick={onCancel}
         >
           Cancel
         </Button>
         <Button
-          size="sm"
-          className="h-7 px-3 text-[12px]"
+          size="xs"
           disabled={!hasChanges}
           onClick={() => onSave(effective)}
         >
@@ -215,17 +212,17 @@ function RecordingRow({
 
 function EmptyModeCard({ onAdd }: { onAdd: () => void }) {
   return (
-    <RowCardButton onClick={onAdd} className="justify-between pr-4">
-      <div className="flex items-center gap-1.5">
-        <Keycap tone="phantom">⌥</Keycap>
-        <Keycap tone="phantom">⌘</Keycap>
-        <Keycap tone="phantom">K</Keycap>
-      </div>
-      <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground/80 group-hover:text-foreground transition-colors">
-        <Plus size={13} />
-        Add hotkey
-      </span>
-    </RowCardButton>
+    <EmptyRowCard
+      preview={
+        <div className="flex items-center gap-1.5">
+          <Keycap tone="phantom">⌥</Keycap>
+          <Keycap tone="phantom">⌘</Keycap>
+          <Keycap tone="phantom">K</Keycap>
+        </div>
+      }
+      action="Add hotkey"
+      onClick={onAdd}
+    />
   );
 }
 
@@ -294,12 +291,9 @@ export function HotkeysPage() {
   return (
     <div className="p-6 flex flex-col gap-7">
       {error && (
-        <p
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/[0.06] px-3 py-2 text-xs font-medium text-destructive"
-        >
+        <Alert variant="destructive" className="font-medium">
           {error}
-        </p>
+        </Alert>
       )}
 
       {settings.modes.map((mode, modeIdx) => {

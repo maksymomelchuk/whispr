@@ -28,6 +28,7 @@ import {
 import type { CleanupAuthMode } from "../lib/types";
 import { CredentialField } from "./CredentialField";
 import { InfoTip } from "./InfoTip";
+import { SectionHeader } from "./SectionHeader";
 
 const thresholdsSchema = z.object({
   minWords: z
@@ -163,28 +164,31 @@ export function AiCleanupField({
 
   return (
     <section data-slot="ai-cleanup" className="flex flex-col gap-2.5">
-      <header className="flex items-center gap-3 pb-1.5 border-b border-border/40">
-        <h3 className="text-section-title text-foreground">AI Cleanup</h3>
-        <InfoTip text="Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Adds ~500ms." />
-        <div className="ml-auto inline-flex items-center gap-2">
-          <span
-            className={cn(
-              "text-form-label",
-              enabledToggle.enabled
-                ? "text-foreground"
-                : "text-muted-foreground/70",
-            )}
-          >
-            {enabledToggle.enabled ? "On" : "Off"}
-          </span>
-          <Switch
-            id="ai-cleanup-enabled"
-            aria-label="Enable AI post-processing"
-            checked={enabledToggle.enabled}
-            onCheckedChange={enabledToggle.toggle}
-          />
-        </div>
-      </header>
+      <SectionHeader
+        title="AI Cleanup"
+        badge={<InfoTip text="Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Adds ~500ms." />}
+        control={
+          <>
+            <span
+              className={cn(
+                "text-form-label",
+                enabledToggle.enabled
+                  ? "text-foreground"
+                  : "text-muted-foreground/70",
+              )}
+            >
+              {enabledToggle.enabled ? "On" : "Off"}
+            </span>
+            <Switch
+              id="ai-cleanup-enabled"
+              aria-label="Enable AI post-processing"
+              checked={enabledToggle.enabled}
+              onCheckedChange={enabledToggle.toggle}
+            />
+          </>
+        }
+        className="items-center"
+      />
 
       {!enabledToggle.enabled ? (
         <p className="text-xs text-muted-foreground/80">

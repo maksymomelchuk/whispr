@@ -9,6 +9,7 @@ interface Props {
   isDefault?: boolean;
   badge?: ReactNode;
   trailing?: ReactNode;
+  control?: ReactNode;
   className?: string;
 }
 
@@ -18,6 +19,7 @@ export function SectionHeader({
   isDefault,
   badge,
   trailing,
+  control,
   className,
 }: Props) {
   const indexLabel =
@@ -44,6 +46,11 @@ export function SectionHeader({
         <span className="ml-auto text-help text-muted-foreground/70 tabular-nums">
           {trailing}
         </span>
+      )}
+      {control && (
+        <div className="ml-auto inline-flex items-center gap-2">
+          {control}
+        </div>
       )}
     </div>
   );

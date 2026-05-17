@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { EmptyPanel } from "@/components/EmptyPanel";
 import { RowCard } from "@/components/RowCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { cn } from "@/lib/utils";
@@ -286,27 +287,19 @@ export function HistoryTab({
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center gap-2.5 rounded-lg border border-dashed border-border/80 bg-card/30 px-6 py-14 text-center">
-      <div className="text-md font-semibold text-muted-foreground">
-        No transcriptions yet
-      </div>
-      <div className="max-w-[280px] text-xs text-muted-foreground/70">
-        Hold your shortcut and speak — transcripts will appear here.
-      </div>
-    </div>
+    <EmptyPanel
+      title="No transcriptions yet"
+      hint="Hold your shortcut and speak — transcripts will appear here."
+    />
   );
 }
 
 function DisabledState() {
   return (
-    <div className="flex flex-col items-center justify-center gap-2.5 rounded-lg border border-dashed border-border/80 bg-card/30 px-6 py-14 text-center">
-      <div className="text-md font-semibold text-muted-foreground">
-        History is disabled
-      </div>
-      <div className="max-w-[280px] text-xs text-muted-foreground/70">
-        Pick a Keep last value above to start saving transcripts again.
-      </div>
-    </div>
+    <EmptyPanel
+      title="History is disabled"
+      hint="Pick a Keep last value above to start saving transcripts again."
+    />
   );
 }
 

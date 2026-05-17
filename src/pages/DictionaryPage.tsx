@@ -1,8 +1,9 @@
-import { Plus, Trash } from "@phosphor-icons/react";
+import { Trash } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { RowCard, RowCardButton } from "@/components/RowCard";
+import { EmptyRowCard } from "@/components/EmptyRowCard";
+import { RowCard } from "@/components/RowCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { TermChipInput } from "@/components/TermChipInput";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -249,16 +250,14 @@ function EditorRow({
         <div className="flex items-center gap-1 ml-1">
           <Button
             variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-[12px]"
+            size="xs"
             onClick={onCancel}
             disabled={saving}
           >
             Cancel
           </Button>
           <Button
-            size="sm"
-            className="h-7 px-3 text-[12px]"
+            size="xs"
             onClick={onSave}
             disabled={saving || !draft.from.trim()}
           >
@@ -275,20 +274,16 @@ function EditorRow({
 
 function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
-    <RowCardButton onClick={onAdd} className="justify-between px-4 py-6">
-      <div className="flex flex-col gap-1 text-left">
+    <EmptyRowCard
+      preview={
         <span className="font-mono text-[13px] font-semibold text-muted-foreground/70">
           spoken → text
         </span>
-        <span className="text-xs text-muted-foreground/70">
-          Rewrite phrases in the transcript after cleanup and snippets run.
-        </span>
-      </div>
-      <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground/80 group-hover:text-foreground transition-colors">
-        <Plus size={13} />
-        Add correction
-      </span>
-    </RowCardButton>
+      }
+      hint="Rewrite phrases in the transcript after cleanup and snippets run."
+      action="Add correction"
+      onClick={onAdd}
+    />
   );
 }
 
@@ -415,18 +410,16 @@ function CorrectionsTab({
           )}
 
           {!editingNew && (
-            <RowCardButton
+            <EmptyRowCard
+              preview={
+                <span className="font-mono text-[13px] font-semibold text-muted-foreground/55">
+                  spoken → text
+                </span>
+              }
+              action="Add correction"
               onClick={startNew}
-              className="justify-between pr-4 py-4"
-            >
-              <span className="font-mono text-[13px] font-semibold text-muted-foreground/55">
-                spoken → text
-              </span>
-              <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground/80 group-hover:text-foreground transition-colors">
-                <Plus size={13} />
-                Add correction
-              </span>
-            </RowCardButton>
+              className="py-4"
+            />
           )}
         </div>
       )}

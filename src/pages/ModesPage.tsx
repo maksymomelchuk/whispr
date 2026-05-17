@@ -6,7 +6,6 @@ import {
   PencilSimple,
   Star,
   Trash,
-  X,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
@@ -53,6 +52,8 @@ import {
 } from "../lib/api";
 import type { HotkeyBinding, Mode, ModeLanguage } from "../lib/types";
 
+import { Chip } from "../components/Chip";
+import { RowCard } from "../components/RowCard";
 import { ToggleRow } from "../components/ToggleRow";
 
 const LANGUAGES: { code: string; name: string; flag: string }[] = [
@@ -161,7 +162,7 @@ function ModeRow({
   else if (isDefault) deleteTooltip = "Set a different default before deleting";
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
+    <RowCard>
       <div className="flex flex-1 min-w-0 flex-col gap-0.5">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-semibold text-foreground">
@@ -263,7 +264,7 @@ function ModeRow({
           )}
         </Tooltip>
       </div>
-    </div>
+    </RowCard>
   );
 }
 
@@ -401,7 +402,7 @@ export function ModeEditor({
   return (
     <>
       <SheetHeader className="px-4 pt-4 pb-0">
-        <SheetTitle className="text-[15px]">
+        <SheetTitle>
           {isNew ? "New Mode" : "Edit Mode"}
         </SheetTitle>
       </SheetHeader>
@@ -467,10 +468,7 @@ export function ModeEditor({
                         if (v) addLangCode(v);
                       }}
                     >
-                      <SelectTrigger
-                        size="sm"
-                        className="w-auto rounded-full border-dashed px-2.5 py-1 h-auto text-xs font-medium text-muted-foreground shadow-none data-[placeholder]:text-muted-foreground"
-                      >
+                      <SelectTrigger size="sm" className="w-auto">
                         <SelectValue placeholder="+ Add language" />
                       </SelectTrigger>
                       <SelectContent>
@@ -484,20 +482,11 @@ export function ModeEditor({
                       </SelectContent>
                     </Select>
                     {restrictCodes.map((code) => (
-                      <span
+                      <Chip
                         key={code}
-                        className="inline-flex items-center gap-1 rounded-full bg-muted pl-2.5 pr-1.5 py-1 text-xs font-medium"
-                      >
-                        {langLabel(code)}
-                        <button
-                          type="button"
-                          onClick={() => removeLangCode(code)}
-                          className="inline-flex items-center justify-center rounded-full p-0.5 text-muted-foreground hover:text-foreground hover:bg-foreground/5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                          aria-label={`Remove ${langLabel(code)}`}
-                        >
-                          <X size={10} weight="bold" />
-                        </button>
-                      </span>
+                        label={langLabel(code)}
+                        onRemove={() => removeLangCode(code)}
+                      />
                     ))}
                   </div>
                 )}
@@ -716,7 +705,7 @@ export function ModesPage() {
       </div>
 
       <Sheet open={editor !== null} onOpenChange={(open) => !open && closeEditor()}>
-        <SheetContent side="right" className="w-[440px] sm:max-w-[440px] flex flex-col gap-4">
+        <SheetContent side="right" className="flex flex-col gap-4">
           {editor && (
             <ModeEditor
               key={editor.mode.id}

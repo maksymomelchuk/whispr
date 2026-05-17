@@ -139,6 +139,7 @@ export function CredentialField({
           <Button
             type="button"
             variant="outline"
+            size="sm"
             onClick={() => setEditing(true)}
             disabled={saving}
           >
@@ -147,6 +148,7 @@ export function CredentialField({
           <Button
             type="button"
             variant="ghost"
+            size="sm"
             onClick={handleRemove}
             disabled={saving}
             className="text-muted-foreground hover:text-destructive"
