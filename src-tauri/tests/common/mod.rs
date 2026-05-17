@@ -105,32 +105,30 @@ impl PipelineHarness {
 
     /// Override the `use_terms` flag on the active mode.
     pub fn with_use_terms(mut self, enabled: bool) -> Self {
-        for mode in self.settings.modes.iter_mut() {
-            if mode.id == self.mode_id {
-                mode.use_terms = enabled;
-            }
+        if let Some(m) = self.active_mode_mut() {
+            m.use_terms = enabled;
         }
         self
     }
 
     /// Override the `use_corrections` flag on the active mode.
     pub fn with_use_corrections(mut self, enabled: bool) -> Self {
-        for mode in self.settings.modes.iter_mut() {
-            if mode.id == self.mode_id {
-                mode.use_corrections = enabled;
-            }
+        if let Some(m) = self.active_mode_mut() {
+            m.use_corrections = enabled;
         }
         self
     }
 
     /// Override the `use_snippets` flag on the active mode.
     pub fn with_use_snippets(mut self, enabled: bool) -> Self {
-        for mode in self.settings.modes.iter_mut() {
-            if mode.id == self.mode_id {
-                mode.use_snippets = enabled;
-            }
+        if let Some(m) = self.active_mode_mut() {
+            m.use_snippets = enabled;
         }
         self
+    }
+
+    fn active_mode_mut(&mut self) -> Option<&mut Mode> {
+        self.settings.modes.iter_mut().find(|m| m.id == self.mode_id)
     }
 
     /// Simulate the Apple Translate stage returning `translated_text`. When
@@ -171,22 +169,19 @@ impl PipelineHarness {
         // pipeline: raw_text → translate → translated_text → cleanup → replaced_text.
         let post_translate = self.translated_text.as_deref().unwrap_or(raw_text);
 
-        let cleanup_output = if let Some(status) = self.cleanup_error {
-            CleanupOutput {
+        let cleanup_output = match (self.cleanup_error, self.cleanup) {
+            (Some(status), _) => CleanupOutput {
                 replaced_text: post_translate.to_string(),
                 status,
-            }
-        } else {
-            match self.cleanup {
-                Some(cleaned) => CleanupOutput {
-                    replaced_text: cleaned,
-                    status: CleanupStatus::Ran,
-                },
-                None => CleanupOutput {
-                    replaced_text: post_translate.to_string(),
-                    status: CleanupStatus::Disabled,
-                },
-            }
+            },
+            (None, Some(cleaned)) => CleanupOutput {
+                replaced_text: cleaned,
+                status: CleanupStatus::Ran,
+            },
+            (None, None) => CleanupOutput {
+                replaced_text: post_translate.to_string(),
+                status: CleanupStatus::Disabled,
+            },
         };
 
         pipeline::run_stages(raw_text, Duration::from_secs(1), &mode, &self.settings, cleanup_output)
