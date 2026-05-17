@@ -1,5 +1,5 @@
 use crate::config::SnippetEntry;
-use crate::dictionary::find_word_match;
+use crate::corrections::find_word_match;
 use time::OffsetDateTime;
 
 pub fn expand_snippets(text: &str, entries: &[SnippetEntry]) -> String {
@@ -127,7 +127,6 @@ mod tests {
         assert_eq!(expand_snippets("no match here", &entries), "no match here");
     }
 
-    // old test encoded case-sensitive (buggy) behavior — fixed to case-insensitive
     #[test]
     fn trigger_matching_is_case_insensitive() {
         let entries = [entry("1", "[Date]", "2026-01-01")];

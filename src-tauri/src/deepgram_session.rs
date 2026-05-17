@@ -357,17 +357,4 @@ mod tests {
             url.as_str().len()
         );
     }
-
-    #[test]
-    fn correction_from_strings_never_reach_url_as_keyterms() {
-        // Correction entries (from != to) must not be passed as terms.
-        // This test verifies by passing only real Terms — no correction from-strings.
-        let terms: Vec<String> = vec!["MongoDB".into()];
-        let url = build_ws_url(&ModeLanguage::exact("en"), fmt(), &terms).unwrap();
-        let q = url.query().unwrap_or("");
-        assert!(q.contains("keyterm=MongoDB"));
-        // dot/slash are corrections and should not appear here at all
-        assert!(!q.contains("keyterm=dot"));
-        assert!(!q.contains("keyterm=slash"));
-    }
 }
