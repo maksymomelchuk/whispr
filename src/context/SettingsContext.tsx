@@ -7,6 +7,11 @@ import type { Settings } from "../lib/types";
 interface SettingsContextValue {
   settings: Settings | null;
   setSettings: React.Dispatch<React.SetStateAction<Settings | null>>;
+  setSetting: <K extends keyof Settings>(
+    key: K,
+    value: Settings[K],
+    persist: () => Promise<void>,
+  ) => Promise<void>;
   themePreference: ThemePreference;
   setThemePreference: (next: ThemePreference) => void;
   accent: Accent;
