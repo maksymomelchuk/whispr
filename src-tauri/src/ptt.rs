@@ -9,7 +9,6 @@ use crate::state::{AppState, ModifierState};
 use crate::transcription_session::TranscriptionSession;
 use crate::{cleanup, cleanup_stats, config, media, overlay, paste, stats, target_app, translation};
 use std::collections::HashMap;
-use std::process::Command;
 use std::time::{Duration, Instant};
 use core_foundation::base::TCFType;
 use core_foundation::runloop::{kCFRunLoopCommonModes, CFRunLoop};
@@ -141,7 +140,6 @@ fn notify_silent(app: &AppHandle, message: impl Into<String>) {
     let message = message.into();
     eprintln!("[notify silent] {message}");
     let _ = app.emit(TRANSCRIPTION_ERROR_EVENT, &message);
-    macos_notification(&message);
 }
 
 /// Pops main window. Only safe after any pending paste has gone out.
@@ -154,23 +152,8 @@ fn notify_error(app: &AppHandle, message: impl Into<String>) {
         let _ = window.show();
         let _ = window.set_focus();
     }
-
-    macos_notification(&message);
 }
 
-/// osascript blocks 50–200ms — keep off the runtime worker.
-#[cfg(target_os = "macos")]
-fn macos_notification(message: &str) {
-    let escaped = message.replace('\\', "\\\\").replace('"', "\\\"");
-    let script = format!(r#"display notification "{escaped}" with title "Whispr""#);
-    tauri::async_runtime::spawn_blocking(move || {
-        if let Err(e) = Command::new("osascript").args(["-e", &script]).output() {
-            eprintln!("[notify] osascript failed: {e}");
-        }
-    });
-}
-#[cfg(not(target_os = "macos"))]
-fn macos_notification(_message: &str) {}
 
 // core-graphics keeps CGEventTapEnable private, but we need to call it from
 // inside the tap's own callback (the only place we learn the system has
