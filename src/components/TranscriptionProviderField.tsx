@@ -100,10 +100,7 @@ export function TranscriptionProviderField({
   };
 
   return (
-    <SectionCard
-      title="Provider"
-      info="Service that transcribes your dictation. Each provider keeps its own credentials and options."
-    >
+    <SectionCard title="Provider">
       <Form {...providerForm}>
         <FormField
           control={providerForm.control}
@@ -141,7 +138,6 @@ export function TranscriptionProviderField({
         <CredentialField
           className="mt-3.5"
           label="API key"
-          info="Paste your Deepgram key from console.deepgram.com."
           placeholder="dg_..."
           isConfigured={deepgramApiKeyConfigured}
           persist={persistDeepgramApiKey}
@@ -155,7 +151,6 @@ export function TranscriptionProviderField({
           <CredentialField
             className="mt-3.5"
             label="API key"
-            info="Create one at console.groq.com."
             placeholder="gsk_..."
             isConfigured={groqApiKeyConfigured}
             persist={persistGroqApiKey}

@@ -1,3 +1,5 @@
+import { Question } from "@phosphor-icons/react";
+
 import {
   Tooltip,
   TooltipContent,
@@ -13,7 +15,7 @@ export function InfoTip({ text }: Props) {
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-border text-[10px] font-semibold leading-none text-muted-foreground/70 bg-card cursor-help select-none outline-none"
+          className="inline-flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors cursor-help select-none outline-none focus-visible:text-muted-foreground/70"
           aria-label={text}
           tabIndex={0}
           onClick={(e) => {
@@ -22,10 +24,12 @@ export function InfoTip({ text }: Props) {
           }}
           onMouseDown={(e) => e.preventDefault()}
         >
-          ?
+          <Question size={13} weight="bold" />
         </span>
       </TooltipTrigger>
-      <TooltipContent>{text}</TooltipContent>
+      <TooltipContent className="max-w-[220px] text-center leading-snug">
+        {text}
+      </TooltipContent>
     </Tooltip>
   );
 }

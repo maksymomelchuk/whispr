@@ -195,9 +195,12 @@ export function AiCleanupField({
       ) : (
         <div className="flex flex-col gap-3.5 pt-1">
           <div className="flex flex-col gap-[6px]">
-            <span className="text-[11px] font-medium tracking-[0.2px] text-muted-foreground">
-              Authentication
-            </span>
+            <div className="inline-flex items-center gap-2">
+              <span className="text-[11px] font-medium tracking-[0.2px] text-muted-foreground">
+                Authentication
+              </span>
+              <InfoTip text="API key: pay-as-you-go via console.anthropic.com. OAuth: uses your Claude subscription — mint a token with `claude setup-token`." />
+            </div>
             <ToggleGroup
               type="single"
               variant="outline"
@@ -206,16 +209,10 @@ export function AiCleanupField({
               className="w-full"
             >
               <ToggleGroupItem value="api_key" className="flex-1 text-xs">
-                <span className="inline-flex items-center gap-2">
-                  Anthropic API key
-                  <InfoTip text={MODE_COPY.api_key.info} />
-                </span>
+                Anthropic API key
               </ToggleGroupItem>
               <ToggleGroupItem value="oauth" className="flex-1 text-xs">
-                <span className="inline-flex items-center gap-2">
-                  Claude Code OAuth
-                  <InfoTip text={MODE_COPY.oauth.info} />
-                </span>
+                Claude Code OAuth
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
