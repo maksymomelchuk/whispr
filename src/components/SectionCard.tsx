@@ -23,7 +23,7 @@ export function SectionCard({
   return (
     <section
       data-slot="section-card"
-      className={cn("flex flex-col gap-2.5", className)}
+      className={cn("flex flex-col gap-2.5 bg-card rounded-[10px] border border-border px-4 py-4", className)}
       {...rest}
     >
       {showHeader && title !== undefined && (
