@@ -221,12 +221,12 @@ export function HistoryTab({
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-start justify-between gap-3 pb-1 border-b border-border/40">
-        <p className="text-[12px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           {limitHint(historyLimit, entries.length)}
         </p>
         <div className="flex shrink-0 items-center gap-2.5">
           <div className="inline-flex items-center gap-1.5">
-            <span className="whitespace-nowrap text-[11px] font-medium text-muted-foreground">
+            <span className="whitespace-nowrap text-form-label text-muted-foreground">
               Keep last
             </span>
             <Select
@@ -286,8 +286,8 @@ export function HistoryTab({
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center gap-2.5 rounded-[10px] border border-dashed border-border/80 bg-card/30 px-6 py-14 text-center">
-      <div className="text-[13px] font-semibold text-muted-foreground">
+    <div className="flex flex-col items-center justify-center gap-2.5 rounded-lg border border-dashed border-border/80 bg-card/30 px-6 py-14 text-center">
+      <div className="text-md font-semibold text-muted-foreground">
         No transcriptions yet
       </div>
       <div className="max-w-[280px] text-xs text-muted-foreground/70">
@@ -299,8 +299,8 @@ function EmptyState() {
 
 function DisabledState() {
   return (
-    <div className="flex flex-col items-center justify-center gap-2.5 rounded-[10px] border border-dashed border-border/80 bg-card/30 px-6 py-14 text-center">
-      <div className="text-[13px] font-semibold text-muted-foreground">
+    <div className="flex flex-col items-center justify-center gap-2.5 rounded-lg border border-dashed border-border/80 bg-card/30 px-6 py-14 text-center">
+      <div className="text-md font-semibold text-muted-foreground">
         History is disabled
       </div>
       <div className="max-w-[280px] text-xs text-muted-foreground/70">
@@ -424,7 +424,7 @@ function HistoryRow({
           >
             {formatTimeOfDay(entry.timestamp)}
           </time>
-          <span className="mt-1 font-mono text-[10.5px] tabular-nums text-muted-foreground/70 leading-none">
+          <span className="mt-1 font-mono text-kbd tabular-nums text-muted-foreground/70">
             {formatHeldDuration(entry.speak_duration_ms)}
           </span>
         </div>
@@ -453,10 +453,7 @@ function HistoryRow({
               type="button"
               variant="ghost"
               size="xs"
-              className={cn(
-                "text-muted-foreground",
-                copied && "text-green-600",
-              )}
+              className="text-muted-foreground"
               aria-label="Copy transcript"
               aria-live="polite"
               onClick={() => flash(entry.final_text)}
@@ -517,7 +514,7 @@ function Stage({ label, text, previousText, note }: StageProps) {
       className="flex flex-col gap-1 [&+[data-history-stage]]:mt-2 [&+[data-history-stage]]:border-t [&+[data-history-stage]]:border-dashed [&+[data-history-stage]]:border-border [&+[data-history-stage]]:pt-2"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/70">
+        <span className="text-eyebrow uppercase text-muted-foreground/70">
           {label}
         </span>
         {!unchanged && text.length > 0 && (
@@ -525,7 +522,7 @@ function Stage({ label, text, previousText, note }: StageProps) {
             type="button"
             variant="ghost"
             size="xs"
-            className={copied ? "text-green-600" : "text-muted-foreground"}
+            className="text-muted-foreground"
             aria-label={`Copy ${label} output`}
             onClick={() => flash(text)}
           >
@@ -534,13 +531,13 @@ function Stage({ label, text, previousText, note }: StageProps) {
         )}
       </div>
       {unchanged ? (
-        <div className="text-[11px] italic text-muted-foreground/70">
+        <div className="text-help italic text-muted-foreground/70">
           (no change)
         </div>
       ) : (
         <div className="whitespace-pre-wrap break-words text-xs leading-[1.5] text-foreground select-text">
           {text.length === 0 ? (
-            <span className="text-[11px] italic text-muted-foreground/70">
+            <span className="text-help italic text-muted-foreground/70">
               (empty)
             </span>
           ) : (
@@ -551,7 +548,7 @@ function Stage({ label, text, previousText, note }: StageProps) {
       {note && (
         <div
           className={cn(
-            "text-[11px] break-words",
+            "text-help break-words",
             note.tone === "info"
               ? "italic text-muted-foreground/70"
               : "font-mono text-destructive",

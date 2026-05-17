@@ -25,7 +25,7 @@ export function Toaster() {
           title:
             "text-[13px] font-medium leading-snug text-foreground tracking-[-0.005em]",
           description:
-            "text-[12.5px] leading-snug text-muted-foreground mt-0.5",
+            "text-xs leading-snug text-muted-foreground mt-0.5",
           // Sit inline at the end of the message, look like a tertiary pill —
           // not a giant solid block competing with the title.
           actionButton: [

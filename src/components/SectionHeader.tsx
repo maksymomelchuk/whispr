@@ -31,21 +31,17 @@ export function SectionHeader({
       )}
     >
       {indexLabel != null && (
-        <span className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/55 tabular-nums">
+        <span className="font-mono text-eyebrow uppercase text-muted-foreground/55 tabular-nums">
           {indexLabel}
         </span>
       )}
-      <h3 className="text-[14px] font-semibold text-foreground tracking-[-0.005em]">
-        {title}
-      </h3>
+      <h3 className="text-section-title text-foreground">{title}</h3>
       {isDefault && (
-        <Badge className="text-[9.5px] font-semibold uppercase tracking-[0.08em] px-1.5 py-0">
-          Default
-        </Badge>
+        <Badge className="text-eyebrow uppercase px-1.5 py-0">Default</Badge>
       )}
       {badge}
       {trailing && (
-        <span className="ml-auto text-[11px] text-muted-foreground/70 tabular-nums">
+        <span className="ml-auto text-help text-muted-foreground/70 tabular-nums">
           {trailing}
         </span>
       )}

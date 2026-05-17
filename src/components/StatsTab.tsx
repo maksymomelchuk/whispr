@@ -222,7 +222,7 @@ export function StatsTab() {
 
       {!hasAny && <EmptyState />}
       {hasAny && (
-        <ul className="m-0 list-none overflow-hidden rounded-[10px] border border-border bg-card p-0">
+        <ul className="m-0 list-none overflow-hidden rounded-lg border border-border bg-card p-0">
           {aggregates.map(({ spec, agg }) => (
             <StatRow
               key={spec.label}
@@ -232,7 +232,7 @@ export function StatsTab() {
                   <span className="text-lg font-semibold leading-none text-foreground">
                     {formatWpm(agg.words, agg.seconds)}
                   </span>
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.04em] text-muted-foreground/70">
+                  <span className="text-eyebrow uppercase text-muted-foreground/70">
                     WPM
                   </span>
                 </>
@@ -262,7 +262,7 @@ export function StatsTab() {
               <InfoTip text="Anthropic Claude Haiku 4.5 token usage and estimated cost." />
             </div>
           </div>
-          <ul className="m-0 list-none overflow-hidden rounded-[10px] border border-border bg-card p-0">
+          <ul className="m-0 list-none overflow-hidden rounded-lg border border-border bg-card p-0">
             {cleanupRows.map((row) => (
               <StatRow
                 key={row.label}
@@ -272,7 +272,7 @@ export function StatsTab() {
                     <span className="text-lg font-semibold leading-none text-foreground">
                       {formatCost(estimateCostUsd(row.input, row.output))}
                     </span>
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.04em] text-muted-foreground/70">
+                    <span className="text-eyebrow uppercase text-muted-foreground/70">
                       est.
                     </span>
                   </>
@@ -329,7 +329,7 @@ function Dot() {
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-[10px] border border-border bg-card px-6 py-10 text-center text-muted-foreground/70">
+    <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-border bg-card px-6 py-10 text-center text-muted-foreground/70">
       <svg
         width="32"
         height="32"

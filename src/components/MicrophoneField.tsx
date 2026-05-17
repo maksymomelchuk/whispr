@@ -33,7 +33,7 @@ interface Props {
 }
 
 type LoadState = "loading" | "ready" | "error";
-type SaveStatus = "idle" | "saving" | "saved" | "error";
+type SaveStatus = "idle" | "saving" | "error";
 
 // Radix Select doesn't render correctly with empty-string values; use a sentinel.
 const DEVICE_DEFAULT = "__system_default__";
@@ -77,12 +77,6 @@ export function MicrophoneField({
     setPauseEnabled(pauseMedia);
   }, [pauseMedia]);
 
-  useEffect(() => {
-    if (status !== "saved") return;
-    const t = setTimeout(() => setStatus("idle"), 1500);
-    return () => clearTimeout(t);
-  }, [status]);
-
   const handleChange = async (next: string) => {
     const previous = form.getValues("device");
     form.setValue("device", next);
@@ -92,7 +86,7 @@ export function MicrophoneField({
     try {
       await persistInputDevice(payload);
       onSaved(payload);
-      setStatus("saved");
+      setStatus("idle");
     } catch (e) {
       form.setValue("device", previous);
       setStatus("error");
@@ -129,9 +123,7 @@ export function MicrophoneField({
           name="device"
           render={({ field }) => (
             <FormItem className="mt-2.5 gap-[6px]">
-              <FormLabel className="text-[11px] font-medium tracking-[0.2px] text-muted-foreground">
-                Input device
-              </FormLabel>
+              <FormLabel>Input device</FormLabel>
               <FormControl>
                 <Select
                   value={field.value}
@@ -186,11 +178,6 @@ export function MicrophoneField({
             Saved device isn&rsquo;t currently available. Recording will use the
             system default until it&rsquo;s reconnected.
           </AlertDescription>
-        </Alert>
-      )}
-      {status === "saved" && (
-        <Alert variant="success" className="mt-2">
-          <AlertDescription>Saved</AlertDescription>
         </Alert>
       )}
       {status === "error" && (

@@ -49,8 +49,8 @@ function SnippetRow({
             <span className="text-muted-foreground/60 italic">(empty)</span>
           )}
         </span>
-        <span className="text-muted-foreground/60 text-[11px] shrink-0">→</span>
-        <span className="flex-1 truncate text-[12.5px] text-muted-foreground">
+        <span className="text-muted-foreground/60 text-help shrink-0">→</span>
+        <span className="flex-1 truncate text-xs text-muted-foreground">
           {snippet.expansion || (
             <span className="italic text-muted-foreground/60">(empty)</span>
           )}
@@ -177,11 +177,11 @@ function EditorRow({
           spellCheck={false}
           autoComplete="off"
           rows={2}
-          className="flex-1 resize-none font-mono text-[12.5px] min-h-[36px] py-1.5"
+          className="flex-1 resize-none font-mono text-xs min-h-[36px] py-1.5"
         />
       </div>
       <div className="flex items-center gap-1.5 flex-wrap pl-0.5">
-        <span className="text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground/70 mr-1">
+        <span className="text-eyebrow uppercase text-muted-foreground/70 mr-1">
           Insert
         </span>
         {PLACEHOLDERS.map((p) => (
@@ -191,7 +191,7 @@ function EditorRow({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="font-mono text-[11px] h-6 px-1.5"
+                className="font-mono text-help h-6 px-1.5"
                 onClick={() => insertPlaceholder(p.label)}
               >
                 {p.label}
@@ -221,7 +221,7 @@ function EditorRow({
         </div>
       </div>
       {error && (
-        <p className="text-[11.5px] text-destructive px-0.5">{error}</p>
+        <p className="text-help text-destructive px-0.5">{error}</p>
       )}
     </RowCard>
   );
@@ -234,11 +234,11 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         <span className="font-mono text-[13px] font-semibold text-muted-foreground/70">
           [sample]
         </span>
-        <span className="text-[12px] text-muted-foreground/70">
+        <span className="text-xs text-muted-foreground/70">
           Triggers in your dictation expand to their text after cleanup.
         </span>
       </div>
-      <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-muted-foreground/80 group-hover:text-foreground transition-colors">
+      <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground/80 group-hover:text-foreground transition-colors">
         <Plus size={13} />
         Add snippet
       </span>
@@ -396,7 +396,7 @@ export function SnippetsPage() {
               <span className="font-mono text-[13px] font-semibold text-muted-foreground/55">
                 trigger → expansion
               </span>
-              <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-muted-foreground/80 group-hover:text-foreground transition-colors">
+              <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground/80 group-hover:text-foreground transition-colors">
                 <Plus size={13} />
                 Add snippet
               </span>

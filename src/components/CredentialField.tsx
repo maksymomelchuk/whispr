@@ -121,9 +121,7 @@ export function CredentialField({
   return (
     <div className={cn("flex flex-col gap-[6px]", className)}>
       <div className="inline-flex items-center gap-2">
-        <span className="text-[11px] font-medium tracking-[0.2px] text-muted-foreground">
-          {label}
-        </span>
+        <span className="text-form-label text-muted-foreground">{label}</span>
         {info && <InfoTip text={info} />}
       </div>
 
@@ -209,11 +207,11 @@ export function CredentialField({
                     </div>
                   </FormControl>
                   {validating ? (
-                    <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    <p className="mt-1.5 text-help text-muted-foreground">
                       Checking key…
                     </p>
                   ) : (
-                    <FormMessage className="mt-1.5 text-[11px]" />
+                    <FormMessage className="mt-1.5 text-help" />
                   )}
                 </FormItem>
               )}

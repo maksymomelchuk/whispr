@@ -24,15 +24,13 @@ export function PageHeader({
     >
       <div className="flex flex-col gap-1.5 min-w-0">
         {eyebrow && (
-          <span className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
+          <span className="font-mono text-eyebrow uppercase text-muted-foreground/80">
             {eyebrow}
           </span>
         )}
-        <h1 className="text-[22px] font-semibold leading-[1.15] text-foreground tracking-[-0.012em]">
-          {title}
-        </h1>
+        <h1 className="text-page-title text-foreground">{title}</h1>
         {subtitle && (
-          <p className="text-[13px] text-muted-foreground leading-snug max-w-prose">
+          <p className="text-md text-muted-foreground leading-snug max-w-prose">
             {subtitle}
           </p>
         )}

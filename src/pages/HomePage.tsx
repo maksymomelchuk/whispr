@@ -39,7 +39,7 @@ export function HomePage() {
       />
 
       <section className="flex flex-col gap-3">
-        <span className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
+        <span className="font-mono text-eyebrow uppercase text-muted-foreground/80">
           Push to talk
         </span>
         {defaultBindings.length > 0 ? (
@@ -63,7 +63,7 @@ export function HomePage() {
 
       {permissions && (
         <section className="flex flex-col gap-2">
-          <span className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
+          <span className="font-mono text-eyebrow uppercase text-muted-foreground/80">
             Permissions
           </span>
           <ul className="flex flex-col">

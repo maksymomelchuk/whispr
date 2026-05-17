@@ -30,11 +30,7 @@ export function UpdateBanner() {
       <AlertDescription className="flex-1">
         Update available (<span className="font-variant-numeric-tabular">v{version}</span>)
       </AlertDescription>
-      <Button
-        size="sm"
-        className="ml-auto rounded-full text-xs"
-        onClick={installAndRestart}
-      >
+      <Button size="sm" className="ml-auto" onClick={installAndRestart}>
         Install &amp; restart
       </Button>
     </Alert>

@@ -77,15 +77,13 @@ function BindingRow({
         {binding.shortcut.is_double_tap && (
           <Badge
             variant="neutral"
-            className="text-[10px] font-semibold uppercase tracking-[0.06em] bg-primary/12 text-primary border-transparent"
+            className="text-eyebrow uppercase bg-primary/12 text-primary border-transparent"
           >
             Double-tap
           </Badge>
         )}
         {conflict && (
-          <span className="text-[11px] font-medium text-destructive/85">
-            Conflict
-          </span>
+          <span className="text-form-label text-destructive/85">Conflict</span>
         )}
       </div>
 
@@ -176,7 +174,7 @@ function RecordingRow({
         {captured ? (
           <ShortcutKeycaps shortcut={captured} tone="accent" />
         ) : (
-          <span className="flex items-center gap-2 text-[12.5px] font-medium text-muted-foreground">
+          <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <span className="relative inline-flex size-2">
               <span className="motion-safe:animate-ping absolute inset-0 rounded-full bg-destructive/70" />
               <span className="relative inline-flex size-2 rounded-full bg-destructive" />
@@ -184,7 +182,7 @@ function RecordingRow({
             Listening… press your shortcut
           </span>
         )}
-        <label className="ml-1 flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none">
+        <label className="ml-1 flex items-center gap-1.5 text-help text-muted-foreground cursor-pointer select-none">
           <Switch
             checked={isDoubleTap}
             onCheckedChange={setIsDoubleTap}
@@ -223,7 +221,7 @@ function EmptyModeCard({ onAdd }: { onAdd: () => void }) {
         <Keycap tone="phantom">⌘</Keycap>
         <Keycap tone="phantom">K</Keycap>
       </div>
-      <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-muted-foreground/80 group-hover:text-foreground transition-colors">
+      <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground/80 group-hover:text-foreground transition-colors">
         <Plus size={13} />
         Add hotkey
       </span>
@@ -298,7 +296,7 @@ export function HotkeysPage() {
       {error && (
         <p
           role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/[0.06] px-3 py-2 text-[12.5px] font-medium text-destructive"
+          className="rounded-md border border-destructive/40 bg-destructive/[0.06] px-3 py-2 text-xs font-medium text-destructive"
         >
           {error}
         </p>

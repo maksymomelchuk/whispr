@@ -144,8 +144,8 @@ function CorrectionRow({
             <span className="text-muted-foreground/60 italic">(empty)</span>
           )}
         </span>
-        <span className="text-muted-foreground/60 text-[11px] shrink-0">→</span>
-        <span className="flex-1 truncate text-[12.5px] text-muted-foreground">
+        <span className="text-muted-foreground/60 text-help shrink-0">→</span>
+        <span className="flex-1 truncate text-xs text-muted-foreground">
           {entry.to || (
             <span className="italic text-muted-foreground/60">(empty)</span>
           )}
@@ -238,7 +238,7 @@ function EditorRow({
           placeholder="text"
           spellCheck={false}
           autoComplete="off"
-          className="text-[12.5px] h-8 flex-1 min-w-0"
+          className="text-xs h-8 flex-1 min-w-0"
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) {
               e.preventDefault();
@@ -267,7 +267,7 @@ function EditorRow({
         </div>
       </div>
       {error && (
-        <p className="text-[11.5px] text-destructive px-0.5">{error}</p>
+        <p className="text-help text-destructive px-0.5">{error}</p>
       )}
     </RowCard>
   );
@@ -280,11 +280,11 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         <span className="font-mono text-[13px] font-semibold text-muted-foreground/70">
           spoken → text
         </span>
-        <span className="text-[12px] text-muted-foreground/70">
+        <span className="text-xs text-muted-foreground/70">
           Rewrite phrases in the transcript after cleanup and snippets run.
         </span>
       </div>
-      <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-muted-foreground/80 group-hover:text-foreground transition-colors">
+      <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground/80 group-hover:text-foreground transition-colors">
         <Plus size={13} />
         Add correction
       </span>
@@ -422,7 +422,7 @@ function CorrectionsTab({
               <span className="font-mono text-[13px] font-semibold text-muted-foreground/55">
                 spoken → text
               </span>
-              <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-muted-foreground/80 group-hover:text-foreground transition-colors">
+              <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground/80 group-hover:text-foreground transition-colors">
                 <Plus size={13} />
                 Add correction
               </span>

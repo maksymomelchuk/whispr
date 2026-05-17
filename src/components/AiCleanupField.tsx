@@ -164,14 +164,12 @@ export function AiCleanupField({
   return (
     <section data-slot="ai-cleanup" className="flex flex-col gap-2.5">
       <header className="flex items-center gap-3 pb-1.5 border-b border-border/40">
-        <h3 className="text-[14px] font-semibold text-foreground tracking-[-0.005em]">
-          AI Cleanup
-        </h3>
+        <h3 className="text-section-title text-foreground">AI Cleanup</h3>
         <InfoTip text="Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Adds ~500ms." />
         <div className="ml-auto inline-flex items-center gap-2">
           <span
             className={cn(
-              "text-[11px] tracking-[0.2px]",
+              "text-form-label",
               enabledToggle.enabled
                 ? "text-foreground"
                 : "text-muted-foreground/70",
@@ -189,14 +187,14 @@ export function AiCleanupField({
       </header>
 
       {!enabledToggle.enabled ? (
-        <p className="text-[12px] text-muted-foreground/80">
+        <p className="text-xs text-muted-foreground/80">
           Off — transcriptions are inserted as Deepgram returns them.
         </p>
       ) : (
         <div className="flex flex-col gap-3.5 pt-1">
           <div className="flex flex-col gap-[6px]">
             <div className="inline-flex items-center gap-2">
-              <span className="text-[11px] font-medium tracking-[0.2px] text-muted-foreground">
+              <span className="text-form-label text-muted-foreground">
                 Authentication
               </span>
               <InfoTip text="API key: pay-as-you-go via console.anthropic.com. OAuth: uses your Claude subscription — mint a token with `claude setup-token`." />
@@ -229,14 +227,14 @@ export function AiCleanupField({
             }
           />
           {showWarning && (
-            <p className="-mt-1.5 text-[11px] text-muted-foreground/80">
+            <p className="-mt-1.5 text-help text-muted-foreground/80">
               Cleanup is bypassed until a credential is set.
             </p>
           )}
 
           <div className="flex flex-col gap-[6px]">
             <div className="inline-flex items-center gap-2">
-              <span className="text-[11px] font-medium tracking-[0.2px] text-muted-foreground">
+              <span className="text-form-label text-muted-foreground">
                 Trigger thresholds
               </span>
               <InfoTip text="Cleanup runs only when both are met. Lower values clean shorter dictations; higher values save tokens." />
@@ -249,7 +247,7 @@ export function AiCleanupField({
                     name="minWords"
                     render={({ field }) => (
                       <FormItem className="flex-1">
-                        <FormLabel className="text-[11px] text-muted-foreground/70">
+                        <FormLabel className="text-muted-foreground/70">
                           Min words
                         </FormLabel>
                         <FormControl>
@@ -261,7 +259,7 @@ export function AiCleanupField({
                             inputMode="numeric"
                           />
                         </FormControl>
-                        <FormMessage className="mt-1.5 text-[11px]" />
+                        <FormMessage className="mt-1.5 text-help" />
                       </FormItem>
                     )}
                   />
@@ -270,7 +268,7 @@ export function AiCleanupField({
                     name="minDurationSec"
                     render={({ field }) => (
                       <FormItem className="flex-1">
-                        <FormLabel className="text-[11px] text-muted-foreground/70">
+                        <FormLabel className="text-muted-foreground/70">
                           Min duration (s)
                         </FormLabel>
                         <FormControl>
@@ -282,7 +280,7 @@ export function AiCleanupField({
                             inputMode="decimal"
                           />
                         </FormControl>
-                        <FormMessage className="mt-1.5 text-[11px]" />
+                        <FormMessage className="mt-1.5 text-help" />
                       </FormItem>
                     )}
                   />

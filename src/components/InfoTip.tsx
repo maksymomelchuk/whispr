@@ -15,7 +15,7 @@ export function InfoTip({ text }: Props) {
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="inline-flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors cursor-help select-none outline-none focus-visible:text-muted-foreground/70"
+          className="inline-flex items-center justify-center rounded-full text-muted-foreground/40 transition-colors cursor-help select-none outline-none hover:text-muted-foreground/70 focus-visible:text-muted-foreground/70 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-offset-1 focus-visible:ring-offset-card"
           aria-label={text}
           tabIndex={0}
           onClick={(e) => {

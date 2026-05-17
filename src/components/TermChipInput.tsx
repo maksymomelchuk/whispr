@@ -60,7 +60,7 @@ export function TermChipInput({ value, onChange }: TermChipInputProps) {
   return (
     <div className="flex flex-col gap-2">
       <div
-        className="min-h-[40px] flex flex-wrap gap-1 items-center p-2 rounded-[10px] bg-card border border-border shadow-xs cursor-text outline-none transition-[color,box-shadow,border-color] has-[input:focus-visible]:border-ring has-[input:focus-visible]:ring-[3px] has-[input:focus-visible]:ring-ring/50"
+        className="min-h-[40px] flex flex-wrap gap-1 items-center p-2 rounded-lg bg-card border border-border shadow-xs cursor-text outline-none transition-[color,box-shadow,border-color] has-[input:focus-visible]:border-ring has-[input:focus-visible]:ring-[3px] has-[input:focus-visible]:ring-ring/50"
         onClick={() => inputRef.current?.focus()}
       >
         {value.map((term) => (
@@ -101,7 +101,7 @@ export function TermChipInput({ value, onChange }: TermChipInputProps) {
             value={pasteText}
             onChange={(e) => setPasteText(e.target.value)}
             placeholder="Paste a list — one term per line, or comma-separated."
-            className="resize-none min-h-[80px] rounded-[10px] bg-card border-border dark:bg-card"
+            className="resize-none min-h-[80px] rounded-lg bg-card border-border dark:bg-card"
             autoFocus
             spellCheck={false}
           />
@@ -126,7 +126,7 @@ export function TermChipInput({ value, onChange }: TermChipInputProps) {
         <button
           type="button"
           onClick={() => setPasteMode(true)}
-          className="text-[11px] text-muted-foreground hover:text-foreground transition-colors w-fit rounded-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="text-help text-muted-foreground hover:text-foreground transition-colors w-fit rounded-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           Paste list…
         </button>

@@ -172,7 +172,7 @@ function ShellInner() {
                 <div
                   aria-hidden
                   className={
-                    "px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/60 " +
+                    "px-2 font-mono text-eyebrow uppercase text-muted-foreground/60 " +
                     "transition-opacity duration-150 " +
                     "group-data-[collapsible=icon]:opacity-0 " +
                     (sectionIdx === 0 ? "" : "mt-1")

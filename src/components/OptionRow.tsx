@@ -26,12 +26,12 @@ export function OptionRow({
   const inner = (
     <>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="inline-flex items-center gap-2 text-[13px] font-semibold text-foreground">
+        <div className="inline-flex items-center gap-2 text-md font-semibold text-foreground">
           {label}
           {info && <InfoTip text={info} />}
         </div>
         {param && (
-          <div className="font-mono text-[11px] text-muted-foreground">
+          <div className="font-mono text-kbd text-muted-foreground">
             {param}
           </div>
         )}

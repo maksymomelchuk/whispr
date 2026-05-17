@@ -113,9 +113,7 @@ export function AppearanceField({
           name="theme"
           render={({ field }) => (
             <FormItem className="mt-2.5 gap-[6px]">
-              <FormLabel className="text-[11px] font-medium tracking-[0.2px] text-muted-foreground">
-                Theme
-              </FormLabel>
+              <FormLabel>Theme</FormLabel>
               <FormControl>
                 <ToggleGroup
                   type="single"
@@ -146,9 +144,7 @@ export function AppearanceField({
         data-slot="form-item"
         className="mt-3.5 flex flex-col gap-[6px]"
       >
-        <span className="text-[11px] font-medium tracking-[0.2px] text-muted-foreground">
-          Accent
-        </span>
+        <span className="text-form-label text-muted-foreground">Accent</span>
         <div
           role="radiogroup"
           aria-label="Accent color"
@@ -168,7 +164,7 @@ export function AppearanceField({
                 onClick={() => onAccentChange(name)}
                 className={cn(
                   "relative size-[22px] rounded-full outline-none transition-[box-shadow,transform] duration-150",
-                  "focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+                  "focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
                   selected
                     ? "ring-2 ring-foreground/70 ring-offset-2 ring-offset-card"
                     : "hover:scale-[1.08]",

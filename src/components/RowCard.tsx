@@ -13,7 +13,7 @@ interface BaseProps {
 }
 
 const BASE =
-  "group relative flex items-center gap-3 rounded-[10px] border pl-3 pr-2 py-2.5 " +
+  "group relative flex items-center gap-3 rounded-lg border pl-3 pr-2 py-2.5 " +
   "shadow-xs transition-[border-color,box-shadow,background-color,outline-color] duration-150 " +
   "outline outline-2 outline-offset-0";
 
