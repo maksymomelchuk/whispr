@@ -128,6 +128,57 @@ pub fn effective_prompt(override_prompt: Option<&str>) -> &str {
     }
 }
 
+/// Raw HTTP response returned by a `Transport` implementation.
+pub(crate) struct TransportResponse {
+    pub(crate) status: u16,
+    pub(crate) body: String,
+}
+
+/// Abstracts the HTTP layer so unit tests can inject a stub without a live
+/// Anthropic endpoint. Production code uses `ReqwestTransport`.
+pub(crate) trait Transport: Send + Sync {
+    fn post<'a>(
+        &'a self,
+        url: &'a str,
+        headers: &'a [(String, String)],
+        body: &'a serde_json::Value,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<TransportResponse, String>> + Send + 'a>,
+    >;
+}
+
+struct ReqwestTransport;
+
+impl Transport for ReqwestTransport {
+    fn post<'a>(
+        &'a self,
+        url: &'a str,
+        headers: &'a [(String, String)],
+        body: &'a serde_json::Value,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<TransportResponse, String>> + Send + 'a>,
+    > {
+        Box::pin(async move {
+            let client = http_client();
+            let mut req = client.post(url);
+            for (k, v) in headers {
+                req = req.header(k.as_str(), v.as_str());
+            }
+            let resp = req
+                .json(body)
+                .send()
+                .await
+                .map_err(|e| e.to_string())?;
+            let status = resp.status().as_u16();
+            let text = resp.text().await.map_err(|e| e.to_string())?;
+            Ok(TransportResponse {
+                status,
+                body: text,
+            })
+        })
+    }
+}
+
 /// Returns the cleaned transcript (trimmed, no trailing space) alongside
 /// token usage. Bounded by `TIMEOUT`; the caller falls back to the raw
 /// transcript past that. The paste pipeline adds its own trailing space at
@@ -137,10 +188,49 @@ pub async fn run(
     credential: Credential<'_>,
     prompt: &str,
 ) -> Result<(String, Usage), CleanupError> {
-    match tokio::time::timeout(TIMEOUT, call(transcript, credential, prompt)).await {
+    run_with_transport(transcript, credential, prompt, &ReqwestTransport, TIMEOUT).await
+}
+
+/// Testable variant of `run` with injectable transport and configurable timeout.
+pub(crate) async fn run_with_transport<T: Transport>(
+    transcript: &str,
+    credential: Credential<'_>,
+    prompt: &str,
+    transport: &T,
+    timeout: Duration,
+) -> Result<(String, Usage), CleanupError> {
+    match tokio::time::timeout(
+        timeout,
+        call_with_transport(transcript, credential, prompt, transport),
+    )
+    .await
+    {
         Ok(result) => result,
         Err(_) => Err(CleanupError::Timeout),
     }
+}
+
+/// Testable variant that mirrors the `min_words` / `min_duration` skip checks
+/// from `ptt::maybe_cleanup`. Returns `None` when the transcript should be
+/// skipped so tests can assert the transport was never called.
+pub(crate) async fn run_checked_with_transport<T: Transport>(
+    transcript: &str,
+    credential: Credential<'_>,
+    prompt: &str,
+    word_count: usize,
+    min_words: usize,
+    speak_duration: Duration,
+    min_duration_ms: u64,
+    transport: &T,
+    timeout: Duration,
+) -> Option<Result<(String, Usage), CleanupError>> {
+    if word_count < min_words {
+        return None;
+    }
+    if speak_duration < Duration::from_millis(min_duration_ms) {
+        return None;
+    }
+    Some(run_with_transport(transcript, credential, prompt, transport, timeout).await)
 }
 
 fn http_client() -> &'static reqwest::Client {
@@ -148,12 +238,8 @@ fn http_client() -> &'static reqwest::Client {
     CLIENT.get_or_init(reqwest::Client::new)
 }
 
-async fn call(
-    transcript: &str,
-    credential: Credential<'_>,
-    prompt: &str,
-) -> Result<(String, Usage), CleanupError> {
-    let system = match &credential {
+fn build_system(credential: &Credential<'_>, prompt: &str) -> serde_json::Value {
+    match credential {
         Credential::ApiKey(_) => serde_json::json!([
             {
                 "type": "text",
@@ -169,56 +255,46 @@ async fn call(
                 "cache_control": {"type": "ephemeral"}
             }
         ]),
-    };
-    let body = serde_json::json!({
-        "model": MODEL,
-        "max_tokens": MAX_TOKENS,
-        "system": system,
-        "messages": [
-            {
-                "role": "user",
-                "content": format!("<transcript>\n{transcript}\n</transcript>")
-            }
-        ]
-    });
+    }
+}
 
-    let req = http_client()
-        .post(ANTHROPIC_URL)
-        .header("anthropic-version", ANTHROPIC_VERSION)
-        .header("content-type", "application/json");
-    let req = match credential {
-        Credential::ApiKey(k) => req.header("x-api-key", k),
-        Credential::OauthToken(t) => req.bearer_auth(t).header("anthropic-beta", OAUTH_BETA),
-    };
+fn build_headers(credential: &Credential<'_>) -> Vec<(String, String)> {
+    let mut headers = vec![
+        (
+            "anthropic-version".to_string(),
+            ANTHROPIC_VERSION.to_string(),
+        ),
+        ("content-type".to_string(), "application/json".to_string()),
+    ];
+    match credential {
+        Credential::ApiKey(k) => {
+            headers.push(("x-api-key".to_string(), k.to_string()));
+        }
+        Credential::OauthToken(t) => {
+            headers.push(("authorization".to_string(), format!("Bearer {t}")));
+            headers.push(("anthropic-beta".to_string(), OAUTH_BETA.to_string()));
+        }
+    }
+    headers
+}
 
-    let resp = req
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| CleanupError::Transient(format!("cleanup request failed: {e}")))?;
-
-    let status = resp.status();
-    if !status.is_success() {
-        let body = resp.text().await.unwrap_or_default();
-        let message = serde_json::from_str::<Value>(&body)
+fn parse_response(status: u16, body: &str) -> Result<(String, Usage), CleanupError> {
+    if !(200..300).contains(&status) {
+        let message = serde_json::from_str::<Value>(body)
             .ok()
             .and_then(|v| v["error"]["message"].as_str().map(String::from))
             .unwrap_or_else(|| {
                 let snippet: String = body.chars().take(200).collect();
                 format!("HTTP {status}: {snippet}")
             });
-        return Err(if status == reqwest::StatusCode::UNAUTHORIZED
-            || status == reqwest::StatusCode::FORBIDDEN
-        {
+        return Err(if status == 401 || status == 403 {
             CleanupError::Credential(message)
         } else {
             CleanupError::Transient(message)
         });
     }
 
-    let v: Value = resp
-        .json()
-        .await
+    let v: Value = serde_json::from_str(body)
         .map_err(|e| CleanupError::Transient(format!("cleanup response parse failed: {e}")))?;
 
     let cleaned = v["content"][0]["text"]
@@ -238,6 +314,35 @@ async fn call(
     Ok((cleaned.to_string(), usage))
 }
 
+async fn call_with_transport<T: Transport>(
+    transcript: &str,
+    credential: Credential<'_>,
+    prompt: &str,
+    transport: &T,
+) -> Result<(String, Usage), CleanupError> {
+    let system = build_system(&credential, prompt);
+    let body = serde_json::json!({
+        "model": MODEL,
+        "max_tokens": MAX_TOKENS,
+        "system": system,
+        "messages": [
+            {
+                "role": "user",
+                "content": format!("<transcript>\n{transcript}\n</transcript>")
+            }
+        ]
+    });
+
+    let headers = build_headers(&credential);
+
+    let resp = transport
+        .post(ANTHROPIC_URL, &headers, &body)
+        .await
+        .map_err(|e| CleanupError::Transient(format!("cleanup request failed: {e}")))?;
+
+    parse_response(resp.status, &resp.body)
+}
+
 /// Sums the three input-token variants (`input_tokens`,
 /// `cache_creation_input_tokens`, `cache_read_input_tokens`) so callers see
 /// total billed input rather than a four-field breakdown — cache-read is
@@ -255,6 +360,102 @@ fn parse_usage(usage: &Value) -> Usage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    // --- Mock transport ---
+
+    struct MockTransport {
+        call_count: Arc<AtomicUsize>,
+        response: Box<dyn Fn() -> Result<TransportResponse, String> + Send + Sync>,
+    }
+
+    impl MockTransport {
+        fn returning(status: u16, body: impl Into<String>) -> Self {
+            let body = body.into();
+            MockTransport {
+                call_count: Arc::new(AtomicUsize::new(0)),
+                response: Box::new(move || {
+                    Ok(TransportResponse {
+                        status,
+                        body: body.clone(),
+                    })
+                }),
+            }
+        }
+
+        fn failing(err: impl Into<String>) -> Self {
+            let err = err.into();
+            MockTransport {
+                call_count: Arc::new(AtomicUsize::new(0)),
+                response: Box::new(move || Err(err.clone())),
+            }
+        }
+
+        fn call_count(&self) -> usize {
+            self.call_count.load(Ordering::SeqCst)
+        }
+    }
+
+    impl Transport for MockTransport {
+        fn post<'a>(
+            &'a self,
+            _url: &'a str,
+            _headers: &'a [(String, String)],
+            _body: &'a serde_json::Value,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<Output = Result<TransportResponse, String>> + Send + 'a,
+            >,
+        > {
+            self.call_count.fetch_add(1, Ordering::SeqCst);
+            let result = (self.response)();
+            Box::pin(async move { result })
+        }
+    }
+
+    /// A transport whose future never resolves, for timeout testing.
+    struct HangingTransport;
+
+    impl Transport for HangingTransport {
+        fn post<'a>(
+            &'a self,
+            _url: &'a str,
+            _headers: &'a [(String, String)],
+            _body: &'a serde_json::Value,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<Output = Result<TransportResponse, String>> + Send + 'a,
+            >,
+        > {
+            Box::pin(std::future::pending())
+        }
+    }
+
+    fn api_key_cred() -> Credential<'static> {
+        Credential::ApiKey("test-key")
+    }
+
+    fn success_body(text: &str) -> String {
+        serde_json::json!({
+            "content": [{"type": "text", "text": text}],
+            "usage": {
+                "input_tokens": 10,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 5,
+                "output_tokens": 20
+            }
+        })
+        .to_string()
+    }
+
+    fn error_body(message: &str) -> String {
+        serde_json::json!({"error": {"message": message}}).to_string()
+    }
+
+    // --- effective_prompt tests (pre-existing) ---
 
     #[test]
     fn effective_prompt_none_returns_default() {
@@ -280,5 +481,211 @@ mod tests {
     #[test]
     fn default_system_prompt_is_non_empty() {
         assert!(!DEFAULT_SYSTEM_PROMPT.is_empty());
+    }
+
+    // --- Transport path tests ---
+
+    #[tokio::test]
+    async fn success_path_returns_cleaned_text() {
+        let transport = MockTransport::returning(200, success_body("Hello, world."));
+        let result = run_with_transport(
+            "hello world",
+            api_key_cred(),
+            DEFAULT_SYSTEM_PROMPT,
+            &transport,
+            Duration::from_secs(5),
+        )
+        .await;
+        let (text, usage) = result.expect("should succeed");
+        assert_eq!(text, "Hello, world.");
+        assert_eq!(usage.input_tokens, 15); // 10 + 0 + 5
+        assert_eq!(usage.output_tokens, 20);
+        assert_eq!(transport.call_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn credential_error_on_401() {
+        let transport =
+            MockTransport::returning(401, error_body("invalid x-api-key"));
+        let result = run_with_transport(
+            "some text here",
+            api_key_cred(),
+            DEFAULT_SYSTEM_PROMPT,
+            &transport,
+            Duration::from_secs(5),
+        )
+        .await;
+        assert!(
+            matches!(result, Err(CleanupError::Credential(_))),
+            "expected Credential error, got {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn credential_error_on_403() {
+        let transport = MockTransport::returning(403, error_body("forbidden"));
+        let result = run_with_transport(
+            "some text here",
+            api_key_cred(),
+            DEFAULT_SYSTEM_PROMPT,
+            &transport,
+            Duration::from_secs(5),
+        )
+        .await;
+        assert!(
+            matches!(result, Err(CleanupError::Credential(_))),
+            "expected Credential error, got {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn transient_error_on_500() {
+        let transport = MockTransport::returning(500, error_body("internal server error"));
+        let result = run_with_transport(
+            "some text here",
+            api_key_cred(),
+            DEFAULT_SYSTEM_PROMPT,
+            &transport,
+            Duration::from_secs(5),
+        )
+        .await;
+        assert!(
+            matches!(result, Err(CleanupError::Transient(_))),
+            "expected Transient error, got {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn transient_error_on_network_failure() {
+        let transport = MockTransport::failing("connection refused");
+        let result = run_with_transport(
+            "some text here",
+            api_key_cred(),
+            DEFAULT_SYSTEM_PROMPT,
+            &transport,
+            Duration::from_secs(5),
+        )
+        .await;
+        assert!(
+            matches!(result, Err(CleanupError::Transient(ref m)) if m.contains("cleanup request failed")),
+            "expected Transient error, got {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn timeout_returns_timeout_error() {
+        let result = run_with_transport(
+            "some text here for timing",
+            api_key_cred(),
+            DEFAULT_SYSTEM_PROMPT,
+            &HangingTransport,
+            Duration::from_millis(50),
+        )
+        .await;
+        assert!(
+            matches!(result, Err(CleanupError::Timeout)),
+            "expected Timeout error, got {result:?}"
+        );
+    }
+
+    // --- Skip-path tests ---
+
+    #[tokio::test]
+    async fn below_min_words_does_not_call_transport() {
+        let transport = MockTransport::failing("should not be called");
+        let result = run_checked_with_transport(
+            "hi",
+            api_key_cred(),
+            DEFAULT_SYSTEM_PROMPT,
+            1,   // word_count
+            5,   // min_words
+            Duration::from_secs(2),
+            500, // min_duration_ms
+            &transport,
+            Duration::from_secs(5),
+        )
+        .await;
+        assert!(result.is_none(), "expected skip (None), got {result:?}");
+        assert_eq!(transport.call_count(), 0, "transport must not be called");
+    }
+
+    #[tokio::test]
+    async fn below_min_duration_does_not_call_transport() {
+        let transport = MockTransport::failing("should not be called");
+        let result = run_checked_with_transport(
+            "this transcript has enough words to pass",
+            api_key_cred(),
+            DEFAULT_SYSTEM_PROMPT,
+            8,                            // word_count (above min_words)
+            5,                            // min_words
+            Duration::from_millis(100),   // speak_duration (below threshold)
+            500,                          // min_duration_ms
+            &transport,
+            Duration::from_secs(5),
+        )
+        .await;
+        assert!(result.is_none(), "expected skip (None), got {result:?}");
+        assert_eq!(transport.call_count(), 0, "transport must not be called");
+    }
+
+    #[tokio::test]
+    async fn above_both_thresholds_calls_transport() {
+        let transport = MockTransport::returning(200, success_body("Cleaned output."));
+        let result = run_checked_with_transport(
+            "this transcript has enough words to pass",
+            api_key_cred(),
+            DEFAULT_SYSTEM_PROMPT,
+            8,                          // word_count
+            5,                          // min_words
+            Duration::from_millis(600), // speak_duration (above threshold)
+            500,                        // min_duration_ms
+            &transport,
+            Duration::from_secs(5),
+        )
+        .await;
+        assert!(result.is_some(), "expected run (Some), got None");
+        assert_eq!(transport.call_count(), 1, "transport must be called once");
+        let (text, _) = result.unwrap().expect("should succeed");
+        assert_eq!(text, "Cleaned output.");
+    }
+
+    // --- Error message content tests ---
+
+    #[tokio::test]
+    async fn credential_error_extracts_message_from_json() {
+        let transport = MockTransport::returning(401, error_body("invalid API key provided"));
+        let result = run_with_transport(
+            "some text here",
+            api_key_cred(),
+            DEFAULT_SYSTEM_PROMPT,
+            &transport,
+            Duration::from_secs(5),
+        )
+        .await;
+        match result {
+            Err(CleanupError::Credential(msg)) => {
+                assert!(msg.contains("invalid API key"), "unexpected message: {msg}")
+            }
+            other => panic!("expected Credential error, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn transient_error_falls_back_to_http_snippet_when_no_json() {
+        let transport = MockTransport::returning(503, "Service Unavailable");
+        let result = run_with_transport(
+            "some text here",
+            api_key_cred(),
+            DEFAULT_SYSTEM_PROMPT,
+            &transport,
+            Duration::from_secs(5),
+        )
+        .await;
+        match result {
+            Err(CleanupError::Transient(msg)) => {
+                assert!(msg.contains("503"), "unexpected message: {msg}")
+            }
+            other => panic!("expected Transient error, got {other:?}"),
+        }
     }
 }
