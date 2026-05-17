@@ -72,6 +72,9 @@ already-trusted app writes the new bundle in place.
 
 ## Releasing a new version
 
+Before tagging, run through the [manual smoke checklist](docs/manual-smoke.md)
+to verify the parts of the app that can't be covered by automated tests.
+
 Releases are cut by `.github/workflows/release.yml`: push a semver tag and
 the workflow builds a universal macOS binary, publishes a GitHub Release,
 and uploads a signed `latest.json` manifest that the installed app polls.
