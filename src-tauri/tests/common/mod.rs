@@ -36,6 +36,7 @@ pub struct PipelineHarness {
     settings: Settings,
     mode_id: String,
     cleanup: Option<String>,
+    cleanup_error: Option<CleanupStatus>,
 }
 
 impl PipelineHarness {
@@ -44,6 +45,7 @@ impl PipelineHarness {
             settings: Settings::default(),
             mode_id: SEED_MODE_DEFAULT_EN.to_string(),
             cleanup: None,
+            cleanup_error: None,
         }
     }
 
@@ -87,6 +89,43 @@ impl PipelineHarness {
         self
     }
 
+    /// Simulate a cleanup run that failed with the given status. The pipeline
+    /// falls back to the raw transcript and records the failure status.
+    pub fn with_cleanup_error(mut self, status: CleanupStatus) -> Self {
+        self.cleanup_error = Some(status);
+        self
+    }
+
+    /// Override the `use_terms` flag on the active mode.
+    pub fn with_use_terms(mut self, enabled: bool) -> Self {
+        for mode in self.settings.modes.iter_mut() {
+            if mode.id == self.mode_id {
+                mode.use_terms = enabled;
+            }
+        }
+        self
+    }
+
+    /// Override the `use_corrections` flag on the active mode.
+    pub fn with_use_corrections(mut self, enabled: bool) -> Self {
+        for mode in self.settings.modes.iter_mut() {
+            if mode.id == self.mode_id {
+                mode.use_corrections = enabled;
+            }
+        }
+        self
+    }
+
+    /// Override the `use_snippets` flag on the active mode.
+    pub fn with_use_snippets(mut self, enabled: bool) -> Self {
+        for mode in self.settings.modes.iter_mut() {
+            if mode.id == self.mode_id {
+                mode.use_snippets = enabled;
+            }
+        }
+        self
+    }
+
     /// Run the post-transcription pipeline stages against `raw_text` and
     /// return an `Outcome`. Intended to be called inside a
     /// `tokio::task::spawn_blocking` future wrapped with
@@ -101,15 +140,22 @@ impl PipelineHarness {
             .cloned()
             .expect("mode not found in settings");
 
-        let cleanup_output = match self.cleanup {
-            Some(cleaned) => CleanupOutput {
-                replaced_text: cleaned,
-                status: CleanupStatus::Ran,
-            },
-            None => CleanupOutput {
+        let cleanup_output = if let Some(status) = self.cleanup_error {
+            CleanupOutput {
                 replaced_text: raw_text.to_string(),
-                status: CleanupStatus::Disabled,
-            },
+                status,
+            }
+        } else {
+            match self.cleanup {
+                Some(cleaned) => CleanupOutput {
+                    replaced_text: cleaned,
+                    status: CleanupStatus::Ran,
+                },
+                None => CleanupOutput {
+                    replaced_text: raw_text.to_string(),
+                    status: CleanupStatus::Disabled,
+                },
+            }
         };
 
         pipeline::run_stages(raw_text, Duration::from_secs(1), &mode, &self.settings, cleanup_output)
