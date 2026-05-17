@@ -1,12 +1,7 @@
 use crate::config::SnippetEntry;
+use crate::dictionary::find_word_match;
 use time::OffsetDateTime;
 
-/// Expands snippet triggers in `text`, then resolves placeholders in the result.
-///
-/// Trigger matching is exact, case-sensitive substring replacement; all
-/// occurrences of each trigger are replaced. Placeholder resolution runs after
-/// trigger substitutions, so an expansion like "Today is {{DATE}}" still
-/// resolves the date.
 pub fn expand_snippets(text: &str, entries: &[SnippetEntry]) -> String {
     let mut result = text.to_string();
     for entry in entries {
@@ -14,9 +9,24 @@ pub fn expand_snippets(text: &str, entries: &[SnippetEntry]) -> String {
         if trigger.is_empty() {
             continue;
         }
-        if result.contains(trigger) {
-            result = result.replace(trigger, &entry.expansion);
+        let trigger_lc = trigger.to_lowercase();
+        let lower = result.to_lowercase();
+        let mut output = String::new();
+        let mut cursor = 0;
+        loop {
+            match find_word_match(&lower, &trigger_lc, cursor) {
+                None => {
+                    output.push_str(&result[cursor..]);
+                    break;
+                }
+                Some((start, end)) => {
+                    output.push_str(&result[cursor..start]);
+                    output.push_str(&entry.expansion);
+                    cursor = end;
+                }
+            }
         }
+        result = output;
     }
     resolve_placeholders(result)
 }
@@ -117,13 +127,39 @@ mod tests {
         assert_eq!(expand_snippets("no match here", &entries), "no match here");
     }
 
+    // old test encoded case-sensitive (buggy) behavior — fixed to case-insensitive
     #[test]
-    fn trigger_matching_is_case_sensitive() {
+    fn trigger_matching_is_case_insensitive() {
         let entries = [entry("1", "[Date]", "2026-01-01")];
         assert_eq!(
             expand_snippets("[date] and [Date]", &entries),
-            "[date] and 2026-01-01"
+            "2026-01-01 and 2026-01-01"
         );
+    }
+
+    #[test]
+    fn trigger_does_not_match_inside_longer_word() {
+        let entries = [entry("1", "sig", "John Smith")];
+        assert_eq!(
+            expand_snippets("I signed the design on the island", &entries),
+            "I signed the design on the island"
+        );
+    }
+
+    #[test]
+    fn trigger_matches_standalone_word_case_insensitively() {
+        let entries = [entry("1", "sig", "John Smith")];
+        assert_eq!(expand_snippets("please send sig", &entries), "please send John Smith");
+        assert_eq!(expand_snippets("please send Sig", &entries), "please send John Smith");
+        assert_eq!(expand_snippets("please send SIG", &entries), "please send John Smith");
+    }
+
+    #[test]
+    fn trigger_matches_adjacent_to_punctuation() {
+        let entries = [entry("1", "my email", "user@example.com")];
+        assert_eq!(expand_snippets("send to my email.", &entries), "send to user@example.com.");
+        assert_eq!(expand_snippets("my email, please", &entries), "user@example.com, please");
+        assert_eq!(expand_snippets("my email", &entries), "user@example.com");
     }
 
     #[test]

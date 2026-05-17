@@ -42,7 +42,7 @@ pub fn apply_dictionary(text: &str, entries: &[DictionaryEntry]) -> String {
             if from_lc.is_empty() {
                 continue;
             }
-            if let Some((start, end)) = find_word_match(&lower, from_lc) {
+            if let Some((start, end)) = find_word_match(&lower, from_lc, 0) {
                 let replacement = format!(" {} ", e.to);
                 padded.replace_range(start..end, &replacement);
                 changed = true;
@@ -85,13 +85,14 @@ fn is_word_char(c: char) -> bool {
 /// characters or the string boundary. Both inputs are expected to already be
 /// lowercased; byte offsets are returned for direct use with
 /// `replace_range` on a same-length original-case string (ASCII-safe).
-fn find_word_match(haystack: &str, needle: &str) -> Option<(usize, usize)> {
+/// `from` is the byte offset to start searching from (pass 0 to search the full string).
+pub fn find_word_match(haystack: &str, needle: &str, from: usize) -> Option<(usize, usize)> {
     if needle.is_empty() {
         return None;
     }
-    let mut from = 0;
-    while let Some(rel) = haystack[from..].find(needle) {
-        let start = from + rel;
+    let mut pos = from;
+    while let Some(rel) = haystack[pos..].find(needle) {
+        let start = pos + rel;
         let end = start + needle.len();
         let left_ok = haystack[..start]
             .chars()
@@ -104,7 +105,7 @@ fn find_word_match(haystack: &str, needle: &str) -> Option<(usize, usize)> {
         if left_ok && right_ok {
             return Some((start, end));
         }
-        from = start + needle.chars().next().map_or(1, |c| c.len_utf8());
+        pos = start + needle.chars().next().map_or(1, |c| c.len_utf8());
     }
     None
 }
