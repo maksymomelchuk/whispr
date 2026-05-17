@@ -120,4 +120,16 @@ mod tests {
         assert_eq!(out, "the quick");
         assert_eq!(s.stable_prefix(), words("the quick").as_slice());
     }
+
+    #[test]
+    fn full_disagreement_empties_the_stable_prefix() {
+        let mut s = Stabilizer::new();
+        s.ingest("hello world");
+        let out = s.ingest("goodbye planet");
+        assert_eq!(out, "goodbye planet");
+        assert!(
+            s.stable_prefix().is_empty(),
+            "no shared words → stable prefix must be empty"
+        );
+    }
 }

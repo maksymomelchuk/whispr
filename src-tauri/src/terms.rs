@@ -102,6 +102,23 @@ mod tests {
         assert_eq!(result, vec!["MongoDB"]);
     }
 
+    #[test]
+    fn keyterms_off_by_one_over_budget_excludes_term() {
+        // "hi" URL-encodes to "hi" (2 bytes); needed = 9+2 = 11.
+        // Budget 10 (one short) → term must not fit.
+        let terms: Vec<String> = vec!["hi".into()];
+        assert!(deepgram_keyterms(&terms, 10).is_empty());
+    }
+
+    #[test]
+    fn keyterms_unicode_term_counted_by_url_encoded_bytes() {
+        // "caf\u{e9}" → UTF-8: 5 bytes → URL-encoded: "caf%C3%A9" (9 bytes).
+        // needed = 9 + 9 = 18. Budget 18 → fits; budget 17 → excluded.
+        let terms: Vec<String> = vec!["caf\u{e9}".into()];
+        assert_eq!(deepgram_keyterms(&terms, 18), vec!["café"]);
+        assert!(deepgram_keyterms(&terms, 17).is_empty());
+    }
+
     // ── groq_prompt_hint ────────────────────────────────────────────────
 
     #[test]
@@ -148,6 +165,31 @@ mod tests {
         assert_eq!(
             groq_prompt_hint(&terms).unwrap(),
             "Vocabulary: MongoDB"
+        );
+    }
+
+    #[test]
+    fn prompt_hint_skips_blank_terms() {
+        let terms: Vec<String> = vec!["  ".into(), "MongoDB".into(), "\t".into()];
+        assert_eq!(
+            groq_prompt_hint(&terms).unwrap(),
+            "Vocabulary: MongoDB"
+        );
+    }
+
+    #[test]
+    fn prompt_hint_returns_none_when_all_terms_are_blank() {
+        let terms: Vec<String> = vec!["  ".into(), "\t".into()];
+        assert!(groq_prompt_hint(&terms).is_none());
+    }
+
+    #[test]
+    fn prompt_hint_unicode_term_fits_within_budget() {
+        // "caf\u{e9}" is 5 UTF-8 bytes; "Vocabulary: " (12) + 5 = 17 ≤ 800.
+        let terms: Vec<String> = vec!["caf\u{e9}".into()];
+        assert_eq!(
+            groq_prompt_hint(&terms).unwrap(),
+            "Vocabulary: café"
         );
     }
 }

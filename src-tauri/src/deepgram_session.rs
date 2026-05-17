@@ -346,6 +346,25 @@ mod tests {
     }
 
     #[test]
+    fn url_includes_keyterms_with_hints_language() {
+        let lang = ModeLanguage::hints(vec!["en".to_string(), "uk".to_string()]);
+        let terms: Vec<String> = vec!["MongoDB".into()];
+        let url = build_ws_url(&lang, fmt(), &terms).unwrap();
+        let q = url.query().unwrap_or("");
+        assert!(q.contains("language=multi"), "Hints must send language=multi: {q}");
+        assert!(q.contains("keyterm=MongoDB"), "keyterm missing for Hints: {q}");
+    }
+
+    #[test]
+    fn url_includes_keyterms_with_auto_language() {
+        let terms: Vec<String> = vec!["Kubernetes".into()];
+        let url = build_ws_url(&ModeLanguage::Auto, fmt(), &terms).unwrap();
+        let q = url.query().unwrap_or("");
+        assert!(!q.contains("language="), "Auto must not send language param: {q}");
+        assert!(q.contains("keyterm=Kubernetes"), "keyterm missing for Auto: {q}");
+    }
+
+    #[test]
     fn url_respects_keyterm_budget() {
         let terms: Vec<String> = (0..200)
             .map(|i| format!("term{i:05}"))
