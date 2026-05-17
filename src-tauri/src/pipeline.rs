@@ -23,6 +23,19 @@ pub struct CleanupOutput {
     pub status: CleanupStatus,
 }
 
+/// Error string produced when the recorder fails to start or cannot negotiate an
+/// audio format. The argument is the recorder's own error message.
+///
+/// Defined here (cross-platform) so the exact wording can be tested from
+/// integration tests on any platform without a macOS environment or AppHandle.
+pub fn recorder_failed_error(recorder_err: &str) -> String {
+    format!("Recording failed: {recorder_err}")
+}
+
+/// Error string produced when the recorder's audio thread exits or panics
+/// before resolving the format-negotiation oneshot.
+pub const RECORDER_THREAD_CRASHED_ERROR: &str = "Recording thread crashed";
+
 /// Runs the post-transcription pipeline stages — snippet expansion, correction
 /// application, and paste-text preparation — without any Tauri or macOS
 /// dependencies, so it can be exercised from integration tests on any platform.
