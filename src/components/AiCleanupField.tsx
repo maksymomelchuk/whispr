@@ -162,7 +162,7 @@ export function AiCleanupField({
   const copy = MODE_COPY[authMode];
 
   return (
-    <section data-slot="ai-cleanup" className="flex flex-col gap-2.5 bg-card rounded-[10px] border border-border px-4 py-4">
+    <section data-slot="ai-cleanup" className="flex flex-col gap-2.5">
       <header className="flex items-center gap-3 pb-1.5 border-b border-border/40">
         <h3 className="text-[14px] font-semibold text-foreground tracking-[-0.005em]">
           AI Cleanup
