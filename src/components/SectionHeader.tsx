@@ -48,9 +48,7 @@ export function SectionHeader({
         </span>
       )}
       {control && (
-        <div className="ml-auto inline-flex items-center gap-2">
-          {control}
-        </div>
+        <div className="ml-auto inline-flex items-center gap-2">{control}</div>
       )}
     </div>
   );

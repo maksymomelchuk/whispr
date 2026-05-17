@@ -14,6 +14,7 @@ import {
 import type { CleanupStats, StatsRow } from "../lib/types";
 import { EmptyPanel } from "./EmptyPanel";
 import { InfoTip } from "./InfoTip";
+import { SectionHeader } from "./SectionHeader";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -206,12 +207,10 @@ export function StatsTab() {
 
   return (
     <section className="flex flex-col gap-3.5">
-      <div className="flex items-start justify-between gap-3 px-0.5">
-        <div className="inline-flex items-center gap-2">
-          <h2 className="m-0 text-[13px] font-semibold">Dictation stats</h2>
-          <InfoTip text="Words dictated and your effective words per minute." />
-        </div>
-        {hasAny && (
+      <SectionHeader
+        title="Dictation stats"
+        badge={<InfoTip text="Words dictated and your effective words per minute." />}
+        control={hasAny ? (
           <Button
             variant={confirmingClear ? "destructive" : "ghost"}
             size="sm"
@@ -219,8 +218,8 @@ export function StatsTab() {
           >
             {confirmingClear ? "Click to confirm" : "Clear stats"}
           </Button>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       {!hasAny && <EmptyState />}
       {hasAny && (
@@ -258,12 +257,10 @@ export function StatsTab() {
 
       {hasCleanup && (
         <>
-          <div className="flex items-start justify-between gap-3 px-0.5">
-            <div className="inline-flex items-center gap-2">
-              <h2 className="m-0 text-[13px] font-semibold">AI Cleanup</h2>
-              <InfoTip text="Anthropic Claude Haiku 4.5 token usage and estimated cost." />
-            </div>
-          </div>
+          <SectionHeader
+            title="AI Cleanup"
+            badge={<InfoTip text="Anthropic Claude Haiku 4.5 token usage and estimated cost." />}
+          />
           <ul className="m-0 list-none overflow-hidden rounded-lg border border-border bg-card p-0">
             {cleanupRows.map((row) => (
               <StatRow

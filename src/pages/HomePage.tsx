@@ -1,17 +1,14 @@
 import { Keyboard, Microphone } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
-import { ShortcutKeycaps } from "@/components/Keycap";
 
-import { PageHeader } from "../components/PageHeader";
 import { useSettings } from "../context/SettingsContext";
 import {
-  type PermissionsStatus,
   checkPermissions,
   openAccessibilitySettings,
   openMicrophoneSettings,
+  type PermissionsStatus,
 } from "../lib/api";
 
 export function HomePage() {
@@ -21,46 +18,15 @@ export function HomePage() {
   );
 
   useEffect(() => {
-    checkPermissions().then(setPermissions).catch(() => {});
+    checkPermissions()
+      .then(setPermissions)
+      .catch(() => {});
   }, []);
 
   if (!settings) return null;
 
-  const defaultBindings = settings.hotkey_bindings.filter(
-    (b) => b.mode_id === settings.default_mode_id,
-  );
-
   return (
     <div className="flex flex-col gap-10 px-10 pt-9 pb-12 max-w-3xl">
-      <PageHeader
-        eyebrow="Workspace · Home"
-        title="Whispr"
-        subtitle="Hold a shortcut, speak, release. Transcription lands in the focused app."
-      />
-
-      <section className="flex flex-col gap-3">
-        <span className="font-mono text-eyebrow uppercase text-muted-foreground/80">
-          Push to talk
-        </span>
-        {defaultBindings.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
-            {defaultBindings.map((b, i) => (
-              <ShortcutKeycaps key={i} shortcut={b.shortcut} size="lg" />
-            ))}
-          </div>
-        ) : (
-          <p className="text-[14px] text-muted-foreground/70">
-            No hotkeys set ·{" "}
-            <Link to="/hotkeys" className="underline underline-offset-4">
-              Open Hotkeys
-            </Link>
-          </p>
-        )}
-        <p className="text-[13px] text-muted-foreground">
-          Hold to dictate · release to transcribe and paste
-        </p>
-      </section>
-
       {permissions && (
         <section className="flex flex-col gap-2">
           <span className="font-mono text-eyebrow uppercase text-muted-foreground/80">
@@ -93,7 +59,12 @@ interface PermissionRowProps {
   onGrant: () => void;
 }
 
-function PermissionRow({ icon: Icon, label, granted, onGrant }: PermissionRowProps) {
+function PermissionRow({
+  icon: Icon,
+  label,
+  granted,
+  onGrant,
+}: PermissionRowProps) {
   return (
     <li className="flex items-center gap-3 py-2.5 border-t border-border/60 last:border-b">
       <Icon size={15} className="text-muted-foreground shrink-0" />

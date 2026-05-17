@@ -54,6 +54,7 @@ import type { HotkeyBinding, Mode, ModeLanguage } from "../lib/types";
 
 import { Chip } from "../components/Chip";
 import { RowCard } from "../components/RowCard";
+import { SectionHeader } from "../components/SectionHeader";
 import { ToggleRow } from "../components/ToggleRow";
 
 const LANGUAGES: { code: string; name: string; flag: string }[] = [
@@ -672,6 +673,7 @@ export function ModesPage() {
 
   return (
     <div className="p-6 flex flex-col gap-8">
+      <SectionHeader title="Modes" />
       <div className="flex flex-col gap-2">
         {settings.modes.map((mode) => (
           <ModeRow
