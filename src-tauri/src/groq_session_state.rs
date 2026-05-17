@@ -519,6 +519,53 @@ mod tests {
     }
 
     #[test]
+    fn poll_other_error_in_recording_logs_error_and_stays_recording() {
+        let mut s = State::new();
+        s.step(Event::Tick { elapsed: secs(3) });
+        let actions = s.step(Event::PollFailed {
+            id: 1,
+            kind: PollFailure::Other,
+        });
+        assert_eq!(actions, vec![Action::LogPollError]);
+        assert_eq!(s.phase(), Phase::Recording);
+        assert!(s.in_flight.is_none());
+        assert_eq!(s.successful_polls, 0);
+    }
+
+    #[test]
+    fn covering_poll_other_error_falls_back_to_final_post() {
+        let mut s = State::new();
+        s.step(Event::Tick { elapsed: secs(3) });
+        s.step(Event::PttReleased { elapsed: secs(3) });
+        assert_eq!(s.phase(), Phase::AwaitingCoveringPoll);
+        let actions = s.step(Event::PollFailed {
+            id: 1,
+            kind: PollFailure::Other,
+        });
+        assert!(actions.contains(&Action::DispatchFinal));
+        assert!(actions.contains(&Action::LogPollError));
+        assert_eq!(s.phase(), Phase::AwaitingFinalPost);
+    }
+
+    #[test]
+    fn ptt_released_when_not_recording_is_noop() {
+        let mut s = State::new();
+        s.step(Event::Tick {
+            elapsed: millis(500),
+        });
+        s.step(Event::PttReleased {
+            elapsed: millis(500),
+        });
+        assert_eq!(s.phase(), Phase::AwaitingFinalPost);
+        // Second PttReleased should be ignored entirely.
+        let actions = s.step(Event::PttReleased {
+            elapsed: millis(600),
+        });
+        assert!(actions.is_empty());
+        assert_eq!(s.phase(), Phase::AwaitingFinalPost);
+    }
+
+    #[test]
     fn done_phase_is_terminal_for_further_events() {
         let mut s = State::new();
         s.step(Event::Tick {
