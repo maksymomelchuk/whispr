@@ -15,10 +15,18 @@ export function TermChipInput({ value, onChange }: TermChipInputProps) {
   const [pasteText, setPasteText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const addTerm = (raw: string) => {
-    const term = raw.trim();
-    if (term && !value.includes(term)) {
-      onChange([...value, term]);
+  const addTerms = (raws: string[]) => {
+    const next = [...value];
+    const seen = new Set(next);
+    for (const raw of raws) {
+      const term = raw.trim();
+      if (term && !seen.has(term)) {
+        next.push(term);
+        seen.add(term);
+      }
+    }
+    if (next.length !== value.length) {
+      onChange(next);
     }
   };
 
@@ -31,8 +39,7 @@ export function TermChipInput({ value, onChange }: TermChipInputProps) {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
-      const parts = inputValue.split(",").map((s) => s.trim()).filter(Boolean);
-      parts.forEach(addTerm);
+      addTerms(inputValue.split(","));
       setInputValue("");
     } else if (e.key === "Backspace" && inputValue === "") {
       removeLast();
@@ -40,17 +47,12 @@ export function TermChipInput({ value, onChange }: TermChipInputProps) {
   };
 
   const handleBlur = () => {
-    const parts = inputValue.split(",").map((s) => s.trim()).filter(Boolean);
-    parts.forEach(addTerm);
+    addTerms(inputValue.split(","));
     setInputValue("");
   };
 
   const commitPaste = () => {
-    const parts = pasteText
-      .split(/[\n,]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    parts.forEach(addTerm);
+    addTerms(pasteText.split(/[\n,]+/));
     setPasteText("");
     setPasteMode(false);
   };
@@ -58,7 +60,7 @@ export function TermChipInput({ value, onChange }: TermChipInputProps) {
   return (
     <div className="flex flex-col gap-2">
       <div
-        className="min-h-[40px] flex flex-wrap gap-1 items-center p-2 border rounded-md bg-background cursor-text focus-within:ring-1 focus-within:ring-ring"
+        className="min-h-[40px] flex flex-wrap gap-1 items-center p-2 rounded-md bg-transparent border border-input shadow-xs cursor-text outline-none transition-[color,box-shadow] has-[input:focus-visible]:border-ring has-[input:focus-visible]:ring-[3px] has-[input:focus-visible]:ring-ring/50 dark:bg-input/30"
         onClick={() => inputRef.current?.focus()}
       >
         {value.map((term) => (
