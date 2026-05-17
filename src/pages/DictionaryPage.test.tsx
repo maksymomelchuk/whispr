@@ -62,6 +62,7 @@ function Wrapper({ initial = BASE }: { initial?: Settings }) {
         value={{
           settings,
           setSettings,
+          setSetting: vi.fn(),
           themePreference: "system",
           setThemePreference: vi.fn(),
           accent: "indigo",
