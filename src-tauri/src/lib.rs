@@ -1,9 +1,12 @@
 mod api_key_validation;
 mod commands;
-mod config;
-mod mode;
-// corrections helpers are consumed by macOS-only session modules; allow
-// unused items on non-macOS so the module still ships and its tests run.
+pub mod config;
+pub mod history;
+pub mod mode;
+pub mod pipeline;
+// corrections helpers are consumed by pipeline (cross-platform) and by
+// macOS-only session modules; allow unused items on non-macOS so the
+// module still ships and its tests run.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod corrections;
 // terms helpers are consumed by macOS-only session modules; allow
@@ -18,10 +21,10 @@ mod groq_audio;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod groq_session_state;
 mod groq_stabilizer;
-mod history;
 mod permissions;
-// snippets helpers are consumed by macOS-only ptt; allow unused items on
-// non-macOS so the module still ships and its tests run.
+// snippets helpers are consumed by pipeline (cross-platform) and by
+// macOS-only ptt; allow unused items on non-macOS so the module still
+// ships and its tests run.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod snippets;
 mod state;
@@ -41,7 +44,7 @@ mod deepgram_session;
 #[cfg(target_os = "macos")]
 mod groq_session;
 #[cfg(target_os = "macos")]
-mod transcription_session;
+pub mod transcription_session;
 
 // Modules that wrap macOS-only APIs (CGEventTap, CGEventPost, CoreAudio via
 // cpal, transparent overlay windows via macOSPrivateApi). Cross-platform
@@ -55,7 +58,7 @@ mod paste;
 #[cfg(target_os = "macos")]
 mod ptt;
 #[cfg(target_os = "macos")]
-mod recorder;
+pub mod recorder;
 #[cfg(target_os = "macos")]
 mod target_app;
 

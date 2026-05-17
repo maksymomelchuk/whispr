@@ -1,11 +1,10 @@
 use crate::config::{HotkeyBinding, Shortcut, TranscriptionProvider};
-use crate::corrections::apply_corrections;
 use crate::deepgram_session::DeepgramSession;
 use crate::groq_session::GroqSession;
-use crate::history::{self, CleanupStatus, HistoryEntry, HISTORY_UPDATED_EVENT};
+use crate::history::{self, CleanupStatus, HISTORY_UPDATED_EVENT};
 use crate::mode::TranslateTarget;
+use crate::pipeline::{self, CleanupOutput};
 use crate::recorder::Recorder;
-use crate::snippets::expand_snippets;
 use crate::state::{AppState, ModifierState};
 use crate::transcription_session::TranscriptionSession;
 use crate::{cleanup, cleanup_stats, config, media, overlay, paste, stats, target_app, translation};
@@ -456,9 +455,7 @@ async fn run_session(
         .find(|m| m.id == mode_id)
         .unwrap_or_else(|| config::get_default_mode(&settings));
     let mode_cleanup_enabled = active_mode.ai_cleanup.enabled;
-    let mode_use_snippets = active_mode.use_snippets;
     let mode_use_terms = active_mode.use_terms;
-    let mode_use_corrections = active_mode.use_corrections;
     let mode_translate = active_mode.translate.clone();
     let mode_language = active_mode.language.clone();
     let mode_source_lang = active_mode.language.as_code().map(str::to_string);
@@ -507,33 +504,23 @@ async fn run_session(
 
     let notice = merge_notices(translate_notice, cleanup_notice);
 
-    let mut final_text = replaced_text.clone();
-    if mode_use_snippets {
-        final_text = expand_snippets(&final_text, &settings.snippets);
-    }
-    if mode_use_corrections {
-        final_text = apply_corrections(&final_text, &settings.corrections);
-    }
-
-    let words = final_text.split_whitespace().count() as u64;
-    let seconds = speak_duration.as_secs() as u32;
-
-    let entry = HistoryEntry {
-        timestamp: history::now_unix_seconds(),
-        speak_duration_ms: speak_duration.as_millis() as u64,
-        raw_text,
-        replaced_text,
-        final_text: final_text.clone(),
-        cleanup_status,
-    };
+    let outcome = pipeline::run_stages(
+        &raw_text,
+        speak_duration,
+        active_mode,
+        &settings,
+        CleanupOutput { replaced_text, status: cleanup_status },
+    );
 
     // paste_handle must complete before any notify_error: set_focus()
     // during the modifier-release wait would steal focus mid-paste.
-    let paste_handle = paste::paste_text(format!("{final_text} "));
+    let paste_handle = paste::paste_text(outcome.pasted_text.clone());
 
+    let words = outcome.history_entry.final_text.split_whitespace().count() as u64;
+    let seconds = (outcome.history_entry.speak_duration_ms / 1000) as u32;
     stats::record(app, words, seconds);
 
-    match history::append(app, entry) {
+    match history::append(app, outcome.history_entry) {
         Ok(_) => {
             let _ = app.emit(HISTORY_UPDATED_EVENT, ());
         }
