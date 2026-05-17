@@ -30,8 +30,6 @@ export function DictionaryPage() {
   const { settings, setSettings } = useSettings();
   const [activeTab, setActiveTab] = useState<Tab>("terms");
 
-  if (!settings) return null;
-
   const termsCount = settings.terms?.length ?? 0;
   const correctionsCount = settings.corrections?.length ?? 0;
 
@@ -69,14 +67,14 @@ export function DictionaryPage() {
         <TermsTab
           initial={settings.terms ?? []}
           onSaved={(saved) =>
-            setSettings((s) => (s ? { ...s, terms: saved } : s))
+            setSettings((s) => ({ ...s, terms: saved }))
           }
         />
       ) : (
         <CorrectionsTab
           corrections={settings.corrections ?? []}
           onPersist={(next) =>
-            setSettings((s) => (s ? { ...s, corrections: next } : s))
+            setSettings((s) => ({ ...s, corrections: next }))
           }
         />
       )}

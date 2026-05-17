@@ -251,8 +251,6 @@ export function SnippetsPage() {
   const [saving, setSaving] = useState(false);
   const { flash, isFlashing } = useFlash();
 
-  if (!settings) return null;
-
   const snippets = settings.snippets;
 
   function startNew() {
@@ -279,9 +277,7 @@ export function SnippetsPage() {
     try {
       await setSnippets(updated);
       const fresh = await getSettings();
-      setSettings((prev) =>
-        prev ? { ...prev, snippets: fresh.snippets } : prev,
-      );
+      setSettings((prev) => ({ ...prev, snippets: fresh.snippets }));
       return true;
     } catch (e) {
       setSaveError(String(e));

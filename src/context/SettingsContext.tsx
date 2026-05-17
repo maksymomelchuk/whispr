@@ -5,12 +5,13 @@ import type { ThemePreference } from "../hooks/useTheme";
 import type { Settings } from "../lib/types";
 
 interface SettingsContextValue {
-  settings: Settings | null;
-  setSettings: React.Dispatch<React.SetStateAction<Settings | null>>;
+  settings: Settings;
+  setSettings: (updater: (prev: Settings) => Settings) => void;
   setSetting: <K extends keyof Settings>(
     key: K,
     value: Settings[K],
     persist: () => Promise<void>,
+    onError?: (err: unknown) => void,
   ) => Promise<void>;
   themePreference: ThemePreference;
   setThemePreference: (next: ThemePreference) => void;

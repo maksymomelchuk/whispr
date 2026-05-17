@@ -225,7 +225,6 @@ export function HotkeysPage() {
   const [error, setError] = useState<string | null>(null);
   const { flash, isFlashing } = useFlash();
 
-  if (!settings) return null;
 
   const bindings = settings.hotkey_bindings;
 
@@ -241,7 +240,7 @@ export function HotkeysPage() {
     setError(null);
     try {
       await setHotkeyBindings(next);
-      setSettings((s) => (s ? { ...s, hotkey_bindings: next } : s));
+      setSettings((s) => ({ ...s, hotkey_bindings: next }));
       if (flashSig) {
         flash(rowFlashId(flashSig.modeId, flashSig.shortcut));
       }

@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
+import { useSettings } from "../context/SettingsContext";
 import { usePersistedToggle } from "../hooks/usePersistedToggle";
 import {
   setAnthropicApiKey as persistApiKey,
@@ -47,20 +48,6 @@ const thresholdsSchema = z.object({
 
 type ThresholdsValues = z.infer<typeof thresholdsSchema>;
 
-interface Props {
-  enabled: boolean;
-  authMode: CleanupAuthMode;
-  apiKeyConfigured: boolean;
-  oauthTokenConfigured: boolean;
-  minWords: number;
-  minDurationMs: number;
-  onEnabledChange: (enabled: boolean) => void;
-  onAuthModeChange: (mode: CleanupAuthMode) => void;
-  onApiKeyConfiguredChange: (configured: boolean) => void;
-  onOauthTokenConfiguredChange: (configured: boolean) => void;
-  onThresholdsChange: (minWords: number, minDurationMs: number) => void;
-}
-
 function formatSeconds(ms: number): string {
   const seconds = ms / 1000;
   return Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(2);
@@ -82,36 +69,32 @@ const MODE_COPY: Record<
   },
 };
 
-export function AiCleanupField({
-  enabled,
-  authMode,
-  apiKeyConfigured,
-  oauthTokenConfigured,
-  minWords,
-  minDurationMs,
-  onEnabledChange,
-  onAuthModeChange,
-  onApiKeyConfiguredChange,
-  onOauthTokenConfiguredChange,
-  onThresholdsChange,
-}: Props) {
+export function AiCleanupField() {
+  const { settings, setSetting, setSettings } = useSettings();
+  const {
+    ai_cleanup_enabled: enabled,
+    ai_cleanup_auth_mode: authMode,
+    ai_cleanup_key_configured: apiKeyConfigured,
+    ai_cleanup_oauth_token_configured: oauthTokenConfigured,
+    ai_cleanup_min_words: minWords,
+    ai_cleanup_min_duration_ms: minDurationMs,
+  } = settings;
+
   const enabledToggle = usePersistedToggle(
     enabled,
     persistEnabled,
-    onEnabledChange,
+    (next) => setSettings((s) => ({ ...s, ai_cleanup_enabled: next })),
   );
 
   const handleAuthModeChange = async (val: string) => {
     if (!val || val === authMode) return;
     const mode = val as CleanupAuthMode;
-    const previous = authMode;
-    onAuthModeChange(mode);
-    try {
-      await persistAuthMode(mode);
-    } catch (e) {
-      onAuthModeChange(previous);
-      toast.error("Couldn't change auth mode", { description: String(e) });
-    }
+    await setSetting(
+      "ai_cleanup_auth_mode",
+      mode,
+      () => persistAuthMode(mode),
+      (e) => toast.error("Couldn't change auth mode", { description: String(e) }),
+    );
   };
 
   const thresholdsForm = useForm<ThresholdsValues>({
@@ -144,7 +127,11 @@ export function AiCleanupField({
       try {
         await persistThresholds(wordsNum, ms);
         lastPersistedRef.current = { minWords: wordsNum, minDurationMs: ms };
-        onThresholdsChange(wordsNum, ms);
+        setSettings((s) => ({
+          ...s,
+          ai_cleanup_min_words: wordsNum,
+          ai_cleanup_min_duration_ms: ms,
+        }));
       } catch (e) {
         toast.error("Couldn't save thresholds", { description: String(e) });
       }
@@ -154,7 +141,7 @@ export function AiCleanupField({
     watched.minWords,
     watched.minDurationSec,
     enabledToggle.enabled,
-    onThresholdsChange,
+    setSettings,
   ]);
 
   const configured =
@@ -228,8 +215,16 @@ export function AiCleanupField({
             persist={authMode === "api_key" ? persistApiKey : persistOauthToken}
             onConfiguredChange={
               authMode === "api_key"
-                ? onApiKeyConfiguredChange
-                : onOauthTokenConfiguredChange
+                ? (configured) =>
+                    setSettings((s) => ({
+                      ...s,
+                      ai_cleanup_key_configured: configured,
+                    }))
+                : (configured) =>
+                    setSettings((s) => ({
+                      ...s,
+                      ai_cleanup_oauth_token_configured: configured,
+                    }))
             }
           />
           {showWarning && (

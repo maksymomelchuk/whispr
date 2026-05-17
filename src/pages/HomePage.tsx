@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { SectionHeader } from "@/components/SectionHeader";
 import { Button } from "@/components/ui/button";
 
-import { useSettings } from "../context/SettingsContext";
 import {
   checkPermissions,
   openAccessibilitySettings,
@@ -13,7 +12,6 @@ import {
 } from "../lib/api";
 
 export function HomePage() {
-  const { settings } = useSettings();
   const [permissions, setPermissions] = useState<PermissionsStatus | null>(
     null,
   );
@@ -23,8 +21,6 @@ export function HomePage() {
       .then(setPermissions)
       .catch(() => {});
   }, []);
-
-  if (!settings) return null;
 
   return (
     <div className="p-6 flex flex-col gap-8">

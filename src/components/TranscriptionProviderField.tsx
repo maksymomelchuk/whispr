@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { useSettings } from "../context/SettingsContext";
 import {
   setDeepgramApiKey as persistDeepgramApiKey,
   setGroqApiKey as persistGroqApiKey,
@@ -26,11 +27,7 @@ import {
   validateDeepgramApiKey,
   validateGroqApiKey,
 } from "../lib/api";
-import type {
-  GroqModel,
-  GroqSettings,
-  TranscriptionProvider,
-} from "../lib/types";
+import type { GroqModel, TranscriptionProvider } from "../lib/types";
 import { CredentialField } from "./CredentialField";
 import { InfoTip } from "./InfoTip";
 import { SectionCard } from "./SectionCard";
@@ -45,58 +42,42 @@ const GROQ_MODEL_OPTIONS: { value: GroqModel; label: string }[] = [
   { value: "whisper_large_v3", label: "Whisper Large v3" },
 ];
 
-interface Props {
-  provider: TranscriptionProvider;
-  groq: GroqSettings;
-  deepgramApiKeyConfigured: boolean;
-  groqApiKeyConfigured: boolean;
-  onProviderChange: (provider: TranscriptionProvider) => void;
-  onGroqSaved: (groq: GroqSettings) => void;
-  onDeepgramApiKeyConfiguredChange: (configured: boolean) => void;
-  onGroqApiKeyConfiguredChange: (configured: boolean) => void;
-}
-
-export function TranscriptionProviderField({
-  provider,
-  groq,
-  deepgramApiKeyConfigured,
-  groqApiKeyConfigured,
-  onProviderChange,
-  onGroqSaved,
-  onDeepgramApiKeyConfiguredChange,
-  onGroqApiKeyConfiguredChange,
-}: Props) {
+export function TranscriptionProviderField() {
+  const { settings, setSetting, setSettings } = useSettings();
+  const {
+    transcription_provider: provider,
+    groq,
+    deepgram_api_key_configured,
+    groq_api_key_configured,
+  } = settings;
   const [providerSaveError, setProviderSaveError] = useState<string | null>(
     null,
   );
+
   const providerForm = useForm<{ provider: TranscriptionProvider }>({
     values: { provider },
   });
 
   const handleProviderChange = async (next: TranscriptionProvider) => {
     if (next === provider) return;
-    const previous = provider;
-    onProviderChange(next);
     setProviderSaveError(null);
-    try {
-      await persistProvider(next);
-    } catch (e) {
-      onProviderChange(previous);
-      setProviderSaveError(String(e));
-    }
+    await setSetting(
+      "transcription_provider",
+      next,
+      () => persistProvider(next),
+      (e) => setProviderSaveError(String(e)),
+    );
   };
 
   const handleGroqModelChange = async (next: GroqModel) => {
     if (next === groq.model) return;
-    const previous = groq;
-    const updated: GroqSettings = { ...groq, model: next };
-    onGroqSaved(updated);
-    try {
-      await persistGroqSettings(updated);
-    } catch (e) {
-      onGroqSaved(previous);
-      toast.error("Couldn't save Groq model", { description: String(e) });
-    }
+    await setSetting(
+      "groq",
+      { ...groq, model: next },
+      () => persistGroqSettings({ ...groq, model: next }),
+      (e) =>
+        toast.error("Couldn't save Groq model", { description: String(e) }),
+    );
   };
 
   return (
@@ -137,10 +118,15 @@ export function TranscriptionProviderField({
           className="mt-3.5"
           label="API key"
           placeholder="dg_..."
-          isConfigured={deepgramApiKeyConfigured}
+          isConfigured={deepgram_api_key_configured}
           persist={persistDeepgramApiKey}
           validate={validateDeepgramApiKey}
-          onConfiguredChange={onDeepgramApiKeyConfiguredChange}
+          onConfiguredChange={(configured) =>
+            setSettings((s) => ({
+              ...s,
+              deepgram_api_key_configured: configured,
+            }))
+          }
         />
       )}
 
@@ -150,10 +136,15 @@ export function TranscriptionProviderField({
             className="mt-3.5"
             label="API key"
             placeholder="gsk_..."
-            isConfigured={groqApiKeyConfigured}
+            isConfigured={groq_api_key_configured}
             persist={persistGroqApiKey}
             validate={validateGroqApiKey}
-            onConfiguredChange={onGroqApiKeyConfiguredChange}
+            onConfiguredChange={(configured) =>
+              setSettings((s) => ({
+                ...s,
+                groq_api_key_configured: configured,
+              }))
+            }
           />
           <div className="mt-3.5 flex flex-col gap-[6px]">
             <div className="inline-flex items-center gap-2">

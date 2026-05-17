@@ -604,15 +604,12 @@ export function ModesPage() {
   const navigate = useNavigate();
   const [editor, setEditor] = useState<EditorState | null>(null);
 
-  if (!settings) return null;
-
   const openEditor = (mode: Mode, isNew = false) => setEditor({ mode, isNew });
   const closeEditor = () => setEditor(null);
 
   const handlePersist = useCallback(
     (saved: Mode, wasNew: boolean) => {
       setSettings((s) => {
-        if (!s) return s;
         if (wasNew) {
           return { ...s, modes: [...s.modes, saved] };
         }
@@ -643,9 +640,7 @@ export function ModesPage() {
   const handleDelete = async (id: string) => {
     try {
       await deleteMode(id);
-      setSettings((s) =>
-        s ? { ...s, modes: s.modes.filter((m) => m.id !== id) } : s,
-      );
+      setSettings((s) => ({ ...s, modes: s.modes.filter((m) => m.id !== id) }));
     } catch (e) {
       console.error(e);
     }
@@ -655,7 +650,7 @@ export function ModesPage() {
     try {
       await duplicateMode(id);
       const updated = await getSettings();
-      setSettings(updated);
+      setSettings(() => updated);
     } catch (e) {
       console.error(e);
     }
@@ -664,7 +659,7 @@ export function ModesPage() {
   const handleSetDefault = async (id: string) => {
     try {
       await setDefaultMode(id);
-      setSettings((s) => (s ? { ...s, default_mode_id: id } : s));
+      setSettings((s) => ({ ...s, default_mode_id: id }));
     } catch (e) {
       console.error(e);
     }

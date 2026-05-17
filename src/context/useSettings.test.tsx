@@ -1,7 +1,6 @@
-import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook } from "@testing-library/react";
-import { useCallback, useEffect, useState } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useCallback, useState } from "react";
+import { describe, expect, it, vi } from "vitest";
 
 import type { Settings } from "../lib/types";
 import { SettingsContext, useSettings } from "./SettingsContext";
@@ -31,29 +30,32 @@ const MOCK_SETTINGS: Settings = {
 };
 
 function TestWrapper({ children }: { children: React.ReactNode }) {
-  const [settings, setSettings] = useState<Settings | null>(null);
+  const [settings, setRawSettings] = useState<Settings>(MOCK_SETTINGS);
 
-  useEffect(() => {
-    // mirrors App.tsx hydration pattern
-    invoke<Settings>("get_settings").then(setSettings);
-  }, []);
+  const setSettings = useCallback(
+    (updater: (prev: Settings) => Settings) => {
+      setRawSettings(updater);
+    },
+    [],
+  );
 
   const setSetting = useCallback(
     async <K extends keyof Settings>(
       key: K,
       value: Settings[K],
       persist: () => Promise<void>,
+      onError?: (err: unknown) => void,
     ) => {
-      const prev = settings;
-      if (!prev) return;
-      setSettings({ ...prev, [key]: value });
+      const snapshot = settings;
+      setSettings(() => ({ ...snapshot, [key]: value }));
       try {
         await persist();
-      } catch {
-        setSettings(prev);
+      } catch (e) {
+        setSettings(() => snapshot);
+        onError?.(e);
       }
     },
-    [settings],
+    [settings, setSettings],
   );
 
   return (
@@ -74,18 +76,10 @@ function TestWrapper({ children }: { children: React.ReactNode }) {
 }
 
 describe("useSettings", () => {
-  beforeEach(() => {
-    vi.mocked(invoke).mockResolvedValue(MOCK_SETTINGS);
-  });
-
-  it("hydration from getSettings populates settings state", async () => {
+  it("exposes initial settings", () => {
     const { result } = renderHook(() => useSettings(), {
       wrapper: TestWrapper,
     });
-
-    expect(result.current.settings).toBeNull();
-
-    await act(async () => {});
 
     expect(result.current.settings).toEqual(MOCK_SETTINGS);
   });
@@ -94,7 +88,6 @@ describe("useSettings", () => {
     const { result } = renderHook(() => useSettings(), {
       wrapper: TestWrapper,
     });
-    await act(async () => {});
 
     const persist = vi.fn().mockReturnValue(new Promise<void>(() => {}));
 
@@ -102,16 +95,15 @@ describe("useSettings", () => {
       void result.current.setSetting("show_in_dock", false, persist);
     });
 
-    expect(result.current.settings?.show_in_dock).toBe(false);
+    expect(result.current.settings.show_in_dock).toBe(false);
   });
 
   it("setSetting rolls back to prior value when persist rejects", async () => {
     const { result } = renderHook(() => useSettings(), {
       wrapper: TestWrapper,
     });
-    await act(async () => {});
 
-    const initial = result.current.settings!.show_in_dock;
+    const initial = result.current.settings.show_in_dock;
 
     await act(async () => {
       await result.current
@@ -121,6 +113,6 @@ describe("useSettings", () => {
         .catch(() => {});
     });
 
-    expect(result.current.settings?.show_in_dock).toBe(initial);
+    expect(result.current.settings.show_in_dock).toBe(initial);
   });
 });

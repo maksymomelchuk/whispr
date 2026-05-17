@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
+import { useSettings } from "../context/SettingsContext";
 import { useConfirmAction } from "../hooks/useConfirmAction";
 import { useFlash } from "../hooks/useFlash";
 import {
@@ -47,11 +48,6 @@ const limitHint = (l: HistoryLimit, count: number): string => {
     return `${count} ${count === 1 ? "entry" : "entries"} stored locally. No limit.`;
   return `${count} of up to ${l} ${l === 1 ? "entry" : "entries"} stored locally.`;
 };
-
-interface HistoryTabProps {
-  historyLimit: HistoryLimit;
-  onHistoryLimitChange: (limit: HistoryLimit) => void;
-}
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -113,10 +109,9 @@ function useClock(intervalMs = 30_000): number {
   return now;
 }
 
-export function HistoryTab({
-  historyLimit,
-  onHistoryLimitChange,
-}: HistoryTabProps) {
+export function HistoryTab() {
+  const { settings, setSettings } = useSettings();
+  const historyLimit = settings.history_limit;
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -140,7 +135,7 @@ export function HistoryTab({
     const next = optionValueToLimit(value);
     try {
       await persistHistoryLimit(next);
-      onHistoryLimitChange(next);
+      setSettings((s) => ({ ...s, history_limit: next }));
     } catch (err) {
       console.error("set history limit failed", err);
     }

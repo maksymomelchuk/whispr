@@ -16,25 +16,34 @@ import type { Settings } from "./lib/types";
 import "./globals.css";
 
 function App() {
-  const [settings, setSettings] = useState<Settings | null>(null);
+  const [settings, setRawSettings] = useState<Settings | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const setSettings = useCallback(
+    (updater: (prev: Settings) => Settings) => {
+      setRawSettings((prev) => (prev ? updater(prev) : prev));
+    },
+    [],
+  );
 
   const setSetting = useCallback(
     async <K extends keyof Settings>(
       key: K,
       value: Settings[K],
       persist: () => Promise<void>,
+      onError?: (err: unknown) => void,
     ) => {
-      const prev = settings;
-      if (!prev) return;
-      setSettings({ ...prev, [key]: value });
+      if (!settings) return;
+      const snapshot = settings;
+      setSettings(() => ({ ...snapshot, [key]: value }));
       try {
         await persist();
-      } catch {
-        setSettings(prev);
+      } catch (e) {
+        setSettings(() => snapshot);
+        onError?.(e);
       }
     },
-    [settings],
+    [settings, setSettings],
   );
   const { preference: themePreference, setPreference: setThemePreference } =
     useTheme();
@@ -42,7 +51,7 @@ function App() {
 
   useEffect(() => {
     getSettings()
-      .then(setSettings)
+      .then(setRawSettings)
       .catch((e) => setLoadError(String(e)));
   }, []);
 

@@ -13,6 +13,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
+import { useSettings } from "../context/SettingsContext";
 import { ACCENTS, type Accent } from "../hooks/useAccent";
 import { usePersistedToggle } from "../hooks/usePersistedToggle";
 import type { ThemePreference } from "../hooks/useTheme";
@@ -62,46 +63,36 @@ const ACCENT_SWATCH: Record<
   },
 };
 
-interface Props {
-  preference: ThemePreference;
-  onChange: (next: ThemePreference) => void;
-  accent: Accent;
-  onAccentChange: (next: Accent) => void;
-  showInDock: boolean;
-  onShowInDockChange: (next: boolean) => void;
-  showLivePreview: boolean;
-  onShowLivePreviewChange: (next: boolean) => void;
-}
+export function AppearanceField() {
+  const {
+    settings,
+    setSettings,
+    themePreference,
+    setThemePreference,
+    accent,
+    setAccent,
+  } = useSettings();
 
-export function AppearanceField({
-  preference,
-  onChange,
-  accent,
-  onAccentChange,
-  showInDock,
-  onShowInDockChange,
-  showLivePreview,
-  onShowLivePreviewChange,
-}: Props) {
   const isDark =
-    preference === "dark" ||
-    (preference === "system" &&
+    themePreference === "dark" ||
+    (themePreference === "system" &&
       typeof window !== "undefined" &&
       window.matchMedia("(prefers-color-scheme: dark)").matches);
+
   const form = useForm<ThemeFormValues>({
     resolver: zodResolver(themeSchema),
-    values: { theme: preference },
+    values: { theme: themePreference },
   });
 
   const dock = usePersistedToggle(
-    showInDock,
+    settings.show_in_dock,
     persistShowInDock,
-    onShowInDockChange,
+    (next) => setSettings((s) => ({ ...s, show_in_dock: next })),
   );
   const preview = usePersistedToggle(
-    showLivePreview,
+    settings.show_live_preview,
     persistShowLivePreview,
-    onShowLivePreviewChange,
+    (next) => setSettings((s) => ({ ...s, show_live_preview: next })),
   );
   const saveError = dock.error ?? preview.error;
 
@@ -120,7 +111,7 @@ export function AppearanceField({
                   variant="outline"
                   value={field.value}
                   onValueChange={(val) => {
-                    if (val) onChange(val as ThemePreference);
+                    if (val) setThemePreference(val as ThemePreference);
                   }}
                   className="w-full"
                 >
@@ -158,7 +149,7 @@ export function AppearanceField({
                 aria-checked={selected}
                 aria-label={swatch.label}
                 title={swatch.label}
-                onClick={() => onAccentChange(name)}
+                onClick={() => setAccent(name)}
                 className={cn(
                   "relative size-[22px] rounded-full outline-none transition-[box-shadow,transform] duration-150",
                   "focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-card",

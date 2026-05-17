@@ -50,12 +50,14 @@ const BASE: Settings = {
 function TermsObserver() {
   const { settings } = useSettings();
   return (
-    <output data-testid="terms-count">{settings?.terms?.length ?? 0}</output>
+    <output data-testid="terms-count">{settings.terms.length}</output>
   );
 }
 
 function Wrapper({ initial = BASE }: { initial?: Settings }) {
-  const [settings, setSettings] = useState<Settings | null>(initial);
+  const [settings, setRawSettings] = useState<Settings>(initial);
+  const setSettings = (updater: (prev: Settings) => Settings) =>
+    setRawSettings(updater);
   return (
     <TooltipProvider>
       <SettingsContext.Provider

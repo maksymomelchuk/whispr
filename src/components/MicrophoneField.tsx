@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { useSettings } from "../context/SettingsContext";
 import {
   listInputDevices,
   setInputDevice as persistInputDevice,
@@ -24,16 +25,6 @@ import {
 } from "../lib/api";
 import { SectionCard } from "./SectionCard";
 import { ToggleRow } from "./ToggleRow";
-
-interface Props {
-  initial: string | null;
-  onSaved: (device: string | null) => void;
-  pauseMedia: boolean;
-  onPauseMediaSaved: (enabled: boolean) => void;
-}
-
-type LoadState = "loading" | "ready" | "error";
-type SaveStatus = "idle" | "saving" | "error";
 
 // Radix Select doesn't render correctly with empty-string values; use a sentinel.
 const DEVICE_DEFAULT = "__system_default__";
@@ -46,20 +37,20 @@ function fromSelectValue(val: string): string | null {
   return val === DEVICE_DEFAULT ? null : val;
 }
 
-export function MicrophoneField({
-  initial,
-  onSaved,
-  pauseMedia,
-  onPauseMediaSaved,
-}: Props) {
+type LoadState = "loading" | "ready" | "error";
+type SaveStatus = "idle" | "saving" | "error";
+
+export function MicrophoneField() {
+  const { settings, setSettings } = useSettings();
+  const { input_device, pause_media_on_record } = settings;
+
   const [devices, setDevices] = useState<string[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [pauseEnabled, setPauseEnabled] = useState(pauseMedia);
 
-  const form = useForm({ values: { device: toSelectValue(initial) } });
+  const form = useForm({ values: { device: toSelectValue(input_device) } });
 
   useEffect(() => {
     listInputDevices()
@@ -73,10 +64,6 @@ export function MicrophoneField({
       });
   }, []);
 
-  useEffect(() => {
-    setPauseEnabled(pauseMedia);
-  }, [pauseMedia]);
-
   const handleChange = async (next: string) => {
     const previous = form.getValues("device");
     form.setValue("device", next);
@@ -85,7 +72,7 @@ export function MicrophoneField({
     setSaveError(null);
     try {
       await persistInputDevice(payload);
-      onSaved(payload);
+      setSettings((s) => ({ ...s, input_device: payload }));
       setStatus("idle");
     } catch (e) {
       form.setValue("device", previous);
@@ -95,23 +82,22 @@ export function MicrophoneField({
   };
 
   const togglePauseMedia = async () => {
-    const next = !pauseEnabled;
-    setPauseEnabled(next);
+    const next = !pause_media_on_record;
     setSaveError(null);
+    setSettings((s) => ({ ...s, pause_media_on_record: next }));
     try {
       await persistPauseMediaOnRecord(next);
-      onPauseMediaSaved(next);
     } catch (e) {
-      setPauseEnabled(!next);
+      setSettings((s) => ({ ...s, pause_media_on_record: !next }));
       setSaveError(String(e));
     }
   };
 
   const missing =
     loadState === "ready" &&
-    initial !== null &&
-    initial !== undefined &&
-    !devices.includes(initial);
+    input_device !== null &&
+    input_device !== undefined &&
+    !devices.includes(input_device);
 
   const isDisabled = loadState !== "ready" || status === "saving";
 
@@ -142,9 +128,9 @@ export function MicrophoneField({
                         {name}
                       </SelectItem>
                     ))}
-                    {missing && initial ? (
-                      <SelectItem value={initial}>
-                        {initial} (unavailable)
+                    {missing && input_device ? (
+                      <SelectItem value={input_device}>
+                        {input_device} (unavailable)
                       </SelectItem>
                     ) : null}
                   </SelectContent>
@@ -158,7 +144,7 @@ export function MicrophoneField({
       <ToggleRow
         id="mute-system-audio"
         label="Mute system audio while recording"
-        checked={pauseEnabled}
+        checked={pause_media_on_record}
         onCheckedChange={togglePauseMedia}
       />
 
