@@ -2,10 +2,14 @@ mod api_key_validation;
 mod commands;
 mod config;
 mod mode;
-// dictionary helpers are consumed by macOS-only session modules; allow
+// corrections helpers are consumed by macOS-only session modules; allow
 // unused items on non-macOS so the module still ships and its tests run.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-mod dictionary;
+mod corrections;
+// terms helpers are consumed by macOS-only session modules; allow
+// unused items on non-macOS so the module still ships and its tests run.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+mod terms;
 // groq_audio is only used by groq_session (macOS-gated); allow unused
 // items on non-macOS builds so the module still ships and its tests
 // run, but the binary doesn't warn about dead code.
@@ -147,7 +151,8 @@ pub fn run() {
             commands::set_hotkey_bindings,
             commands::set_shortcut_capture_paused,
             commands::open_translation_settings,
-            commands::set_dictionary,
+            commands::set_terms,
+            commands::set_corrections,
             commands::set_snippets,
             commands::set_default_mode_cleanup_enabled,
             commands::add_mode,

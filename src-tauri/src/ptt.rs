@@ -1,6 +1,6 @@
 use crate::config::{HotkeyBinding, Shortcut, TranscriptionProvider};
+use crate::corrections::apply_corrections;
 use crate::deepgram_session::DeepgramSession;
-use crate::dictionary::apply_dictionary;
 use crate::groq_session::GroqSession;
 use crate::history::{self, CleanupStatus, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::mode::TranslateTarget;
@@ -457,21 +457,24 @@ async fn run_session(
         .unwrap_or_else(|| config::get_default_mode(&settings));
     let mode_cleanup_enabled = active_mode.ai_cleanup.enabled;
     let mode_use_snippets = active_mode.use_snippets;
-    let mode_use_dictionary = active_mode.use_dictionary;
+    let mode_use_terms = active_mode.use_terms;
+    let mode_use_corrections = active_mode.use_corrections;
     let mode_translate = active_mode.translate.clone();
     let mode_language = active_mode.language.clone();
     let mode_source_lang = active_mode.language.as_code().map(str::to_string);
     let mode_prompt_override = active_mode.ai_cleanup.prompt_override.clone();
 
+    let session_terms = if mode_use_terms { settings.terms.clone() } else { vec![] };
+
     let session_result = match settings.transcription_provider {
         TranscriptionProvider::Deepgram => {
             DeepgramSession
-                .run(app.clone(), format, chunk_rx, mode_language)
+                .run(app.clone(), format, chunk_rx, mode_language, session_terms)
                 .await
         }
         TranscriptionProvider::Groq => {
             GroqSession
-                .run(app.clone(), format, chunk_rx, mode_language)
+                .run(app.clone(), format, chunk_rx, mode_language, session_terms)
                 .await
         }
     };
@@ -508,8 +511,8 @@ async fn run_session(
     if mode_use_snippets {
         final_text = expand_snippets(&final_text, &settings.snippets);
     }
-    if mode_use_dictionary {
-        final_text = apply_dictionary(&final_text, &settings.dictionary);
+    if mode_use_corrections {
+        final_text = apply_corrections(&final_text, &settings.corrections);
     }
 
     let words = final_text.split_whitespace().count() as u64;

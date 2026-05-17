@@ -88,8 +88,13 @@ pub struct Mode {
     pub language: ModeLanguage,
     pub translate: TranslateTarget,
     pub ai_cleanup: ModeCleanup,
+    /// Legacy field; migrated to use_terms + use_corrections on first load.
+    #[serde(rename = "use_dictionary", default, skip_serializing)]
+    pub legacy_use_dictionary: Option<bool>,
     #[serde(default = "default_true")]
-    pub use_dictionary: bool,
+    pub use_terms: bool,
+    #[serde(default = "default_true")]
+    pub use_corrections: bool,
     #[serde(default = "default_true")]
     pub use_snippets: bool,
 }
@@ -108,7 +113,9 @@ impl Mode {
                 enabled: cleanup_enabled,
                 prompt_override: None,
             },
-            use_dictionary: true,
+            legacy_use_dictionary: None,
+            use_terms: true,
+            use_corrections: true,
             use_snippets: true,
         }
     }
@@ -124,7 +131,9 @@ impl Mode {
                 enabled: true,
                 prompt_override: None,
             },
-            use_dictionary: true,
+            legacy_use_dictionary: None,
+            use_terms: true,
+            use_corrections: true,
             use_snippets: true,
         }
     }
@@ -140,7 +149,9 @@ impl Mode {
                 enabled: false,
                 prompt_override: None,
             },
-            use_dictionary: true,
+            legacy_use_dictionary: None,
+            use_terms: true,
+            use_corrections: true,
             use_snippets: true,
         }
     }
@@ -158,7 +169,9 @@ impl Mode {
                 enabled: true,
                 prompt_override: None,
             },
-            use_dictionary: true,
+            legacy_use_dictionary: None,
+            use_terms: true,
+            use_corrections: true,
             use_snippets: true,
         }
     }
@@ -273,8 +286,42 @@ mod tests {
         assert_eq!(decoded.name, "Default English");
         assert_eq!(decoded.language, ModeLanguage::exact("en"));
         assert!(!decoded.ai_cleanup.enabled);
-        assert!(decoded.use_dictionary);
+        assert!(decoded.use_terms);
+        assert!(decoded.use_corrections);
         assert!(decoded.use_snippets);
+    }
+
+    #[test]
+    fn use_dictionary_false_deserializes_to_legacy_field() {
+        let json = r#"{"id":"x","name":"X","language":{"kind":"exact","code":"en"},"translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_dictionary":false,"use_snippets":true}"#;
+        let mode: Mode = serde_json::from_str(json).unwrap();
+        assert_eq!(mode.legacy_use_dictionary, Some(false));
+        // use_terms and use_corrections default to true until migrated
+        assert!(mode.use_terms);
+        assert!(mode.use_corrections);
+    }
+
+    #[test]
+    fn use_dictionary_true_deserializes_to_legacy_field() {
+        let json = r#"{"id":"x","name":"X","language":{"kind":"exact","code":"en"},"translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_dictionary":true,"use_snippets":true}"#;
+        let mode: Mode = serde_json::from_str(json).unwrap();
+        assert_eq!(mode.legacy_use_dictionary, Some(true));
+    }
+
+    #[test]
+    fn use_dictionary_absent_gives_none() {
+        let json = r#"{"id":"x","name":"X","language":{"kind":"exact","code":"en"},"translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_terms":true,"use_corrections":true,"use_snippets":true}"#;
+        let mode: Mode = serde_json::from_str(json).unwrap();
+        assert_eq!(mode.legacy_use_dictionary, None);
+    }
+
+    #[test]
+    fn seed_mode_does_not_serialize_use_dictionary() {
+        let mode = Mode::seed_default_en(false);
+        let json = serde_json::to_string(&mode).unwrap();
+        assert!(!json.contains("use_dictionary"));
+        assert!(json.contains("use_terms"));
+        assert!(json.contains("use_corrections"));
     }
 
     #[test]

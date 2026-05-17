@@ -73,8 +73,15 @@ pub fn check_one_binding_per_mode(bindings: &[HotkeyBinding]) -> Result<(), Stri
     Ok(())
 }
 
+/// Legacy two-field entry; only used for reading old `dictionary` JSON during migration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DictionaryEntry {
+    pub from: String,
+    pub to: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorrectionEntry {
     pub from: String,
     pub to: String,
 }
@@ -86,7 +93,7 @@ pub struct SnippetEntry {
     pub expansion: String,
 }
 
-pub fn default_dictionary() -> Vec<DictionaryEntry> {
+pub fn default_corrections() -> Vec<CorrectionEntry> {
     [
         ("dot", "."),
         ("slash", "/"),
@@ -100,7 +107,7 @@ pub fn default_dictionary() -> Vec<DictionaryEntry> {
         ("exclamation mark", "!"),
     ]
     .into_iter()
-    .map(|(from, to)| DictionaryEntry {
+    .map(|(from, to)| CorrectionEntry {
         from: from.to_string(),
         to: to.to_string(),
     })
@@ -239,8 +246,13 @@ pub struct Settings {
     pub legacy_shortcut: Shortcut,
     #[serde(default)]
     pub hotkey_bindings: Vec<HotkeyBinding>,
-    #[serde(default = "default_dictionary")]
-    pub dictionary: Vec<DictionaryEntry>,
+    /// Legacy unified dictionary field; split into terms + corrections during migration.
+    #[serde(rename = "dictionary", default, skip_serializing)]
+    pub legacy_dictionary: Vec<DictionaryEntry>,
+    #[serde(default)]
+    pub terms: Vec<String>,
+    #[serde(default = "default_corrections")]
+    pub corrections: Vec<CorrectionEntry>,
     #[serde(default)]
     pub snippets: Vec<SnippetEntry>,
     #[serde(default)]
@@ -276,7 +288,9 @@ impl Default for Settings {
             groq_api_key: None,
             legacy_shortcut: Shortcut::default(),
             hotkey_bindings: default_hotkey_bindings(),
-            dictionary: default_dictionary(),
+            legacy_dictionary: vec![],
+            terms: vec![],
+            corrections: default_corrections(),
             snippets: vec![],
             deepgram: DeepgramSettings::default(),
             groq: GroqSettings::default(),
@@ -374,10 +388,42 @@ fn migrate(s: &mut Settings) -> bool {
         changed = true;
     }
 
-    // ── Legacy replacements → dictionary ─────────────────────────────────
+    // ── Legacy replacements → dictionary (now terms + corrections) ───────
     if let Some(legacy) = s.legacy_replacements.take() {
-        s.dictionary = legacy;
+        s.legacy_dictionary = legacy;
         changed = true;
+    }
+
+    // ── Legacy dictionary → terms + corrections ───────────────────────────
+    // Each entry where from == to becomes a Term; all others become Corrections.
+    if !s.legacy_dictionary.is_empty() {
+        let mut terms = Vec::new();
+        let mut corrections = Vec::new();
+        for entry in s.legacy_dictionary.drain(..) {
+            if entry.from == entry.to {
+                terms.push(entry.from);
+            } else {
+                corrections.push(CorrectionEntry {
+                    from: entry.from,
+                    to: entry.to,
+                });
+            }
+        }
+        s.terms = terms;
+        s.corrections = corrections;
+        changed = true;
+    }
+
+    // ── Mode migration: use_dictionary → use_terms + use_corrections ──────
+    for mode in s.modes.iter_mut() {
+        if let Some(use_dict) = mode.legacy_use_dictionary {
+            if !use_dict {
+                mode.use_terms = false;
+                mode.use_corrections = false;
+            }
+            mode.legacy_use_dictionary = None;
+            changed = true;
+        }
     }
 
     // ── Legacy shortcut → hotkey_bindings ────────────────────────────────
@@ -644,20 +690,105 @@ mod tests {
         assert!(v.get("ai_cleanup_enabled").is_none());
     }
 
-    fn migration_renames_legacy_replacements_to_dictionary() {
+    #[test]
+    fn migration_renames_legacy_replacements_then_splits_to_corrections() {
+        // "dot → ." is from != to, so it becomes a Correction.
         let json = r#"{"replacements": [{"from": "dot", "to": "."}]}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         assert_eq!(s.legacy_replacements.as_ref().map(|v| v.len()), Some(1));
         let changed = migrate(&mut s);
         assert!(changed);
-        assert_eq!(s.dictionary.len(), 1);
-        assert_eq!(s.dictionary[0].from, "dot");
+        assert_eq!(s.corrections.len(), 1);
+        assert_eq!(s.corrections[0].from, "dot");
+        assert_eq!(s.corrections[0].to, ".");
+        assert!(s.terms.is_empty());
         assert!(s.legacy_replacements.is_none());
-        // Serialized form must use "dictionary" key, not "replacements".
+        // Serialized form must not contain "replacements" or "dictionary".
         let reserialized = serde_json::to_string(&s).unwrap();
         let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
         assert!(v.get("replacements").is_none());
-        assert!(v.get("dictionary").is_some());
+        assert!(v.get("dictionary").is_none(), "dictionary must not be written back");
+        assert!(v.get("corrections").is_some());
+    }
+
+    #[test]
+    fn migration_splits_dictionary_from_eq_to_as_term() {
+        // "MongoDB → MongoDB" (from == to) becomes a Term.
+        let json = r#"{"dictionary": [{"from": "MongoDB", "to": "MongoDB"}]}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        let changed = migrate(&mut s);
+        assert!(changed);
+        assert_eq!(s.terms, vec!["MongoDB"]);
+        assert!(s.corrections.is_empty());
+    }
+
+    #[test]
+    fn migration_splits_dictionary_from_ne_to_as_correction() {
+        // "anthropik → Anthropic" becomes a Correction.
+        let json = r#"{"dictionary": [{"from": "anthropik", "to": "Anthropic"}]}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        let changed = migrate(&mut s);
+        assert!(changed);
+        assert!(s.terms.is_empty());
+        assert_eq!(s.corrections.len(), 1);
+        assert_eq!(s.corrections[0].from, "anthropik");
+        assert_eq!(s.corrections[0].to, "Anthropic");
+    }
+
+    #[test]
+    fn migration_splits_mixed_dictionary() {
+        let json = r#"{"dictionary": [
+            {"from": "MongoDB", "to": "MongoDB"},
+            {"from": "dot", "to": "."},
+            {"from": "anthropik", "to": "Anthropic"}
+        ]}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        migrate(&mut s);
+        assert_eq!(s.terms, vec!["MongoDB"]);
+        assert_eq!(s.corrections.len(), 2);
+        assert_eq!(s.corrections[0].from, "dot");
+        assert_eq!(s.corrections[1].from, "anthropik");
+    }
+
+    #[test]
+    fn migration_dictionary_is_idempotent() {
+        // After migration, re-running migrate() must not change anything.
+        let json = r#"{"dictionary": [{"from": "MongoDB", "to": "MongoDB"}]}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        migrate(&mut s);
+        // Second run: legacy_dictionary is empty, terms/corrections are already set.
+        let changed2 = migrate(&mut s);
+        assert!(!changed2, "second migrate must be a no-op");
+        assert_eq!(s.terms, vec!["MongoDB"]);
+    }
+
+    #[test]
+    fn migration_mode_use_dictionary_false_sets_both_flags_false() {
+        let json = r#"{"modes": [
+            {"id":"mode-default-en","name":"D","language":{"kind":"exact","code":"en"},
+             "translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},
+             "use_dictionary":false,"use_snippets":true}
+        ], "default_mode_id": "mode-default-en"}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        // Absorb the seed-mode migrations too.
+        migrate(&mut s);
+        let mode = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        assert!(!mode.use_terms, "use_terms must be false");
+        assert!(!mode.use_corrections, "use_corrections must be false");
+    }
+
+    #[test]
+    fn migration_mode_use_dictionary_true_leaves_flags_true() {
+        let json = r#"{"modes": [
+            {"id":"mode-default-en","name":"D","language":{"kind":"exact","code":"en"},
+             "translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},
+             "use_dictionary":true,"use_snippets":true}
+        ], "default_mode_id": "mode-default-en"}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        migrate(&mut s);
+        let mode = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        assert!(mode.use_terms, "use_terms must remain true");
+        assert!(mode.use_corrections, "use_corrections must remain true");
     }
 
     #[test]
@@ -689,7 +820,7 @@ mod tests {
     #[test]
     fn migrate_adds_missing_seeds_to_existing_mode_default_en() {
         let json = r#"{
-            "modes": [{"id":"mode-default-en","name":"My Custom Name","language":{"kind":"exact","code":"en"},"translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_dictionary":true,"use_snippets":true}],
+            "modes": [{"id":"mode-default-en","name":"My Custom Name","language":{"kind":"exact","code":"en"},"translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_terms":true,"use_corrections":true,"use_snippets":true}],
             "default_mode_id": "mode-default-en"
         }"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();

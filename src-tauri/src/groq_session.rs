@@ -12,7 +12,7 @@
 //! owns the buffer, the timer, and the HTTP requests.
 
 use crate::config::{self, GroqModel};
-use crate::dictionary;
+use crate::terms;
 use crate::groq_audio::encode_to_flac_16k_mono;
 use crate::groq_session_state::{self, Action, Event, Phase, PollFailure, State};
 use crate::mode::ModeLanguage;
@@ -58,6 +58,7 @@ impl TranscriptionSession for GroqSession {
         format: AudioFormat,
         mut chunks: UnboundedReceiver<Vec<i16>>,
         language: ModeLanguage,
+        terms: Vec<String>,
     ) -> Result<(String, Duration), String> {
         let speak_start = Instant::now();
         let settings = config::load(&app);
@@ -68,7 +69,7 @@ impl TranscriptionSession for GroqSession {
             .ok_or_else(|| "Groq API key not configured".to_string())?;
         let model = groq_model_api_id(settings.groq.model);
         let language = language.as_code().map(str::to_string);
-        let prompt = dictionary::groq_prompt_hint(&settings.dictionary);
+        let prompt = terms::groq_prompt_hint(&terms);
         let show_live_preview = settings.show_live_preview;
 
         let buffered: Arc<Mutex<Vec<i16>>> = Arc::new(Mutex::new(Vec::new()));

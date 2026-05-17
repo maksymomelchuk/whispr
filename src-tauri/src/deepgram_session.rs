@@ -1,8 +1,9 @@
-use crate::config::{self, DictionaryEntry};
-use crate::dictionary::{self, apply_dictionary};
+use crate::config::{self, CorrectionEntry};
+use crate::corrections::apply_corrections;
 use crate::mode::ModeLanguage;
 use crate::recorder::AudioFormat;
 use crate::transcription_session::TranscriptionSession;
+use crate::terms;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 use std::time::{Duration, Instant};
@@ -37,6 +38,7 @@ impl TranscriptionSession for DeepgramSession {
         format: AudioFormat,
         mut chunks: UnboundedReceiver<Vec<i16>>,
         language: ModeLanguage,
+        terms: Vec<String>,
     ) -> Result<(String, Duration), String> {
         let speak_start = Instant::now();
         let settings = config::load(&app);
@@ -49,9 +51,9 @@ impl TranscriptionSession for DeepgramSession {
             .filter(|k| !k.is_empty())
             .ok_or_else(|| "API key not configured".to_string())?;
         let show_live_preview = settings.show_live_preview;
-        let dictionary = settings.dictionary.clone();
+        let corrections = settings.corrections.clone();
 
-        let url = build_ws_url(&language, format, &dictionary)?;
+        let url = build_ws_url(&language, format, &terms)?;
         let mut req = url
             .as_str()
             .into_client_request()
@@ -124,7 +126,7 @@ impl TranscriptionSession for DeepgramSession {
                                         let preview = compose_preview(
                                             &transcript_pieces,
                                             &current_interim,
-                                            &dictionary,
+                                            &corrections,
                                         );
                                         if preview != last_emitted {
                                             let _ = app.emit(TRANSCRIPT_PARTIAL_EVENT, &preview);
@@ -180,7 +182,7 @@ impl TranscriptionSession for DeepgramSession {
         let raw = raw.trim().to_string();
 
         if show_live_preview && !raw.is_empty() {
-            let final_preview = apply_dictionary(&raw, &dictionary);
+            let final_preview = apply_corrections(&raw, &corrections);
             if final_preview != last_emitted {
                 let _ = app.emit(TRANSCRIPT_PARTIAL_EVENT, &final_preview);
             }
@@ -193,7 +195,7 @@ impl TranscriptionSession for DeepgramSession {
 fn compose_preview(
     finals: &[String],
     interim: &str,
-    dictionary: &[DictionaryEntry],
+    corrections: &[CorrectionEntry],
 ) -> String {
     let mut preview = finals.join(" ");
     if !interim.is_empty() {
@@ -202,13 +204,13 @@ fn compose_preview(
         }
         preview.push_str(interim);
     }
-    apply_dictionary(&preview, dictionary)
+    apply_corrections(&preview, corrections)
 }
 
 fn build_ws_url(
     language: &ModeLanguage,
     format: AudioFormat,
-    dictionary: &[DictionaryEntry],
+    terms: &[String],
 ) -> Result<Url, String> {
     let mut url = Url::parse(DEEPGRAM_WS_BASE).map_err(|e| format!("base URL parse: {e}"))?;
     {
@@ -231,13 +233,13 @@ fn build_ws_url(
         q.append_pair("smart_format", "true");
         q.append_pair("numerals", "true");
     }
-    // Append dictionary `from` terms as keyterms, staying within the 4 KB
-    // total-URL ceiling. Budget is computed after all static params.
+    // Append terms as keyterms, staying within the 4 KB total-URL ceiling.
+    // Budget is computed after all static params.
     let remaining =
-        dictionary::DEEPGRAM_KEYTERM_BUDGET_BYTES.saturating_sub(url.as_str().len());
+        terms::DEEPGRAM_KEYTERM_BUDGET_BYTES.saturating_sub(url.as_str().len());
     {
         let mut q = url.query_pairs_mut();
-        for term in dictionary::deepgram_keyterms(dictionary, remaining) {
+        for term in terms::deepgram_keyterms(terms, remaining) {
             q.append_pair("keyterm", &term);
         }
     }
@@ -295,13 +297,6 @@ mod tests {
         }
     }
 
-    fn entry(from: &str, to: &str) -> DictionaryEntry {
-        DictionaryEntry {
-            from: from.to_string(),
-            to: to.to_string(),
-        }
-    }
-
     #[test]
     fn build_ws_url_hardcodes_smart_format_and_numerals() {
         let url = build_ws_url(&ModeLanguage::Auto, fmt(), &[]).unwrap();
@@ -335,26 +330,16 @@ mod tests {
     }
 
     #[test]
-    fn url_includes_dictionary_keyterms() {
-        let entries = vec![entry("MongoDB", "MongoDB"), entry("TypeScript", "TypeScript")];
-        let url = build_ws_url(&ModeLanguage::exact("en"), fmt(), &entries).unwrap();
+    fn url_includes_terms_as_keyterms() {
+        let terms: Vec<String> = vec!["MongoDB".into(), "TypeScript".into()];
+        let url = build_ws_url(&ModeLanguage::exact("en"), fmt(), &terms).unwrap();
         let q = url.query().unwrap_or("");
         assert!(q.contains("keyterm=MongoDB"), "missing MongoDB: {q}");
         assert!(q.contains("keyterm=TypeScript"), "missing TypeScript: {q}");
     }
 
     #[test]
-    fn url_excludes_punctuation_cue_entries() {
-        let entries = vec![entry("dot", "."), entry("MongoDB", "MongoDB"), entry("slash", "/")];
-        let url = build_ws_url(&ModeLanguage::exact("en"), fmt(), &entries).unwrap();
-        let q = url.query().unwrap_or("");
-        assert!(q.contains("keyterm=MongoDB"), "missing MongoDB: {q}");
-        assert!(!q.contains("keyterm=dot"), "unexpected dot: {q}");
-        assert!(!q.contains("keyterm=slash"), "unexpected slash: {q}");
-    }
-
-    #[test]
-    fn url_has_no_keyterms_for_empty_dictionary() {
+    fn url_has_no_keyterms_for_empty_terms() {
         let url = build_ws_url(&ModeLanguage::exact("en"), fmt(), &[]).unwrap();
         let q = url.query().unwrap_or("");
         assert!(!q.contains("keyterm="), "unexpected keyterm: {q}");
@@ -362,14 +347,27 @@ mod tests {
 
     #[test]
     fn url_respects_keyterm_budget() {
-        let entries: Vec<DictionaryEntry> = (0..200)
-            .map(|i| entry(&format!("term{i:05}"), &format!("term{i:05}")))
+        let terms: Vec<String> = (0..200)
+            .map(|i| format!("term{i:05}"))
             .collect();
-        let url = build_ws_url(&ModeLanguage::exact("en"), fmt(), &entries).unwrap();
+        let url = build_ws_url(&ModeLanguage::exact("en"), fmt(), &terms).unwrap();
         assert!(
-            url.as_str().len() <= dictionary::DEEPGRAM_KEYTERM_BUDGET_BYTES,
+            url.as_str().len() <= terms::DEEPGRAM_KEYTERM_BUDGET_BYTES,
             "URL too long: {} bytes",
             url.as_str().len()
         );
+    }
+
+    #[test]
+    fn correction_from_strings_never_reach_url_as_keyterms() {
+        // Correction entries (from != to) must not be passed as terms.
+        // This test verifies by passing only real Terms — no correction from-strings.
+        let terms: Vec<String> = vec!["MongoDB".into()];
+        let url = build_ws_url(&ModeLanguage::exact("en"), fmt(), &terms).unwrap();
+        let q = url.query().unwrap_or("");
+        assert!(q.contains("keyterm=MongoDB"));
+        // dot/slash are corrections and should not appear here at all
+        assert!(!q.contains("keyterm=dot"));
+        assert!(!q.contains("keyterm=slash"));
     }
 }

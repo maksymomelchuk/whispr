@@ -4,7 +4,7 @@ import type {
   ApiKeyValidation,
   CleanupAuthMode,
   CleanupStats,
-  DictionaryEntry,
+  CorrectionEntry,
   GroqSettings,
   HistoryEntry,
   HistoryLimit,
@@ -47,8 +47,11 @@ export const setShortcutCapturePaused = (paused: boolean) =>
 export const openTranslationSettings = () =>
   invoke<void>("open_translation_settings");
 
-export const setDictionary = (dictionary: DictionaryEntry[]) =>
-  invoke<void>("set_dictionary", { dictionary });
+export const setTerms = (terms: string[]) =>
+  invoke<void>("set_terms", { terms });
+
+export const setCorrections = (corrections: CorrectionEntry[]) =>
+  invoke<void>("set_corrections", { corrections });
 
 export const setSnippets = (snippets: Snippet[]) =>
   invoke<void>("set_snippets", { snippets });

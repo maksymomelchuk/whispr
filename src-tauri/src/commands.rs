@@ -1,7 +1,7 @@
 use crate::api_key_validation::{self, ApiKeyValidation};
 use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
 use crate::config::{
-    self, CleanupAuthMode, DictionaryEntry, GroqSettings, HotkeyBinding, Settings, SnippetEntry,
+    self, CleanupAuthMode, CorrectionEntry, GroqSettings, HotkeyBinding, Settings, SnippetEntry,
     TranscriptionProvider,
 };
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
@@ -21,7 +21,8 @@ pub struct SettingsView {
     pub deepgram_api_key_configured: bool,
     pub groq_api_key_configured: bool,
     pub hotkey_bindings: Vec<HotkeyBinding>,
-    pub dictionary: Vec<DictionaryEntry>,
+    pub terms: Vec<String>,
+    pub corrections: Vec<CorrectionEntry>,
     pub snippets: Vec<SnippetEntry>,
     pub groq: GroqSettings,
     pub modes: Vec<Mode>,
@@ -52,7 +53,8 @@ impl From<Settings> for SettingsView {
             deepgram_api_key_configured,
             groq_api_key_configured,
             hotkey_bindings: s.hotkey_bindings,
-            dictionary: s.dictionary,
+            terms: s.terms,
+            corrections: s.corrections,
             snippets: s.snippets,
             groq: s.groq,
             modes: s.modes,
@@ -162,11 +164,19 @@ pub fn set_shortcut_capture_paused(state: State<'_, AppState>, paused: bool) {
 }
 
 #[tauri::command]
-pub fn set_dictionary(
+pub fn set_terms(
     app: AppHandle,
-    dictionary: Vec<DictionaryEntry>,
+    terms: Vec<String>,
 ) -> Result<(), String> {
-    config::update(&app, |s| s.dictionary = dictionary)
+    config::update(&app, |s| s.terms = terms)
+}
+
+#[tauri::command]
+pub fn set_corrections(
+    app: AppHandle,
+    corrections: Vec<CorrectionEntry>,
+) -> Result<(), String> {
+    config::update(&app, |s| s.corrections = corrections)
 }
 
 #[tauri::command]

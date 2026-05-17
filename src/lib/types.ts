@@ -9,7 +9,7 @@ export interface HotkeyBinding {
   mode_id: string;
 }
 
-export interface DictionaryEntry {
+export interface CorrectionEntry {
   from: string;
   to: string;
 }
@@ -61,7 +61,8 @@ export interface Mode {
   language: ModeLanguage;
   translate: TranslateTarget;
   ai_cleanup: ModeCleanup;
-  use_dictionary: boolean;
+  use_terms: boolean;
+  use_corrections: boolean;
   use_snippets: boolean;
 }
 
@@ -72,7 +73,8 @@ export interface Settings {
   deepgram_api_key_configured: boolean;
   groq_api_key_configured: boolean;
   hotkey_bindings: HotkeyBinding[];
-  dictionary: DictionaryEntry[];
+  terms: string[];
+  corrections: CorrectionEntry[];
   snippets: Snippet[];
   groq: GroqSettings;
   modes: Mode[];
