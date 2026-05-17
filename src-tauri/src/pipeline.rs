@@ -5,6 +5,26 @@ use crate::mode::Mode;
 use crate::snippets::expand_snippets;
 use std::time::{Duration, Instant};
 
+/// Carries a user-visible notification produced by the translate or cleanup
+/// stages. `Focus` raises the main window (for errors requiring user action);
+/// `Flash` paints the overlay red briefly (transient soft warning).
+#[derive(Debug, PartialEq)]
+pub enum Notice {
+    None,
+    Flash(String),
+    Focus(String),
+}
+
+/// `Focus` beats `Flash` beats `None` — when both a transient warning and an
+/// actionable error are emitted, the actionable one wins.
+pub fn merge_notices(a: Notice, b: Notice) -> Notice {
+    match (a, b) {
+        (Notice::Focus(m), _) | (_, Notice::Focus(m)) => Notice::Focus(m),
+        (Notice::Flash(m), _) | (_, Notice::Flash(m)) => Notice::Flash(m),
+        _ => Notice::None,
+    }
+}
+
 /// Result of running the post-transcription pipeline stages.
 pub struct Outcome {
     /// Text that would be pasted (final text with a trailing space).
