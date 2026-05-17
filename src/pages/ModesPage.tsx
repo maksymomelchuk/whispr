@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   CaretRight,
@@ -6,13 +6,16 @@ import {
   PencilSimple,
   Star,
   Trash,
+  X,
 } from "@phosphor-icons/react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -49,7 +52,6 @@ import {
   updateMode,
 } from "../lib/api";
 import type { HotkeyBinding, Mode, ModeLanguage } from "../lib/types";
-import { Separator } from "@/components/ui/separator";
 
 import { ToggleRow } from "../components/ToggleRow";
 
@@ -269,16 +271,15 @@ function ModeEditor({
   mode,
   isNew,
   onClose,
-  onSaved,
+  onPersist,
 }: {
   mode: Mode;
   isNew: boolean;
   onClose: () => void;
-  onSaved: (mode: Mode) => void;
+  onPersist: (mode: Mode, wasNew: boolean) => void;
 }) {
   const [draft, setDraft] = useState<Mode>(mode);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const [promptOpen, setPromptOpen] = useState(
     !!mode.ai_cleanup.prompt_override,
   );
@@ -331,38 +332,81 @@ function ModeEditor({
   const setUseSnippets = (use_snippets: boolean) =>
     setDraft((d) => ({ ...d, use_snippets }));
 
-  const handleSave = async () => {
-    setSaving(true);
-    setError(null);
-    const normalized: Mode = {
+  const normalized = useMemo<Mode>(
+    () => ({
       ...draft,
       language: buildLanguage(langMode, restrictCodes),
       ai_cleanup: {
         ...draft.ai_cleanup,
         prompt_override: draft.ai_cleanup.prompt_override?.trim() || null,
       },
+    }),
+    [draft, langMode, restrictCodes],
+  );
+
+  const lastSavedRef = useRef<string>(JSON.stringify(normalized));
+  const normalizedRef = useRef<Mode>(normalized);
+  normalizedRef.current = normalized;
+  const onPersistRef = useRef(onPersist);
+  onPersistRef.current = onPersist;
+
+  useEffect(() => {
+    if (isNew) return;
+    if (normalized.name.trim().length === 0) return;
+    const serialized = JSON.stringify(normalized);
+    if (serialized === lastSavedRef.current) return;
+
+    const handle = setTimeout(() => {
+      lastSavedRef.current = serialized;
+      updateMode(normalized)
+        .then(() => onPersistRef.current(normalized, false))
+        .catch((e) => {
+          toast.error("Couldn't save mode", { description: String(e) });
+        });
+    }, 450);
+
+    return () => clearTimeout(handle);
+  }, [normalized, isNew]);
+
+  // Flush pending edits if the sheet closes inside the 450ms debounce window.
+  useEffect(() => {
+    if (isNew) return;
+    return () => {
+      const current = normalizedRef.current;
+      if (current.name.trim().length === 0) return;
+      const serialized = JSON.stringify(current);
+      if (serialized === lastSavedRef.current) return;
+      lastSavedRef.current = serialized;
+      updateMode(current)
+        .then(() => onPersistRef.current(current, false))
+        .catch((e) => {
+          toast.error("Couldn't save mode", { description: String(e) });
+        });
     };
+  }, [isNew]);
+
+  const handleCreate = async () => {
+    setCreating(true);
     try {
-      if (isNew) {
-        await addMode(normalized);
-      } else {
-        await updateMode(normalized);
-      }
-      onSaved(normalized);
+      await addMode(normalized);
+      onPersistRef.current(normalized, true);
+      onClose();
     } catch (e) {
-      setError(String(e));
+      toast.error("Couldn't add mode", { description: String(e) });
     } finally {
-      setSaving(false);
+      setCreating(false);
     }
   };
 
   return (
     <>
-      <SheetHeader>
-        <SheetTitle>{isNew ? "New Mode" : "Edit Mode"}</SheetTitle>
+      <SheetHeader className="px-4 pt-4 pb-0">
+        <SheetTitle className="text-[15px]">
+          {isNew ? "New Mode" : "Edit Mode"}
+        </SheetTitle>
       </SheetHeader>
 
-      <div className="flex flex-col gap-4 px-4 overflow-y-auto flex-1">
+      <div className="flex flex-col gap-4 px-4 pb-6 overflow-y-auto flex-1">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="mode-name" className="text-[13px]">
             Name
@@ -378,79 +422,88 @@ function ModeEditor({
 
         <div className="flex flex-col gap-2">
           <Label className="text-[13px]">Spoken language</Label>
-          <label className="flex items-start gap-2.5 cursor-pointer">
-            <input
-              type="radio"
-              name={`lang-mode-${draft.id}`}
-              value="auto"
-              checked={langMode === "auto"}
-              onChange={() => setLangMode("auto")}
-              className="mt-0.5 shrink-0"
-            />
-            <div className="flex flex-col gap-0.5">
-              <span className="text-sm">Auto-detect all languages</span>
-              <span className="text-xs text-muted-foreground">
-                Let the engine detect the spoken language without restrictions.
-              </span>
-            </div>
-          </label>
-          <label className="flex items-start gap-2.5 cursor-pointer">
-            <input
-              type="radio"
-              name={`lang-mode-${draft.id}`}
-              value="restrict"
-              checked={langMode === "restrict"}
-              onChange={() => setLangMode("restrict")}
-              className="mt-0.5 shrink-0"
-            />
-            <div className="flex flex-col gap-1">
-              <span className="text-sm">Restrict detection to selected languages</span>
-              <span className="text-xs text-muted-foreground">
-                Improve detection by limiting it to one or more expected languages.
-              </span>
-              {langMode === "restrict" && (
-                <div className="flex flex-col gap-2 mt-1">
-                  <Select
-                    value=""
-                    onValueChange={(v) => { if (v) addLangCode(v); }}
-                  >
-                    <SelectTrigger size="sm" className="h-6 w-auto self-start px-2 text-xs">
-                      <SelectValue placeholder="+ Add language" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {LANGUAGES.filter(
-                        (l) => !restrictCodes.includes(l.code),
-                      ).map((l) => (
-                        <SelectItem key={l.code} value={l.code}>
-                          {l.flag} {l.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {restrictCodes.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {restrictCodes.map((code) => (
-                        <span
-                          key={code}
-                          className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium"
+          <RadioGroup
+            value={langMode}
+            onValueChange={(v) => setLangMode(v as "auto" | "restrict")}
+            className="gap-2"
+          >
+            <Label
+              htmlFor={`lang-auto-${draft.id}`}
+              className="flex items-start gap-2.5 cursor-pointer font-normal"
+            >
+              <RadioGroupItem
+                id={`lang-auto-${draft.id}`}
+                value="auto"
+                className="mt-0.5"
+              />
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[13px]">Auto-detect all languages</span>
+                <span className="text-xs text-muted-foreground">
+                  Let the engine detect the spoken language without restrictions.
+                </span>
+              </div>
+            </Label>
+            <Label
+              htmlFor={`lang-restrict-${draft.id}`}
+              className="flex items-start gap-2.5 cursor-pointer font-normal"
+            >
+              <RadioGroupItem
+                id={`lang-restrict-${draft.id}`}
+                value="restrict"
+                className="mt-0.5"
+              />
+              <div className="flex flex-col gap-1">
+                <span className="text-[13px]">
+                  Restrict detection to selected languages
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Improve detection by limiting it to one or more expected languages.
+                </span>
+                {langMode === "restrict" && (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                    <Select
+                      value=""
+                      onValueChange={(v) => {
+                        if (v) addLangCode(v);
+                      }}
+                    >
+                      <SelectTrigger
+                        size="sm"
+                        className="w-auto rounded-full border-dashed px-2.5 py-1 h-auto text-xs font-medium text-muted-foreground shadow-none data-[placeholder]:text-muted-foreground"
+                      >
+                        <SelectValue placeholder="+ Add language" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {LANGUAGES.filter(
+                          (l) => !restrictCodes.includes(l.code),
+                        ).map((l) => (
+                          <SelectItem key={l.code} value={l.code}>
+                            {l.flag} {l.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {restrictCodes.map((code) => (
+                      <span
+                        key={code}
+                        className="inline-flex items-center gap-1 rounded-full bg-muted pl-2.5 pr-1.5 py-1 text-xs font-medium"
+                      >
+                        {langLabel(code)}
+                        <button
+                          type="button"
+                          onClick={() => removeLangCode(code)}
+                          className="inline-flex items-center justify-center rounded-full p-0.5 text-muted-foreground hover:text-foreground hover:bg-foreground/5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                          aria-label={`Remove ${langLabel(code)}`}
                         >
-                          {langLabel(code)}
-                          <button
-                            type="button"
-                            onClick={() => removeLangCode(code)}
-                            className="ml-0.5 text-muted-foreground hover:text-foreground leading-none"
-                            aria-label={`Remove ${code}`}
-                          >
-                            ✕
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </label>
+                          <X size={10} weight="bold" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </Label>
+          </RadioGroup>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -512,7 +565,12 @@ function ModeEditor({
               </CollapsibleContent>
             </Collapsible>
           )}
-          <Separator className="my-3.5" />
+          <div className="flex items-center gap-3 mt-3 mb-1">
+            <span className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
+              Augment
+            </span>
+            <div className="flex-1 h-px bg-border/60" />
+          </div>
           <ToggleRow
             id="terms"
             label="Use terms"
@@ -533,28 +591,19 @@ function ModeEditor({
           />
         </div>
 
-        {error && (
-          <p className="text-xs text-destructive">{error}</p>
-        )}
       </div>
 
-      <SheetFooter className="flex-row gap-2">
-        <Button
-          variant="outline"
-          onClick={onClose}
-          disabled={saving}
-          className="flex-1"
-        >
-          Cancel
-        </Button>
-        <Button
-          onClick={handleSave}
-          disabled={saving || !draft.name.trim()}
-          className="flex-1"
-        >
-          {saving ? "Saving…" : "Save"}
-        </Button>
-      </SheetFooter>
+      {isNew && (
+        <SheetFooter>
+          <Button
+            onClick={handleCreate}
+            disabled={creating || !draft.name.trim()}
+            className="w-full"
+          >
+            {creating ? "Creating…" : "Create mode"}
+          </Button>
+        </SheetFooter>
+      )}
     </>
   );
 }
@@ -571,17 +620,21 @@ export function ModesPage() {
   const openEditor = (mode: Mode, isNew = false) => setEditor({ mode, isNew });
   const closeEditor = () => setEditor(null);
 
-  const handleSaved = (saved: Mode) => {
-    const wasNew = editor?.isNew ?? false;
-    setSettings((s) => {
-      if (!s) return s;
-      if (wasNew) {
-        return { ...s, modes: [...s.modes, saved] };
-      }
-      return { ...s, modes: s.modes.map((m) => (m.id === saved.id ? saved : m)) };
-    });
-    closeEditor();
-  };
+  const handlePersist = useCallback(
+    (saved: Mode, wasNew: boolean) => {
+      setSettings((s) => {
+        if (!s) return s;
+        if (wasNew) {
+          return { ...s, modes: [...s.modes, saved] };
+        }
+        return {
+          ...s,
+          modes: s.modes.map((m) => (m.id === saved.id ? saved : m)),
+        };
+      });
+    },
+    [setSettings],
+  );
 
   const handleAddMode = () => {
     const newMode: Mode = {
@@ -670,7 +723,7 @@ export function ModesPage() {
               mode={editor.mode}
               isNew={editor.isNew}
               onClose={closeEditor}
-              onSaved={handleSaved}
+              onPersist={handlePersist}
             />
           )}
         </SheetContent>
