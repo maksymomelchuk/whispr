@@ -212,6 +212,7 @@ function EmptyModeCard({ onAdd }: { onAdd: () => void }) {
       }
       action="Add hotkey"
       onClick={onAdd}
+      className="py-3"
     />
   );
 }
@@ -224,7 +225,6 @@ export function HotkeysPage() {
   );
   const [error, setError] = useState<string | null>(null);
   const { flash, isFlashing } = useFlash();
-
 
   const bindings = settings.hotkey_bindings;
 
