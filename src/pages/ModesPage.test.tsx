@@ -1,6 +1,21 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { Mode } from "@/lib/types";
+
+import {
+  addMode as mockAddMode,
+  updateMode as mockUpdateMode,
+} from "../lib/api";
+import { ModeEditor } from "./ModesPage";
 
 vi.mock("@/components/ui/sheet", () => ({
   SheetHeader: ({ children, ...p }: any) => <div {...p}>{children}</div>,
@@ -21,11 +36,6 @@ vi.mock("../lib/api", () => ({
 vi.mock("sonner", () => ({
   toast: { error: vi.fn() },
 }));
-
-import { updateMode as mockUpdateMode, addMode as mockAddMode } from "../lib/api";
-import { toast } from "sonner";
-import type { Mode } from "@/lib/types";
-import { ModeEditor } from "./ModesPage";
 
 const MODE: Mode = {
   id: "mode-1",
@@ -51,7 +61,12 @@ function EditorWrapper({
   onPersist?: (m: Mode, wasNew: boolean) => void;
 }) {
   return (
-    <ModeEditor mode={mode} isNew={isNew} onClose={onClose} onPersist={onPersist} />
+    <ModeEditor
+      mode={mode}
+      isNew={isNew}
+      onClose={onClose}
+      onPersist={onPersist}
+    />
   );
 }
 
@@ -147,7 +162,9 @@ describe("ModeEditor – autosave", () => {
 
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "My Mode" } });
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "My Mode" },
+    });
 
     // Advance past debounce window — must NOT autosave for new modes.
     act(() => vi.advanceTimersByTime(450));
@@ -156,10 +173,14 @@ describe("ModeEditor – autosave", () => {
     // Restore real timers before the async click/create flow.
     vi.useRealTimers();
 
-    expect(screen.getByRole("button", { name: "Create mode" })).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Create mode" }),
+    ).not.toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: "Create mode" }));
 
-    await waitFor(() => expect(vi.mocked(mockAddMode)).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(vi.mocked(mockAddMode)).toHaveBeenCalledTimes(1),
+    );
     expect(onClose).toHaveBeenCalled();
   });
 });

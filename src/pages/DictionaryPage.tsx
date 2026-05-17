@@ -1,4 +1,4 @@
-import { Trash } from "@phosphor-icons/react";
+import { TrashIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -171,7 +171,7 @@ function CorrectionRow({
               onClick={onDelete}
               className="transition-colors text-muted-foreground/70 hover:text-destructive"
             >
-              <Trash size={15} />
+              <TrashIcon size={15} />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Delete</TooltipContent>
@@ -265,9 +265,7 @@ function EditorRow({
           </Button>
         </div>
       </div>
-      {error && (
-        <p className="text-help text-destructive px-0.5">{error}</p>
-      )}
+      {error && <p className="text-help text-destructive px-0.5">{error}</p>}
     </RowCard>
   );
 }
@@ -346,9 +344,7 @@ function CorrectionsTab({
       next = [...corrections, entry];
       flashKey = `c-${next.length - 1}`;
     } else {
-      next = corrections.map((c, idx) =>
-        idx === editing.index ? entry : c,
-      );
+      next = corrections.map((c, idx) => (idx === editing.index ? entry : c));
       flashKey = `c-${editing.index}`;
     }
     setSaveError(null);

@@ -1,6 +1,7 @@
-import { Keyboard, Microphone } from "@phosphor-icons/react";
+import { KeyboardIcon, MicrophoneIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 
+import { SectionHeader } from "@/components/SectionHeader";
 import { Button } from "@/components/ui/button";
 
 import { useSettings } from "../context/SettingsContext";
@@ -26,21 +27,19 @@ export function HomePage() {
   if (!settings) return null;
 
   return (
-    <div className="flex flex-col gap-10 px-10 pt-9 pb-12 max-w-3xl">
+    <div className="p-6 flex flex-col gap-8">
       {permissions && (
         <section className="flex flex-col gap-2">
-          <span className="font-mono text-eyebrow uppercase text-muted-foreground/80">
-            Permissions
-          </span>
+          <SectionHeader title="Permissions" />
           <ul className="flex flex-col">
             <PermissionRow
-              icon={Microphone}
+              icon={MicrophoneIcon}
               label="Microphone"
               granted={permissions.microphone}
               onGrant={openMicrophoneSettings}
             />
             <PermissionRow
-              icon={Keyboard}
+              icon={KeyboardIcon}
               label="Accessibility"
               granted={permissions.accessibility}
               onGrant={openAccessibilitySettings}

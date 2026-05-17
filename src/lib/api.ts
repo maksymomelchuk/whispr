@@ -118,6 +118,9 @@ export interface PermissionsStatus {
   accessibility: boolean;
 }
 
-export const checkPermissions = () => invoke<PermissionsStatus>("check_permissions");
-export const openMicrophoneSettings = () => invoke<void>("open_microphone_settings");
-export const openAccessibilitySettings = () => invoke<void>("open_accessibility_settings");
+export const checkPermissions = () =>
+  invoke<PermissionsStatus>("check_permissions");
+export const openMicrophoneSettings = () =>
+  invoke<void>("open_microphone_settings");
+export const openAccessibilitySettings = () =>
+  invoke<void>("open_accessibility_settings");

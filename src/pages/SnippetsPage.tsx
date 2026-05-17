@@ -1,6 +1,9 @@
+import { TrashIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
-import { Trash } from "@phosphor-icons/react";
 
+import { EmptyRowCard } from "@/components/EmptyRowCard";
+import { RowCard } from "@/components/RowCard";
+import { SectionHeader } from "@/components/SectionHeader";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,9 +14,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { EmptyRowCard } from "@/components/EmptyRowCard";
-import { RowCard } from "@/components/RowCard";
-import { SectionHeader } from "@/components/SectionHeader";
 
 import { useSettings } from "../context/SettingsContext";
 import { useFlash } from "../hooks/useFlash";
@@ -75,7 +75,7 @@ function SnippetRow({
         <Button
           variant="ghost"
           size="xs"
-          className="text-muted-foreground hover:text-foreground"
+          className="text-muted-foreground hover:text-foreground "
           onClick={onEdit}
         >
           Edit
@@ -89,7 +89,7 @@ function SnippetRow({
               onClick={onDelete}
               className="transition-colors text-muted-foreground/70 hover:text-destructive"
             >
-              <Trash size={15} />
+              <TrashIcon size={15} />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Delete</TooltipContent>
@@ -219,9 +219,7 @@ function EditorRow({
           </Button>
         </div>
       </div>
-      {error && (
-        <p className="text-help text-destructive px-0.5">{error}</p>
-      )}
+      {error && <p className="text-help text-destructive px-0.5">{error}</p>}
     </RowCard>
   );
 }
@@ -330,8 +328,7 @@ export function SnippetsPage() {
 
   const editingNew = editing.kind === "new";
   const editingId = editing.kind === "edit" ? editing.id : null;
-  const showTopLevelError =
-    saveError !== null && editing.kind === "none";
+  const showTopLevelError = saveError !== null && editing.kind === "none";
 
   return (
     <div className="p-6 flex flex-col gap-8">

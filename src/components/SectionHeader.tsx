@@ -1,12 +1,10 @@
 import type { ReactNode } from "react";
 
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 interface Props {
   title: ReactNode;
   index?: number | string | null;
-  isDefault?: boolean;
   badge?: ReactNode;
   trailing?: ReactNode;
   control?: ReactNode;
@@ -16,7 +14,6 @@ interface Props {
 export function SectionHeader({
   title,
   index,
-  isDefault,
   badge,
   trailing,
   control,
@@ -26,22 +23,18 @@ export function SectionHeader({
     typeof index === "number" ? String(index + 1).padStart(2, "0") : index;
 
   return (
-    <div
-      className={cn(
-        "flex items-baseline gap-3 pb-1.5 border-b border-border/40",
-        className,
-      )}
-    >
+    <div className={cn("flex items-start gap-3", className)}>
       {indexLabel != null && (
         <span className="font-mono text-eyebrow uppercase text-muted-foreground/55 tabular-nums">
           {indexLabel}
         </span>
       )}
-      <h3 className="text-section-title text-foreground">{title}</h3>
-      {isDefault && (
-        <Badge className="text-eyebrow uppercase px-1.5 py-0">Default</Badge>
-      )}
-      {badge}
+      <div className="flex gap-2 items-center">
+        <h3 className="font-mono text-eyebrow uppercase text-foreground">
+          {title}
+        </h3>
+        {badge}
+      </div>
       {trailing && (
         <span className="ml-auto text-help text-muted-foreground/70 tabular-nums">
           {trailing}

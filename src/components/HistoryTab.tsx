@@ -1,6 +1,9 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { EmptyPanel } from "@/components/EmptyPanel";
+import { RowCard } from "@/components/RowCard";
+import { SectionHeader } from "@/components/SectionHeader";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,16 +14,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EmptyPanel } from "@/components/EmptyPanel";
-import { RowCard } from "@/components/RowCard";
-import { SectionHeader } from "@/components/SectionHeader";
 import { cn } from "@/lib/utils";
 
 import { useConfirmAction } from "../hooks/useConfirmAction";
 import { useFlash } from "../hooks/useFlash";
 import {
-  clearHistory as persistClearHistory,
   getHistory,
+  clearHistory as persistClearHistory,
   setHistoryLimit as persistHistoryLimit,
 } from "../lib/api";
 import type { CleanupStatus, HistoryEntry, HistoryLimit } from "../lib/types";
@@ -84,8 +84,7 @@ function dayLabel(timestamp: number, now: number): string {
   return date.toLocaleDateString([], {
     month: "short",
     day: "numeric",
-    year:
-      date.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
+    year: date.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
   });
 }
 
@@ -126,8 +125,8 @@ export function HistoryTab({
   const seenIds = useRef<Set<string>>(new Set());
   const initialized = useRef(false);
 
-  const { confirming: confirmingClear, trigger: handleClear } = useConfirmAction(
-    async () => {
+  const { confirming: confirmingClear, trigger: handleClear } =
+    useConfirmAction(async () => {
       try {
         await persistClearHistory();
         setEntries([]);
@@ -135,8 +134,7 @@ export function HistoryTab({
       } catch (e) {
         console.error("clear history failed", e);
       }
-    },
-  );
+    });
 
   const handleLimitChange = async (value: string) => {
     const next = optionValueToLimit(value);
@@ -190,7 +188,8 @@ export function HistoryTab({
   }, []);
 
   const groups = useMemo(() => {
-    const buckets: { key: string; label: string; entries: HistoryEntry[] }[] = [];
+    const buckets: { key: string; label: string; entries: HistoryEntry[] }[] =
+      [];
     for (const e of entries) {
       const key = dayKey(e.timestamp);
       const existing = buckets.find((b) => b.key === key);
@@ -259,8 +258,7 @@ export function HistoryTab({
         </div>
       </div>
 
-      {entries.length === 0 &&
-        (isOff ? <DisabledState /> : <EmptyState />)}
+      {entries.length === 0 && (isOff ? <DisabledState /> : <EmptyState />)}
 
       {groups.map((group) => (
         <section key={group.key} className="flex flex-col gap-2.5">
@@ -335,17 +333,26 @@ function cleanupView(status: CleanupStatus): CleanupView {
     case "skipped_below_min_words":
       return {
         badge: { label: "skipped: too short", tone: "neutral" },
-        note: () => ({ text: "Skipped: below minimum word count.", tone: "info" }),
+        note: () => ({
+          text: "Skipped: below minimum word count.",
+          tone: "info",
+        }),
       };
     case "skipped_below_min_duration":
       return {
         badge: { label: "skipped: too brief", tone: "neutral" },
-        note: () => ({ text: "Skipped: below minimum duration.", tone: "info" }),
+        note: () => ({
+          text: "Skipped: below minimum duration.",
+          tone: "info",
+        }),
       };
     case "no_credential":
       return {
         badge: { label: "cleanup unconfigured", tone: "warn" },
-        note: () => ({ text: "Skipped: no credential configured.", tone: "error" }),
+        note: () => ({
+          text: "Skipped: no credential configured.",
+          tone: "error",
+        }),
       };
     case "failed_timeout":
       return {

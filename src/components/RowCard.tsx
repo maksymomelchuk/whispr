@@ -48,32 +48,34 @@ function rowClasses(
   );
 }
 
-export const RowCard = forwardRef<HTMLDivElement, BaseProps & HTMLAttributes<HTMLDivElement>>(
-  function RowCard(
-    {
-      tone = "neutral",
-      flashing = false,
-      interactive = true,
-      className,
-      children,
-      ...rest
-    },
-    ref,
-  ) {
-    return (
-      <div
-        ref={ref}
-        className={rowClasses(tone, flashing, interactive, className)}
-        {...rest}
-      >
-        {children}
-      </div>
-    );
+export const RowCard = forwardRef<
+  HTMLDivElement,
+  BaseProps & HTMLAttributes<HTMLDivElement>
+>(function RowCard(
+  {
+    tone = "neutral",
+    flashing = false,
+    interactive = true,
+    className,
+    children,
+    ...rest
   },
-);
+  ref,
+) {
+  return (
+    <div
+      ref={ref}
+      className={rowClasses(tone, flashing, interactive, className)}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+});
 
 interface ButtonProps
-  extends BaseProps,
+  extends
+    BaseProps,
     Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "children"> {}
 
 export const RowCardButton = forwardRef<HTMLButtonElement, ButtonProps>(

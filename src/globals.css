@@ -86,8 +86,8 @@ body {
   --text-form-label--font-weight: 500;
   --text-form-label--letter-spacing: 0.2px;
 
-  --text-help: 11px;
-  --text-help--line-height: 1.4;
+  --text-help: 10px;
+  --text-help--line-height: 1;
 
   --text-eyebrow: 10.5px;
   --text-eyebrow--line-height: 1;

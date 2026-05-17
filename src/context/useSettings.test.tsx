@@ -1,10 +1,10 @@
-import { act, renderHook } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
+import { act, renderHook } from "@testing-library/react";
 import { useCallback, useEffect, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SettingsContext, useSettings } from "./SettingsContext";
 import type { Settings } from "../lib/types";
+import { SettingsContext, useSettings } from "./SettingsContext";
 
 const MOCK_SETTINGS: Settings = {
   transcription_provider: "deepgram",

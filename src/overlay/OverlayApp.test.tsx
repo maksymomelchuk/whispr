@@ -1,5 +1,5 @@
-import { act, render } from "@testing-library/react";
 import { listen } from "@tauri-apps/api/event";
+import { act, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OverlayApp } from "./OverlayApp";
@@ -33,7 +33,9 @@ describe("OverlayApp", () => {
     expect(container.querySelector(".overlay-error-icon")).toBeInTheDocument();
     fire("ptt-pressed");
     expect(container.querySelector(".overlay-wave")).toBeInTheDocument();
-    expect(container.querySelector(".overlay-error-icon")).not.toBeInTheDocument();
+    expect(
+      container.querySelector(".overlay-error-icon"),
+    ).not.toBeInTheDocument();
     expect(container.querySelector(".overlay-spinner")).not.toBeInTheDocument();
   });
 

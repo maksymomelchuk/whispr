@@ -1,18 +1,22 @@
+import {
+  CaretRightIcon,
+  CopyIcon,
+  PencilSimpleIcon,
+  StarIcon,
+  TrashIcon,
+} from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  CaretRight,
-  Copy,
-  PencilSimple,
-  Star,
-  Trash,
-} from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -23,23 +27,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
   Sheet,
   SheetContent,
   SheetFooter,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+import { Chip } from "../components/Chip";
+import { RowCard } from "../components/RowCard";
+import { SectionHeader } from "../components/SectionHeader";
+import { ToggleRow } from "../components/ToggleRow";
 import { useSettings } from "../context/SettingsContext";
 import {
   addMode,
@@ -51,11 +55,6 @@ import {
   updateMode,
 } from "../lib/api";
 import type { HotkeyBinding, Mode, ModeLanguage } from "../lib/types";
-
-import { Chip } from "../components/Chip";
-import { RowCard } from "../components/RowCard";
-import { SectionHeader } from "../components/SectionHeader";
-import { ToggleRow } from "../components/ToggleRow";
 
 const LANGUAGES: { code: string; name: string; flag: string }[] = [
   { code: "en", name: "English", flag: "🇺🇸" },
@@ -115,7 +114,10 @@ const APPLE_TRANSLATE_LANGUAGES: [string, string][] = [
 ];
 
 function translateLanguageName(code: string): string {
-  return APPLE_TRANSLATE_LANGUAGES.find(([c]) => c === code)?.[1] ?? code.toUpperCase();
+  return (
+    APPLE_TRANSLATE_LANGUAGES.find(([c]) => c === code)?.[1] ??
+    code.toUpperCase()
+  );
 }
 
 function languageSummary(lang: ModeLanguage): string {
@@ -169,9 +171,7 @@ function ModeRow({
           <span className="text-sm font-semibold text-foreground">
             {mode.name}
           </span>
-          {isDefault && (
-            <Badge className="text-[10px]">Default</Badge>
-          )}
+          {isDefault && <Badge className="text-[10px]">Default</Badge>}
           {mode.ai_cleanup.enabled && (
             <Badge variant="neutral" className="text-[10px]">
               Cleanup
@@ -180,9 +180,7 @@ function ModeRow({
         </div>
         <span className="text-xs text-muted-foreground">
           {languageSummary(mode.language)}
-          {mode.translate.kind !== "off" && (
-            <> · {translateSummary(mode)}</>
-          )}
+          {mode.translate.kind !== "off" && <> · {translateSummary(mode)}</>}
           {bindings.length > 0 && (
             <> · {bindings.map((b) => formatShortcut(b.shortcut)).join(", ")}</>
           )}
@@ -199,7 +197,7 @@ function ModeRow({
                 aria-label="Set as default"
                 onClick={onSetDefault}
               >
-                <Star size={15} />
+                <StarIcon size={15} />
               </Button>
             </TooltipTrigger>
             <TooltipContent>Set as default</TooltipContent>
@@ -213,7 +211,7 @@ function ModeRow({
             disabled
             className="opacity-100 text-primary"
           >
-            <Star size={15} weight="fill" />
+            <StarIcon size={15} weight="fill" />
           </Button>
         )}
 
@@ -225,7 +223,7 @@ function ModeRow({
               aria-label="Edit"
               onClick={onEdit}
             >
-              <PencilSimple size={15} />
+              <PencilSimpleIcon size={15} />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Edit</TooltipContent>
@@ -239,7 +237,7 @@ function ModeRow({
               aria-label="Duplicate"
               onClick={onDuplicate}
             >
-              <Copy size={15} />
+              <CopyIcon size={15} />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Duplicate</TooltipContent>
@@ -256,13 +254,11 @@ function ModeRow({
                 onClick={onDelete}
                 className="text-muted-foreground/70 hover:text-destructive"
               >
-                <Trash size={15} />
+                <TrashIcon size={15} />
               </Button>
             </span>
           </TooltipTrigger>
-          {deleteTooltip && (
-            <TooltipContent>{deleteTooltip}</TooltipContent>
-          )}
+          {deleteTooltip && <TooltipContent>{deleteTooltip}</TooltipContent>}
         </Tooltip>
       </div>
     </RowCard>
@@ -297,7 +293,8 @@ export function ModeEditor({
   });
 
   const addLangCode = (code: string) => {
-    if (!restrictCodes.includes(code)) setRestrictCodes([...restrictCodes, code]);
+    if (!restrictCodes.includes(code))
+      setRestrictCodes([...restrictCodes, code]);
   };
   const removeLangCode = (code: string) => {
     const updated = restrictCodes.filter((c) => c !== code);
@@ -323,9 +320,7 @@ export function ModeEditor({
     setDraft((d) => ({
       ...d,
       translate:
-        value === "off"
-          ? { kind: "off" }
-          : { kind: "apple", target: value },
+        value === "off" ? { kind: "off" } : { kind: "apple", target: value },
     }));
   const setUseTerms = (use_terms: boolean) =>
     setDraft((d) => ({ ...d, use_terms }));
@@ -403,9 +398,7 @@ export function ModeEditor({
   return (
     <>
       <SheetHeader className="px-4 pt-4 pb-0">
-        <SheetTitle>
-          {isNew ? "New Mode" : "Edit Mode"}
-        </SheetTitle>
+        <SheetTitle>{isNew ? "New Mode" : "Edit Mode"}</SheetTitle>
       </SheetHeader>
 
       <div className="flex flex-col gap-4 px-4 pb-6 overflow-y-auto flex-1">
@@ -441,7 +434,8 @@ export function ModeEditor({
               <div className="flex flex-col gap-0.5">
                 <span className="text-[13px]">Auto-detect all languages</span>
                 <span className="text-xs text-muted-foreground">
-                  Let the engine detect the spoken language without restrictions.
+                  Let the engine detect the spoken language without
+                  restrictions.
                 </span>
               </div>
             </Label>
@@ -459,7 +453,8 @@ export function ModeEditor({
                   Restrict detection to selected languages
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  Improve detection by limiting it to one or more expected languages.
+                  Improve detection by limiting it to one or more expected
+                  languages.
                 </span>
                 {langMode === "restrict" && (
                   <div className="flex flex-wrap items-center gap-1.5 mt-1">
@@ -499,7 +494,9 @@ export function ModeEditor({
         <div className="flex flex-col gap-1.5">
           <Label className="text-[13px]">Translate to</Label>
           <Select
-            value={draft.translate.kind === "apple" ? draft.translate.target : "off"}
+            value={
+              draft.translate.kind === "apple" ? draft.translate.target : "off"
+            }
             onValueChange={setTranslate}
           >
             <SelectTrigger size="sm" className="w-full">
@@ -535,7 +532,7 @@ export function ModeEditor({
               className="flex flex-col gap-2"
             >
               <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-fit">
-                <CaretRight
+                <CaretRightIcon
                   size={10}
                   className={`transition-transform ${promptOpen ? "rotate-90" : ""}`}
                 />
@@ -550,7 +547,10 @@ export function ModeEditor({
                   spellCheck={false}
                 />
                 <p className="text-help text-muted-foreground leading-relaxed">
-                  The text inside <code className="font-mono">&lt;transcript&gt;</code> tags will be your dictation. Your prompt is responsible for treating it as data to transform, not instructions to execute.
+                  The text inside{" "}
+                  <code className="font-mono">&lt;transcript&gt;</code> tags
+                  will be your dictation. Your prompt is responsible for
+                  treating it as data to transform, not instructions to execute.
                 </p>
               </CollapsibleContent>
             </Collapsible>
@@ -580,7 +580,6 @@ export function ModeEditor({
             onCheckedChange={setUseSnippets}
           />
         </div>
-
       </div>
 
       {isNew && (
@@ -706,7 +705,10 @@ export function ModesPage() {
         </Button>
       </div>
 
-      <Sheet open={editor !== null} onOpenChange={(open) => !open && closeEditor()}>
+      <Sheet
+        open={editor !== null}
+        onOpenChange={(open) => !open && closeEditor()}
+      >
         <SheetContent side="right" className="flex flex-col gap-4">
           {editor && (
             <ModeEditor

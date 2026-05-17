@@ -1,5 +1,5 @@
+import { QuestionIcon } from "@phosphor-icons/react";
 import { useState } from "react";
-import { Question } from "@phosphor-icons/react";
 
 import {
   Tooltip,
@@ -35,7 +35,7 @@ export function InfoTip({ text }: Props) {
             }
           }}
         >
-          <Question size={13} weight="bold" />
+          <QuestionIcon size={13} weight="bold" />
         </span>
       </TooltipTrigger>
       <TooltipContent className="max-w-[220px] text-center leading-snug">

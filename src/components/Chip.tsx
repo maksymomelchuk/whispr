@@ -1,4 +1,4 @@
-import { X } from "@phosphor-icons/react";
+import { XIcon } from "@phosphor-icons/react";
 
 interface Props {
   label: string;
@@ -18,7 +18,7 @@ export function Chip({ label, onRemove }: Props) {
         className="inline-flex items-center justify-center p-1.5 rounded-sm text-primary/60 hover:text-destructive transition-colors"
         aria-label={`Remove ${label}`}
       >
-        <X size={10} weight="bold" />
+        <XIcon size={10} weight="bold" />
       </button>
     </span>
   );

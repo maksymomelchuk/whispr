@@ -3,10 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SettingsContext, useSettings } from "@/context/SettingsContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { SettingsContext, useSettings } from "@/context/SettingsContext";
 import type { Settings } from "@/lib/types";
 
+import {
+  setCorrections as mockSetCorrections,
+  setTerms as mockSetTerms,
+} from "../lib/api";
 import { DictionaryPage } from "./DictionaryPage";
 
 vi.mock("../lib/api", () => ({
@@ -18,11 +22,6 @@ vi.mock("../lib/api", () => ({
 vi.mock("sonner", () => ({
   toast: { error: vi.fn() },
 }));
-
-import {
-  setTerms as mockSetTerms,
-  setCorrections as mockSetCorrections,
-} from "../lib/api";
 
 const BASE: Settings = {
   transcription_provider: "deepgram",
@@ -168,9 +167,7 @@ describe("Corrections tab", () => {
       screen.getByRole("button", { name: "Delete correction" }),
     );
 
-    await waitFor(() =>
-      expect(mockSetCorrections).toHaveBeenCalledWith([]),
-    );
+    await waitFor(() => expect(mockSetCorrections).toHaveBeenCalledWith([]));
   });
 
   it("cancel: closes editor without persisting", async () => {

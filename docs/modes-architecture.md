@@ -1,6 +1,6 @@
 # Modes architecture
 
-This document defines the target shape of settings, the transcription pipeline, and the migration story for the Modes rework. It is the canonical reference for issues #30-#39. If anything in this doc contradicts an individual issue, the issue wins for *its* slice; this doc is the integration contract across slices.
+This document defines the target shape of settings, the transcription pipeline, and the migration story for the Modes rework. It is the canonical reference for issues #30-#39. If anything in this doc contradicts an individual issue, the issue wins for _its_ slice; this doc is the integration contract across slices.
 
 ## Why this rework exists
 
@@ -16,12 +16,12 @@ Today, language is duplicated across `DeepgramSettings` and `GroqSettings`. AI c
 ## Domain glossary
 
 - **Mode** — a named bundle of recording behavior: language, translate target, cleanup, dictionary/snippets opt-ins. Replaces the implicit "current settings combination." A user can have many; one is the default. Each mode can bind one or more hotkeys.
-- **Engine** — the global transcription provider configuration: which provider (Deepgram or Groq), which model, API key. Engine is *model-agnostic from the Mode's point of view*: Modes carry no provider-specific fields.
+- **Engine** — the global transcription provider configuration: which provider (Deepgram or Groq), which model, API key. Engine is _model-agnostic from the Mode's point of view_: Modes carry no provider-specific fields.
 - **Dictionary** — global list of `from → to` substitutions. Used twice: as a prompt hint to the engine (so the engine recognizes the term in the first place) and as a final post-substitution (so manual corrections always win).
 - **Snippets** — global list of `trigger → expansion` substitutions, with placeholders like `{{DATE}}`, `{{TIME}}`, `{{CLIPBOARD}}`. Applied during post-processing.
 - **Hotkey binding** — a pair `(shortcut, mode_id)`. A Mode can have multiple bindings (future-proofs tap/double-tap variants).
 
-Important naming: we use **Mode**, not Workflow. "Workflow" is reserved for a future higher-level concept (per-app/per-URL rules that pick a Mode). Mode is what the recording *does*; Workflow would be a rule that picks a Mode. The existing "Workflows" sidebar entry is a stub and gets renamed to "Modes" in slice #30.
+Important naming: we use **Mode**, not Workflow. "Workflow" is reserved for a future higher-level concept (per-app/per-URL rules that pick a Mode). Mode is what the recording _does_; Workflow would be a rule that picks a Mode. The existing "Workflows" sidebar entry is a stub and gets renamed to "Modes" in slice #30.
 
 ## Target schema
 
@@ -148,15 +148,15 @@ Punctuation-cue entries (e.g., the default `"dot" → "."`) are filtered out of 
 
 How Mode fields map to each provider's request:
 
-| Mode field | Deepgram | Groq |
-|---|---|---|
-| `language: Auto` | omit `language` param | omit `language` form field |
-| `language: Exact("xx")` | `language=xx` | `language=xx` |
-| `language: Hints([...])` | `language=multi` (codes informational) | omit `language` (Whisper auto-detects) |
-| `translate` | n/a — handled by pipeline | n/a — handled by pipeline |
+| Mode field                  | Deepgram                                           | Groq                                               |
+| --------------------------- | -------------------------------------------------- | -------------------------------------------------- |
+| `language: Auto`            | omit `language` param                              | omit `language` form field                         |
+| `language: Exact("xx")`     | `language=xx`                                      | `language=xx`                                      |
+| `language: Hints([...])`    | `language=multi` (codes informational)             | omit `language` (Whisper auto-detects)             |
+| `translate`                 | n/a — handled by pipeline                          | n/a — handled by pipeline                          |
 | dictionary terms (filtered) | `keyterm=<from>` per entry; URL budget ~4096 bytes | `prompt=Vocabulary: t1, t2, ...`; char budget ~800 |
-| smart_format / numerals | hardcoded `smart_format=true&numerals=true` | not applicable (Whisper handles natively) |
-| dictation | not sent | not applicable |
+| smart_format / numerals     | hardcoded `smart_format=true&numerals=true`        | not applicable (Whisper handles natively)          |
+| dictation                   | not sent                                           | not applicable                                     |
 
 Budget constants live in `dictionary.rs` (or wherever the helper sits):
 
@@ -169,12 +169,12 @@ const GROQ_PROMPT_BUDGET_CHARS: usize = 800;
 
 These four modes are seeded on first launch and on upgrade (idempotent — match by id constant, not name). User-edited copies are not overwritten; missing seeds are recreated.
 
-| Constant id | Name | language | translate | ai_cleanup |
-|---|---|---|---|---|
-| `mode-default-en` | Default English | `Exact("en")` | `Off` | `{ enabled: false }` |
-| `mode-cleaned-en` | Cleaned English | `Exact("en")` | `Off` | `{ enabled: true }` |
-| `mode-ukrainian` | Ukrainian | `Exact("uk")` | `Off` | `{ enabled: false }` |
-| `mode-ua-en` | UA → EN | `Exact("uk")` | `Apple { target: "en" }` *(disabled in UI until slice #37 lands; field present, picker reads "coming soon")* | `{ enabled: true }` |
+| Constant id       | Name            | language      | translate                                                                                                    | ai_cleanup           |
+| ----------------- | --------------- | ------------- | ------------------------------------------------------------------------------------------------------------ | -------------------- |
+| `mode-default-en` | Default English | `Exact("en")` | `Off`                                                                                                        | `{ enabled: false }` |
+| `mode-cleaned-en` | Cleaned English | `Exact("en")` | `Off`                                                                                                        | `{ enabled: true }`  |
+| `mode-ukrainian`  | Ukrainian       | `Exact("uk")` | `Off`                                                                                                        | `{ enabled: false }` |
+| `mode-ua-en`      | UA → EN         | `Exact("uk")` | `Apple { target: "en" }` _(disabled in UI until slice #37 lands; field present, picker reads "coming soon")_ | `{ enabled: true }`  |
 
 `default_mode_id = mode-default-en` after a fresh install. On upgrade, do not override the user's existing default; seed the others alongside whatever default they already have.
 
@@ -196,18 +196,18 @@ Migration must be idempotent: launching the app a second time on a migrated `set
 
 A rough guide to which files each slice touches most heavily. Use this to spot merge conflicts early.
 
-| Slice | Primary files |
-|---|---|
-| #30 Modes foundation | `config.rs`, `mode.rs` (new), `ptt.rs`, `lib/types.ts`, `pages/Modes*.tsx`, sidebar |
+| Slice                              | Primary files                                                                                              |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| #30 Modes foundation               | `config.rs`, `mode.rs` (new), `ptt.rs`, `lib/types.ts`, `pages/Modes*.tsx`, sidebar                        |
 | #31 Dictionary rename + order flip | `replacements.rs` → `dictionary.rs`, `ptt.rs`, `lib/types.ts`, `pages/Replacements*` → `pages/Dictionary*` |
-| #32 Drop Deepgram knobs | `config.rs`, `deepgram_session.rs`, `components/TranscriptionField.tsx`, `lib/types.ts` |
-| #33 Mode CRUD + seed | `pages/Modes*.tsx`, `mode.rs`, `config.rs` (seed helper) |
-| #34 Dictionary as engine hint | `dictionary.rs`, `deepgram_session.rs`, `groq_session.rs` |
-| #35 Snippets | `snippets.rs` (new), `ptt.rs`, `pages/Snippets*.tsx`, sidebar |
-| #36 Multi-language picker | `mode.rs` (enum), `deepgram_session.rs`, `groq_session.rs`, mode editor UI |
-| #37 Translation (HITL) | `translation.rs` (new) + Swift bridge, `ptt.rs`, mode editor UI |
-| #38 Hotkey-per-mode | `hotkeys.rs`, `config.rs`, `pages/Hotkeys*.tsx`, mode editor UI |
-| #39 Per-mode prompt override | `cleanup.rs`, `ptt.rs`, mode editor UI |
+| #32 Drop Deepgram knobs            | `config.rs`, `deepgram_session.rs`, `components/TranscriptionField.tsx`, `lib/types.ts`                    |
+| #33 Mode CRUD + seed               | `pages/Modes*.tsx`, `mode.rs`, `config.rs` (seed helper)                                                   |
+| #34 Dictionary as engine hint      | `dictionary.rs`, `deepgram_session.rs`, `groq_session.rs`                                                  |
+| #35 Snippets                       | `snippets.rs` (new), `ptt.rs`, `pages/Snippets*.tsx`, sidebar                                              |
+| #36 Multi-language picker          | `mode.rs` (enum), `deepgram_session.rs`, `groq_session.rs`, mode editor UI                                 |
+| #37 Translation (HITL)             | `translation.rs` (new) + Swift bridge, `ptt.rs`, mode editor UI                                            |
+| #38 Hotkey-per-mode                | `hotkeys.rs`, `config.rs`, `pages/Hotkeys*.tsx`, mode editor UI                                            |
+| #39 Per-mode prompt override       | `cleanup.rs`, `ptt.rs`, mode editor UI                                                                     |
 
 ## Explicitly out of scope
 
@@ -229,4 +229,4 @@ Where useful: TypeWhisper macOS source at `/Users/maksym/Developer/typewhisper-m
 
 - `TypeWhisper/Services/PostProcessingPipeline.swift` — priority-ordered post-processing.
 - `TypeWhisper/ViewModels/SettingsViewModel.swift` — the `LanguageSelection` enum (Auto / Exact / Hints / inheritGlobal) we're modeling `ModeLanguage` on.
-- `TypeWhisper/Models/Workflow.swift` — the broader Workflow concept we're explicitly *not* adopting (reserved for future).
+- `TypeWhisper/Models/Workflow.swift` — the broader Workflow concept we're explicitly _not_ adopting (reserved for future).

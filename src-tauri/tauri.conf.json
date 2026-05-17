@@ -40,9 +40,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": [
-      "../binaries/apple-translate"
-    ]
+    "externalBin": ["../binaries/apple-translate"]
   },
   "plugins": {
     "updater": {

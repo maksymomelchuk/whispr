@@ -166,7 +166,9 @@ export function AiCleanupField({
     <section data-slot="ai-cleanup" className="flex flex-col gap-2.5">
       <SectionHeader
         title="AI Cleanup"
-        badge={<InfoTip text="Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Adds ~500ms." />}
+        badge={
+          <InfoTip text="Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Adds ~500ms." />
+        }
         control={
           <>
             <span

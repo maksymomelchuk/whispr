@@ -1,15 +1,16 @@
+import { ChartBarIcon } from "@phosphor-icons/react";
 import { listen } from "@tauri-apps/api/event";
-import { ChartBar } from "@phosphor-icons/react";
-import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+
 import { useConfirmAction } from "../hooks/useConfirmAction";
 import {
-  clearStats as persistClearStats,
   getCleanupStats,
   getStats,
+  clearStats as persistClearStats,
 } from "../lib/api";
 import type { CleanupStats, StatsRow } from "../lib/types";
 import { EmptyPanel } from "./EmptyPanel";
@@ -142,8 +143,8 @@ export function StatsTab() {
     ];
   }, [cleanup]);
 
-  const { confirming: confirmingClear, trigger: handleClear } = useConfirmAction(
-    async () => {
+  const { confirming: confirmingClear, trigger: handleClear } =
+    useConfirmAction(async () => {
       try {
         await persistClearStats();
         setRows([]);
@@ -151,8 +152,7 @@ export function StatsTab() {
       } catch (e) {
         console.error("clear stats failed", e);
       }
-    },
-  );
+    });
 
   const refresh = () => {
     Promise.all([getStats(), getCleanupStats()])
@@ -206,19 +206,23 @@ export function StatsTab() {
     (cleanup.overall.input_tokens > 0 || cleanup.overall.output_tokens > 0);
 
   return (
-    <section className="flex flex-col gap-3.5">
+    <section className="flex flex-col gap-5">
       <SectionHeader
         title="Dictation stats"
-        badge={<InfoTip text="Words dictated and your effective words per minute." />}
-        control={hasAny ? (
-          <Button
-            variant={confirmingClear ? "destructive" : "ghost"}
-            size="sm"
-            onClick={handleClear}
-          >
-            {confirmingClear ? "Click to confirm" : "Clear stats"}
-          </Button>
-        ) : undefined}
+        badge={
+          <InfoTip text="Words dictated and your effective words per minute." />
+        }
+        control={
+          hasAny ? (
+            <Button
+              variant={confirmingClear ? "destructive" : "ghost"}
+              size="xs"
+              onClick={handleClear}
+            >
+              {confirmingClear ? "Click to confirm" : "Clear stats"}
+            </Button>
+          ) : undefined
+        }
       />
 
       {!hasAny && <EmptyState />}
@@ -259,7 +263,9 @@ export function StatsTab() {
         <>
           <SectionHeader
             title="AI Cleanup"
-            badge={<InfoTip text="Anthropic Claude Haiku 4.5 token usage and estimated cost." />}
+            badge={
+              <InfoTip text="Anthropic Claude Haiku 4.5 token usage and estimated cost." />
+            }
           />
           <ul className="m-0 list-none overflow-hidden rounded-lg border border-border bg-card p-0">
             {cleanupRows.map((row) => (
@@ -329,7 +335,7 @@ function Dot() {
 function EmptyState() {
   return (
     <EmptyPanel
-      icon={<ChartBar size={32} />}
+      icon={<ChartBarIcon size={32} />}
       title="No dictations yet"
       hint="Hold your shortcut and speak — your stats will start showing up here."
     />

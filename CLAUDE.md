@@ -9,6 +9,7 @@ Don't reference the current task, fix, or callers ("used by X", "added for the Y
 ## Examples
 
 Bad (WHAT — delete):
+
 ```rust
 // Increment the counter
 counter += 1;
@@ -21,6 +22,7 @@ fn user_name(...) -> String { ... }
 ```
 
 Bad (narration — delete):
+
 ```rust
 // Kick off paste first so the user sees text while the file I/O for
 // stats and history runs concurrently. paste_text spawns its own
@@ -28,6 +30,7 @@ Bad (narration — delete):
 ```
 
 Good (WHY — keep):
+
 ```rust
 // chunk by characters, not bytes — arbitrary UTF-8 byte splits would
 // corrupt multi-byte sequences when converted to UTF-16 downstream.

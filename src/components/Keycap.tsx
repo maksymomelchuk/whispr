@@ -39,7 +39,9 @@ export function Keycap({
   tone?: KeycapTone;
   size?: KeycapSize;
 }) {
-  return <kbd className={`${BASE} ${SIZES[size]} ${TONES[tone]}`}>{children}</kbd>;
+  return (
+    <kbd className={`${BASE} ${SIZES[size]} ${TONES[tone]}`}>{children}</kbd>
+  );
 }
 
 export function ShortcutKeycaps({

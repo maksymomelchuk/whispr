@@ -44,7 +44,10 @@ export function OptionRow({
     "flex items-start gap-2.5 rounded-md p-2 transition-colors hover:bg-secondary/60";
   if (htmlFor) {
     return (
-      <label htmlFor={htmlFor} className={cn(base, "cursor-pointer", className)}>
+      <label
+        htmlFor={htmlFor}
+        className={cn(base, "cursor-pointer", className)}
+      >
         {inner}
       </label>
     );

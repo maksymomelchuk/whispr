@@ -140,10 +140,7 @@ export function AppearanceField({
         />
       </Form>
 
-      <div
-        data-slot="form-item"
-        className="mt-3.5 flex flex-col gap-[6px]"
-      >
+      <div data-slot="form-item" className="mt-3.5 flex flex-col gap-[6px]">
         <span className="text-form-label text-muted-foreground">Accent</span>
         <div
           role="radiogroup"

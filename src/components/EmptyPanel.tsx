@@ -12,7 +12,9 @@ export function EmptyPanel({ icon, title, hint }: Props) {
       {icon && <span className="text-muted-foreground/50">{icon}</span>}
       <div className="text-md font-semibold text-muted-foreground">{title}</div>
       {hint && (
-        <div className="max-w-[280px] text-xs text-muted-foreground/70">{hint}</div>
+        <div className="max-w-[280px] text-xs text-muted-foreground/70">
+          {hint}
+        </div>
       )}
     </div>
   );

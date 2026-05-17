@@ -1,4 +1,4 @@
-import { CaretRight } from "@phosphor-icons/react";
+import { CaretRightIcon } from "@phosphor-icons/react";
 import { useState, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
@@ -42,7 +42,7 @@ export function CollapsibleCard({
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:rounded-sm",
         )}
       >
-        <CaretRight
+        <CaretRightIcon
           className={cn(
             "size-[10px] shrink-0 self-center text-muted-foreground/55",
             "transition-transform duration-base ease-[cubic-bezier(0.25,0.46,0.45,0.94)] motion-reduce:transition-none",

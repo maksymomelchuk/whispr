@@ -1,13 +1,13 @@
 import {
-  Book,
-  ChartBar,
-  ClockCounterClockwise,
-  Gear,
-  House,
-  Keyboard,
-  Lightning,
-  Microphone,
-  Sliders,
+  BookIcon,
+  ChartBarIcon,
+  ClockCounterClockwiseIcon,
+  GearIcon,
+  HouseIcon,
+  KeyboardIcon,
+  LightningIcon,
+  MicrophoneIcon,
+  SlidersIcon,
 } from "@phosphor-icons/react";
 import { useEffect } from "react";
 import {
@@ -53,28 +53,28 @@ interface NavSection {
 const NAV_SECTIONS: NavSection[] = [
   {
     label: "Workspace",
-    items: [{ label: "Home", icon: House, path: "/" }],
+    items: [{ label: "Home", icon: HouseIcon, path: "/" }],
   },
   {
     label: "Pipeline",
     items: [
-      { label: "Hotkeys", icon: Keyboard, path: "/hotkeys" },
-      { label: "Transcription", icon: Microphone, path: "/transcription" },
-      { label: "Dictionary", icon: Book, path: "/dictionary" },
-      { label: "Modes", icon: Sliders, path: "/modes" },
-      { label: "Snippets", icon: Lightning, path: "/snippets" },
+      { label: "Hotkeys", icon: KeyboardIcon, path: "/hotkeys" },
+      { label: "Transcription", icon: MicrophoneIcon, path: "/transcription" },
+      { label: "Dictionary", icon: BookIcon, path: "/dictionary" },
+      { label: "Modes", icon: SlidersIcon, path: "/modes" },
+      { label: "Snippets", icon: LightningIcon, path: "/snippets" },
     ],
   },
   {
     label: "Insights",
     items: [
-      { label: "History", icon: ClockCounterClockwise, path: "/history" },
-      { label: "Stats", icon: ChartBar, path: "/stats" },
+      { label: "History", icon: ClockCounterClockwiseIcon, path: "/history" },
+      { label: "Stats", icon: ChartBarIcon, path: "/stats" },
     ],
   },
   {
     label: "System",
-    items: [{ label: "General", icon: Gear, path: "/general" }],
+    items: [{ label: "General", icon: GearIcon, path: "/general" }],
   },
 ];
 

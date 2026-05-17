@@ -16,11 +16,11 @@ import {
   setAnthropicApiKey,
   setAnthropicOauthToken,
   setCleanupAuthMode,
+  setCleanupEnabled,
   setCleanupThresholds,
   setCorrections,
-  setDefaultMode,
-  setCleanupEnabled,
   setDeepgramApiKey,
+  setDefaultMode,
   setGroqApiKey,
   setGroqSettings,
   setHistoryLimit,
@@ -40,7 +40,11 @@ import {
 
 // Fixture: maps each Tauri command to its expected argument keys.
 // A rename in Rust or a payload shape change will cause the matching test to fail.
-const COMMANDS: Array<{ call: () => void; cmd: string; args?: Record<string, unknown> }> = [
+const COMMANDS: Array<{
+  call: () => void;
+  cmd: string;
+  args?: Record<string, unknown>;
+}> = [
   { call: () => getSettings(), cmd: "get_settings" },
   {
     call: () => setTranscriptionProvider("deepgram"),

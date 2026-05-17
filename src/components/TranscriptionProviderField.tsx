@@ -157,7 +157,9 @@ export function TranscriptionProviderField({
           />
           <div className="mt-3.5 flex flex-col gap-[6px]">
             <div className="inline-flex items-center gap-2">
-              <span className="text-form-label text-muted-foreground">Model</span>
+              <span className="text-form-label text-muted-foreground">
+                Model
+              </span>
               <InfoTip text="v3-turbo is cheapest and fastest. v3 is slightly more accurate." />
             </div>
             <Select

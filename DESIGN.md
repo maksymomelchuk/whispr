@@ -124,6 +124,7 @@ Color is allowed in exactly three situations: a single accent for the current ac
 The interface explicitly rejects the neon-on-black "hacker" theme called out in PRODUCT.md. Whispr is terminal-adjacent because it shares the audience's values — keyboard parity, semantic color, density without noise — not because it cosplays a TTY.
 
 **Key Characteristics:**
+
 - 220° cool-tinted neutrals; chroma never exceeds the cool-grey threshold.
 - Hairline 1px borders at 40–60% alpha; no thick strokes.
 - Density earned through hierarchy, not airy padding.
@@ -136,6 +137,7 @@ The interface explicitly rejects the neon-on-black "hacker" theme called out in 
 A cool-tinted greyscale (220° hue, 8–20% saturation) plus one user-selected accent. The neutrals are doing 90% of the work; the accent earns its keep by being rare.
 
 ### Primary
+
 - **Indigo Signal** (#3460e9, canonical `hsl(224 76% 56%)`): default accent. Used for primary buttons, the current selection, focus rings, and active state in the sidebar. In dark mode, lifts to `hsl(224 88% 66%)` so contrast against the cool-dark surface stays above AA.
 - **Violet Signal** (#7748e1, canonical `hsl(262 70% 58%)`): user-selectable accent.
 - **Coral Signal** (#e0612d, canonical `hsl(15 80% 55%)`): user-selectable accent.
@@ -143,9 +145,11 @@ A cool-tinted greyscale (220° hue, 8–20% saturation) plus one user-selected a
 - **Graphite Signal** (#272d36, canonical `hsl(220 16% 18%)`): "the disciplined choice" — the accent becomes a near-neutral and the focus ring carries the chromatic load instead.
 
 ### Destructive
+
 - **Crimson Stop** (#b91e1e, canonical `hsl(0 72% 42%)`): destructive actions, irreversible operations, validation errors. Never used for general emphasis.
 
 ### Neutral (light)
+
 - **Cool Ash 97** (#f6f7f9, `hsl(220 14% 97%)`): page background.
 - **Cool Ash 95** (#f1f2f4, `hsl(220 14% 95.5%)`): sidebar background — one tonal step cooler than the canvas to mark navigation territory.
 - **Cool Ash 94** (#eceef1, `hsl(220 12% 94%)`): muted surface, secondary buttons, toggle group rest state.
@@ -155,6 +159,7 @@ A cool-tinted greyscale (220° hue, 8–20% saturation) plus one user-selected a
 - **Pure White** (#ffffff): card surface — the only true white in the palette, used to lift a card out of the cool-ash field.
 
 ### Neutral (dark)
+
 - **Cool Char 9** (#15171a, `hsl(220 14% 9%)`): canvas.
 - **Cool Char 10.5** (#191c20, `hsl(220 14% 10.5%)`): sidebar — again, one step cooler than the canvas to separate territory.
 - **Cool Char 12.5** (#1c1f24, `hsl(220 14% 12.5%)`): card surface.
@@ -169,7 +174,7 @@ A cool-tinted greyscale (220° hue, 8–20% saturation) plus one user-selected a
 
 **The Semantic Color Rule.** Color must carry meaning: state (selected, focus, capture-armed), action (primary, destructive), or diff. Decorative color is forbidden. If a surface is "blue because settings UI tends to be blue", the surface is wrong.
 
-**The No Confetti Rule.** No green success toasts, no transient "Saved" alerts, no confirmation banners that pop in and fade out. When a value is saved, the control's new state IS the confirmation: input collapses, dirty indicator disappears, dropdown closes. Save *failures* go to a sonner toast at bottom-right. Successes stay silent.
+**The No Confetti Rule.** No green success toasts, no transient "Saved" alerts, no confirmation banners that pop in and fade out. When a value is saved, the control's new state IS the confirmation: input collapses, dirty indicator disappears, dropdown closes. Save _failures_ go to a sonner toast at bottom-right. Successes stay silent.
 
 ## 3. Typography
 
@@ -194,7 +199,7 @@ Base size is 14px / line-height 1.4, set on `<body>`. Scale ratio is tight — 1
 
 **The Mono Discipline Rule.** `SF Mono` is reserved for keyboard shortcuts, file/identifier strings, masked credentials, and numerics that need to align in columns. It is forbidden for headings, body copy, button labels, or anything that wants to "look technical". Mono is a tool, not a vibe.
 
-**The Tight Scale Rule.** Steps between sizes never exceed 1.6×, and most are closer to 1.1×. The page hierarchy is achieved through *weight* and *color* contrast as much as *size*. A 22px title and 14px section header look different because the title is 600/foreground and the section is 600/foreground-with-a-rule-under-it — not because of dramatic size contrast.
+**The Tight Scale Rule.** Steps between sizes never exceed 1.6×, and most are closer to 1.1×. The page hierarchy is achieved through _weight_ and _color_ contrast as much as _size_. A 22px title and 14px section header look different because the title is 600/foreground and the section is 600/foreground-with-a-rule-under-it — not because of dramatic size contrast.
 
 ## 4. Elevation
 
@@ -219,6 +224,7 @@ The system is **flat by default**. Depth is conveyed through three mechanisms, i
 ## 5. Components
 
 ### Buttons
+
 - **Shape:** rounded-md (6.4px / `0.4rem`). Never pill (only the Switch uses pill). Never sharp-cornered.
 - **Primary:** background = current accent (default Indigo Signal #3460e9), white text. `h-9 px-4`, 36px tall. Hover darkens to 90% lightness in the same hue. Disabled = 50% opacity, no color change.
 - **Outline:** background = card, 1px border = input stroke (#dce0e6), foreground text. Used for `Replace` in CredentialField, dialog secondary actions.
@@ -227,6 +233,7 @@ The system is **flat by default**. Depth is conveyed through three mechanisms, i
 - **Focus:** 3px ring at 50% accent alpha, slight border shift to ring color. Visible always — never `outline: none`.
 
 ### Inputs / Fields
+
 - **Shape:** rounded-md, `h-9 px-3 py-1`. 1px border at `input` stroke color.
 - **Focus:** 3px ring at 50% accent alpha. The border itself shifts to the ring color so the affordance reads at any zoom.
 - **Error:** border becomes destructive, ring shifts to destructive @ 20% alpha. `FormMessage` renders below the input at 11px in destructive color.
@@ -237,32 +244,37 @@ The system is **flat by default**. Depth is conveyed through three mechanisms, i
 
 The credential UX is documented because it is the most repeated pattern in the settings surface and was previously the source of the most confusion. It governs API keys, OAuth tokens, and any secret-string input.
 
-- **Configured rest state:** the input is *not visible*. In its place sits a 36px-tall masked field showing twelve `•` characters in mono at 55% alpha, flanked by an outline `Replace` button and a ghost `Remove` button. The mask is the affordance — nothing announces "Configured" in words or color.
+- **Configured rest state:** the input is _not visible_. In its place sits a 36px-tall masked field showing twelve `•` characters in mono at 55% alpha, flanked by an outline `Replace` button and a ghost `Remove` button. The mask is the affordance — nothing announces "Configured" in words or color.
 - **Editing state:** `Replace` swaps the mask for a real password input + `Save` + ghost `Cancel`. Esc cancels. Input autofocuses.
 - **Not-configured state:** input is shown directly, with `Save` and no Cancel.
 - **Validation:** on blur, the persisted `validate` function is called. While checking, an 11px muted caption reads "Checking key…". Invalid results render under the input as a destructive FormMessage.
 - **Save success:** the field collapses back to the masked rest state. No alert, no toast, no green text. The collapse is the confirmation.
 
 ### Toggle Row
+
 - **Layout:** label on the left (13px, foreground), Switch on the right.
 - **Switch:** Radix Switch; pill-shaped track. Unchecked = `input` neutral; checked = current accent. 4.6mm tall on the default size — small but tappable on macOS.
 - **Stacked rows** receive a 1px top border at the `border` color when they follow another `[data-slot="toggle-row"]` or a `form-item`, via a CSS adjacent-sibling rule in `globals.css`. This is the only place the system uses a sibling rule for layout — it's how toggle-only sections get their rhythm without each row carrying a border.
 
 ### Section Card
+
 - **No frame.** A section is a `<section>` with a 14px/600 title, an optional info tooltip, and an optional trailing badge — separated from its content by a 1px bottom border at 40% alpha. No card, no shadow, no panel. The section is defined by the rule under the title.
 
 ### RowCard
+
 - **Used for:** repeating list rows that need to be tappable as a unit (hotkey bindings, modes, snippets).
 - **Shape:** rounded-[10px], 1px border, `shadow-xs`. Hover lifts to ring-tinted border + `shadow-sm`. Padding `pl-3 pr-2 py-2.5`.
 - **Tones:** `neutral` (default), `destructive` (red-tinted border + bg), `accent` (ring-tinted border + bg, used for "currently held" hotkey), `dashed` (border-dashed, used for "+ Add" affordances).
 
 ### Sidebar Navigation
+
 - **Background:** one tonal step cooler than the canvas.
 - **Item:** 32px tall, left-aligned icon (15px) + 13px label + right-aligned ⌘N keycap.
 - **Keycap:** mono 10.5px, 0% opacity at rest, 100% on row hover or row active. Active items show their keycap permanently so the user is reminded which shortcut they're already using.
 - **Section labels:** mono 10px, uppercase, 0.16em tracking, 60% alpha. Hidden when the sidebar collapses to icon-only.
 
 ### Toaster (error surface)
+
 - **Position:** bottom-right.
 - **Width:** content-sized.
 - **Style:** background card, 1px border, `shadow-lg`. Title in foreground, description in muted-foreground at 12px. Errors get destructive-tinted background and border at 10%/30% alpha.
@@ -270,23 +282,25 @@ The credential UX is documented because it is the most repeated pattern in the s
 
 ### Named Rules
 
-**The Configured-Collapse Rule.** Any field that stores a secret defaults to a masked-rest state when configured. The input is removed from the page, not just hidden via `type="password"`. A user looking at a settings screen with three credentials should see *no input boxes at all* — three masked rests, three `Replace` buttons.
+**The Configured-Collapse Rule.** Any field that stores a secret defaults to a masked-rest state when configured. The input is removed from the page, not just hidden via `type="password"`. A user looking at a settings screen with three credentials should see _no input boxes at all_ — three masked rests, three `Replace` buttons.
 
 **The Inline Affordance Rule.** Action buttons live next to the control they act on — `Save` is to the right of the input, not at the bottom of a section. Section-level Save buttons are forbidden because they ask the user to scan back and forth to figure out what they're committing.
 
 ## 6. Do's and Don'ts
 
 ### Do:
+
 - **Do** use one accent at a time. Indigo by default; user can pick violet, coral, emerald, or graphite. The accent is used for primary actions, focus rings, and current-selection — nothing else.
 - **Do** keep neutrals tinted to 220° hue at 8–14% saturation. A "pure" grey looks alien against the rest of the surface.
 - **Do** render section breaks with a 1px bottom border at 40% alpha under the title. Hierarchy comes from the rule, not from a frame.
 - **Do** collapse credential fields to a masked rest state once configured. The mask is the confirmation.
-- **Do** route save *failures* to the sonner toast at bottom-right. Errors are loud; successes are silent.
+- **Do** route save _failures_ to the sonner toast at bottom-right. Errors are loud; successes are silent.
 - **Do** keep the focus ring visible at all times — 3px at 50% accent alpha. Power users navigate by keyboard.
 - **Do** use `SF Mono` only for keyboard shortcuts, identifier strings, masked credentials, and column-aligned numerics.
 - **Do** earn density. Toggle rows are 2px padding tall. Section gaps are 32px. The contrast between row-density and section-spacing is the rhythm.
 
 ### Don't:
+
 - **Don't** ship the neon-on-black "hacker" theme PRODUCT.md explicitly rejects. Terminal-green on pitch-black, scanline overlays, cyberpunk affectation — forbidden. We share the audience's values; we do not cosplay a TTY.
 - **Don't** use green "Saved" alerts, transient success toasts, or any confirmation that pops in and fades out. The control's state change IS the confirmation. If you find yourself adding `<Alert variant="success">`, delete it.
 - **Don't** stack Save buttons section by section. Use the inline pattern (Save next to the field) or autosave with a 450ms debounce.

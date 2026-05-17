@@ -1,6 +1,10 @@
-import { Trash } from "@phosphor-icons/react";
+import { TrashIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
 
+import { EmptyRowCard } from "@/components/EmptyRowCard";
+import { Keycap, ShortcutKeycaps } from "@/components/Keycap";
+import { RowCard } from "@/components/RowCard";
+import { SectionHeader } from "@/components/SectionHeader";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,10 +14,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { EmptyRowCard } from "@/components/EmptyRowCard";
-import { Keycap, ShortcutKeycaps } from "@/components/Keycap";
-import { RowCard } from "@/components/RowCard";
-import { SectionHeader } from "@/components/SectionHeader";
 
 import { useSettings } from "../context/SettingsContext";
 import { useFlash } from "../hooks/useFlash";
@@ -101,7 +101,7 @@ function BindingRow({
               onClick={onRemove}
               className="transition-colors text-muted-foreground/70 hover:text-destructive"
             >
-              <Trash size={15} />
+              <TrashIcon size={15} />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Remove</TooltipContent>
@@ -160,11 +160,7 @@ function RecordingRow({
   };
 
   return (
-    <RowCard
-      tone="accent"
-      interactive={false}
-      className="shadow-sm"
-    >
+    <RowCard tone="accent" interactive={false} className="shadow-sm">
       <div className="flex flex-1 min-w-0 items-center gap-3 flex-wrap">
         {captured ? (
           <ShortcutKeycaps shortcut={captured} tone="accent" />
@@ -183,20 +179,13 @@ function RecordingRow({
           </Tooltip>
         )}
         <label className="ml-1 flex items-center gap-1.5 text-help text-muted-foreground cursor-pointer select-none">
-          <Switch
-            checked={isDoubleTap}
-            onCheckedChange={setIsDoubleTap}
-          />
+          <Switch checked={isDoubleTap} onCheckedChange={setIsDoubleTap} />
           Double-tap
         </label>
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
-        <Button
-          variant="ghost"
-          size="xs"
-          onClick={onCancel}
-        >
+        <Button variant="ghost" size="xs" onClick={onCancel}>
           Cancel
         </Button>
         <Button
@@ -299,7 +288,6 @@ export function HotkeysPage() {
 
       {settings.modes.map((mode, modeIdx) => {
         const rows = modeBindings(mode);
-        const isDefault = mode.id === settings.default_mode_id;
         const isRecordingForThisMode = recorderTarget?.modeId === mode.id;
         const recordingExistingIndex =
           isRecordingForThisMode && recorderTarget?.bindingIndex !== null
@@ -314,11 +302,7 @@ export function HotkeysPage() {
 
         return (
           <section key={mode.id} className="flex flex-col gap-2.5">
-            <SectionHeader
-              index={modeIdx}
-              title={mode.name}
-              isDefault={isDefault}
-            />
+            <SectionHeader index={modeIdx} title={mode.name} />
 
             {rows.length === 0 ? (
               recordingNewBinding ? (
@@ -358,9 +342,7 @@ export function HotkeysPage() {
                       conflict={hasConflict(bindings, index)}
                       armed={armed}
                       flashing={flashing}
-                      onEdit={() =>
-                        startRecording(index, binding.shortcut)
-                      }
+                      onEdit={() => startRecording(index, binding.shortcut)}
                       onRemove={() => handleRemove(index)}
                     />
                   );

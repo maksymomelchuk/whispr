@@ -10,7 +10,10 @@ export function UpdateBanner() {
 
   if (state.status === "error") {
     return (
-      <Alert variant="destructive" className="rounded-none border-x-0 border-t-0">
+      <Alert
+        variant="destructive"
+        className="rounded-none border-x-0 border-t-0"
+      >
         <AlertDescription>Update failed: {state.message}</AlertDescription>
       </Alert>
     );
@@ -28,7 +31,8 @@ export function UpdateBanner() {
   return (
     <Alert className="flex items-center gap-2 rounded-none border-x-0 border-t-0">
       <AlertDescription className="flex-1">
-        Update available (<span className="font-variant-numeric-tabular">v{version}</span>)
+        Update available (
+        <span className="font-variant-numeric-tabular">v{version}</span>)
       </AlertDescription>
       <Button size="sm" className="ml-auto" onClick={installAndRestart}>
         Install &amp; restart
