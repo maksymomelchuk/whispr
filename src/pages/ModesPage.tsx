@@ -324,8 +324,10 @@ function ModeEditor({
           ? { kind: "off" }
           : { kind: "apple", target: value },
     }));
-  const setUseDictionary = (use_dictionary: boolean) =>
-    setDraft((d) => ({ ...d, use_dictionary }));
+  const setUseTerms = (use_terms: boolean) =>
+    setDraft((d) => ({ ...d, use_terms }));
+  const setUseCorrections = (use_corrections: boolean) =>
+    setDraft((d) => ({ ...d, use_corrections }));
   const setUseSnippets = (use_snippets: boolean) =>
     setDraft((d) => ({ ...d, use_snippets }));
 
@@ -512,10 +514,16 @@ function ModeEditor({
           )}
           <Separator className="my-3.5" />
           <ToggleRow
-            id="dictionary"
-            label="Use dictionary"
-            checked={draft.use_dictionary}
-            onCheckedChange={setUseDictionary}
+            id="terms"
+            label="Use terms"
+            checked={draft.use_terms}
+            onCheckedChange={setUseTerms}
+          />
+          <ToggleRow
+            id="corrections"
+            label="Use corrections"
+            checked={draft.use_corrections}
+            onCheckedChange={setUseCorrections}
           />
           <ToggleRow
             id="snippets"
@@ -583,7 +591,8 @@ export function ModesPage() {
       language: { kind: "exact", code: "en" },
       translate: { kind: "off" },
       ai_cleanup: { enabled: false, prompt_override: null },
-      use_dictionary: true,
+      use_terms: true,
+      use_corrections: true,
       use_snippets: true,
     };
     openEditor(newMode, true);

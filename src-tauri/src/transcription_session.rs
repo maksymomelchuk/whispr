@@ -13,7 +13,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 /// `Duration` is the user-perceived speak duration — PTT-down to
 /// chunk-channel close — and excludes any post-close drain the provider may
 /// perform to flush queued finals. The returned transcript is raw: the
-/// caller applies cleanup then dictionary so each pipeline stage stays
+/// caller applies cleanup then corrections so each pipeline stage stays
 /// observable in the history trace.
 pub trait TranscriptionSession {
     async fn run(
@@ -22,5 +22,6 @@ pub trait TranscriptionSession {
         format: AudioFormat,
         chunks: UnboundedReceiver<Vec<i16>>,
         language: ModeLanguage,
+        terms: Vec<String>,
     ) -> Result<(String, Duration), String>;
 }
