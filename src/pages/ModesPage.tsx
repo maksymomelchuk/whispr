@@ -267,7 +267,7 @@ function ModeRow({
   );
 }
 
-function ModeEditor({
+export function ModeEditor({
   mode,
   isNew,
   onClose,
