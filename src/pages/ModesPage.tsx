@@ -56,39 +56,39 @@ import { Chip } from "../components/Chip";
 import { RowCard } from "../components/RowCard";
 import { ToggleRow } from "../components/ToggleRow";
 
-const LANGUAGES: { code: string; name: string }[] = [
-  { code: "en", name: "English" },
-  { code: "uk", name: "Ukrainian" },
-  { code: "fr", name: "French" },
-  { code: "de", name: "German" },
-  { code: "es", name: "Spanish" },
-  { code: "it", name: "Italian" },
-  { code: "pt", name: "Portuguese" },
-  { code: "ru", name: "Russian" },
-  { code: "zh", name: "Chinese" },
-  { code: "ja", name: "Japanese" },
-  { code: "ko", name: "Korean" },
-  { code: "ar", name: "Arabic" },
-  { code: "pl", name: "Polish" },
-  { code: "nl", name: "Dutch" },
-  { code: "tr", name: "Turkish" },
-  { code: "sv", name: "Swedish" },
-  { code: "da", name: "Danish" },
-  { code: "fi", name: "Finnish" },
-  { code: "nb", name: "Norwegian" },
-  { code: "cs", name: "Czech" },
-  { code: "hu", name: "Hungarian" },
-  { code: "ro", name: "Romanian" },
-  { code: "hi", name: "Hindi" },
-  { code: "vi", name: "Vietnamese" },
-  { code: "th", name: "Thai" },
-  { code: "id", name: "Indonesian" },
-  { code: "he", name: "Hebrew" },
+const LANGUAGES: { code: string; name: string; flag: string }[] = [
+  { code: "en", name: "English", flag: "🇺🇸" },
+  { code: "uk", name: "Ukrainian", flag: "🇺🇦" },
+  { code: "fr", name: "French", flag: "🇫🇷" },
+  { code: "de", name: "German", flag: "🇩🇪" },
+  { code: "es", name: "Spanish", flag: "🇪🇸" },
+  { code: "it", name: "Italian", flag: "🇮🇹" },
+  { code: "pt", name: "Portuguese", flag: "🇵🇹" },
+  { code: "ru", name: "Russian", flag: "🇷🇺" },
+  { code: "zh", name: "Chinese", flag: "🇨🇳" },
+  { code: "ja", name: "Japanese", flag: "🇯🇵" },
+  { code: "ko", name: "Korean", flag: "🇰🇷" },
+  { code: "ar", name: "Arabic", flag: "🇸🇦" },
+  { code: "pl", name: "Polish", flag: "🇵🇱" },
+  { code: "nl", name: "Dutch", flag: "🇳🇱" },
+  { code: "tr", name: "Turkish", flag: "🇹🇷" },
+  { code: "sv", name: "Swedish", flag: "🇸🇪" },
+  { code: "da", name: "Danish", flag: "🇩🇰" },
+  { code: "fi", name: "Finnish", flag: "🇫🇮" },
+  { code: "nb", name: "Norwegian", flag: "🇳🇴" },
+  { code: "cs", name: "Czech", flag: "🇨🇿" },
+  { code: "hu", name: "Hungarian", flag: "🇭🇺" },
+  { code: "ro", name: "Romanian", flag: "🇷🇴" },
+  { code: "hi", name: "Hindi", flag: "🇮🇳" },
+  { code: "vi", name: "Vietnamese", flag: "🇻🇳" },
+  { code: "th", name: "Thai", flag: "🇹🇭" },
+  { code: "id", name: "Indonesian", flag: "🇮🇩" },
+  { code: "he", name: "Hebrew", flag: "🇮🇱" },
 ];
 
 function langLabel(code: string): string {
   const entry = LANGUAGES.find((l) => l.code === code);
-  return entry ? entry.name : code.toUpperCase();
+  return entry ? `${entry.flag} ${entry.name}` : code.toUpperCase();
 }
 
 const APPLE_TRANSLATE_LANGUAGES: [string, string][] = [
@@ -476,7 +476,7 @@ export function ModeEditor({
                           (l) => !restrictCodes.includes(l.code),
                         ).map((l) => (
                           <SelectItem key={l.code} value={l.code}>
-                            {l.name}
+                            {l.flag} {l.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
