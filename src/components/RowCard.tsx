@@ -94,7 +94,7 @@ export const RowCardButton = forwardRef<HTMLButtonElement, ButtonProps>(
         type="button"
         className={cn(
           rowClasses(tone, flashing, interactive, className),
-          "text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+          "text-left focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
         )}
         {...rest}
       >

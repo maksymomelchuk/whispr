@@ -186,7 +186,6 @@ function RecordingRow({
         )}
         <label className="ml-1 flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none">
           <Switch
-            size="sm"
             checked={isDoubleTap}
             onCheckedChange={setIsDoubleTap}
           />

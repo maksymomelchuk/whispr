@@ -60,13 +60,13 @@ export function TermChipInput({ value, onChange }: TermChipInputProps) {
   return (
     <div className="flex flex-col gap-2">
       <div
-        className="min-h-[40px] flex flex-wrap gap-1 items-center p-2 rounded-md bg-transparent border border-input shadow-xs cursor-text outline-none transition-[color,box-shadow] has-[input:focus-visible]:border-ring has-[input:focus-visible]:ring-[3px] has-[input:focus-visible]:ring-ring/50 dark:bg-input/30"
+        className="min-h-[40px] flex flex-wrap gap-1 items-center p-2 rounded-[10px] bg-card border border-border shadow-xs cursor-text outline-none transition-[color,box-shadow,border-color] has-[input:focus-visible]:border-ring has-[input:focus-visible]:ring-[3px] has-[input:focus-visible]:ring-ring/50"
         onClick={() => inputRef.current?.focus()}
       >
         {value.map((term) => (
           <span
             key={term}
-            className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md bg-secondary text-secondary-foreground text-[12px] leading-snug"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary/10 text-primary text-[12px] leading-snug ring-1 ring-inset ring-primary/15"
           >
             {term}
             <button
@@ -75,7 +75,7 @@ export function TermChipInput({ value, onChange }: TermChipInputProps) {
                 e.stopPropagation();
                 onChange(value.filter((t) => t !== term));
               }}
-              className="ml-0.5 text-muted-foreground hover:text-foreground transition-colors"
+              className="text-primary/60 hover:text-destructive transition-colors"
               aria-label={`Remove ${term}`}
             >
               <X size={10} weight="bold" />
@@ -89,7 +89,7 @@ export function TermChipInput({ value, onChange }: TermChipInputProps) {
           onKeyDown={handleKeyDown}
           onBlur={handleBlur}
           placeholder={value.length === 0 ? "Type a term and press Enter…" : ""}
-          className="flex-1 min-w-[120px] bg-transparent outline-none text-[13px] placeholder:text-muted-foreground/60"
+          className="flex-1 min-w-[120px] bg-transparent outline-none text-md placeholder:text-muted-foreground"
           spellCheck={false}
           autoComplete="off"
         />
@@ -101,7 +101,7 @@ export function TermChipInput({ value, onChange }: TermChipInputProps) {
             value={pasteText}
             onChange={(e) => setPasteText(e.target.value)}
             placeholder="Paste a list — one term per line, or comma-separated."
-            className="text-[13px] resize-none min-h-[80px]"
+            className="resize-none min-h-[80px] rounded-[10px] bg-card border-border dark:bg-card"
             autoFocus
             spellCheck={false}
           />
@@ -126,7 +126,7 @@ export function TermChipInput({ value, onChange }: TermChipInputProps) {
         <button
           type="button"
           onClick={() => setPasteMode(true)}
-          className="text-[11px] text-muted-foreground hover:text-foreground transition-colors w-fit"
+          className="text-[11px] text-muted-foreground hover:text-foreground transition-colors w-fit rounded-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           Paste list…
         </button>

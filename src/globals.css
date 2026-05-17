@@ -66,6 +66,10 @@ body {
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
+
+  /* DESIGN.md "Body / Row" workhorse — sits between text-xs (12px) and text-sm (14px). */
+  --text-md: 13px;
+  --text-md--line-height: 1.45;
 }
 
 /* ── Tinted neutrals — cool 220° hue, very low chroma ─────────────────────── */

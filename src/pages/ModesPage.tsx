@@ -500,7 +500,7 @@ function ModeEditor({
               </CollapsibleTrigger>
               <CollapsibleContent className="flex flex-col gap-2">
                 <Textarea
-                  className="resize-none min-h-[80px] text-[13px] leading-[1.5]"
+                  className="resize-none min-h-[80px] leading-[1.5]"
                   placeholder="Leave empty to use the default cleanup prompt."
                   value={draft.ai_cleanup.prompt_override ?? ""}
                   onChange={(e) => setPromptOverride(e.target.value)}

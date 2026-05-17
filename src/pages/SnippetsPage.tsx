@@ -166,7 +166,7 @@ function EditorRow({
           placeholder="trigger"
           spellCheck={false}
           autoComplete="off"
-          className="font-mono text-[13px] font-semibold h-8 max-w-[200px]"
+          className="font-mono font-semibold h-8 max-w-[200px]"
         />
         <span className="pt-1.5 text-muted-foreground/60 text-[12px]">→</span>
         <Textarea
