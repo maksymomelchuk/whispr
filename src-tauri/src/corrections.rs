@@ -60,8 +60,12 @@ pub fn apply_corrections(text: &str, entries: &[CorrectionEntry]) -> String {
     for &c in COMPACT {
         let middle = format!(" {} ", c);
         let tail = format!(" {}", c);
+        // head strips trailing space so chained replacements glue to the
+        // right neighbor too: "  -   -  help " → "-- help " → "--help ".
+        let head = format!("{} ", c);
         padded = padded.replace(&middle, &c.to_string());
         padded = padded.replace(&tail, &c.to_string());
+        padded = padded.replace(&head, &c.to_string());
     }
     for &c in CLING_LEFT {
         let middle = format!(" {} ", c);
@@ -114,6 +118,7 @@ pub fn find_word_match(haystack: &str, needle: &str, from: usize) -> Option<(usi
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     fn entry(from: &str, to: &str) -> CorrectionEntry {
         CorrectionEntry {
@@ -213,5 +218,36 @@ mod tests {
             &[entry("dash", "-")],
         );
         assert_eq!(out, "--help");
+    }
+
+    proptest! {
+        #[test]
+        fn apply_corrections_terminates_and_is_valid_utf8(
+            entries in proptest::collection::vec(
+                ("[a-z]{1,10}", "[a-z._/-]{0,15}").prop_map(|(from, to)| CorrectionEntry { from, to }),
+                0..8
+            ),
+            text in "[a-z ]{0,100}"
+        ) {
+            let result = apply_corrections(&text, &entries);
+            prop_assert!(std::str::from_utf8(result.as_bytes()).is_ok());
+        }
+
+        #[test]
+        fn find_word_match_slice_roundtrip(
+            haystack in "[a-z ]{0,50}",
+            needle in "[a-z]{1,10}",
+            from in 0usize..51usize
+        ) {
+            let from_clamped = from.min(haystack.len());
+            let is_wc = |c: char| c.is_alphanumeric() || c == '\'' || c == '-' || c == '_';
+            if let Some((start, end)) = find_word_match(&haystack, &needle, from_clamped) {
+                prop_assert_eq!(&haystack[start..end], needle.as_str());
+                let left_ok = haystack[..start].chars().next_back().map_or(true, |c| !is_wc(c));
+                let right_ok = haystack[end..].chars().next().map_or(true, |c| !is_wc(c));
+                prop_assert!(left_ok, "left boundary violated: {:?}", &haystack[..start]);
+                prop_assert!(right_ok, "right boundary violated: {:?}", &haystack[end..]);
+            }
+        }
     }
 }

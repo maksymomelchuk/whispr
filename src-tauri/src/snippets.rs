@@ -77,6 +77,7 @@ fn read_clipboard() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     fn entry(id: &str, trigger: &str, expansion: &str) -> SnippetEntry {
         SnippetEntry {
@@ -220,5 +221,23 @@ mod tests {
         assert!(!result.contains("{{TIME}}"));
         // Result should be "YYYY-MM-DD HH:MM"
         assert_eq!(result.len(), 16, "expected 16 chars (date + space + time), got: {result}");
+    }
+
+    proptest! {
+        #[test]
+        fn expand_snippets_terminates_and_is_valid_utf8(
+            entries in proptest::collection::vec(
+                ("[a-z]{1,10}", "[a-zA-Z ]{0,30}").prop_map(|(trigger, expansion)| SnippetEntry {
+                    id: "test".to_string(),
+                    trigger,
+                    expansion,
+                }),
+                0..8
+            ),
+            text in "[a-z ]{0,100}"
+        ) {
+            let result = expand_snippets(&text, &entries);
+            prop_assert!(std::str::from_utf8(result.as_bytes()).is_ok());
+        }
     }
 }

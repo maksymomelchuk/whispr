@@ -35,6 +35,9 @@ time = { version = "0.3", features = ["local-offset", "formatting", "parsing", "
 claxon = "0.4"
 flacenc = { version = "0.5", default-features = false }
 
+[dev-dependencies]
+proptest = "1"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 macos-accessibility-client = "0.0.1"
 core-foundation = "0.10"
