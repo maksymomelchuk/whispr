@@ -11,7 +11,9 @@
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",
     "check": "cd src-tauri && cargo build",
-    "test": "cd src-tauri && cargo test",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:rust": "cd src-tauri && cargo test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "sandcastle": "npx tsx .sandcastle/main.ts"
@@ -39,13 +41,18 @@
     "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
     "@tailwindcss/vite": "^4.3.0",
     "@tauri-apps/cli": "^2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^25.8.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "jsdom": "^29.1.1",
     "prettier": "^3.8.3",
     "tailwindcss": "^4.3.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.1.6"
   }
 }
