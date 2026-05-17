@@ -11,6 +11,20 @@ use whispr_lib::{
 /// clear "harness deadline exceeded" message rather than hanging the suite.
 pub const HARNESS_DEADLINE: Duration = Duration::from_secs(5);
 
+/// Runs `work` on a blocking thread, bounded by `HARNESS_DEADLINE`. Panics
+/// with a clear message if the deadline is exceeded or `work` panics, so a
+/// truly infinite loop in the pipeline fails the test cleanly instead of
+/// hanging the suite.
+pub async fn run_under_deadline<F>(work: F) -> Outcome
+where
+    F: FnOnce() -> Outcome + Send + 'static,
+{
+    tokio::time::timeout(HARNESS_DEADLINE, tokio::task::spawn_blocking(work))
+        .await
+        .expect("harness deadline exceeded")
+        .expect("spawn_blocking panicked")
+}
+
 /// Builder-style fixture that runs the post-transcription pipeline stages
 /// (snippet expansion, correction application, paste-text preparation)
 /// against a preset raw transcript without any Tauri or macOS dependencies.

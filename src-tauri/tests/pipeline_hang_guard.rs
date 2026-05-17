@@ -6,32 +6,23 @@
 /// caps iteration with `MAX_PASSES`, and this test proves the full pipeline
 /// honours that cap by completing within a hard deadline.
 ///
-/// The test wraps the pipeline call in `tokio::time::timeout` +
+/// The harness wraps each pipeline call in `tokio::time::timeout` +
 /// `spawn_blocking` so a truly infinite loop fails the test (via cancellation)
 /// rather than hanging the suite indefinitely.
 #[path = "common/mod.rs"]
 mod common;
 
-use common::{PipelineHarness, HARNESS_DEADLINE};
+use common::{run_under_deadline, PipelineHarness};
 use std::time::Duration;
 
 #[tokio::test]
 async fn identity_correction_terminates_within_deadline() {
-    let result = tokio::time::timeout(
-        HARNESS_DEADLINE,
-        tokio::task::spawn_blocking(|| {
-            PipelineHarness::new()
-                .with_corrections(&[("getmany", "Getmany")])
-                .run("I love Getmany.")
-        }),
-    )
+    let outcome = run_under_deadline(|| {
+        PipelineHarness::new()
+            .with_corrections(&[("getmany", "Getmany")])
+            .run("I love Getmany.")
+    })
     .await;
-
-    assert!(
-        result.is_ok(),
-        "harness deadline exceeded: pipeline with identity correction rule hung"
-    );
-    let outcome = result.unwrap().expect("spawn_blocking panicked");
 
     // The identity rule is filtered out by apply_corrections (case-folded
     // from == to), so the text is unchanged.
@@ -41,21 +32,12 @@ async fn identity_correction_terminates_within_deadline() {
 
 #[tokio::test]
 async fn identity_correction_with_mixed_case_input_terminates() {
-    let result = tokio::time::timeout(
-        HARNESS_DEADLINE,
-        tokio::task::spawn_blocking(|| {
-            PipelineHarness::new()
-                .with_corrections(&[("getmany", "Getmany"), ("hello", "Hello")])
-                .run("getmany hello world")
-        }),
-    )
+    let outcome = run_under_deadline(|| {
+        PipelineHarness::new()
+            .with_corrections(&[("getmany", "Getmany"), ("hello", "Hello")])
+            .run("getmany hello world")
+    })
     .await;
-
-    assert!(
-        result.is_ok(),
-        "harness deadline exceeded: pipeline with multiple identity rules hung"
-    );
-    let outcome = result.unwrap().expect("spawn_blocking panicked");
 
     // Both rules are case-folded identities and are filtered out.
     assert_eq!(outcome.history_entry.final_text, "getmany hello world");
@@ -63,55 +45,39 @@ async fn identity_correction_with_mixed_case_input_terminates() {
 
 #[tokio::test]
 async fn non_identity_correction_applies_and_terminates() {
-    let result = tokio::time::timeout(
-        HARNESS_DEADLINE,
-        tokio::task::spawn_blocking(|| {
-            PipelineHarness::new()
-                .with_corrections(&[("dash", "-")])
-                .run("dash dash help")
-        }),
-    )
+    let outcome = run_under_deadline(|| {
+        PipelineHarness::new()
+            .with_corrections(&[("dash", "-")])
+            .run("dash dash help")
+    })
     .await;
 
-    assert!(result.is_ok(), "harness deadline exceeded");
-    let outcome = result.unwrap().expect("spawn_blocking panicked");
     assert_eq!(outcome.history_entry.final_text, "--help");
     assert_eq!(outcome.pasted_text, "--help ");
 }
 
 #[tokio::test]
 async fn empty_corrections_list_passes_text_through() {
-    let result = tokio::time::timeout(
-        HARNESS_DEADLINE,
-        tokio::task::spawn_blocking(|| {
-            PipelineHarness::new()
-                .with_corrections(&[])
-                .run("some raw transcript")
-        }),
-    )
+    let outcome = run_under_deadline(|| {
+        PipelineHarness::new()
+            .with_corrections(&[])
+            .run("some raw transcript")
+    })
     .await;
 
-    assert!(result.is_ok(), "harness deadline exceeded");
-    let outcome = result.unwrap().expect("spawn_blocking panicked");
     assert_eq!(outcome.history_entry.final_text, "some raw transcript");
     assert_eq!(outcome.history_entry.raw_text, "some raw transcript");
 }
 
 #[tokio::test]
 async fn cleanup_output_flows_through_pipeline() {
-    let result = tokio::time::timeout(
-        HARNESS_DEADLINE,
-        tokio::task::spawn_blocking(|| {
-            PipelineHarness::new()
-                .with_corrections(&[("mongo", "MongoDB")])
-                .with_cleanup("I prefer Mongo")
-                .run("raw transcript that cleanup replaced")
-        }),
-    )
+    let outcome = run_under_deadline(|| {
+        PipelineHarness::new()
+            .with_corrections(&[("mongo", "MongoDB")])
+            .with_cleanup("I prefer Mongo")
+            .run("raw transcript that cleanup replaced")
+    })
     .await;
-
-    assert!(result.is_ok(), "harness deadline exceeded");
-    let outcome = result.unwrap().expect("spawn_blocking panicked");
 
     // raw_text is the original, replaced_text is from cleanup, final_text
     // has corrections applied on top.
@@ -122,20 +88,14 @@ async fn cleanup_output_flows_through_pipeline() {
 
 #[tokio::test]
 async fn elapsed_time_is_populated() {
-    let result = tokio::time::timeout(
-        HARNESS_DEADLINE,
-        tokio::task::spawn_blocking(|| {
-            PipelineHarness::new()
-                .with_corrections(&[("getmany", "Getmany")])
-                .run("I love Getmany.")
-        }),
-    )
+    let outcome = run_under_deadline(|| {
+        PipelineHarness::new()
+            .with_corrections(&[("getmany", "Getmany")])
+            .run("I love Getmany.")
+    })
     .await;
 
-    assert!(result.is_ok(), "harness deadline exceeded");
-    let outcome = result.unwrap().expect("spawn_blocking panicked");
-
-    // elapsed is measured by run_stages itself; it should be non-zero and
-    // well within a second for this trivial input.
+    // elapsed is measured by run_stages itself; it should be well within a
+    // second for this trivial input.
     assert!(outcome.elapsed < Duration::from_secs(1));
 }

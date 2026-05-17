@@ -13,10 +13,6 @@ pub struct Outcome {
     pub history_entry: HistoryEntry,
     /// Wall time from the start of `run_stages` to completion.
     pub elapsed: Duration,
-    /// Events that the production pipeline would have emitted; always empty
-    /// from `run_stages` itself (no AppHandle access). The harness may
-    /// populate this from other sources.
-    pub emitted_events: Vec<String>,
 }
 
 /// Pre-resolved output from the cleanup stage, fed into `run_stages`.
@@ -30,10 +26,6 @@ pub struct CleanupOutput {
 /// Runs the post-transcription pipeline stages — snippet expansion, correction
 /// application, and paste-text preparation — without any Tauri or macOS
 /// dependencies, so it can be exercised from integration tests on any platform.
-///
-/// Production `run_session` in `ptt.rs` calls this after resolving translation
-/// and cleanup. The `PipelineHarness` in integration tests calls it directly
-/// with preset inputs to exercise these stages in isolation.
 pub fn run_stages(
     raw_text: &str,
     speak_duration: Duration,
@@ -71,6 +63,5 @@ pub fn run_stages(
         pasted_text,
         history_entry,
         elapsed: start.elapsed(),
-        emitted_events: Vec::new(),
     }
 }

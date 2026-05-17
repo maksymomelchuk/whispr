@@ -504,7 +504,7 @@ async fn run_session(
 
     let notice = merge_notices(translate_notice, cleanup_notice);
 
-    let outcome = pipeline::run_stages(
+    let pipeline::Outcome { pasted_text, history_entry, .. } = pipeline::run_stages(
         &raw_text,
         speak_duration,
         active_mode,
@@ -514,13 +514,13 @@ async fn run_session(
 
     // paste_handle must complete before any notify_error: set_focus()
     // during the modifier-release wait would steal focus mid-paste.
-    let paste_handle = paste::paste_text(outcome.pasted_text.clone());
+    let paste_handle = paste::paste_text(pasted_text);
 
-    let words = outcome.history_entry.final_text.split_whitespace().count() as u64;
-    let seconds = (outcome.history_entry.speak_duration_ms / 1000) as u32;
+    let words = history_entry.final_text.split_whitespace().count() as u64;
+    let seconds = speak_duration.as_secs() as u32;
     stats::record(app, words, seconds);
 
-    match history::append(app, outcome.history_entry) {
+    match history::append(app, history_entry) {
         Ok(_) => {
             let _ = app.emit(HISTORY_UPDATED_EVENT, ());
         }
