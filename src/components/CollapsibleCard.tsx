@@ -45,7 +45,7 @@ export function CollapsibleCard({
         <CaretRight
           className={cn(
             "size-[10px] shrink-0 self-center text-muted-foreground/55",
-            "transition-transform duration-[180ms] ease-[cubic-bezier(0.25,0.46,0.45,0.94)] motion-reduce:transition-none",
+            "transition-transform duration-base ease-[cubic-bezier(0.25,0.46,0.45,0.94)] motion-reduce:transition-none",
             open && "rotate-90 text-muted-foreground",
           )}
           aria-hidden

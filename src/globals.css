@@ -101,6 +101,11 @@ body {
 
   --tracking-eyebrow: 0.14em;
   --tracking-kbd: 0;
+
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+  --duration-flash: 600ms;
 }
 
 /* ── Tinted neutrals — cool 220° hue, very low chroma ─────────────────────── */

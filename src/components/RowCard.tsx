@@ -43,7 +43,7 @@ function rowClasses(
     interactive && INTERACTIVE_TONES[tone],
     flashing
       ? "outline-ring/45"
-      : "outline-transparent motion-safe:duration-[600ms]",
+      : "outline-transparent motion-safe:duration-flash",
     extra,
   );
 }
