@@ -79,6 +79,7 @@ export interface Settings {
   groq: GroqSettings;
   modes: Mode[];
   default_mode_id: string;
+  ai_cleanup_enabled: boolean;
   ai_cleanup_auth_mode: CleanupAuthMode;
   ai_cleanup_key_configured: boolean;
   ai_cleanup_oauth_token_configured: boolean;

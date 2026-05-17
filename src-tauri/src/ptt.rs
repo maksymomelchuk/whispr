@@ -430,7 +430,7 @@ async fn run_session(
         .iter()
         .find(|m| m.id == mode_id)
         .unwrap_or_else(|| config::get_default_mode(&settings));
-    let mode_cleanup_enabled = active_mode.ai_cleanup.enabled;
+    let mode_cleanup_enabled = settings.ai_cleanup.enabled && active_mode.ai_cleanup.enabled;
     let mode_use_terms = active_mode.use_terms;
     let mode_translate = active_mode.translate.clone();
     let mode_language = active_mode.language.clone();

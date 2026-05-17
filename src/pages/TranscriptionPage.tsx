@@ -8,10 +8,6 @@ export function TranscriptionPage() {
 
   if (!settings) return null;
 
-  const defaultMode =
-    settings.modes.find((m) => m.id === settings.default_mode_id) ??
-    settings.modes[0];
-
   return (
     <div className="p-6 flex flex-col gap-8">
       <TranscriptionProviderField
@@ -37,20 +33,12 @@ export function TranscriptionPage() {
         }
       />
       <AiCleanupField
-        enabled={defaultMode?.ai_cleanup.enabled ?? false}
+        enabled={settings.ai_cleanup_enabled}
         authMode={settings.ai_cleanup_auth_mode}
         apiKeyConfigured={settings.ai_cleanup_key_configured}
         oauthTokenConfigured={settings.ai_cleanup_oauth_token_configured}
-        onEnabledChange={(enabled) =>
-          setSettings((s) => {
-            if (!s) return s;
-            const modes = s.modes.map((m) =>
-              m.id === s.default_mode_id
-                ? { ...m, ai_cleanup: { ...m.ai_cleanup, enabled } }
-                : m,
-            );
-            return { ...s, modes };
-          })
+        onEnabledChange={(ai_cleanup_enabled) =>
+          setSettings((s) => (s ? { ...s, ai_cleanup_enabled } : s))
         }
         onAuthModeChange={(ai_cleanup_auth_mode) =>
           setSettings((s) => (s ? { ...s, ai_cleanup_auth_mode } : s))

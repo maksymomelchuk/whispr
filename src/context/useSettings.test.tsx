@@ -17,6 +17,7 @@ const MOCK_SETTINGS: Settings = {
   groq: { model: "whisper_large_v3" },
   modes: [],
   default_mode_id: "default",
+  ai_cleanup_enabled: true,
   ai_cleanup_auth_mode: "api_key",
   ai_cleanup_key_configured: false,
   ai_cleanup_oauth_token_configured: false,

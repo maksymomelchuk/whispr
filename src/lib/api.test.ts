@@ -19,7 +19,7 @@ import {
   setCleanupThresholds,
   setCorrections,
   setDefaultMode,
-  setDefaultModeCleanupEnabled,
+  setCleanupEnabled,
   setDeepgramApiKey,
   setGroqApiKey,
   setGroqSettings,
@@ -99,8 +99,8 @@ const COMMANDS: Array<{ call: () => void; cmd: string; args?: Record<string, unk
     args: { snippets: [] },
   },
   {
-    call: () => setDefaultModeCleanupEnabled(true),
-    cmd: "set_default_mode_cleanup_enabled",
+    call: () => setCleanupEnabled(true),
+    cmd: "set_cleanup_enabled",
     args: { enabled: true },
   },
   {

@@ -56,8 +56,8 @@ export const setCorrections = (corrections: CorrectionEntry[]) =>
 export const setSnippets = (snippets: Snippet[]) =>
   invoke<void>("set_snippets", { snippets });
 
-export const setDefaultModeCleanupEnabled = (enabled: boolean) =>
-  invoke<void>("set_default_mode_cleanup_enabled", { enabled });
+export const setCleanupEnabled = (enabled: boolean) =>
+  invoke<void>("set_cleanup_enabled", { enabled });
 
 export const addMode = (mode: Mode) => invoke<void>("add_mode", { mode });
 

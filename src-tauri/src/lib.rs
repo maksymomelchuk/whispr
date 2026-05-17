@@ -157,7 +157,7 @@ pub fn run() {
             commands::set_terms,
             commands::set_corrections,
             commands::set_snippets,
-            commands::set_default_mode_cleanup_enabled,
+            commands::set_cleanup_enabled,
             commands::add_mode,
             commands::update_mode,
             commands::delete_mode,

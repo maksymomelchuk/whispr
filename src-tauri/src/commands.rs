@@ -27,6 +27,7 @@ pub struct SettingsView {
     pub groq: GroqSettings,
     pub modes: Vec<Mode>,
     pub default_mode_id: ModeId,
+    pub ai_cleanup_enabled: bool,
     pub ai_cleanup_auth_mode: CleanupAuthMode,
     pub ai_cleanup_key_configured: bool,
     pub ai_cleanup_oauth_token_configured: bool,
@@ -59,6 +60,7 @@ impl From<Settings> for SettingsView {
             groq: s.groq,
             modes: s.modes,
             default_mode_id: s.default_mode_id,
+            ai_cleanup_enabled: s.ai_cleanup.enabled,
             ai_cleanup_auth_mode: s.ai_cleanup.auth_mode,
             ai_cleanup_key_configured: s
                 .ai_cleanup
@@ -190,13 +192,8 @@ pub fn set_snippets(
 /// Sets `ai_cleanup.enabled` on the mode identified by `default_mode_id`.
 /// No-op if that mode is missing — migration guarantees one exists on load.
 #[tauri::command]
-pub fn set_default_mode_cleanup_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
-    config::update(&app, |s| {
-        let id = s.default_mode_id.clone();
-        if let Some(mode) = s.modes.iter_mut().find(|m| m.id == id) {
-            mode.ai_cleanup.enabled = enabled;
-        }
-    })
+pub fn set_cleanup_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
+    config::update(&app, |s| s.ai_cleanup.enabled = enabled)
 }
 
 #[tauri::command]

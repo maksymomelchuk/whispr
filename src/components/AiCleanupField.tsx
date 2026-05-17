@@ -21,7 +21,7 @@ import { usePersistedToggle } from "../hooks/usePersistedToggle";
 import {
   setAnthropicApiKey as persistApiKey,
   setCleanupAuthMode as persistAuthMode,
-  setDefaultModeCleanupEnabled as persistEnabled,
+  setCleanupEnabled as persistEnabled,
   setAnthropicOauthToken as persistOauthToken,
   setCleanupThresholds as persistThresholds,
 } from "../lib/api";

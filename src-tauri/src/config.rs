@@ -178,6 +178,10 @@ fn default_cleanup_min_duration_ms() -> u64 {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiCleanupSettings {
+    /// Global master switch. Per-mode `ai_cleanup.enabled` is the opt-in;
+    /// this gates the whole feature without touching every mode individually.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     #[serde(default)]
     pub auth_mode: CleanupAuthMode,
     #[serde(default)]
@@ -199,6 +203,7 @@ pub struct AiCleanupSettings {
 impl Default for AiCleanupSettings {
     fn default() -> Self {
         Self {
+            enabled: true,
             auth_mode: CleanupAuthMode::default(),
             anthropic_api_key: None,
             anthropic_oauth_token: None,
