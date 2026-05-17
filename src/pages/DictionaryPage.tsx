@@ -1,22 +1,18 @@
-import { useEffect, useState } from "react";
-
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Plus } from "@phosphor-icons/react";
+import { useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
+import { toast } from "sonner";
 import * as z from "zod";
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { SectionHeader } from "@/components/SectionHeader";
 import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-} from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 
+import { useSettings } from "../context/SettingsContext";
 import { setDictionary as persistDictionary } from "../lib/api";
 import type { DictionaryEntry } from "../lib/types";
-import { CollapsibleCard } from "./CollapsibleCard";
 
 const dictionarySchema = z.object({
   rows: z.array(z.object({ from: z.string(), to: z.string() })),
@@ -24,20 +20,13 @@ const dictionarySchema = z.object({
 
 type DictionaryFormValues = z.infer<typeof dictionarySchema>;
 
-interface Props {
-  initial: DictionaryEntry[];
-  onSaved: (dictionary: DictionaryEntry[]) => void;
-  defaultOpen?: boolean;
-}
+export function DictionaryPage() {
+  const { settings, setSettings } = useSettings();
+  const dictionary = settings?.dictionary ?? [];
 
-export function DictionaryField({
-  initial,
-  onSaved,
-  defaultOpen = true,
-}: Props) {
   const form = useForm<DictionaryFormValues>({
     resolver: zodResolver(dictionarySchema),
-    values: { rows: initial },
+    values: { rows: dictionary },
   });
 
   const { fields, append, remove } = useFieldArray({
@@ -46,43 +35,55 @@ export function DictionaryField({
   });
 
   const [saving, setSaving] = useState(false);
-  const [savedOk, setSavedOk] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!savedOk) return;
-    const t = setTimeout(() => setSavedOk(false), 1500);
-    return () => clearTimeout(t);
-  }, [savedOk]);
+  if (!settings) return null;
 
   const onSubmit = async (values: DictionaryFormValues) => {
     const cleaned = values.rows
       .map((r) => ({ from: r.from.trim(), to: r.to }))
       .filter((r) => r.from.length > 0);
     setSaving(true);
-    setSaveError(null);
     try {
       await persistDictionary(cleaned);
       form.reset({ rows: cleaned });
-      onSaved(cleaned);
-      setSavedOk(true);
+      setSettings((s) =>
+        s ? { ...s, dictionary: cleaned as DictionaryEntry[] } : s,
+      );
     } catch (e) {
-      setSaveError(String(e));
+      toast.error("Couldn't save dictionary", { description: String(e) });
     } finally {
       setSaving(false);
     }
   };
 
+  const entryCount = fields.length;
+  const dirty = form.formState.isDirty;
+
   return (
-    <CollapsibleCard
-      title="Dictionary"
-      defaultOpen={defaultOpen}
-      dirty={form.formState.isDirty}
-      info='Spoken words on the left become the text on the right. Punctuation like ". / -" is spaced intelligently — saying "test dot ts" produces "test.ts".'
-    >
+    <div className="p-6 flex flex-col gap-4">
+      <SectionHeader
+        title="Dictionary"
+        trailing={
+          entryCount > 0
+            ? `${entryCount} ${entryCount === 1 ? "entry" : "entries"}`
+            : undefined
+        }
+      />
+      <p className="-mt-1 text-[12px] text-muted-foreground/85 max-w-prose">
+        Spoken words on the left become the text on the right. Whole-word,
+        case-insensitive. Punctuation like{" "}
+        <code className="font-mono text-[11.5px]">. / -</code> is spaced
+        intelligently — saying <em>“test dot ts”</em> produces{" "}
+        <code className="font-mono text-[11.5px]">test.ts</code>. Entries also
+        bias the transcriber, so recognition improves on the words you add.
+      </p>
+
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)}>
-          <div className="mb-2.5 flex flex-col gap-1.5">
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="flex flex-col gap-2"
+        >
+          <div className="flex flex-col gap-1.5">
             {fields.map(({ id }, i) => (
               <div key={id} className="flex items-center gap-1.5">
                 <FormField
@@ -140,29 +141,16 @@ export function DictionaryField({
               size="sm"
               onClick={() => append({ from: "", to: "" })}
             >
-              + Add
+              <Plus size={13} />
+              Add
             </Button>
             <div className="flex-1" />
-            <Button
-              type="submit"
-              size="sm"
-              disabled={!form.formState.isDirty || saving}
-            >
+            <Button type="submit" size="sm" disabled={!dirty || saving}>
               {saving ? "Saving…" : "Save"}
             </Button>
           </div>
-          {savedOk && (
-            <Alert variant="success" className="mt-2">
-              <AlertDescription>Saved</AlertDescription>
-            </Alert>
-          )}
-          {saveError && (
-            <Alert variant="destructive" className="mt-2">
-              <AlertDescription>{saveError}</AlertDescription>
-            </Alert>
-          )}
         </form>
       </Form>
-    </CollapsibleCard>
+    </div>
   );
 }

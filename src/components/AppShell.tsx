@@ -1,4 +1,5 @@
 import {
+  Book,
   ChartBar,
   ClockCounterClockwise,
   Gear,
@@ -17,6 +18,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 
+import { DictionaryPage } from "../pages/DictionaryPage";
 import { GeneralPage } from "../pages/GeneralPage";
 import { HistoryPage } from "../pages/HistoryPage";
 import { HomePage } from "../pages/HomePage";
@@ -58,6 +60,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: "Hotkeys", icon: Keyboard, path: "/hotkeys" },
       { label: "Transcription", icon: Microphone, path: "/transcription" },
+      { label: "Dictionary", icon: Book, path: "/dictionary" },
       { label: "Modes", icon: Sliders, path: "/modes" },
       { label: "Snippets", icon: Lightning, path: "/snippets" },
     ],
@@ -202,6 +205,7 @@ function ShellInner() {
               <Route path="/general" element={<GeneralPage />} />
               <Route path="/hotkeys" element={<HotkeysPage />} />
               <Route path="/transcription" element={<TranscriptionPage />} />
+              <Route path="/dictionary" element={<DictionaryPage />} />
               <Route path="/modes" element={<ModesPage />} />
               <Route path="/snippets" element={<SnippetsPage />} />
               <Route path="/history" element={<HistoryPage />} />

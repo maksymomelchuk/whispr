@@ -1,10 +1,8 @@
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
-import * as z from "zod";
+import { toast } from "sonner";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
@@ -33,7 +31,7 @@ import type {
   GroqSettings,
   TranscriptionProvider,
 } from "../lib/types";
-import { ApiKeyField } from "./ApiKeyField";
+import { CredentialField } from "./CredentialField";
 import { InfoTip } from "./InfoTip";
 import { SectionCard } from "./SectionCard";
 
@@ -46,13 +44,6 @@ const GROQ_MODEL_OPTIONS: { value: GroqModel; label: string }[] = [
   { value: "whisper_large_v3_turbo", label: "Whisper Large v3-turbo" },
   { value: "whisper_large_v3", label: "Whisper Large v3" },
 ];
-
-const groqSchema = z.object({
-  model: z.enum(["whisper_large_v3_turbo", "whisper_large_v3"]),
-});
-
-type GroqFormValues = z.infer<typeof groqSchema>;
-type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 interface Props {
   provider: TranscriptionProvider;
@@ -95,167 +86,111 @@ export function TranscriptionProviderField({
     }
   };
 
+  const handleGroqModelChange = async (next: GroqModel) => {
+    if (next === groq.model) return;
+    const previous = groq;
+    const updated: GroqSettings = { ...groq, model: next };
+    onGroqSaved(updated);
+    try {
+      await persistGroqSettings(updated);
+    } catch (e) {
+      onGroqSaved(previous);
+      toast.error("Couldn't save Groq model", { description: String(e) });
+    }
+  };
+
   return (
-    <>
-      <SectionCard title="Provider">
-        <Form {...providerForm}>
-          <FormField
-            control={providerForm.control}
-            name="provider"
-            render={({ field }) => (
-              <FormItem className="gap-[6px]">
-                <div className="inline-flex items-center gap-2">
-                  <FormLabel className="m-0 text-[11px] font-medium tracking-[0.2px] text-muted-foreground">
-                    Transcription provider
-                  </FormLabel>
-                  <InfoTip text="Provider used for the next dictation. Each provider keeps its own API key and options." />
-                </div>
-                <FormControl>
-                  <Select
-                    value={field.value}
-                    onValueChange={(val) =>
-                      handleProviderChange(val as TranscriptionProvider)
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PROVIDER_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </FormControl>
-              </FormItem>
-            )}
-          />
-        </Form>
-        {providerSaveError && (
-          <Alert variant="destructive" className="mt-2">
-            <AlertDescription>{providerSaveError}</AlertDescription>
-          </Alert>
-        )}
-      </SectionCard>
+    <SectionCard
+      title="Provider"
+      info="Service that transcribes your dictation. Each provider keeps its own credentials and options."
+    >
+      <Form {...providerForm}>
+        <FormField
+          control={providerForm.control}
+          name="provider"
+          render={({ field }) => (
+            <FormItem className="mt-2.5 gap-[6px]">
+              <FormLabel className="text-[11px] font-medium tracking-[0.2px] text-muted-foreground">
+                Service
+              </FormLabel>
+              <FormControl>
+                <Select
+                  value={field.value}
+                  onValueChange={(val) =>
+                    handleProviderChange(val as TranscriptionProvider)
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PROVIDER_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormControl>
+            </FormItem>
+          )}
+        />
+      </Form>
 
       {provider === "deepgram" && (
-        <ApiKeyField
-          title="Deepgram API Key"
-          info="Required to transcribe audio with Deepgram. Paste your key from console.deepgram.com."
+        <CredentialField
+          className="mt-3.5"
+          label="API key"
+          info="Paste your Deepgram key from console.deepgram.com."
           placeholder="dg_..."
           isConfigured={deepgramApiKeyConfigured}
           persist={persistDeepgramApiKey}
           validate={validateDeepgramApiKey}
-          onSaved={onDeepgramApiKeyConfiguredChange}
+          onConfiguredChange={onDeepgramApiKeyConfiguredChange}
         />
       )}
 
       {provider === "groq" && (
         <>
-          <ApiKeyField
-            title="Groq API Key"
-            info="Required to transcribe audio with Groq. Create one at console.groq.com."
+          <CredentialField
+            className="mt-3.5"
+            label="API key"
+            info="Create one at console.groq.com."
             placeholder="gsk_..."
             isConfigured={groqApiKeyConfigured}
             persist={persistGroqApiKey}
             validate={validateGroqApiKey}
-            onSaved={onGroqApiKeyConfiguredChange}
+            onConfiguredChange={onGroqApiKeyConfiguredChange}
           />
-          <GroqOptions initial={groq} onSaved={onGroqSaved} />
+          <div className="mt-3.5 flex flex-col gap-[6px]">
+            <div className="inline-flex items-center gap-2">
+              <span className="text-[11px] font-medium tracking-[0.2px] text-muted-foreground">
+                Model
+              </span>
+              <InfoTip text="v3-turbo is cheapest and fastest. v3 is slightly more accurate." />
+            </div>
+            <Select
+              value={groq.model}
+              onValueChange={(val) => handleGroqModelChange(val as GroqModel)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {GROQ_MODEL_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </>
       )}
-    </>
-  );
-}
 
-interface GroqOptionsProps {
-  initial: GroqSettings;
-  onSaved: (groq: GroqSettings) => void;
-}
-
-function GroqOptions({ initial, onSaved }: GroqOptionsProps) {
-  const form = useForm<GroqFormValues>({
-    resolver: zodResolver(groqSchema),
-    values: { model: initial.model },
-  });
-  const [status, setStatus] = useState<SaveStatus>("idle");
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (status !== "saved") return;
-    const t = setTimeout(() => setStatus("idle"), 1500);
-    return () => clearTimeout(t);
-  }, [status]);
-
-  const onSubmit = form.handleSubmit(async (values) => {
-    const cleaned: GroqSettings = { model: values.model };
-    setStatus("saving");
-    setError(null);
-    try {
-      await persistGroqSettings(cleaned);
-      onSaved(cleaned);
-      setStatus("saved");
-    } catch (e) {
-      setStatus("error");
-      setError(String(e));
-    }
-  });
-
-  return (
-    <SectionCard
-      title="Groq"
-      info="Whisper Large via Groq's transcription endpoint."
-    >
-      <Form {...form}>
-        <div className="mb-4 flex flex-col gap-1">
-          <FormField
-            control={form.control}
-            name="model"
-            render={({ field }) => (
-              <FormItem className="gap-[6px]">
-                <div className="inline-flex items-center gap-2">
-                  <FormLabel className="m-0 text-xs font-semibold text-foreground">
-                    Model
-                  </FormLabel>
-                  <InfoTip text="v3-turbo is the cheapest and fastest. v3 is slightly more accurate." />
-                </div>
-                <FormControl>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {GROQ_MODEL_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </FormControl>
-              </FormItem>
-            )}
-          />
-        </div>
-        <div className="mt-2 flex items-center justify-end">
-          <Button
-            onClick={onSubmit}
-            disabled={!form.formState.isDirty || status === "saving"}
-          >
-            {status === "saving" ? "Saving…" : "Save"}
-          </Button>
-        </div>
-      </Form>
-      {status === "saved" && (
-        <Alert variant="success" className="mt-2">
-          <AlertDescription>Saved</AlertDescription>
-        </Alert>
-      )}
-      {status === "error" && (
-        <Alert variant="destructive" className="mt-2">
-          <AlertDescription>{error}</AlertDescription>
+      {providerSaveError && (
+        <Alert variant="destructive" className="mt-3">
+          <AlertDescription>{providerSaveError}</AlertDescription>
         </Alert>
       )}
     </SectionCard>

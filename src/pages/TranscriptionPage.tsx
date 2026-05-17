@@ -1,24 +1,19 @@
 import { AiCleanupField } from "../components/AiCleanupField";
-import { DictionaryField } from "../components/DictionaryField";
 import { TranscriptionProviderField } from "../components/TranscriptionProviderField";
 import { useSettings } from "../context/SettingsContext";
-import type {
-  DictionaryEntry,
-  GroqSettings,
-  TranscriptionProvider,
-} from "../lib/types";
+import type { GroqSettings, TranscriptionProvider } from "../lib/types";
 
 export function TranscriptionPage() {
   const { settings, setSettings } = useSettings();
 
   if (!settings) return null;
 
-  const defaultMode = settings.modes.find(
-    (m) => m.id === settings.default_mode_id,
-  ) ?? settings.modes[0];
+  const defaultMode =
+    settings.modes.find((m) => m.id === settings.default_mode_id) ??
+    settings.modes[0];
 
   return (
-    <div className="p-6 flex flex-col gap-6">
+    <div className="p-6 flex flex-col gap-8">
       <TranscriptionProviderField
         provider={settings.transcription_provider}
         groq={settings.groq}
@@ -77,13 +72,6 @@ export function TranscriptionPage() {
           setSettings((s) =>
             s ? { ...s, ai_cleanup_min_words, ai_cleanup_min_duration_ms } : s,
           )
-        }
-      />
-      <DictionaryField
-        initial={settings.dictionary}
-        defaultOpen={false}
-        onSaved={(dictionary: DictionaryEntry[]) =>
-          setSettings((s) => (s ? { ...s, dictionary } : s))
         }
       />
     </div>

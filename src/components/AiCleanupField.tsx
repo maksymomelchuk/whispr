@@ -1,10 +1,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 import * as z from "zod";
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
@@ -14,7 +13,9 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { cn } from "@/lib/utils";
 
 import { usePersistedToggle } from "../hooks/usePersistedToggle";
 import {
@@ -25,11 +26,8 @@ import {
   setCleanupThresholds as persistThresholds,
 } from "../lib/api";
 import type { CleanupAuthMode } from "../lib/types";
-import { CollapsibleCard } from "./CollapsibleCard";
+import { CredentialField } from "./CredentialField";
 import { InfoTip } from "./InfoTip";
-import { ToggleRow } from "./ToggleRow";
-
-const credentialSchema = z.object({ credential: z.string() });
 
 const thresholdsSchema = z.object({
   minWords: z
@@ -46,7 +44,6 @@ const thresholdsSchema = z.object({
     ),
 });
 
-type CredentialValues = z.infer<typeof credentialSchema>;
 type ThresholdsValues = z.infer<typeof thresholdsSchema>;
 
 interface Props {
@@ -61,7 +58,6 @@ interface Props {
   onApiKeyConfiguredChange: (configured: boolean) => void;
   onOauthTokenConfiguredChange: (configured: boolean) => void;
   onThresholdsChange: (minWords: number, minDurationMs: number) => void;
-  defaultOpen?: boolean;
 }
 
 function formatSeconds(ms: number): string {
@@ -71,17 +67,17 @@ function formatSeconds(ms: number): string {
 
 const MODE_COPY: Record<
   CleanupAuthMode,
-  { fieldLabel: string; placeholderEmpty: string; placeholderReplace: string }
+  { fieldLabel: string; placeholderEmpty: string; info: string }
 > = {
   api_key: {
-    fieldLabel: "Anthropic API Key",
+    fieldLabel: "Anthropic API key",
     placeholderEmpty: "sk-ant-…",
-    placeholderReplace: "Enter new key to replace…",
+    info: "Pay-as-you-go via console.anthropic.com.",
   },
   oauth: {
-    fieldLabel: "Claude Code OAuth Token",
+    fieldLabel: "Claude Code OAuth token",
     placeholderEmpty: "sk-ant-oat…",
-    placeholderReplace: "Enter new token to replace…",
+    info: "Uses your Claude subscription. Mint with `claude setup-token`.",
   },
 };
 
@@ -97,7 +93,6 @@ export function AiCleanupField({
   onApiKeyConfiguredChange,
   onOauthTokenConfiguredChange,
   onThresholdsChange,
-  defaultOpen = false,
 }: Props) {
   const enabledToggle = usePersistedToggle(
     enabled,
@@ -108,57 +103,15 @@ export function AiCleanupField({
   const handleAuthModeChange = async (val: string) => {
     if (!val || val === authMode) return;
     const mode = val as CleanupAuthMode;
+    const previous = authMode;
+    onAuthModeChange(mode);
     try {
       await persistAuthMode(mode);
-      onAuthModeChange(mode);
     } catch (e) {
-      console.error("Failed to save auth mode", e);
+      onAuthModeChange(previous);
+      toast.error("Couldn't change auth mode", { description: String(e) });
     }
   };
-
-  const credentialForm = useForm<CredentialValues>({
-    resolver: zodResolver(credentialSchema),
-    defaultValues: { credential: "" },
-  });
-
-  const [credSaving, setCredSaving] = useState(false);
-  const [credSavedOk, setCredSavedOk] = useState(false);
-
-  useEffect(() => {
-    if (!credSavedOk) return;
-    const t = setTimeout(() => setCredSavedOk(false), 1500);
-    return () => clearTimeout(t);
-  }, [credSavedOk]);
-
-  // Switching modes wipes the unsaved draft so we don't accidentally try to
-  // save a half-typed API key as an OAuth token (or vice versa).
-  useEffect(() => {
-    credentialForm.reset({ credential: "" });
-  }, [authMode, credentialForm]);
-
-  const persistCredential = async (raw: string) => {
-    setCredSaving(true);
-    credentialForm.clearErrors("credential");
-    try {
-      if (authMode === "api_key") {
-        await persistApiKey(raw);
-        onApiKeyConfiguredChange(raw.length > 0);
-      } else {
-        await persistOauthToken(raw);
-        onOauthTokenConfiguredChange(raw.length > 0);
-      }
-      credentialForm.reset({ credential: "" });
-      setCredSavedOk(true);
-    } catch (e) {
-      credentialForm.setError("credential", { message: String(e) });
-    } finally {
-      setCredSaving(false);
-    }
-  };
-
-  const onCredentialSubmit = (values: CredentialValues) =>
-    persistCredential(values.credential.trim());
-  const handleCredentialClear = () => persistCredential("");
 
   const thresholdsForm = useForm<ThresholdsValues>({
     resolver: zodResolver(thresholdsSchema),
@@ -168,54 +121,81 @@ export function AiCleanupField({
     },
   });
 
-  const [threshSaving, setThreshSaving] = useState(false);
-  const [threshSavedOk, setThreshSavedOk] = useState(false);
-
+  const lastPersistedRef = useRef({ minWords, minDurationMs });
   useEffect(() => {
-    if (!threshSavedOk) return;
-    const t = setTimeout(() => setThreshSavedOk(false), 1500);
-    return () => clearTimeout(t);
-  }, [threshSavedOk]);
+    lastPersistedRef.current = { minWords, minDurationMs };
+  }, [minWords, minDurationMs]);
 
-  const onThresholdsSubmit = async (values: ThresholdsValues) => {
-    setThreshSaving(true);
-    const wordsNum = Number(values.minWords);
-    const ms = Math.round(Number(values.minDurationSec) * 1000);
-    try {
-      await persistThresholds(wordsNum, ms);
-      onThresholdsChange(wordsNum, ms);
-      setThreshSavedOk(true);
-    } catch (e) {
-      thresholdsForm.setError("root", { message: String(e) });
-    } finally {
-      setThreshSaving(false);
+  const watched = thresholdsForm.watch();
+  useEffect(() => {
+    if (!enabledToggle.enabled) return;
+    const valid = thresholdsSchema.safeParse(watched);
+    if (!valid.success) return;
+    const wordsNum = Number(watched.minWords);
+    const ms = Math.round(Number(watched.minDurationSec) * 1000);
+    if (
+      wordsNum === lastPersistedRef.current.minWords &&
+      ms === lastPersistedRef.current.minDurationMs
+    ) {
+      return;
     }
-  };
+    const t = setTimeout(async () => {
+      try {
+        await persistThresholds(wordsNum, ms);
+        lastPersistedRef.current = { minWords: wordsNum, minDurationMs: ms };
+        onThresholdsChange(wordsNum, ms);
+      } catch (e) {
+        toast.error("Couldn't save thresholds", { description: String(e) });
+      }
+    }, 450);
+    return () => clearTimeout(t);
+  }, [
+    watched.minWords,
+    watched.minDurationSec,
+    enabledToggle.enabled,
+    onThresholdsChange,
+  ]);
 
   const configured =
     authMode === "api_key" ? apiKeyConfigured : oauthTokenConfigured;
   const showWarning = enabledToggle.enabled && !configured;
   const copy = MODE_COPY[authMode];
-  const placeholder = configured
-    ? copy.placeholderReplace
-    : copy.placeholderEmpty;
-  const credentialValue = credentialForm.watch("credential");
-  const credentialDirty = credentialValue.trim().length > 0;
 
   return (
-    <CollapsibleCard title="AI Cleanup" defaultOpen={defaultOpen}>
-      <ToggleRow
-        id="ai-cleanup-enabled"
-        label="Enable AI post-processing"
-        info="Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Adds ~500ms."
-        checked={enabledToggle.enabled}
-        onCheckedChange={enabledToggle.toggle}
-      />
+    <section data-slot="ai-cleanup" className="flex flex-col gap-2.5">
+      <header className="flex items-center gap-3 pb-1.5 border-b border-border/40">
+        <h3 className="text-[14px] font-semibold text-foreground tracking-[-0.005em]">
+          AI Cleanup
+        </h3>
+        <InfoTip text="Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Adds ~500ms." />
+        <div className="ml-auto inline-flex items-center gap-2">
+          <span
+            className={cn(
+              "text-[11px] tracking-[0.2px]",
+              enabledToggle.enabled
+                ? "text-foreground"
+                : "text-muted-foreground/70",
+            )}
+          >
+            {enabledToggle.enabled ? "On" : "Off"}
+          </span>
+          <Switch
+            id="ai-cleanup-enabled"
+            aria-label="Enable AI post-processing"
+            checked={enabledToggle.enabled}
+            onCheckedChange={enabledToggle.toggle}
+          />
+        </div>
+      </header>
 
-      {enabledToggle.enabled && (
-        <>
-          <div className="mb-4 flex flex-col gap-1">
-            <span className="text-xs font-semibold text-foreground">
+      {!enabledToggle.enabled ? (
+        <p className="text-[12px] text-muted-foreground/80">
+          Off — transcriptions are inserted as Deepgram returns them.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-3.5 pt-1">
+          <div className="flex flex-col gap-[6px]">
+            <span className="text-[11px] font-medium tracking-[0.2px] text-muted-foreground">
               Authentication
             </span>
             <ToggleGroup
@@ -227,103 +207,51 @@ export function AiCleanupField({
             >
               <ToggleGroupItem value="api_key" className="flex-1 text-xs">
                 <span className="inline-flex items-center gap-2">
-                  Anthropic API Key
-                  <InfoTip text="Pay-as-you-go via console.anthropic.com." />
+                  Anthropic API key
+                  <InfoTip text={MODE_COPY.api_key.info} />
                 </span>
               </ToggleGroupItem>
               <ToggleGroupItem value="oauth" className="flex-1 text-xs">
                 <span className="inline-flex items-center gap-2">
                   Claude Code OAuth
-                  <InfoTip text="Uses your Claude subscription. Mint with `claude setup-token`." />
+                  <InfoTip text={MODE_COPY.oauth.info} />
                 </span>
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
 
-          <div className="mb-4 flex flex-col gap-1">
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs font-semibold text-foreground">
-                {copy.fieldLabel}
-              </span>
-              {configured ? (
-                <span className="text-xs text-emerald-600 dark:text-emerald-400">
-                  Configured
-                </span>
-              ) : (
-                <span className="text-xs text-destructive">Not set</span>
-              )}
-            </div>
-            <Form {...credentialForm}>
-              <form onSubmit={credentialForm.handleSubmit(onCredentialSubmit)}>
-                <FormField
-                  control={credentialForm.control}
-                  name="credential"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            {...field}
-                            type="password"
-                            placeholder={placeholder}
-                            spellCheck={false}
-                            autoComplete="off"
-                            onChange={(e) => {
-                              field.onChange(e);
-                              credentialForm.clearErrors("credential");
-                            }}
-                          />
-                          <Button
-                            type="submit"
-                            disabled={!credentialDirty || credSaving}
-                          >
-                            {credSaving ? "Saving…" : "Save"}
-                          </Button>
-                          {configured && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={handleCredentialClear}
-                              disabled={credSaving}
-                            >
-                              Clear
-                            </Button>
-                          )}
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </form>
-            </Form>
-            {credSavedOk && (
-              <Alert variant="success" className="mt-2">
-                <AlertDescription>Saved</AlertDescription>
-              </Alert>
-            )}
-            {showWarning && !credentialForm.formState.errors.credential && (
-              <p className="m-0 text-center text-[11px] text-muted-foreground/70">
-                Cleanup is bypassed until a credential is set.
-              </p>
-            )}
-          </div>
+          <CredentialField
+            label={copy.fieldLabel}
+            placeholder={copy.placeholderEmpty}
+            isConfigured={configured}
+            persist={authMode === "api_key" ? persistApiKey : persistOauthToken}
+            onConfiguredChange={
+              authMode === "api_key"
+                ? onApiKeyConfiguredChange
+                : onOauthTokenConfiguredChange
+            }
+          />
+          {showWarning && (
+            <p className="-mt-1.5 text-[11px] text-muted-foreground/80">
+              Cleanup is bypassed until a credential is set.
+            </p>
+          )}
 
-          <div className="mb-4 flex flex-col gap-1">
+          <div className="flex flex-col gap-[6px]">
             <div className="inline-flex items-center gap-2">
-              <span className="text-xs font-semibold text-foreground">
+              <span className="text-[11px] font-medium tracking-[0.2px] text-muted-foreground">
                 Trigger thresholds
               </span>
-              <InfoTip text="Both must be met for cleanup to run." />
+              <InfoTip text="Cleanup runs only when both are met. Lower values clean shorter dictations; higher values save tokens." />
             </div>
             <Form {...thresholdsForm}>
-              <form onSubmit={thresholdsForm.handleSubmit(onThresholdsSubmit)}>
+              <form onSubmit={(e) => e.preventDefault()}>
                 <div className="flex items-end gap-2">
                   <FormField
                     control={thresholdsForm.control}
                     name="minWords"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="flex-1">
                         <FormLabel className="text-[11px] text-muted-foreground/70">
                           Min words
                         </FormLabel>
@@ -333,10 +261,10 @@ export function AiCleanupField({
                             type="number"
                             min={0}
                             step={1}
-                            className="min-w-[120px]"
+                            inputMode="numeric"
                           />
                         </FormControl>
-                        <FormMessage />
+                        <FormMessage className="mt-1.5 text-[11px]" />
                       </FormItem>
                     )}
                   />
@@ -344,7 +272,7 @@ export function AiCleanupField({
                     control={thresholdsForm.control}
                     name="minDurationSec"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="flex-1">
                         <FormLabel className="text-[11px] text-muted-foreground/70">
                           Min duration (s)
                         </FormLabel>
@@ -354,37 +282,19 @@ export function AiCleanupField({
                             type="number"
                             min={0}
                             step={0.5}
-                            className="min-w-[160px]"
+                            inputMode="decimal"
                           />
                         </FormControl>
-                        <FormMessage />
+                        <FormMessage className="mt-1.5 text-[11px]" />
                       </FormItem>
                     )}
                   />
-                  <Button
-                    type="submit"
-                    disabled={!thresholdsForm.formState.isDirty || threshSaving}
-                  >
-                    {threshSaving ? "Saving…" : "Save"}
-                  </Button>
                 </div>
-                {thresholdsForm.formState.errors.root && (
-                  <Alert variant="destructive" className="mt-2">
-                    <AlertDescription>
-                      {thresholdsForm.formState.errors.root.message}
-                    </AlertDescription>
-                  </Alert>
-                )}
               </form>
             </Form>
-            {threshSavedOk && (
-              <Alert variant="success" className="mt-2">
-                <AlertDescription>Saved</AlertDescription>
-              </Alert>
-            )}
           </div>
-        </>
+        </div>
       )}
-    </CollapsibleCard>
+    </section>
   );
 }
