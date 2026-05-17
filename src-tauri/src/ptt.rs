@@ -3,7 +3,7 @@ use crate::deepgram_session::DeepgramSession;
 use crate::groq_session::GroqSession;
 use crate::history::{self, CleanupStatus, HISTORY_UPDATED_EVENT};
 use crate::mode::TranslateTarget;
-use crate::pipeline::{self, CleanupOutput};
+use crate::pipeline::{self, merge_notices, CleanupOutput, Notice};
 use crate::recorder::Recorder;
 use crate::state::{AppState, ModifierState};
 use crate::transcription_session::TranscriptionSession;
@@ -171,13 +171,6 @@ fn macos_notification(message: &str) {
 }
 #[cfg(not(target_os = "macos"))]
 fn macos_notification(_message: &str) {}
-
-/// `Flash` paints the overlay red briefly; `Focus` raises the main window.
-enum Notice {
-    None,
-    Flash(String),
-    Focus(String),
-}
 
 // core-graphics keeps CGEventTapEnable private, but we need to call it from
 // inside the tap's own callback (the only place we learn the system has
@@ -542,14 +535,6 @@ async fn run_session(
     }
 
     Ok(())
-}
-
-fn merge_notices(a: Notice, b: Notice) -> Notice {
-    match (a, b) {
-        (Notice::Focus(m), _) | (_, Notice::Focus(m)) => Notice::Focus(m),
-        (Notice::Flash(m), _) | (_, Notice::Flash(m)) => Notice::Flash(m),
-        _ => Notice::None,
-    }
 }
 
 async fn maybe_translate(

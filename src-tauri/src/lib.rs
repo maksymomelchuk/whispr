@@ -19,7 +19,7 @@ mod terms;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod groq_audio;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-mod groq_session_state;
+pub mod groq_session_state;
 mod groq_stabilizer;
 mod permissions;
 // snippets helpers are consumed by pipeline (cross-platform) and by

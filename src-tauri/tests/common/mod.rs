@@ -2,7 +2,7 @@ use std::time::Duration;
 use whispr_lib::{
     config::{CorrectionEntry, Settings, SnippetEntry},
     history::CleanupStatus,
-    mode::SEED_MODE_DEFAULT_EN,
+    mode::{Mode, SEED_MODE_DEFAULT_EN},
     pipeline::{self, CleanupOutput, Outcome},
 };
 
@@ -37,6 +37,11 @@ pub struct PipelineHarness {
     mode_id: String,
     cleanup: Option<String>,
     cleanup_error: Option<CleanupStatus>,
+    /// Pre-translated text. When set, this text is used as the base for the
+    /// cleanup stage (simulating what Apple Translate would have produced).
+    translated_text: Option<String>,
+    /// Override the active mode entirely (e.g. to test non-default languages).
+    custom_mode: Option<Mode>,
 }
 
 impl PipelineHarness {
@@ -46,6 +51,8 @@ impl PipelineHarness {
             mode_id: SEED_MODE_DEFAULT_EN.to_string(),
             cleanup: None,
             cleanup_error: None,
+            translated_text: None,
+            custom_mode: None,
         }
     }
 
@@ -126,23 +133,47 @@ impl PipelineHarness {
         self
     }
 
+    /// Simulate the Apple Translate stage returning `translated_text`. When
+    /// set, this text is the base passed to the cleanup stage (mirroring the
+    /// real pipeline where translate feeds into cleanup). Without this call the
+    /// harness passes `raw_text` directly to cleanup, i.e. translate is a no-op.
+    pub fn with_translated_text(mut self, translated_text: &str) -> Self {
+        self.translated_text = Some(translated_text.to_string());
+        self
+    }
+
+    /// Override the active `Mode` used by `run_stages`. Use this to test
+    /// pipeline behaviour under non-default language or translate configurations
+    /// without needing a matching entry in `settings.modes`.
+    pub fn with_mode(mut self, mode: Mode) -> Self {
+        self.custom_mode = Some(mode);
+        self
+    }
+
     /// Run the post-transcription pipeline stages against `raw_text` and
     /// return an `Outcome`. Intended to be called inside a
     /// `tokio::task::spawn_blocking` future wrapped with
     /// `tokio::time::timeout(HARNESS_DEADLINE, ...)` so that any infinite
     /// loop in the pipeline causes the test to fail cleanly.
     pub fn run(self, raw_text: &str) -> Outcome {
-        let mode = self
-            .settings
-            .modes
-            .iter()
-            .find(|m| m.id == self.mode_id)
-            .cloned()
-            .expect("mode not found in settings");
+        let mode = if let Some(m) = self.custom_mode {
+            m
+        } else {
+            self.settings
+                .modes
+                .iter()
+                .find(|m| m.id == self.mode_id)
+                .cloned()
+                .expect("mode not found in settings")
+        };
+
+        // Translation (if simulated) feeds into cleanup, mirroring the real
+        // pipeline: raw_text → translate → translated_text → cleanup → replaced_text.
+        let post_translate = self.translated_text.as_deref().unwrap_or(raw_text);
 
         let cleanup_output = if let Some(status) = self.cleanup_error {
             CleanupOutput {
-                replaced_text: raw_text.to_string(),
+                replaced_text: post_translate.to_string(),
                 status,
             }
         } else {
@@ -152,7 +183,7 @@ impl PipelineHarness {
                     status: CleanupStatus::Ran,
                 },
                 None => CleanupOutput {
-                    replaced_text: raw_text.to_string(),
+                    replaced_text: post_translate.to_string(),
                     status: CleanupStatus::Disabled,
                 },
             }
