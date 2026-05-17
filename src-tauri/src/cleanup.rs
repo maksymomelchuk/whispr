@@ -210,29 +210,6 @@ pub(crate) async fn run_with_transport<T: Transport>(
     }
 }
 
-/// Testable variant that mirrors the `min_words` / `min_duration` skip checks
-/// from `ptt::maybe_cleanup`. Returns `None` when the transcript should be
-/// skipped so tests can assert the transport was never called.
-pub(crate) async fn run_checked_with_transport<T: Transport>(
-    transcript: &str,
-    credential: Credential<'_>,
-    prompt: &str,
-    word_count: usize,
-    min_words: usize,
-    speak_duration: Duration,
-    min_duration_ms: u64,
-    transport: &T,
-    timeout: Duration,
-) -> Option<Result<(String, Usage), CleanupError>> {
-    if word_count < min_words {
-        return None;
-    }
-    if speak_duration < Duration::from_millis(min_duration_ms) {
-        return None;
-    }
-    Some(run_with_transport(transcript, credential, prompt, transport, timeout).await)
-}
-
 fn http_client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
     CLIENT.get_or_init(reqwest::Client::new)
@@ -586,67 +563,6 @@ mod tests {
             matches!(result, Err(CleanupError::Timeout)),
             "expected Timeout error, got {result:?}"
         );
-    }
-
-    // --- Skip-path tests ---
-
-    #[tokio::test]
-    async fn below_min_words_does_not_call_transport() {
-        let transport = MockTransport::failing("should not be called");
-        let result = run_checked_with_transport(
-            "hi",
-            api_key_cred(),
-            DEFAULT_SYSTEM_PROMPT,
-            1,   // word_count
-            5,   // min_words
-            Duration::from_secs(2),
-            500, // min_duration_ms
-            &transport,
-            Duration::from_secs(5),
-        )
-        .await;
-        assert!(result.is_none(), "expected skip (None), got {result:?}");
-        assert_eq!(transport.call_count(), 0, "transport must not be called");
-    }
-
-    #[tokio::test]
-    async fn below_min_duration_does_not_call_transport() {
-        let transport = MockTransport::failing("should not be called");
-        let result = run_checked_with_transport(
-            "this transcript has enough words to pass",
-            api_key_cred(),
-            DEFAULT_SYSTEM_PROMPT,
-            8,                            // word_count (above min_words)
-            5,                            // min_words
-            Duration::from_millis(100),   // speak_duration (below threshold)
-            500,                          // min_duration_ms
-            &transport,
-            Duration::from_secs(5),
-        )
-        .await;
-        assert!(result.is_none(), "expected skip (None), got {result:?}");
-        assert_eq!(transport.call_count(), 0, "transport must not be called");
-    }
-
-    #[tokio::test]
-    async fn above_both_thresholds_calls_transport() {
-        let transport = MockTransport::returning(200, success_body("Cleaned output."));
-        let result = run_checked_with_transport(
-            "this transcript has enough words to pass",
-            api_key_cred(),
-            DEFAULT_SYSTEM_PROMPT,
-            8,                          // word_count
-            5,                          // min_words
-            Duration::from_millis(600), // speak_duration (above threshold)
-            500,                        // min_duration_ms
-            &transport,
-            Duration::from_secs(5),
-        )
-        .await;
-        assert!(result.is_some(), "expected run (Some), got None");
-        assert_eq!(transport.call_count(), 1, "transport must be called once");
-        let (text, _) = result.unwrap().expect("should succeed");
-        assert_eq!(text, "Cleaned output.");
     }
 
     // --- Error message content tests ---

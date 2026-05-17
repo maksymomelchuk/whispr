@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::time::Duration;
 use whispr_lib::{
     config::{CorrectionEntry, Settings, SnippetEntry},
@@ -188,51 +190,3 @@ impl PipelineHarness {
     }
 }
 
-/// Test-only stub implementing `TranscriptionSession` for integration tests
-/// that exercise the full `run_session` path. Requires macOS because
-/// `TranscriptionSession` and its dependencies are macOS-gated.
-#[cfg(target_os = "macos")]
-pub mod stub_transcription {
-    use std::time::Duration;
-    use tauri::AppHandle;
-    use tokio::sync::mpsc::UnboundedReceiver;
-    use whispr_lib::{
-        mode::ModeLanguage,
-        recorder::AudioFormat,
-        transcription_session::TranscriptionSession,
-    };
-
-    /// A `TranscriptionSession` that returns a preset transcript or error
-    /// without touching any audio hardware or network. The `AppHandle` passed
-    /// to `run` is ignored (no events are emitted).
-    pub struct StubTranscriptionSession {
-        result: Result<(String, Duration), String>,
-    }
-
-    impl StubTranscriptionSession {
-        pub fn returning(text: impl Into<String>, duration: Duration) -> Self {
-            StubTranscriptionSession {
-                result: Ok((text.into(), duration)),
-            }
-        }
-
-        pub fn failing(message: impl Into<String>) -> Self {
-            StubTranscriptionSession {
-                result: Err(message.into()),
-            }
-        }
-    }
-
-    impl TranscriptionSession for StubTranscriptionSession {
-        async fn run(
-            self,
-            _app: AppHandle,
-            _format: AudioFormat,
-            _chunks: UnboundedReceiver<Vec<i16>>,
-            _language: ModeLanguage,
-            _terms: Vec<String>,
-        ) -> Result<(String, Duration), String> {
-            self.result
-        }
-    }
-}

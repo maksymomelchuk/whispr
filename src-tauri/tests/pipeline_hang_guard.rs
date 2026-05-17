@@ -2,9 +2,10 @@
 ///
 /// When a correction rule's `to` value is the same as `from` after
 /// case-folding (e.g. "getmany" → "Getmany"), a naive re-scan loop would
-/// re-match the replacement on every pass and never converge. `apply_corrections`
-/// caps iteration with `MAX_PASSES`, and this test proves the full pipeline
-/// honours that cap by completing within a hard deadline.
+/// re-match the replacement on every pass and never converge.
+/// `apply_corrections` handles these as a one-shot sweep with cursor
+/// advancement, and this test proves the full pipeline still completes
+/// within a hard deadline and produces the case-corrected output.
 ///
 /// The harness wraps each pipeline call in `tokio::time::timeout` +
 /// `spawn_blocking` so a truly infinite loop fails the test (via cancellation)
@@ -24,8 +25,7 @@ async fn identity_correction_terminates_within_deadline() {
     })
     .await;
 
-    // The identity rule is filtered out by apply_corrections (case-folded
-    // from == to), so the text is unchanged.
+    // Input already has the target casing, so the rule is a no-op.
     assert_eq!(outcome.history_entry.final_text, "I love Getmany.");
     assert_eq!(outcome.pasted_text, "I love Getmany. ");
 }
@@ -39,8 +39,8 @@ async fn identity_correction_with_mixed_case_input_terminates() {
     })
     .await;
 
-    // Both rules are case-folded identities and are filtered out.
-    assert_eq!(outcome.history_entry.final_text, "getmany hello world");
+    // Both rules re-case their matches in the lowercase input.
+    assert_eq!(outcome.history_entry.final_text, "Getmany Hello world");
 }
 
 #[tokio::test]

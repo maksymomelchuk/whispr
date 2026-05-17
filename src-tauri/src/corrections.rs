@@ -22,32 +22,53 @@ pub fn apply_corrections(text: &str, entries: &[CorrectionEntry]) -> String {
     }
 
     let mut padded = format!(" {} ", text);
-    // Drop pure case-folded identity rules ("getmany" → "Getmany"): each
-    // pass would re-find the same whole-word match and re-wrap it in spaces,
-    // a true infinite loop with no progress toward the cap below.
-    let active: Vec<(&CorrectionEntry, String)> = entries
-        .iter()
-        .filter_map(|e| {
-            let from_lc = e.from.to_lowercase();
-            if from_lc.is_empty() || e.to.to_lowercase() == from_lc {
-                None
-            } else {
-                Some((e, from_lc))
+
+    // Split rules into two groups: case-only ("ukraine" → "Ukraine") and the
+    // rest ("dash" → "-", "mongo" → "MongoDB"). Case-only rules need a single
+    // sweep with cursor advancement — the lowercased replacement is identical
+    // to the lowercased pattern, so the main re-scan loop would either pin on
+    // the first occurrence (advancing nothing) or burn passes wrapping it in
+    // whitespace that later trips up phase-2 punctuation cleanup. The rest go
+    // through the cascade loop so chains like "dash dash help" → "--help"
+    // still resolve.
+    let mut case_only: Vec<(&CorrectionEntry, String)> = Vec::new();
+    let mut cascade: Vec<(&CorrectionEntry, String)> = Vec::new();
+    for e in entries {
+        let from_lc = e.from.to_lowercase();
+        if from_lc.is_empty() {
+            continue;
+        }
+        if e.to.to_lowercase() == from_lc {
+            case_only.push((e, from_lc));
+        } else {
+            cascade.push((e, from_lc));
+        }
+    }
+
+    for (e, from_lc) in &case_only {
+        let replacement = format!(" {} ", e.to);
+        let mut search_from = 0;
+        loop {
+            let lower = padded.to_lowercase();
+            match find_word_match(&lower, from_lc, search_from) {
+                Some((start, end)) => {
+                    padded.replace_range(start..end, &replacement);
+                    search_from = start + replacement.len();
+                }
+                None => break,
             }
-        })
-        .collect();
+        }
+    }
 
     const MAX_PASSES: usize = 32;
     for _ in 0..MAX_PASSES {
         let lower = padded.to_lowercase();
         let mut changed = false;
-        for (e, from_lc) in &active {
+        for (e, from_lc) in &cascade {
             if let Some((start, end)) = find_word_match(&lower, from_lc, 0) {
                 let replacement = format!(" {} ", e.to);
                 padded.replace_range(start..end, &replacement);
                 changed = true;
-                // Restart the scan from the top — replacement may have
-                // exposed a new match earlier in the string.
                 break;
             }
         }
@@ -191,15 +212,30 @@ mod tests {
     }
 
     #[test]
-    fn case_folded_identity_rule_does_not_hang() {
-        // "getmany" → "Getmany" is a case-folded identity: the lowercased
-        // replacement still matches the lowercased pattern, which previously
-        // pinned apply_corrections in an infinite outer loop.
+    fn case_only_rule_applies_and_terminates() {
         let out = apply_corrections(
             "I love Getmany.",
             &[entry("getmany", "Getmany")],
         );
         assert_eq!(out, "I love Getmany.");
+    }
+
+    #[test]
+    fn case_only_rule_capitalizes_lowercase_input() {
+        let out = apply_corrections(
+            "hello from ukraine",
+            &[entry("ukraine", "Ukraine")],
+        );
+        assert_eq!(out, "hello from Ukraine");
+    }
+
+    #[test]
+    fn case_only_rule_applies_to_every_occurrence() {
+        let out = apply_corrections(
+            "from ukraine to ukraine",
+            &[entry("ukraine", "Ukraine")],
+        );
+        assert_eq!(out, "from Ukraine to Ukraine");
     }
 
     #[test]

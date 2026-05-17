@@ -15,6 +15,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 /// perform to flush queued finals. The returned transcript is raw: the
 /// caller applies cleanup then corrections so each pipeline stage stays
 /// observable in the history trace.
+#[allow(async_fn_in_trait)]
 pub trait TranscriptionSession {
     async fn run(
         self,
