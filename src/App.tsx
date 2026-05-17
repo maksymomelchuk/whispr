@@ -1,5 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BrowserRouter } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -18,6 +18,24 @@ import "./globals.css";
 function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const setSetting = useCallback(
+    async <K extends keyof Settings>(
+      key: K,
+      value: Settings[K],
+      persist: () => Promise<void>,
+    ) => {
+      const prev = settings;
+      if (!prev) return;
+      setSettings({ ...prev, [key]: value });
+      try {
+        await persist();
+      } catch {
+        setSettings(prev);
+      }
+    },
+    [settings],
+  );
   const { preference: themePreference, setPreference: setThemePreference } =
     useTheme();
   const { accent, setAccent } = useAccent();
@@ -91,6 +109,7 @@ function App() {
       value={{
         settings,
         setSettings,
+        setSetting,
         themePreference,
         setThemePreference,
         accent,
