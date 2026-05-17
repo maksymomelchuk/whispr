@@ -45,7 +45,7 @@ export function DictionaryPage() {
         : undefined;
 
   return (
-    <div className="p-6 flex flex-col gap-4">
+    <div className="p-6 flex flex-col gap-8">
       <SectionHeader title="Dictionary" trailing={trailing} />
 
       <ToggleGroup
@@ -171,7 +171,7 @@ function CorrectionRow({
               onClick={onDelete}
               className="transition-colors text-muted-foreground/70 hover:text-destructive"
             >
-              <Trash size={16} />
+              <Trash size={15} />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Delete</TooltipContent>

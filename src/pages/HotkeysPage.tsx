@@ -69,12 +69,8 @@ function BindingRow({
   const tone = conflict ? "destructive" : armed ? "accent" : "neutral";
   return (
     <RowCard tone={tone} flashing={flashing}>
-      {armed && (
-        <span className="absolute -left-3 top-1/2 -translate-y-1/2">
-          <ArmedDot />
-        </span>
-      )}
       <div className="flex flex-1 min-w-0 items-center gap-2.5 flex-wrap">
+        {armed && <ArmedDot />}
         <ShortcutKeycaps shortcut={binding.shortcut} tone={tone} />
         {binding.shortcut.is_double_tap && (
           <Badge variant="accent" className="text-eyebrow uppercase">
@@ -105,7 +101,7 @@ function BindingRow({
               onClick={onRemove}
               className="transition-colors text-muted-foreground/70 hover:text-destructive"
             >
-              <Trash size={16} />
+              <Trash size={15} />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Remove</TooltipContent>
@@ -167,7 +163,7 @@ function RecordingRow({
     <RowCard
       tone="accent"
       interactive={false}
-      className="shadow-sm ring-2 ring-ring/15"
+      className="shadow-sm"
     >
       <div className="flex flex-1 min-w-0 items-center gap-3 flex-wrap">
         {captured ? (
@@ -289,7 +285,7 @@ export function HotkeysPage() {
     `${modeId}|${shortcutKey(shortcut)}`;
 
   return (
-    <div className="p-6 flex flex-col gap-7">
+    <div className="p-6 flex flex-col gap-8">
       {error && (
         <Alert variant="destructive" className="font-medium">
           {error}

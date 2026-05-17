@@ -89,7 +89,7 @@ function SnippetRow({
               onClick={onDelete}
               className="transition-colors text-muted-foreground/70 hover:text-destructive"
             >
-              <Trash size={16} />
+              <Trash size={15} />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Delete</TooltipContent>
@@ -334,7 +334,7 @@ export function SnippetsPage() {
     saveError !== null && editing.kind === "none";
 
   return (
-    <div className="p-6 flex flex-col gap-2.5">
+    <div className="p-6 flex flex-col gap-8">
       <SectionHeader
         title="Snippets"
         trailing={
