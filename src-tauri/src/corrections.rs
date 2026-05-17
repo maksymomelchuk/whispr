@@ -14,25 +14,34 @@ const CLING_LEFT: &[char] = &[',', ';', ':', '?', '!'];
 /// the way a literal " from " search would. The replacement is spliced in
 /// with surrounding spaces and collapsed by the phase-2 punctuation passes
 /// below. The outer loop re-runs replacements until stable so chains like
-/// "dash dash help" fully resolve to "--help".
+/// "dash dash help" fully resolve to "--help". MAX_PASSES caps it so a rule
+/// whose `to` (case-folded) contains its `from` can't pin the pipeline.
 pub fn apply_corrections(text: &str, entries: &[CorrectionEntry]) -> String {
     if entries.is_empty() {
         return text.to_string();
     }
 
     let mut padded = format!(" {} ", text);
-    let froms_lc: Vec<String> = entries
+    // Drop pure case-folded identity rules ("getmany" → "Getmany"): each
+    // pass would re-find the same whole-word match and re-wrap it in spaces,
+    // a true infinite loop with no progress toward the cap below.
+    let active: Vec<(&CorrectionEntry, String)> = entries
         .iter()
-        .map(|e| e.from.to_lowercase())
+        .filter_map(|e| {
+            let from_lc = e.from.to_lowercase();
+            if from_lc.is_empty() || e.to.to_lowercase() == from_lc {
+                None
+            } else {
+                Some((e, from_lc))
+            }
+        })
         .collect();
 
-    loop {
+    const MAX_PASSES: usize = 32;
+    for _ in 0..MAX_PASSES {
         let lower = padded.to_lowercase();
         let mut changed = false;
-        for (e, from_lc) in entries.iter().zip(froms_lc.iter()) {
-            if from_lc.is_empty() {
-                continue;
-            }
+        for (e, from_lc) in &active {
             if let Some((start, end)) = find_word_match(&lower, from_lc, 0) {
                 let replacement = format!(" {} ", e.to);
                 padded.replace_range(start..end, &replacement);
@@ -174,6 +183,27 @@ mod tests {
         // Verbal punctuation still works as a correction rule.
         let out = apply_corrections("test dot ts", &[entry("dot", ".")]);
         assert_eq!(out, "test.ts");
+    }
+
+    #[test]
+    fn case_folded_identity_rule_does_not_hang() {
+        // "getmany" → "Getmany" is a case-folded identity: the lowercased
+        // replacement still matches the lowercased pattern, which previously
+        // pinned apply_corrections in an infinite outer loop.
+        let out = apply_corrections(
+            "I love Getmany.",
+            &[entry("getmany", "Getmany")],
+        );
+        assert_eq!(out, "I love Getmany.");
+    }
+
+    #[test]
+    fn rule_whose_replacement_contains_pattern_terminates() {
+        // "abc" → "abc def" — the replacement re-contains the pattern as a
+        // whole word, so naive re-scan loops forever. MAX_PASSES caps it;
+        // here we just need termination with a sensible result.
+        let out = apply_corrections("hello abc world", &[entry("abc", "abc def")]);
+        assert!(out.contains("def"), "replacement should apply at least once: {out}");
     }
 
     #[test]
