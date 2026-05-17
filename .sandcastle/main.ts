@@ -1,4 +1,4 @@
-// Parallel Planner with Review — four-phase orchestration loop
+// Parallel Planner with Tiered Review — three-phase orchestration loop
 //
 // This template drives a multi-phase workflow:
 //   Phase 1 (Plan):             An opus agent analyzes open issues, builds a
@@ -6,10 +6,17 @@
 //                               listing unblocked issues with branch names.
 //   Phase 2 (Execute + Review): For each issue, a sandbox is created via
 //                               createSandbox(). The implementer runs first
-//                               (100 iterations). If it produces commits, a
-//                               reviewer runs in the same sandbox on the same
-//                               branch (1 iteration). All issue pipelines run
-//                               concurrently via Promise.allSettled().
+//                               (100 iterations). If it produces commits, the
+//                               diff is triaged on the host: trivial diffs
+//                               (tiny, or only tests/docs/lockfile) skip
+//                               review entirely. Otherwise a Haiku tier-1
+//                               reviewer runs in the sandbox; it commits
+//                               mechanical fixes and emits a <verdict> tag.
+//                               If the verdict is ESCALATE, a Sonnet tier-2
+//                               reviewer runs against the same branch with
+//                               the tier-1 concerns as a seed. All issue
+//                               pipelines run concurrently via
+//                               Promise.allSettled().
 //   Phase 3 (Merge):            A single agent merges all completed branches
 //                               into the current branch.
 //
@@ -33,6 +40,13 @@ import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 // Raise this if your backlog is large; lower it for a quick smoke-test run.
 const MAX_ITERATIONS = 10;
 
+// Source branch the orchestrator merges into and diffs against. Resolved
+// once at startup so an external checkout switch mid-run can't shift the
+// baseline used by the triage filter.
+const SOURCE_BRANCH = execSync("git rev-parse --abbrev-ref HEAD", {
+  encoding: "utf-8",
+}).trim();
+
 // Hooks run inside the sandbox before the agent starts each iteration.
 // pnpm install ensures the sandbox always has fresh dependencies.
 //
@@ -47,6 +61,53 @@ const hooks = {
 };
 
 const copyToWorktree = ["pnpm-lock.yaml"];
+
+// ---------------------------------------------------------------------------
+// Triage
+// ---------------------------------------------------------------------------
+
+// Skip the reviewer entirely when the implementer's diff is too small or
+// scoped to files where LLM review wouldn't add value over the implementer's
+// own typecheck + tests. Calibrate against `.sandcastle/logs/` history:
+// scan past reviewer runs that produced zero commits and widen these until
+// you stop skipping useful reviews.
+const TRIAGE_MIN_LINES = 30;
+const TRIAGE_TRIVIAL_PATHS = [
+  /^pnpm-lock\.yaml$/,
+  /\.snap$/,
+  /\.test\.(ts|tsx|rs)$/,
+  /^docs\//,
+  /\.md$/,
+];
+
+function triageDiff(branch: string): { trivial: boolean; reason: string } {
+  const shortstat = execSync(
+    `git diff --shortstat ${SOURCE_BRANCH}...${branch}`,
+    { encoding: "utf-8" },
+  );
+  const files = execSync(`git diff --name-only ${SOURCE_BRANCH}...${branch}`, {
+    encoding: "utf-8",
+  })
+    .split("\n")
+    .filter(Boolean);
+
+  const linesChanged = [
+    ...shortstat.matchAll(/(\d+) (insertion|deletion)/g),
+  ].reduce((sum, m) => sum + Number(m[1]!), 0);
+
+  if (linesChanged > 0 && linesChanged < TRIAGE_MIN_LINES) {
+    return { trivial: true, reason: `${linesChanged} lines changed` };
+  }
+
+  const allTrivialPaths =
+    files.length > 0 &&
+    files.every((f) => TRIAGE_TRIVIAL_PATHS.some((p) => p.test(f)));
+  if (allTrivialPaths) {
+    return { trivial: true, reason: "only tests/docs/lockfile touched" };
+  }
+
+  return { trivial: false, reason: "" };
+}
 
 // ---------------------------------------------------------------------------
 // Main loop
@@ -103,11 +164,22 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   }
 
   // -------------------------------------------------------------------------
-  // Phase 2: Execute + Review
+  // Phase 2: Execute + Tiered Review
   //
   // For each issue, create a sandbox via createSandbox() so the implementer
-  // and reviewer share the same sandbox instance per branch. The implementer
-  // runs first; if it produces commits, the reviewer runs in the same sandbox.
+  // and reviewers share the same sandbox instance per branch. Flow:
+  //
+  //   implementer (Sonnet, 100 iters)
+  //       │
+  //       ├─ no commits → done
+  //       │
+  //       └─ commits → triageDiff() on host
+  //                      ├─ trivial → done
+  //                      └─ non-trivial → tier-1 reviewer (Haiku)
+  //                                          ├─ CLEAN/FIXED → done
+  //                                          └─ ESCALATE → tier-2 (Sonnet)
+  //                                                          with tier-1
+  //                                                          concerns as seed
   //
   // Promise.allSettled means one failing pipeline doesn't cancel the others.
   // -------------------------------------------------------------------------
@@ -122,7 +194,6 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
       });
 
       try {
-        // Run the implementer
         const implement = await sandbox.run({
           name: "implementer",
           maxIterations: 100,
@@ -135,31 +206,61 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
           },
         });
 
-        // --- SETUP A: per-issue reviewer (disabled) ---------------------------
-        // Runs the reviewer immediately after each implementer in the same
-        // sandbox, scoped to that branch's diff. Re-enable this block and
-        // disable SETUP B (post-merge reviewer further down) to switch back.
-        //
-        // if (implement.commits.length > 0) {
-        //   const review = await sandbox.run({
-        //     name: "reviewer",
-        //     maxIterations: 1,
-        //     agent: sandcastle.claudeCode("claude-opus-4-7"),
-        //     promptFile: "./.sandcastle/review-prompt.md",
-        //     promptArgs: {
-        //       BRANCH: issue.branch,
-        //     },
-        //   });
-        //
-        //   // Merge commits from both runs so the merge phase sees all of them.
-        //   // Each sandbox.run() only returns commits from its own run.
-        //   return {
-        //     ...review,
-        //     commits: [...implement.commits, ...review.commits],
-        //   };
-        // }
+        if (implement.commits.length === 0) {
+          return implement;
+        }
 
-        return implement;
+        const triage = triageDiff(issue.branch);
+        if (triage.trivial) {
+          console.log(`  ${issue.id}: skipping reviewer (${triage.reason})`);
+          return implement;
+        }
+
+        // Tier 1: Haiku — fixes mechanical issues itself, escalates the rest.
+        const tier1 = await sandbox.run({
+          name: "reviewer-tier1",
+          maxIterations: 1,
+          agent: sandcastle.claudeCode("claude-haiku-4-5"),
+          promptFile: "./.sandcastle/review-prompt-tier1.md",
+          promptArgs: {
+            BRANCH: issue.branch,
+            SOURCE_BRANCH,
+          },
+        });
+
+        const escalate = /<verdict>\s*ESCALATE\s*<\/verdict>/.test(
+          tier1.stdout,
+        );
+        const concerns =
+          tier1.stdout.match(/<concerns>([\s\S]*?)<\/concerns>/)?.[1]?.trim() ??
+          "";
+
+        let tier2Commits: typeof tier1.commits = [];
+        if (escalate) {
+          const preview = concerns.replace(/\s+/g, " ").slice(0, 80);
+          console.log(
+            `  ${issue.id}: escalating to Sonnet${preview ? ` — ${preview}` : ""}`,
+          );
+          const tier2 = await sandbox.run({
+            name: "reviewer-tier2",
+            maxIterations: 1,
+            agent: sandcastle.claudeCode("claude-sonnet-4-6"),
+            promptFile: "./.sandcastle/review-prompt-tier2.md",
+            promptArgs: {
+              BRANCH: issue.branch,
+              SOURCE_BRANCH,
+              TIER1_CONCERNS: concerns || "(no specific concerns provided)",
+            },
+          });
+          tier2Commits = tier2.commits;
+        }
+
+        // Merge commits from all stages so the merge phase sees all of them.
+        // Each sandbox.run() only returns commits from its own run.
+        return {
+          ...implement,
+          commits: [...implement.commits, ...tier1.commits, ...tier2Commits],
+        };
       } finally {
         await sandbox.close();
       }
@@ -210,13 +311,6 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   // The {{BRANCHES}} and {{ISSUES}} prompt arguments are lists that the agent
   // uses to know which branches to merge and which issues to close.
   // -------------------------------------------------------------------------
-
-  // Capture host HEAD before merge so the post-merge reviewer can diff
-  // against the pre-merge state to see exactly what landed this cycle.
-  const preMergeRef = execSync("git rev-parse HEAD", {
-    encoding: "utf-8",
-  }).trim();
-
   await sandcastle.run({
     hooks,
     sandbox: docker(),
@@ -233,32 +327,6 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   });
 
   console.log("\nBranches merged.");
-
-  // -------------------------------------------------------------------------
-  // Phase 4: Review (SETUP B — active)
-  //
-  // A single reviewer runs once per iteration, after merge, on the source
-  // branch. It diffs the post-merge HEAD against the pre-merge SHA so it
-  // sees every issue's changes as one consolidated diff. Any commits it
-  // makes land directly on the source branch — no second merge needed.
-  //
-  // To switch back to per-issue reviewing, re-enable the SETUP A block
-  // inside Phase 2 above and comment this call out.
-  // -------------------------------------------------------------------------
-  await sandcastle.run({
-    hooks,
-    sandbox: docker(),
-    name: "reviewer",
-    maxIterations: 1,
-    agent: sandcastle.claudeCode("claude-opus-4-7"),
-    promptFile: "./.sandcastle/review-post-merge-prompt.md",
-    promptArgs: {
-      PRE_MERGE_REF: preMergeRef,
-      ISSUES: completedIssues.map((i) => `- ${i.id}: ${i.title}`).join("\n"),
-    },
-  });
-
-  console.log("\nReview pass complete.");
 }
 
 console.log("\nAll done.");
