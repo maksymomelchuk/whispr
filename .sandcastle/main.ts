@@ -21,6 +21,7 @@
 // Or add to package.json:
 //   "scripts": { "sandcastle": "npx tsx .sandcastle/main.ts" }
 
+import { execSync } from "node:child_process";
 import * as sandcastle from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 
@@ -134,25 +135,29 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
           },
         });
 
-        // Only review if the implementer produced commits
-        if (implement.commits.length > 0) {
-          const review = await sandbox.run({
-            name: "reviewer",
-            maxIterations: 1,
-            agent: sandcastle.claudeCode("claude-opus-4-7"),
-            promptFile: "./.sandcastle/review-prompt.md",
-            promptArgs: {
-              BRANCH: issue.branch,
-            },
-          });
-
-          // Merge commits from both runs so the merge phase sees all of them.
-          // Each sandbox.run() only returns commits from its own run.
-          return {
-            ...review,
-            commits: [...implement.commits, ...review.commits],
-          };
-        }
+        // --- SETUP A: per-issue reviewer (disabled) ---------------------------
+        // Runs the reviewer immediately after each implementer in the same
+        // sandbox, scoped to that branch's diff. Re-enable this block and
+        // disable SETUP B (post-merge reviewer further down) to switch back.
+        //
+        // if (implement.commits.length > 0) {
+        //   const review = await sandbox.run({
+        //     name: "reviewer",
+        //     maxIterations: 1,
+        //     agent: sandcastle.claudeCode("claude-opus-4-7"),
+        //     promptFile: "./.sandcastle/review-prompt.md",
+        //     promptArgs: {
+        //       BRANCH: issue.branch,
+        //     },
+        //   });
+        //
+        //   // Merge commits from both runs so the merge phase sees all of them.
+        //   // Each sandbox.run() only returns commits from its own run.
+        //   return {
+        //     ...review,
+        //     commits: [...implement.commits, ...review.commits],
+        //   };
+        // }
 
         return implement;
       } finally {
@@ -205,6 +210,13 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   // The {{BRANCHES}} and {{ISSUES}} prompt arguments are lists that the agent
   // uses to know which branches to merge and which issues to close.
   // -------------------------------------------------------------------------
+
+  // Capture host HEAD before merge so the post-merge reviewer can diff
+  // against the pre-merge state to see exactly what landed this cycle.
+  const preMergeRef = execSync("git rev-parse HEAD", {
+    encoding: "utf-8",
+  }).trim();
+
   await sandcastle.run({
     hooks,
     sandbox: docker(),
@@ -221,6 +233,32 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   });
 
   console.log("\nBranches merged.");
+
+  // -------------------------------------------------------------------------
+  // Phase 4: Review (SETUP B — active)
+  //
+  // A single reviewer runs once per iteration, after merge, on the source
+  // branch. It diffs the post-merge HEAD against the pre-merge SHA so it
+  // sees every issue's changes as one consolidated diff. Any commits it
+  // makes land directly on the source branch — no second merge needed.
+  //
+  // To switch back to per-issue reviewing, re-enable the SETUP A block
+  // inside Phase 2 above and comment this call out.
+  // -------------------------------------------------------------------------
+  await sandcastle.run({
+    hooks,
+    sandbox: docker(),
+    name: "reviewer",
+    maxIterations: 1,
+    agent: sandcastle.claudeCode("claude-opus-4-7"),
+    promptFile: "./.sandcastle/review-post-merge-prompt.md",
+    promptArgs: {
+      PRE_MERGE_REF: preMergeRef,
+      ISSUES: completedIssues.map((i) => `- ${i.id}: ${i.title}`).join("\n"),
+    },
+  });
+
+  console.log("\nReview pass complete.");
 }
 
 console.log("\nAll done.");
