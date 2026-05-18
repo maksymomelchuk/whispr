@@ -21,3 +21,11 @@ Corrections do **not** bias the recognizer — their `from` is by definition the
 A user-defined shorthand the user _deliberately_ uses in speech. Triggers are matched in the post-STT text and expanded into longer content, optionally with placeholders (`{{DATE}}`, `{{TIME}}`, `{{CLIPBOARD}}`).
 
 Distinction from [[Correction]]: a Correction patches over a recognizer mistake (involuntary); a Snippet expands a chosen shortcut (voluntary). A Correction's replacement is always static text; a Snippet's expansion can contain placeholders resolved at injection time.
+
+## Engine
+
+Provider-specific plumbing that turns audio into text — Deepgram's streaming WebSocket, Groq's polling REST. An Engine sees raw audio chunks and emits raw text-so-far updates plus a final raw transcript. It knows its protocol and nothing else: not [[Correction]]s, not the UI overlay, not how previews are throttled. Swapping providers means writing a new Engine; nothing else in the pipeline needs to change.
+
+## Session
+
+One push-to-talk dictation, from PTT-down to paste. The Session owns an [[Engine]] and everything around it: computing audio levels for the overlay, applying [[Correction]]s to the raw partials the Engine emits, throttling the preview event stream, and translating soft engine failures (e.g. Groq's final-POST fallback) into user-visible flashes. Engines are pluggable; the Session is the same regardless of which Engine is in use.
