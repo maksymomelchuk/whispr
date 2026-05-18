@@ -81,12 +81,25 @@ pub fn apply_corrections(text: &str, entries: &[CorrectionEntry]) -> String {
     for &c in COMPACT {
         let middle = format!(" {} ", c);
         let tail = format!(" {}", c);
-        // head strips trailing space so chained replacements glue to the
-        // right neighbor too: "  -   -  help " → "-- help " → "--help ".
-        let head = format!("{} ", c);
-        padded = padded.replace(&middle, &c.to_string());
-        padded = padded.replace(&tail, &c.to_string());
-        padded = padded.replace(&head, &c.to_string());
+        if c == '.' {
+            // Run middle in a loop to collapse double-spaces left by cascade
+            // replacements ("  .  " → " . " → ".") without touching the
+            // original dot. middle only matches space-flanked dots, so it
+            // never compacts sentence-boundary dots (those have a letter
+            // directly before them). head ". " is intentionally skipped —
+            // applying it would strip the space in "size. Check".
+            while padded.contains(&middle) {
+                padded = padded.replace(&middle, &c.to_string());
+            }
+            padded = padded.replace(&tail, &c.to_string());
+        } else {
+            padded = padded.replace(&middle, &c.to_string());
+            padded = padded.replace(&tail, &c.to_string());
+            // strips trailing space so chained replacements glue to the
+            // right neighbor: "  -   -  help " → "--help ".
+            let head = format!("{} ", c);
+            padded = padded.replace(&head, &c.to_string());
+        }
     }
     for &c in CLING_LEFT {
         let middle = format!(" {} ", c);
@@ -146,6 +159,21 @@ mod tests {
             from: from.to_string(),
             to: to.to_string(),
         }
+    }
+
+    #[test]
+    fn space_after_sentence_period_preserved() {
+        let out = apply_corrections(
+            "They should be same in size. Check and fix this.",
+            &[],
+        );
+        assert_eq!(out, "They should be same in size. Check and fix this.");
+    }
+
+    #[test]
+    fn dot_correction_still_compacts_compound_tokens() {
+        let out = apply_corrections("test dot ts", &[entry("dot", ".")]);
+        assert_eq!(out, "test.ts");
     }
 
     #[test]
