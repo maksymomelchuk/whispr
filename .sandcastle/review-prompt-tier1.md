@@ -30,7 +30,7 @@ not failure — it is the correct action when a careful read is needed.
 - Redundant local variables, obviously over-nested conditionals
 - Renames that improve clarity in a single file with no callers outside
 - Removing trailing whitespace, fixing obvious formatting
-- Removing stray `console.log` / `dbg!` / `println!` left from debugging
+- Removing stray `console.log` / `dbg!()` / `println!()` left from debugging
 
 Run `pnpm typecheck` (or the project's equivalent) after committing any fix
 to make sure nothing breaks. Commit message should describe the refinement

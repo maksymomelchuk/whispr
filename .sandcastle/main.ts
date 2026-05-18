@@ -224,7 +224,6 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
           promptFile: "./.sandcastle/review-prompt-tier1.md",
           promptArgs: {
             BRANCH: issue.branch,
-            SOURCE_BRANCH,
           },
         });
 
@@ -248,7 +247,6 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
             promptFile: "./.sandcastle/review-prompt-tier2.md",
             promptArgs: {
               BRANCH: issue.branch,
-              SOURCE_BRANCH,
               TIER1_CONCERNS: concerns || "(no specific concerns provided)",
             },
           });
