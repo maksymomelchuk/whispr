@@ -132,7 +132,7 @@ export function CorrectionsPage() {
                 spoken → text
               </span>
             }
-            hint="Group find-and-replace rules into named sets. Modes can apply any combination."
+            hint="Group find-and-replace rules into named sets. Profiles can apply any combination."
             action="New correction set"
             onClick={() => setCreatingName("")}
           />
@@ -355,7 +355,7 @@ function DeleteConfirmDialog({
               <span className="font-medium text-foreground">
                 {affectedModes.map((m) => m.name).join(", ")}
               </span>
-              . It will be unlinked from {affectedModes.length === 1 ? "that mode" : "those modes"}.
+              . It will be unlinked from {affectedModes.length === 1 ? "that profile" : "those profiles"}.
             </p>
           )}
         </div>

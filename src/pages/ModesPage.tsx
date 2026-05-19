@@ -206,7 +206,7 @@ function ModeRow({
 }) {
   const deleteDisabled = isLast || isDefault;
   let deleteTooltip: string | null = null;
-  if (isLast) deleteTooltip = "Cannot delete the only remaining mode";
+  if (isLast) deleteTooltip = "Cannot delete the only remaining profile";
   else if (isDefault) deleteTooltip = "Set a different default before deleting";
 
   return (
@@ -262,7 +262,7 @@ function ModeRow({
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label="Default mode"
+            aria-label="Default profile"
             disabled
             className="opacity-100 text-primary"
           >
@@ -499,7 +499,7 @@ export function ModeEditor({
       updateMode(normalized)
         .then(() => onPersistRef.current(normalized, false))
         .catch((e) => {
-          toast.error("Couldn't save mode", { description: String(e) });
+          toast.error("Couldn't save profile", { description: String(e) });
         });
     }, 450);
 
@@ -518,7 +518,7 @@ export function ModeEditor({
       updateMode(current)
         .then(() => onPersistRef.current(current, false))
         .catch((e) => {
-          toast.error("Couldn't save mode", { description: String(e) });
+          toast.error("Couldn't save profile", { description: String(e) });
         });
     };
   }, [isNew]);
@@ -530,7 +530,7 @@ export function ModeEditor({
       onPersistRef.current(normalized, true);
       onClose();
     } catch (e) {
-      toast.error("Couldn't add mode", { description: String(e) });
+      toast.error("Couldn't add profile", { description: String(e) });
     } finally {
       setCreating(false);
     }
@@ -539,7 +539,7 @@ export function ModeEditor({
   return (
     <>
       <SheetHeader className="px-4 pt-4 pb-0">
-        <SheetTitle>{isNew ? "New Mode" : "Edit Mode"}</SheetTitle>
+        <SheetTitle>{isNew ? "New Profile" : "Edit Profile"}</SheetTitle>
       </SheetHeader>
 
       <div className="flex flex-col gap-4 px-4 pb-10 overflow-y-auto flex-1 min-h-0 [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb:hover]:bg-muted-foreground/40">
@@ -552,7 +552,7 @@ export function ModeEditor({
             value={draft.name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
-            placeholder="Mode name"
+            placeholder="Profile name"
           />
         </div>
 
@@ -813,7 +813,7 @@ export function ModeEditor({
             disabled={creating || !draft.name.trim()}
             className="w-full"
           >
-            {creating ? "Creating…" : "Create mode"}
+            {creating ? "Creating…" : "Create profile"}
           </Button>
         </SheetFooter>
       )}
@@ -892,7 +892,7 @@ export function ModesPage() {
 
   return (
     <div className="p-6 flex flex-col gap-8">
-      <SectionHeader title="Modes" />
+      <SectionHeader title="Profiles" />
       <div className="flex flex-col gap-2">
         {settings.modes.map((mode) => {
           const provider = mode.provider_model.provider;
@@ -922,7 +922,7 @@ export function ModesPage() {
 
       <div className="flex items-center gap-3">
         <Button variant="outline" size="sm" onClick={handleAddMode}>
-          + Add mode
+          + Add profile
         </Button>
         <Button
           variant="ghost"

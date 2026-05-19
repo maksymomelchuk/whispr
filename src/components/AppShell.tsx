@@ -6,9 +6,9 @@ import {
   HouseIcon,
   KeyboardIcon,
   LightningIcon,
-  MicrophoneIcon,
   SlidersIcon,
   TextTIcon,
+  WaveformIcon,
 } from "@phosphor-icons/react";
 import { useEffect } from "react";
 import {
@@ -32,6 +32,7 @@ import { ProvidersPage } from "../pages/ProvidersPage";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -48,40 +49,42 @@ interface NavItem {
 }
 
 interface NavSection {
-  label: string;
+  label?: string;
   items: NavItem[];
 }
 
 const NAV_SECTIONS: NavSection[] = [
   {
-    label: "Workspace",
     items: [{ label: "Home", icon: HouseIcon, path: "/" }],
   },
   {
-    label: "Pipeline",
+    label: "Dictation",
     items: [
       { label: "Hotkeys", icon: KeyboardIcon, path: "/hotkeys" },
-      { label: "Providers", icon: MicrophoneIcon, path: "/providers" },
-      { label: "Terms", icon: TextTIcon, path: "/terms" },
+      { label: "Profiles", icon: SlidersIcon, path: "/modes" },
+      { label: "Providers", icon: WaveformIcon, path: "/providers" },
+      { label: "Vocabulary", icon: TextTIcon, path: "/terms" },
       { label: "Corrections", icon: ArrowsHorizontalIcon, path: "/corrections" },
-      { label: "Modes", icon: SlidersIcon, path: "/modes" },
       { label: "Snippets", icon: LightningIcon, path: "/snippets" },
     ],
   },
   {
-    label: "Insights",
+    label: "Activity",
     items: [
       { label: "History", icon: ClockCounterClockwiseIcon, path: "/history" },
       { label: "Stats", icon: ChartBarIcon, path: "/stats" },
     ],
   },
-  {
-    label: "System",
-    items: [{ label: "General", icon: GearIcon, path: "/general" }],
-  },
 ];
 
-const FLAT_NAV: NavItem[] = NAV_SECTIONS.flatMap((s) => s.items);
+const FOOTER_NAV: NavItem[] = [
+  { label: "General", icon: GearIcon, path: "/general" },
+];
+
+const FLAT_NAV: NavItem[] = [
+  ...NAV_SECTIONS.flatMap((s) => s.items),
+  ...FOOTER_NAV,
+];
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 
@@ -171,18 +174,22 @@ function ShellInner() {
         >
           <SidebarContent className="px-2 py-3 gap-4">
             {NAV_SECTIONS.map((section, sectionIdx) => (
-              <div key={section.label} className="flex flex-col gap-1">
-                <div
-                  aria-hidden
-                  className={
-                    "px-2 font-mono text-eyebrow uppercase text-muted-foreground/60 " +
-                    "transition-opacity duration-150 " +
-                    "group-data-[collapsible=icon]:opacity-0 " +
-                    (sectionIdx === 0 ? "" : "mt-1")
-                  }
-                >
-                  {section.label}
-                </div>
+              <div
+                key={section.label ?? `section-${sectionIdx}`}
+                className="flex flex-col gap-1"
+              >
+                {section.label && (
+                  <div
+                    aria-hidden
+                    className={
+                      "px-2 font-mono text-eyebrow uppercase text-muted-foreground/60 " +
+                      "transition-opacity duration-150 " +
+                      "group-data-[collapsible=icon]:opacity-0 mt-1"
+                    }
+                  >
+                    {section.label}
+                  </div>
+                )}
                 <SidebarMenu>
                   {section.items.map((item) => {
                     counter += 1;
@@ -197,6 +204,19 @@ function ShellInner() {
               </div>
             ))}
           </SidebarContent>
+          <SidebarFooter className="px-2 pb-3">
+            <SidebarMenu>
+              {FOOTER_NAV.map((item) => {
+                counter += 1;
+                const shortcut = `⌘${counter}`;
+                return (
+                  <SidebarMenuItem key={item.path}>
+                    <NavMenuButton {...item} shortcut={shortcut} />
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarFooter>
         </Sidebar>
 
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">

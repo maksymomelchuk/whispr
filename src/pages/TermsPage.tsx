@@ -136,11 +136,11 @@ export function TermsPage() {
 
   return (
     <div className="p-6 flex flex-col gap-8">
-      <SectionHeader title="Terms" trailing={trailing} />
+      <SectionHeader title="Vocabulary" trailing={trailing} />
 
       <p className="text-[12px] text-muted-foreground/85 max-w-prose -mt-5">
         Vocabulary hints sent to the recognizer so it picks your exact spelling.
-        Organize terms into named sets and assign sets to modes.
+        Organize terms into named sets and assign sets to profiles.
       </p>
 
       <div className="flex flex-col gap-2">
@@ -151,7 +151,7 @@ export function TermsPage() {
                 No term sets yet
               </span>
             }
-            hint="Create a set and assign it to modes to bias transcription."
+            hint="Create a set and assign it to profiles to bias transcription."
             action="New term set"
             onClick={() => newInputRef.current?.focus()}
           />
@@ -347,10 +347,10 @@ function DeleteConfirmDialog({
             <DialogDescription>
               This set is used by{" "}
               {affectedModeNames.length === 1
-                ? `the mode "${affectedModeNames[0]}"`
-                : `${affectedModeNames.length} modes: ${affectedModeNames.join(", ")}`}
+                ? `the profile "${affectedModeNames[0]}"`
+                : `${affectedModeNames.length} profiles: ${affectedModeNames.join(", ")}`}
               . Deleting it will unlink it from{" "}
-              {affectedModeNames.length === 1 ? "that mode" : "those modes"}.
+              {affectedModeNames.length === 1 ? "that profile" : "those profiles"}.
             </DialogDescription>
           )}
         </DialogHeader>

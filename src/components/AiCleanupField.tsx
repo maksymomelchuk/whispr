@@ -136,7 +136,7 @@ export function AiCleanupField() {
       <SectionHeader
         title="AI Cleanup"
         badge={
-          <InfoTip text="Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Enable per-mode in the Modes page. Adds ~500ms." />
+          <InfoTip text="Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Enable per-profile in the Profiles page. Adds ~500ms." />
         }
         className="items-center"
       />
@@ -186,7 +186,7 @@ export function AiCleanupField() {
         />
         {!configured && (
           <p className="-mt-1.5 text-help text-muted-foreground/80">
-            Set a credential to enable AI cleanup on a mode.
+            Set a credential to enable AI cleanup on a profile.
           </p>
         )}
 

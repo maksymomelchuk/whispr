@@ -143,7 +143,7 @@ describe("ModeEditor – autosave", () => {
     });
 
     expect(vi.mocked(toast.error)).toHaveBeenCalledWith(
-      "Couldn't save mode",
+      "Couldn't save profile",
       expect.anything(),
     );
     // Local state must not revert.
@@ -164,7 +164,7 @@ describe("ModeEditor – autosave", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Create mode" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create profile" })).toBeDisabled();
 
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 
@@ -180,9 +180,9 @@ describe("ModeEditor – autosave", () => {
     vi.useRealTimers();
 
     expect(
-      screen.getByRole("button", { name: "Create mode" }),
+      screen.getByRole("button", { name: "Create profile" }),
     ).not.toBeDisabled();
-    await userEvent.click(screen.getByRole("button", { name: "Create mode" }));
+    await userEvent.click(screen.getByRole("button", { name: "Create profile" }));
 
     await waitFor(() =>
       expect(vi.mocked(mockAddMode)).toHaveBeenCalledTimes(1),
