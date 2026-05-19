@@ -4,7 +4,7 @@
 //! authenticate against the same key the dictation path uses, so a 200 here
 //! means the key will work for real dictation.
 
-use crate::config::GroqModel;
+use crate::provider::GroqModel;
 
 const ASSEMBLYAI_ACCOUNT_URL: &str = "https://api.assemblyai.com/v2/account";
 use crate::groq_audio::encode_to_flac_16k_mono;

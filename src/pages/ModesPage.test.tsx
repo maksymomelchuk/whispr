@@ -47,6 +47,7 @@ const MODE: Mode = {
   use_terms: true,
   use_corrections: true,
   use_snippets: true,
+  provider_model: { provider: "deepgram" },
 };
 
 function EditorWrapper({

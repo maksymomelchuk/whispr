@@ -26,7 +26,7 @@ import { HotkeysPage } from "../pages/HotkeysPage";
 import { ModesPage } from "../pages/ModesPage";
 import { SnippetsPage } from "../pages/SnippetsPage";
 import { StatsPage } from "../pages/StatsPage";
-import { TranscriptionPage } from "../pages/TranscriptionPage";
+import { ProvidersPage } from "../pages/ProvidersPage";
 import {
   Sidebar,
   SidebarContent,
@@ -59,7 +59,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Pipeline",
     items: [
       { label: "Hotkeys", icon: KeyboardIcon, path: "/hotkeys" },
-      { label: "Transcription", icon: MicrophoneIcon, path: "/transcription" },
+      { label: "Providers", icon: MicrophoneIcon, path: "/providers" },
       { label: "Dictionary", icon: BookIcon, path: "/dictionary" },
       { label: "Modes", icon: SlidersIcon, path: "/modes" },
       { label: "Snippets", icon: LightningIcon, path: "/snippets" },
@@ -204,7 +204,7 @@ function ShellInner() {
               <Route index element={<HomePage />} />
               <Route path="/general" element={<GeneralPage />} />
               <Route path="/hotkeys" element={<HotkeysPage />} />
-              <Route path="/transcription" element={<TranscriptionPage />} />
+              <Route path="/providers" element={<ProvidersPage />} />
               <Route path="/dictionary" element={<DictionaryPage />} />
               <Route path="/modes" element={<ModesPage />} />
               <Route path="/snippets" element={<SnippetsPage />} />

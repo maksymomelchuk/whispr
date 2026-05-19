@@ -11,7 +11,8 @@
 //! State-machine corner cases live in `groq_session_state::State`: this module
 //! owns the buffer, the timer, and the HTTP requests.
 
-use crate::config::{self, GroqModel};
+use crate::config;
+use crate::provider::GroqModel;
 use crate::groq_audio::{self, AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
 use crate::terms;
 use crate::groq_audio::encode_to_flac_16k_mono;
@@ -36,7 +37,9 @@ const LEVEL_THROTTLE: Duration = Duration::from_millis(33);
 /// `ptt::ERROR_FLASH` uses for cleanup failures.
 const SOFT_WARNING_FLASH: Duration = Duration::from_millis(800);
 
-pub struct GroqSession;
+pub struct GroqSession {
+    pub model: GroqModel,
+}
 
 enum Outcome {
     Poll {
@@ -66,8 +69,8 @@ impl TranscriptionSession for GroqSession {
             .groq_api_key
             .clone()
             .filter(|k| !k.is_empty())
-            .ok_or_else(|| "Groq API key not configured".to_string())?;
-        let model = groq_model_api_id(settings.groq.model);
+            .ok_or_else(|| "API key missing for Groq".to_string())?;
+        let model = groq_model_api_id(self.model);
         let language = language.as_code().map(str::to_string);
         let prompt = terms::groq_prompt_hint(&terms);
         let show_live_preview = settings.show_live_preview;

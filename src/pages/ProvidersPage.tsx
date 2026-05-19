@@ -1,10 +1,10 @@
 import { AiCleanupField } from "../components/AiCleanupField";
-import { TranscriptionProviderField } from "../components/TranscriptionProviderField";
+import { ProvidersField } from "../components/ProvidersField";
 
-export function TranscriptionPage() {
+export function ProvidersPage() {
   return (
     <div className="p-6 flex flex-col gap-8">
-      <TranscriptionProviderField />
+      <ProvidersField />
       <AiCleanupField />
     </div>
   );

@@ -1,3 +1,4 @@
+use crate::provider::ProviderModel;
 use serde::{Deserialize, Serialize};
 
 pub type ModeId = String;
@@ -97,6 +98,8 @@ pub struct Mode {
     pub use_corrections: bool,
     #[serde(default = "default_true")]
     pub use_snippets: bool,
+    #[serde(default)]
+    pub provider_model: ProviderModel,
 }
 
 impl Mode {
@@ -117,6 +120,7 @@ impl Mode {
             use_terms: true,
             use_corrections: true,
             use_snippets: true,
+            provider_model: ProviderModel::Deepgram,
         }
     }
 
@@ -135,6 +139,7 @@ impl Mode {
             use_terms: true,
             use_corrections: true,
             use_snippets: true,
+            provider_model: ProviderModel::Deepgram,
         }
     }
 
@@ -153,6 +158,7 @@ impl Mode {
             use_terms: true,
             use_corrections: true,
             use_snippets: true,
+            provider_model: ProviderModel::Deepgram,
         }
     }
 
@@ -173,6 +179,7 @@ impl Mode {
             use_terms: true,
             use_corrections: true,
             use_snippets: true,
+            provider_model: ProviderModel::Deepgram,
         }
     }
 }

@@ -4,6 +4,7 @@ import {
   PencilSimpleIcon,
   StarIcon,
   TrashIcon,
+  WarningCircleIcon,
 } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -54,8 +55,47 @@ import {
   setDefaultMode,
   updateMode,
 } from "../lib/api";
-import type { HotkeyBinding, Mode, ModeLanguage } from "../lib/types";
-import { ASSEMBLYAI_MODEL_SUPPORTED_LANGUAGES } from "../lib/types";
+import type {
+  AssemblyAiModel,
+  GroqModel,
+  HotkeyBinding,
+  Mode,
+  ModeLanguage,
+  ProviderModel,
+} from "../lib/types";
+import { providerModelLanguageCodes } from "../lib/types";
+
+const PROVIDER_OPTIONS: { value: ProviderModel["provider"]; label: string }[] =
+  [
+    { value: "deepgram", label: "Deepgram" },
+    { value: "groq", label: "Groq" },
+    { value: "assembly_ai", label: "AssemblyAI" },
+  ];
+
+const GROQ_MODEL_OPTIONS: { value: GroqModel; label: string }[] = [
+  { value: "whisper_large_v3_turbo", label: "Whisper Large v3-turbo" },
+  { value: "whisper_large_v3", label: "Whisper Large v3" },
+];
+
+const ASSEMBLYAI_MODEL_OPTIONS: { value: AssemblyAiModel; label: string }[] = [
+  { value: "universal_pro_streaming", label: "Universal-3 Pro" },
+  { value: "universal_streaming_english", label: "Universal English" },
+  {
+    value: "universal_streaming_multilingual",
+    label: "Universal Multilingual",
+  },
+  { value: "whisper_streaming", label: "Whisper Streaming" },
+];
+
+function defaultProviderModel(
+  provider: ProviderModel["provider"],
+): ProviderModel {
+  if (provider === "groq")
+    return { provider: "groq", model: "whisper_large_v3_turbo" };
+  if (provider === "assembly_ai")
+    return { provider: "assembly_ai", model: "universal_pro_streaming" };
+  return { provider: "deepgram" };
+}
 
 const LANGUAGES: { code: string; name: string; flag: string }[] = [
   { code: "en", name: "English", flag: "🇺🇸" },
@@ -146,6 +186,7 @@ function ModeRow({
   isDefault,
   isLast,
   bindings,
+  missingProviderKey,
   onEdit,
   onDuplicate,
   onDelete,
@@ -155,6 +196,7 @@ function ModeRow({
   isDefault: boolean;
   isLast: boolean;
   bindings: HotkeyBinding[];
+  missingProviderKey: boolean;
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -177,6 +219,16 @@ function ModeRow({
             <Badge variant="neutral" className="text-[10px]">
               Cleanup
             </Badge>
+          )}
+          {missingProviderKey && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex items-center text-amber-500">
+                  <WarningCircleIcon size={14} weight="fill" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>API key missing for this provider</TooltipContent>
+            </Tooltip>
           )}
         </div>
         <span className="text-xs text-muted-foreground">
@@ -271,13 +323,11 @@ export function ModeEditor({
   isNew,
   onClose,
   onPersist,
-  allowedLanguageCodes = null,
 }: {
   mode: Mode;
   isNew: boolean;
   onClose: () => void;
   onPersist: (mode: Mode, wasNew: boolean) => void;
-  allowedLanguageCodes?: string[] | null;
 }) {
   const [draft, setDraft] = useState<Mode>(mode);
   const [creating, setCreating] = useState(false);
@@ -304,6 +354,20 @@ export function ModeEditor({
     setRestrictCodes(updated);
     if (updated.length === 0) setLangMode("auto");
   };
+
+  const allowedLanguageCodes = providerModelLanguageCodes(draft.provider_model);
+
+  const setProviderModel = (pm: ProviderModel) =>
+    setDraft((d) => ({ ...d, provider_model: pm }));
+
+  const setProvider = (provider: ProviderModel["provider"]) =>
+    setProviderModel(defaultProviderModel(provider));
+
+  const setGroqModel = (model: GroqModel) =>
+    setProviderModel({ provider: "groq", model });
+
+  const setAssemblyAiModel = (model: AssemblyAiModel) =>
+    setProviderModel({ provider: "assembly_ai", model });
 
   const setName = (name: string) => setDraft((d) => ({ ...d, name }));
   const setCleanup = (enabled: boolean) =>
@@ -417,6 +481,67 @@ export function ModeEditor({
             placeholder="Mode name"
           />
         </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-[13px]">Provider</Label>
+          <Select
+            value={draft.provider_model.provider}
+            onValueChange={(v) => setProvider(v as ProviderModel["provider"])}
+          >
+            <SelectTrigger size="sm" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PROVIDER_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {draft.provider_model.provider === "groq" && (
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[13px]">Model</Label>
+            <Select
+              value={draft.provider_model.model}
+              onValueChange={(v) => setGroqModel(v as GroqModel)}
+            >
+              <SelectTrigger size="sm" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {GROQ_MODEL_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {draft.provider_model.provider === "assembly_ai" && (
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[13px]">Model</Label>
+            <Select
+              value={draft.provider_model.model}
+              onValueChange={(v) => setAssemblyAiModel(v as AssemblyAiModel)}
+            >
+              <SelectTrigger size="sm" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ASSEMBLYAI_MODEL_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="flex flex-col gap-2">
           <Label className="text-[13px]">Spoken language</Label>
@@ -642,6 +767,7 @@ export function ModesPage() {
       use_terms: true,
       use_corrections: true,
       use_snippets: true,
+      provider_model: { provider: "deepgram" },
     };
     openEditor(newMode, true);
   };
@@ -678,21 +804,30 @@ export function ModesPage() {
     <div className="p-6 flex flex-col gap-8">
       <SectionHeader title="Modes" />
       <div className="flex flex-col gap-2">
-        {settings.modes.map((mode) => (
-          <ModeRow
-            key={mode.id}
-            mode={mode}
-            isDefault={mode.id === settings.default_mode_id}
-            isLast={settings.modes.length === 1}
-            bindings={settings.hotkey_bindings.filter(
-              (b) => b.mode_id === mode.id,
-            )}
-            onEdit={() => openEditor(mode)}
-            onDuplicate={() => handleDuplicate(mode.id)}
-            onDelete={() => handleDelete(mode.id)}
-            onSetDefault={() => handleSetDefault(mode.id)}
-          />
-        ))}
+        {settings.modes.map((mode) => {
+          const provider = mode.provider_model.provider;
+          const missingProviderKey =
+            (provider === "deepgram" && !settings.deepgram_api_key_configured) ||
+            (provider === "groq" && !settings.groq_api_key_configured) ||
+            (provider === "assembly_ai" &&
+              !settings.assemblyai_api_key_configured);
+          return (
+            <ModeRow
+              key={mode.id}
+              mode={mode}
+              isDefault={mode.id === settings.default_mode_id}
+              isLast={settings.modes.length === 1}
+              bindings={settings.hotkey_bindings.filter(
+                (b) => b.mode_id === mode.id,
+              )}
+              missingProviderKey={missingProviderKey}
+              onEdit={() => openEditor(mode)}
+              onDuplicate={() => handleDuplicate(mode.id)}
+              onDelete={() => handleDelete(mode.id)}
+              onSetDefault={() => handleSetDefault(mode.id)}
+            />
+          );
+        })}
       </div>
 
       <div className="flex items-center gap-3">
@@ -721,11 +856,6 @@ export function ModesPage() {
               isNew={editor.isNew}
               onClose={closeEditor}
               onPersist={handlePersist}
-              allowedLanguageCodes={
-                settings.transcription_provider === "assembly_ai"
-                  ? ASSEMBLYAI_MODEL_SUPPORTED_LANGUAGES[settings.assemblyai.model]
-                  : null
-              }
             />
           )}
         </SheetContent>

@@ -30,10 +30,6 @@ export type AssemblyAiModel =
   | "universal_streaming_multilingual"
   | "whisper_streaming";
 
-export interface AssemblyAiSettings {
-  model: AssemblyAiModel;
-}
-
 export const ASSEMBLYAI_MODEL_SUPPORTED_LANGUAGES: Record<
   AssemblyAiModel,
   string[] | null
@@ -44,8 +40,14 @@ export const ASSEMBLYAI_MODEL_SUPPORTED_LANGUAGES: Record<
   whisper_streaming: null,
 };
 
-export interface GroqSettings {
-  model: GroqModel;
+export type ProviderModel =
+  | { provider: "deepgram" }
+  | { provider: "groq"; model: GroqModel }
+  | { provider: "assembly_ai"; model: AssemblyAiModel };
+
+export function providerModelLanguageCodes(pm: ProviderModel): string[] | null {
+  if (pm.provider !== "assembly_ai") return null;
+  return ASSEMBLYAI_MODEL_SUPPORTED_LANGUAGES[pm.model];
 }
 
 /// `null` = unlimited, `0` = off, `n` = keep last n.
@@ -84,12 +86,12 @@ export interface Mode {
   use_terms: boolean;
   use_corrections: boolean;
   use_snippets: boolean;
+  provider_model: ProviderModel;
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
 export interface Settings {
-  transcription_provider: TranscriptionProvider;
   deepgram_api_key_configured: boolean;
   groq_api_key_configured: boolean;
   assemblyai_api_key_configured: boolean;
@@ -97,8 +99,6 @@ export interface Settings {
   terms: string[];
   corrections: CorrectionEntry[];
   snippets: Snippet[];
-  groq: GroqSettings;
-  assemblyai: AssemblyAiSettings;
   modes: Mode[];
   default_mode_id: string;
   ai_cleanup_enabled: boolean;
@@ -112,6 +112,22 @@ export interface Settings {
   history_limit: HistoryLimit;
   show_in_dock: boolean;
   show_live_preview: boolean;
+}
+
+// ── Capability matrix (from Tauri backend) ────────────────────────────────────
+
+export interface ModelEntry {
+  id: ProviderModel;
+  supported_language_codes: string[] | null;
+}
+
+export interface ProviderEntry {
+  id: TranscriptionProvider;
+  models: ModelEntry[];
+}
+
+export interface CapabilityMatrix {
+  providers: ProviderEntry[];
 }
 
 export type CleanupStatus =

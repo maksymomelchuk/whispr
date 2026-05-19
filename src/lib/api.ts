@@ -2,11 +2,10 @@ import { invoke } from "@tauri-apps/api/core";
 
 import type {
   ApiKeyValidation,
-  AssemblyAiSettings,
+  CapabilityMatrix,
   CleanupAuthMode,
   CleanupStats,
   CorrectionEntry,
-  GroqSettings,
   HistoryEntry,
   HistoryLimit,
   HotkeyBinding,
@@ -14,15 +13,14 @@ import type {
   Settings,
   Snippet,
   StatsRow,
-  TranscriptionProvider,
 } from "./types";
 
 export { formatShortcut } from "./shortcut";
 
 export const getSettings = () => invoke<Settings>("get_settings");
 
-export const setTranscriptionProvider = (provider: TranscriptionProvider) =>
-  invoke<void>("set_transcription_provider", { provider });
+export const getCapabilityMatrix = () =>
+  invoke<CapabilityMatrix>("get_capability_matrix");
 
 export const setDeepgramApiKey = (apiKey: string) =>
   invoke<void>("set_deepgram_api_key", { apiKey });
@@ -30,14 +28,8 @@ export const setDeepgramApiKey = (apiKey: string) =>
 export const setGroqApiKey = (apiKey: string) =>
   invoke<void>("set_groq_api_key", { apiKey });
 
-export const setGroqSettings = (groq: GroqSettings) =>
-  invoke<void>("set_groq_settings", { groq });
-
 export const setAssemblyAiApiKey = (apiKey: string) =>
   invoke<void>("set_assemblyai_api_key", { apiKey });
-
-export const setAssemblyAiSettings = (assemblyai: AssemblyAiSettings) =>
-  invoke<void>("set_assemblyai_settings", { assemblyai });
 
 export const validateAssemblyAiApiKey = (apiKey: string) =>
   invoke<ApiKeyValidation>("validate_assemblyai_api_key", { apiKey });

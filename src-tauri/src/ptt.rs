@@ -1,4 +1,5 @@
-use crate::config::{HotkeyBinding, Shortcut, TranscriptionProvider};
+use crate::config::{HotkeyBinding, Shortcut};
+use crate::provider::{ProviderModel, TranscriptionProvider};
 use crate::assemblyai_session::AssemblyAiSession;
 use crate::deepgram_session::DeepgramSession;
 use crate::groq_session::GroqSession;
@@ -440,19 +441,42 @@ async fn run_session(
 
     let session_terms = if mode_use_terms { settings.terms.clone() } else { vec![] };
 
-    let session_result = match settings.transcription_provider {
-        TranscriptionProvider::Deepgram => {
+    let missing_key = match active_mode.provider_model.provider() {
+        TranscriptionProvider::Deepgram => settings
+            .deepgram_api_key
+            .as_deref()
+            .is_none_or(|k| k.is_empty()),
+        TranscriptionProvider::Groq => settings
+            .groq_api_key
+            .as_deref()
+            .is_none_or(|k| k.is_empty()),
+        TranscriptionProvider::AssemblyAi => settings
+            .assemblyai_api_key
+            .as_deref()
+            .is_none_or(|k| k.is_empty()),
+    };
+    if missing_key {
+        let name = match active_mode.provider_model.provider() {
+            TranscriptionProvider::Deepgram => "Deepgram",
+            TranscriptionProvider::Groq => "Groq",
+            TranscriptionProvider::AssemblyAi => "AssemblyAI",
+        };
+        return Err(format!("API key missing for {name}"));
+    }
+
+    let session_result = match &active_mode.provider_model {
+        ProviderModel::Deepgram => {
             DeepgramSession
                 .run(app.clone(), format, chunk_rx, mode_language, session_terms)
                 .await
         }
-        TranscriptionProvider::Groq => {
-            GroqSession
+        ProviderModel::Groq { model } => {
+            GroqSession { model: *model }
                 .run(app.clone(), format, chunk_rx, mode_language, session_terms)
                 .await
         }
-        TranscriptionProvider::AssemblyAi => {
-            AssemblyAiSession
+        ProviderModel::AssemblyAi { model } => {
+            AssemblyAiSession { model: *model }
                 .run(app.clone(), format, chunk_rx, mode_language, session_terms)
                 .await
         }

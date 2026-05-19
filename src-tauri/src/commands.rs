@@ -1,23 +1,22 @@
 use crate::api_key_validation::{self, ApiKeyValidation};
 use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
 use crate::config::{
-    self, AssemblyAiSettings, CleanupAuthMode, CorrectionEntry, GroqSettings, HotkeyBinding,
-    Settings, SnippetEntry, TranscriptionProvider,
+    self, CleanupAuthMode, CorrectionEntry, HotkeyBinding, Settings, SnippetEntry,
 };
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::mode::{Mode, ModeId};
 use crate::permissions;
+use crate::provider::{AssemblyAiModel, GroqModel, ProviderModel, TranscriptionProvider};
 use crate::state::AppState;
 use crate::stats::{self, StatsRow, STATS_UPDATED_EVENT};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
-/// Public projection of Settings for the webview. Omits both API keys so a
-/// webview XSS (e.g., via a future supply-chain compromise) cannot read them
-/// back over IPC. Keys are write-only from the frontend's perspective.
+/// Public projection of Settings for the webview. Omits API keys so a
+/// webview XSS cannot read them back over IPC. Keys are write-only from the
+/// frontend's perspective.
 #[derive(Debug, Clone, Serialize)]
 pub struct SettingsView {
-    pub transcription_provider: TranscriptionProvider,
     pub deepgram_api_key_configured: bool,
     pub groq_api_key_configured: bool,
     pub assemblyai_api_key_configured: bool,
@@ -25,8 +24,6 @@ pub struct SettingsView {
     pub terms: Vec<String>,
     pub corrections: Vec<CorrectionEntry>,
     pub snippets: Vec<SnippetEntry>,
-    pub groq: GroqSettings,
-    pub assemblyai: AssemblyAiSettings,
     pub modes: Vec<Mode>,
     pub default_mode_id: ModeId,
     pub ai_cleanup_enabled: bool,
@@ -49,12 +46,9 @@ impl From<Settings> for SettingsView {
             .as_deref()
             .or(s.api_key.as_deref())
             .is_some_and(|k| !k.is_empty());
-        let groq_api_key_configured =
-            s.groq_api_key.as_deref().is_some_and(|k| !k.is_empty());
         SettingsView {
-            transcription_provider: s.transcription_provider,
             deepgram_api_key_configured,
-            groq_api_key_configured,
+            groq_api_key_configured: s.groq_api_key.as_deref().is_some_and(|k| !k.is_empty()),
             assemblyai_api_key_configured: s
                 .assemblyai_api_key
                 .as_deref()
@@ -63,8 +57,6 @@ impl From<Settings> for SettingsView {
             terms: s.terms,
             corrections: s.corrections,
             snippets: s.snippets,
-            groq: s.groq,
-            assemblyai: s.assemblyai.clone(),
             modes: s.modes,
             default_mode_id: s.default_mode_id,
             ai_cleanup_enabled: s.ai_cleanup.enabled,
@@ -90,17 +82,72 @@ impl From<Settings> for SettingsView {
     }
 }
 
+#[derive(Debug, Serialize)]
+pub struct ModelEntry {
+    pub id: ProviderModel,
+    pub supported_language_codes: Option<Vec<&'static str>>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ProviderEntry {
+    pub id: TranscriptionProvider,
+    pub models: Vec<ModelEntry>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CapabilityMatrix {
+    pub providers: Vec<ProviderEntry>,
+}
+
 #[tauri::command]
 pub fn get_settings(app: AppHandle) -> SettingsView {
     config::load(&app).into()
 }
 
 #[tauri::command]
-pub fn set_transcription_provider(
-    app: AppHandle,
-    provider: TranscriptionProvider,
-) -> Result<(), String> {
-    config::update(&app, |s| s.transcription_provider = provider)
+pub fn get_capability_matrix() -> CapabilityMatrix {
+    CapabilityMatrix {
+        providers: vec![
+            ProviderEntry {
+                id: TranscriptionProvider::Deepgram,
+                models: vec![],
+            },
+            ProviderEntry {
+                id: TranscriptionProvider::Groq,
+                models: vec![
+                    ModelEntry {
+                        id: ProviderModel::Groq { model: GroqModel::WhisperLargeV3Turbo },
+                        supported_language_codes: None,
+                    },
+                    ModelEntry {
+                        id: ProviderModel::Groq { model: GroqModel::WhisperLargeV3 },
+                        supported_language_codes: None,
+                    },
+                ],
+            },
+            ProviderEntry {
+                id: TranscriptionProvider::AssemblyAi,
+                models: vec![
+                    ModelEntry {
+                        id: ProviderModel::AssemblyAi { model: AssemblyAiModel::UniversalProStreaming },
+                        supported_language_codes: AssemblyAiModel::UniversalProStreaming.supported_language_codes(),
+                    },
+                    ModelEntry {
+                        id: ProviderModel::AssemblyAi { model: AssemblyAiModel::UniversalStreamingEnglish },
+                        supported_language_codes: AssemblyAiModel::UniversalStreamingEnglish.supported_language_codes(),
+                    },
+                    ModelEntry {
+                        id: ProviderModel::AssemblyAi { model: AssemblyAiModel::UniversalStreamingMultilingual },
+                        supported_language_codes: AssemblyAiModel::UniversalStreamingMultilingual.supported_language_codes(),
+                    },
+                    ModelEntry {
+                        id: ProviderModel::AssemblyAi { model: AssemblyAiModel::WhisperStreaming },
+                        supported_language_codes: AssemblyAiModel::WhisperStreaming.supported_language_codes(),
+                    },
+                ],
+            },
+        ],
+    }
 }
 
 #[tauri::command]
@@ -119,18 +166,8 @@ pub fn set_assemblyai_api_key(app: AppHandle, api_key: String) -> Result<(), Str
 }
 
 #[tauri::command]
-pub fn set_assemblyai_settings(app: AppHandle, assemblyai: AssemblyAiSettings) -> Result<(), String> {
-    config::update(&app, |s| s.assemblyai = assemblyai)
-}
-
-#[tauri::command]
 pub async fn validate_assemblyai_api_key(api_key: String) -> ApiKeyValidation {
     api_key_validation::validate_assemblyai(&api_key).await
-}
-
-#[tauri::command]
-pub fn set_groq_settings(app: AppHandle, groq: GroqSettings) -> Result<(), String> {
-    config::update(&app, |s| s.groq = groq)
 }
 
 #[tauri::command]
@@ -146,7 +183,7 @@ pub async fn validate_groq_api_key(app: AppHandle, api_key: String) -> ApiKeyVal
         .as_code()
         .unwrap_or("en")
         .to_string();
-    api_key_validation::validate_groq(&api_key, settings.groq.model, &language).await
+    api_key_validation::validate_groq(&api_key, GroqModel::default(), &language).await
 }
 
 #[tauri::command]

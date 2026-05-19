@@ -1,4 +1,5 @@
-use crate::config::{self, AssemblyAiModel};
+use crate::config;
+use crate::provider::AssemblyAiModel;
 use crate::groq_audio::{self, to_pcm_16k_mono_bytes, AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
 use crate::mode::ModeLanguage;
 use crate::recorder::AudioFormat;
@@ -23,7 +24,9 @@ const TERMINATION_TIMEOUT: Duration = Duration::from_secs(3);
 /// = 800 samples * 2 bytes = 1600 bytes.
 const MIN_SEND_BYTES: usize = 1600;
 
-pub struct AssemblyAiSession;
+pub struct AssemblyAiSession {
+    pub model: AssemblyAiModel,
+}
 
 impl TranscriptionSession for AssemblyAiSession {
     async fn run(
@@ -40,8 +43,8 @@ impl TranscriptionSession for AssemblyAiSession {
             .assemblyai_api_key
             .clone()
             .filter(|k| !k.is_empty())
-            .ok_or_else(|| "AssemblyAI API key not configured".to_string())?;
-        let model = settings.assemblyai.model;
+            .ok_or_else(|| "API key missing for AssemblyAI".to_string())?;
+        let model = self.model;
         let show_live_preview = settings.show_live_preview;
 
         if let ModeLanguage::Exact { code } = &language {

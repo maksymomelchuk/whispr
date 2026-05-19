@@ -24,7 +24,6 @@ vi.mock("sonner", () => ({
 }));
 
 const BASE: Settings = {
-  transcription_provider: "deepgram",
   deepgram_api_key_configured: false,
   groq_api_key_configured: false,
   assemblyai_api_key_configured: false,
@@ -32,8 +31,6 @@ const BASE: Settings = {
   terms: [],
   corrections: [],
   snippets: [],
-  groq: { model: "whisper_large_v3" },
-  assemblyai: { model: "universal_pro_streaming" },
   modes: [],
   default_mode_id: "",
   ai_cleanup_enabled: true,

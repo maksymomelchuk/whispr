@@ -7,6 +7,7 @@ import {
   clearStats,
   deleteMode,
   duplicateMode,
+  getCapabilityMatrix,
   getCleanupStats,
   getHistory,
   getSettings,
@@ -15,6 +16,7 @@ import {
   openTranslationSettings,
   setAnthropicApiKey,
   setAnthropicOauthToken,
+  setAssemblyAiApiKey,
   setCleanupAuthMode,
   setCleanupEnabled,
   setCleanupThresholds,
@@ -22,7 +24,6 @@ import {
   setDeepgramApiKey,
   setDefaultMode,
   setGroqApiKey,
-  setGroqSettings,
   setHistoryLimit,
   setHotkeyBindings,
   setInputDevice,
@@ -32,8 +33,8 @@ import {
   setShowLivePreview,
   setSnippets,
   setTerms,
-  setTranscriptionProvider,
   updateMode,
+  validateAssemblyAiApiKey,
   validateDeepgramApiKey,
   validateGroqApiKey,
 } from "./api";
@@ -46,11 +47,7 @@ const COMMANDS: Array<{
   args?: Record<string, unknown>;
 }> = [
   { call: () => getSettings(), cmd: "get_settings" },
-  {
-    call: () => setTranscriptionProvider("deepgram"),
-    cmd: "set_transcription_provider",
-    args: { provider: "deepgram" },
-  },
+  { call: () => getCapabilityMatrix(), cmd: "get_capability_matrix" },
   {
     call: () => setDeepgramApiKey("dk"),
     cmd: "set_deepgram_api_key",
@@ -62,9 +59,9 @@ const COMMANDS: Array<{
     args: { apiKey: "gk" },
   },
   {
-    call: () => setGroqSettings({ model: "whisper_large_v3" }),
-    cmd: "set_groq_settings",
-    args: { groq: { model: "whisper_large_v3" } },
+    call: () => setAssemblyAiApiKey("ak"),
+    cmd: "set_assemblyai_api_key",
+    args: { apiKey: "ak" },
   },
   {
     call: () => validateDeepgramApiKey("dk"),
@@ -75,6 +72,11 @@ const COMMANDS: Array<{
     call: () => validateGroqApiKey("gk"),
     cmd: "validate_groq_api_key",
     args: { apiKey: "gk" },
+  },
+  {
+    call: () => validateAssemblyAiApiKey("ak"),
+    cmd: "validate_assemblyai_api_key",
+    args: { apiKey: "ak" },
   },
   {
     call: () => setHotkeyBindings([]),
@@ -119,6 +121,7 @@ const COMMANDS: Array<{
         use_terms: true,
         use_corrections: true,
         use_snippets: true,
+        provider_model: { provider: "deepgram" },
       }),
     cmd: "add_mode",
     args: {
@@ -132,6 +135,7 @@ const COMMANDS: Array<{
         use_terms: true,
         use_corrections: true,
         use_snippets: true,
+        provider_model: { provider: "deepgram" },
       },
     },
   },
@@ -147,6 +151,7 @@ const COMMANDS: Array<{
         use_terms: true,
         use_corrections: true,
         use_snippets: true,
+        provider_model: { provider: "groq", model: "whisper_large_v3_turbo" },
       }),
     cmd: "update_mode",
     args: {
@@ -160,6 +165,7 @@ const COMMANDS: Array<{
         use_terms: true,
         use_corrections: true,
         use_snippets: true,
+        provider_model: { provider: "groq", model: "whisper_large_v3_turbo" },
       },
     },
   },

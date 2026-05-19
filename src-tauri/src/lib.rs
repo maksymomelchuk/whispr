@@ -3,6 +3,7 @@ mod commands;
 pub mod config;
 pub mod history;
 pub mod mode;
+pub mod provider;
 pub mod pipeline;
 // corrections helpers are consumed by pipeline (cross-platform) and by
 // macOS-only session modules; allow unused items on non-macOS so the
@@ -147,12 +148,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
-            commands::set_transcription_provider,
+            commands::get_capability_matrix,
             commands::set_deepgram_api_key,
             commands::set_groq_api_key,
-            commands::set_groq_settings,
             commands::set_assemblyai_api_key,
-            commands::set_assemblyai_settings,
             commands::validate_deepgram_api_key,
             commands::validate_groq_api_key,
             commands::validate_assemblyai_api_key,

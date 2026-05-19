@@ -2,6 +2,7 @@ use crate::mode::{
     Mode, ModeId, ModeLanguage, SEED_MODE_CLEANED_EN, SEED_MODE_DEFAULT_EN, SEED_MODE_UA_EN,
     SEED_MODE_UKRAINIAN,
 };
+pub use crate::provider::{AssemblyAiModel, GroqModel, ProviderModel, TranscriptionProvider};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
@@ -122,66 +123,17 @@ pub struct DeepgramSettings {
     pub language: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum TranscriptionProvider {
-    #[default]
-    Deepgram,
-    Groq,
-    AssemblyAi,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AssemblyAiModel {
-    #[default]
-    UniversalProStreaming,
-    UniversalStreamingEnglish,
-    UniversalStreamingMultilingual,
-    WhisperStreaming,
-}
-
-impl AssemblyAiModel {
-    pub fn api_id(self) -> &'static str {
-        match self {
-            Self::UniversalProStreaming => "u3-rt-pro",
-            Self::UniversalStreamingEnglish => "universal-streaming-english",
-            Self::UniversalStreamingMultilingual => "universal-streaming-multilingual",
-            Self::WhisperStreaming => "whisper-rt",
-        }
-    }
-
-    pub fn supports_language(self, code: &str) -> bool {
-        match self {
-            Self::UniversalStreamingEnglish => code == "en",
-            Self::UniversalProStreaming | Self::UniversalStreamingMultilingual => {
-                matches!(code, "en" | "es" | "de" | "fr" | "pt" | "it")
-            }
-            Self::WhisperStreaming => true,
-        }
-    }
-
-}
-
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AssemblyAiSettings {
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub model: AssemblyAiModel,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum GroqModel {
-    WhisperLargeV3,
-    #[default]
-    WhisperLargeV3Turbo,
-}
-
-/// Language is now owned by Mode; this field is read from legacy JSON during
-/// migration and never written back (skip_serializing).
+/// Language and model are now owned by Mode; these fields are read from legacy
+/// JSON during migration and never written back (skip_serializing).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GroqSettings {
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub model: GroqModel,
     #[serde(default, skip_serializing)]
     pub language: Option<String>,
@@ -279,7 +231,7 @@ pub struct Settings {
     /// Legacy field; renamed to `dictionary`. Read during migration, never written back.
     #[serde(rename = "replacements", default, skip_serializing)]
     pub legacy_replacements: Option<Vec<DictionaryEntry>>,
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub transcription_provider: TranscriptionProvider,
     #[serde(default)]
     pub deepgram_api_key: Option<String>,
@@ -473,6 +425,21 @@ fn migrate(s: &mut Settings) -> bool {
             }
             mode.legacy_use_dictionary = None;
             changed = true;
+        }
+    }
+
+    // ── Mode migration: stamp per-mode provider_model from legacy global ──
+    // Only runs when the global provider was explicitly non-default (Groq or
+    // AssemblyAI) AND a mode still has the default Deepgram — which means it
+    // was loaded from old JSON that predates per-mode providers.
+    if s.transcription_provider != TranscriptionProvider::Deepgram {
+        let target =
+            ProviderModel::from_legacy(s.transcription_provider, s.groq.model, s.assemblyai.model);
+        for mode in s.modes.iter_mut() {
+            if mode.provider_model == ProviderModel::default() {
+                mode.provider_model = target.clone();
+                changed = true;
+            }
         }
     }
 
@@ -1160,5 +1127,81 @@ mod tests {
             },
         ];
         assert!(check_hotkey_conflicts(&bindings).is_err());
+    }
+
+    #[test]
+    fn migration_stamps_groq_provider_model_onto_all_seeded_modes() {
+        let json = r#"{"transcription_provider": "groq", "groq": {"model": "whisper_large_v3"}}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        let changed = migrate(&mut s);
+        assert!(changed);
+        let expected = ProviderModel::Groq { model: GroqModel::WhisperLargeV3 };
+        for mode in &s.modes {
+            assert_eq!(
+                mode.provider_model, expected,
+                "mode {} should have Groq provider_model",
+                mode.id
+            );
+        }
+    }
+
+    #[test]
+    fn migration_stamps_assemblyai_provider_model_onto_all_seeded_modes() {
+        let json = r#"{"transcription_provider": "assembly_ai", "assemblyai": {"model": "whisper_streaming"}}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        let changed = migrate(&mut s);
+        assert!(changed);
+        let expected = ProviderModel::AssemblyAi { model: AssemblyAiModel::WhisperStreaming };
+        for mode in &s.modes {
+            assert_eq!(
+                mode.provider_model, expected,
+                "mode {} should have AssemblyAI provider_model",
+                mode.id
+            );
+        }
+    }
+
+    #[test]
+    fn migration_provider_model_skips_already_customised_modes() {
+        let json = r#"{"transcription_provider": "groq"}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        migrate(&mut s);
+        // Customise one mode to AssemblyAI after first migration.
+        s.modes[0].provider_model = ProviderModel::AssemblyAi { model: AssemblyAiModel::default() };
+        // A second migrate (e.g. transcription_provider still Groq after reload)
+        // must not overwrite the already-customised mode.
+        migrate(&mut s);
+        assert_eq!(
+            s.modes[0].provider_model,
+            ProviderModel::AssemblyAi { model: AssemblyAiModel::default() },
+            "already-customised mode must not be overwritten"
+        );
+    }
+
+    #[test]
+    fn migration_deepgram_provider_does_not_stamp_modes() {
+        let mut s = Settings::default();
+        s.transcription_provider = TranscriptionProvider::Deepgram;
+        let changed = migrate(&mut s);
+        assert!(!changed, "deepgram is the default; no stamping needed");
+        for mode in &s.modes {
+            assert_eq!(mode.provider_model, ProviderModel::Deepgram);
+        }
+    }
+
+    #[test]
+    fn migration_provider_model_does_not_appear_in_reserialized_json() {
+        let json = r#"{"transcription_provider": "groq"}"#;
+        let s = from_json(json).unwrap();
+        let reserialized = serde_json::to_string(&s).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
+        assert!(
+            v.get("transcription_provider").is_none(),
+            "transcription_provider must be skipped on serialization"
+        );
+        assert!(
+            v.get("groq").and_then(|g| g.get("model")).is_none(),
+            "groq.model must be skipped on serialization"
+        );
     }
 }
