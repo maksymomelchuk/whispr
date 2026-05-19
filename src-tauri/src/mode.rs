@@ -96,7 +96,8 @@ pub struct Mode {
     /// Legacy boolean; read on load to populate term_set_ids, then not written back.
     #[serde(default = "default_true", skip_serializing)]
     pub use_terms: bool,
-    #[serde(default = "default_true")]
+    /// Legacy field; read during migration to seed correction_set_ids, then dropped.
+    #[serde(default = "default_true", skip_serializing)]
     pub use_corrections: bool,
     #[serde(default = "default_true")]
     pub use_snippets: bool,
@@ -104,6 +105,8 @@ pub struct Mode {
     pub provider_model: ProviderModel,
     #[serde(default)]
     pub term_set_ids: Vec<SetId>,
+    #[serde(default)]
+    pub correction_set_ids: Vec<SetId>,
 }
 
 impl Mode {
@@ -126,6 +129,7 @@ impl Mode {
             use_snippets: true,
             provider_model: ProviderModel::Deepgram,
             term_set_ids: vec![],
+            correction_set_ids: vec![],
         }
     }
 
@@ -146,6 +150,7 @@ impl Mode {
             use_snippets: true,
             provider_model: ProviderModel::Deepgram,
             term_set_ids: vec![],
+            correction_set_ids: vec![],
         }
     }
 
@@ -166,6 +171,7 @@ impl Mode {
             use_snippets: true,
             provider_model: ProviderModel::Deepgram,
             term_set_ids: vec![],
+            correction_set_ids: vec![],
         }
     }
 
@@ -188,6 +194,7 @@ impl Mode {
             use_snippets: true,
             provider_model: ProviderModel::Deepgram,
             term_set_ids: vec![],
+            correction_set_ids: vec![],
         }
     }
 }
@@ -301,9 +308,9 @@ mod tests {
         assert_eq!(decoded.name, "Default English");
         assert_eq!(decoded.language, ModeLanguage::exact("en"));
         assert!(!decoded.ai_cleanup.enabled);
-        assert!(decoded.use_corrections);
         assert!(decoded.use_snippets);
         assert!(decoded.term_set_ids.is_empty());
+        assert!(decoded.correction_set_ids.is_empty());
     }
 
     #[test]
@@ -336,8 +343,9 @@ mod tests {
         let json = serde_json::to_string(&mode).unwrap();
         assert!(!json.contains("use_dictionary"), "use_dictionary must not appear");
         assert!(!json.contains("use_terms"), "use_terms is skip_serializing");
-        assert!(json.contains("use_corrections"));
+        assert!(!json.contains("use_corrections"), "use_corrections is skip_serializing");
         assert!(json.contains("term_set_ids"));
+        assert!(json.contains("correction_set_ids"));
     }
 
     #[test]

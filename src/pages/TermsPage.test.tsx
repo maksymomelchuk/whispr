@@ -35,7 +35,7 @@ const BASE_MODE: Mode = {
   translate: { kind: "off" },
   ai_cleanup: { enabled: false, prompt_override: null },
   term_set_ids: [],
-  use_corrections: true,
+  correction_set_ids: [],
   use_snippets: true,
   provider_model: { provider: "deepgram" },
 };
@@ -46,7 +46,7 @@ const BASE: Settings = {
   assemblyai_api_key_configured: false,
   hotkey_bindings: [],
   term_sets: [],
-  corrections: [],
+  correction_sets: [],
   snippets: [],
   modes: [BASE_MODE],
   default_mode_id: "mode-1",

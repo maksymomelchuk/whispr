@@ -139,5 +139,6 @@ fn mode_with_language_off(language: ModeLanguage) -> Mode {
         use_snippets: true,
         provider_model: ProviderModel::Deepgram,
         term_set_ids: vec![],
+        correction_set_ids: vec![],
     }
 }

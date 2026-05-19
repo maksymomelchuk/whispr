@@ -96,6 +96,15 @@ pub struct CorrectionEntry {
     pub to: String,
 }
 
+pub const DEFAULT_CORRECTION_SET_ID: &str = "correction-set-default";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NamedCorrectionSet {
+    pub id: SetId,
+    pub name: String,
+    pub entries: Vec<CorrectionEntry>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnippetEntry {
     pub id: String,
@@ -261,8 +270,12 @@ pub struct Settings {
     pub terms: Vec<String>,
     #[serde(default)]
     pub term_sets: Vec<NamedTermSet>,
-    #[serde(default = "default_corrections")]
-    pub corrections: Vec<CorrectionEntry>,
+    /// Legacy flat corrections list; seeded into the "Default Corrections" set on
+    /// first migration, then dropped from subsequent saves.
+    #[serde(rename = "corrections", default = "default_corrections", skip_serializing)]
+    pub legacy_corrections: Vec<CorrectionEntry>,
+    #[serde(default)]
+    pub correction_sets: Vec<NamedCorrectionSet>,
     #[serde(default)]
     pub snippets: Vec<SnippetEntry>,
     #[serde(default)]
@@ -291,6 +304,20 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
+        let default_set = NamedCorrectionSet {
+            id: DEFAULT_CORRECTION_SET_ID.to_string(),
+            name: "Default Corrections".to_string(),
+            entries: default_corrections(),
+        };
+        let default_set_id = DEFAULT_CORRECTION_SET_ID.to_string();
+        let mut mode_default_en = Mode::seed_default_en(false);
+        let mut mode_cleaned_en = Mode::seed_cleaned_en();
+        let mut mode_ukrainian = Mode::seed_ukrainian();
+        let mut mode_ua_en = Mode::seed_ua_en();
+        mode_default_en.correction_set_ids = vec![default_set_id.clone()];
+        mode_cleaned_en.correction_set_ids = vec![default_set_id.clone()];
+        mode_ukrainian.correction_set_ids = vec![default_set_id.clone()];
+        mode_ua_en.correction_set_ids = vec![default_set_id.clone()];
         Self {
             api_key: None,
             ai_cleanup_enabled: None,
@@ -304,18 +331,14 @@ impl Default for Settings {
             legacy_dictionary: vec![],
             terms: vec![],
             term_sets: vec![],
-            corrections: default_corrections(),
+            legacy_corrections: default_corrections(),
+            correction_sets: vec![default_set],
             snippets: vec![],
             deepgram: DeepgramSettings::default(),
             groq: GroqSettings::default(),
             assemblyai: AssemblyAiSettings::default(),
             ai_cleanup: AiCleanupSettings::default(),
-            modes: vec![
-                Mode::seed_default_en(false),
-                Mode::seed_cleaned_en(),
-                Mode::seed_ukrainian(),
-                Mode::seed_ua_en(),
-            ],
+            modes: vec![mode_default_en, mode_cleaned_en, mode_ukrainian, mode_ua_en],
             default_mode_id: default_mode_id(),
             input_device: None,
             pause_media_on_record: true,
@@ -425,7 +448,7 @@ fn migrate(s: &mut Settings) -> bool {
             }
         }
         s.terms = terms;
-        s.corrections = corrections;
+        s.legacy_corrections = corrections;
         changed = true;
     }
 
@@ -474,6 +497,27 @@ fn migrate(s: &mut Settings) -> bool {
                     .contains(&SEED_TERM_SET_DEFAULT_ID.to_string())
             {
                 mode.term_set_ids.push(SEED_TERM_SET_DEFAULT_ID.to_string());
+            }
+        }
+        changed = true;
+    }
+
+    // ── Correction sets: seed "Default Corrections" from legacy flat list ──
+    // Runs exactly once: when correction_sets is empty, the legacy corrections
+    // (user's existing list or the seeded defaults) become a named set. Every
+    // mode whose use_corrections flag was true gets the set ID appended to
+    // correction_set_ids. Idempotent: skipped on all subsequent loads.
+    if s.correction_sets.is_empty() {
+        let default_set = NamedCorrectionSet {
+            id: DEFAULT_CORRECTION_SET_ID.to_string(),
+            name: "Default Corrections".to_string(),
+            entries: s.legacy_corrections.clone(),
+        };
+        s.correction_sets.push(default_set);
+        let set_id = DEFAULT_CORRECTION_SET_ID.to_string();
+        for mode in s.modes.iter_mut() {
+            if mode.use_corrections && !mode.correction_set_ids.contains(&set_id) {
+                mode.correction_set_ids.push(set_id.clone());
             }
         }
         changed = true;
@@ -754,25 +798,28 @@ mod tests {
 
     #[test]
     fn migration_renames_legacy_replacements_then_splits_to_corrections() {
-        // "dot → ." is from != to, so it becomes a Correction.
+        // "dot → ." is from != to, so it becomes a Correction entry in the default set.
         let json = r#"{"replacements": [{"from": "dot", "to": "."}]}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         assert_eq!(s.legacy_replacements.as_ref().map(|v| v.len()), Some(1));
         let changed = migrate(&mut s);
         assert!(changed);
-        assert_eq!(s.corrections.len(), 1);
-        assert_eq!(s.corrections[0].from, "dot");
-        assert_eq!(s.corrections[0].to, ".");
-        // terms is drained into term_sets during migration
+        assert_eq!(s.legacy_corrections.len(), 1);
+        assert_eq!(s.legacy_corrections[0].from, "dot");
+        assert_eq!(s.legacy_corrections[0].to, ".");
+        // terms is drained into term_sets; nothing terms-side here.
         assert!(s.terms.is_empty());
         assert!(s.legacy_replacements.is_none());
-        // Serialized form must not contain legacy fields.
+        // Entries end up in the seeded correction set.
+        assert_eq!(s.correction_sets.len(), 1);
+        assert_eq!(s.correction_sets[0].entries.len(), 1);
         let reserialized = serde_json::to_string(&s).unwrap();
         let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
         assert!(v.get("replacements").is_none());
         assert!(v.get("dictionary").is_none(), "dictionary must not be written back");
         assert!(v.get("terms").is_none(), "terms is skip_serializing");
-        assert!(v.get("corrections").is_some());
+        assert!(v.get("corrections").is_none(), "legacy corrections must not be written back");
+        assert!(v.get("correction_sets").is_some());
     }
 
     #[test]
@@ -782,7 +829,7 @@ mod tests {
         let mut s: Settings = serde_json::from_str(json).unwrap();
         let changed = migrate(&mut s);
         assert!(changed);
-        // terms is drained into the Default Terms set
+        // terms is drained into the Default Terms set.
         assert!(s.terms.is_empty());
         let default_set = s
             .term_sets
@@ -790,21 +837,26 @@ mod tests {
             .find(|ts| ts.id == SEED_TERM_SET_DEFAULT_ID)
             .expect("Default Terms set must be created");
         assert_eq!(default_set.entries, vec!["MongoDB"]);
-        assert!(s.corrections.is_empty());
+        // No corrections — but the empty Default Corrections set is still seeded.
+        assert!(s.legacy_corrections.is_empty());
+        assert_eq!(s.correction_sets.len(), 1);
+        assert!(s.correction_sets[0].entries.is_empty());
     }
 
     #[test]
     fn migration_splits_dictionary_from_ne_to_as_correction() {
-        // "anthropik → Anthropic" becomes a Correction; no term set is created.
+        // "anthropik → Anthropic" becomes a Correction entry in the default set; no term set is created.
         let json = r#"{"dictionary": [{"from": "anthropik", "to": "Anthropic"}]}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         let changed = migrate(&mut s);
         assert!(changed);
         assert!(s.terms.is_empty());
         assert!(s.term_sets.is_empty(), "no terms to seed a Default Terms set");
-        assert_eq!(s.corrections.len(), 1);
-        assert_eq!(s.corrections[0].from, "anthropik");
-        assert_eq!(s.corrections[0].to, "Anthropic");
+        assert_eq!(s.legacy_corrections.len(), 1);
+        assert_eq!(s.legacy_corrections[0].from, "anthropik");
+        assert_eq!(s.legacy_corrections[0].to, "Anthropic");
+        assert_eq!(s.correction_sets[0].entries.len(), 1);
+        assert_eq!(s.correction_sets[0].entries[0].from, "anthropik");
     }
 
     #[test]
@@ -816,7 +868,7 @@ mod tests {
         ]}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
-        // MongoDB ends up in the Default Terms set
+        // MongoDB ends up in the Default Terms set.
         assert!(s.terms.is_empty());
         let default_set = s
             .term_sets
@@ -824,9 +876,11 @@ mod tests {
             .find(|ts| ts.id == SEED_TERM_SET_DEFAULT_ID)
             .expect("Default Terms set must exist");
         assert_eq!(default_set.entries, vec!["MongoDB"]);
-        assert_eq!(s.corrections.len(), 2);
-        assert_eq!(s.corrections[0].from, "dot");
-        assert_eq!(s.corrections[1].from, "anthropik");
+        // The two corrections end up in the seeded Default Corrections set.
+        assert_eq!(s.legacy_corrections.len(), 2);
+        assert_eq!(s.legacy_corrections[0].from, "dot");
+        assert_eq!(s.legacy_corrections[1].from, "anthropik");
+        assert_eq!(s.correction_sets[0].entries.len(), 2);
     }
 
     #[test]
@@ -835,7 +889,7 @@ mod tests {
         let json = r#"{"dictionary": [{"from": "MongoDB", "to": "MongoDB"}]}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
-        // Second run: legacy_dictionary and terms are empty; term_sets already set.
+        // Second run: legacy_dictionary and terms are drained; term_sets and correction_sets already seeded.
         let changed2 = migrate(&mut s);
         assert!(!changed2, "second migrate must be a no-op");
         assert!(s.terms.is_empty());
@@ -845,6 +899,7 @@ mod tests {
             .find(|ts| ts.id == SEED_TERM_SET_DEFAULT_ID)
             .expect("Default Terms set must exist");
         assert_eq!(default_set.entries, vec!["MongoDB"]);
+        assert_eq!(s.correction_sets.len(), 1);
     }
 
     #[test]

@@ -1,5 +1,5 @@
 import {
-  BookIcon,
+  ArrowsHorizontalIcon,
   ChartBarIcon,
   ClockCounterClockwiseIcon,
   GearIcon,
@@ -19,7 +19,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 
-import { DictionaryPage } from "../pages/DictionaryPage";
+import { CorrectionsPage } from "../pages/CorrectionsPage";
 import { TermsPage } from "../pages/TermsPage";
 import { GeneralPage } from "../pages/GeneralPage";
 import { HistoryPage } from "../pages/HistoryPage";
@@ -63,7 +63,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: "Hotkeys", icon: KeyboardIcon, path: "/hotkeys" },
       { label: "Providers", icon: MicrophoneIcon, path: "/providers" },
       { label: "Terms", icon: TextTIcon, path: "/terms" },
-      { label: "Dictionary", icon: BookIcon, path: "/dictionary" },
+      { label: "Corrections", icon: ArrowsHorizontalIcon, path: "/corrections" },
       { label: "Modes", icon: SlidersIcon, path: "/modes" },
       { label: "Snippets", icon: LightningIcon, path: "/snippets" },
     ],
@@ -209,7 +209,7 @@ function ShellInner() {
               <Route path="/hotkeys" element={<HotkeysPage />} />
               <Route path="/providers" element={<ProvidersPage />} />
               <Route path="/terms" element={<TermsPage />} />
-              <Route path="/dictionary" element={<DictionaryPage />} />
+              <Route path="/corrections" element={<CorrectionsPage />} />
               <Route path="/modes" element={<ModesPage />} />
               <Route path="/snippets" element={<SnippetsPage />} />
               <Route path="/history" element={<HistoryPage />} />

@@ -2,11 +2,13 @@
 
 use std::time::Duration;
 use whispr_lib::{
-    config::{CorrectionEntry, Settings, SnippetEntry},
+    config::{CorrectionEntry, NamedCorrectionSet, Settings, SnippetEntry},
     history::CleanupStatus,
     mode::{Mode, SEED_MODE_DEFAULT_EN},
     pipeline::{self, CleanupOutput, Outcome},
 };
+
+const HARNESS_CORRECTION_SET_ID: &str = "harness-corrections";
 
 /// Deadline enforced by the harness. Any pipeline run that exceeds this
 /// causes the spawned task to be cancelled and the test to fail with a
@@ -58,16 +60,43 @@ impl PipelineHarness {
         }
     }
 
-    /// Replace the active corrections list (discards the default correction
-    /// entries seeded by `Settings::default()`).
-    pub fn with_corrections(mut self, rules: &[(&str, &str)]) -> Self {
-        self.settings.corrections = rules
+    /// Append a named correction set and link its ID to the active mode's
+    /// `correction_set_ids`. May be chained to build multi-set scenarios.
+    pub fn with_correction_set(mut self, id: &str, rules: &[(&str, &str)]) -> Self {
+        let entries = rules
             .iter()
             .map(|(from, to)| CorrectionEntry {
                 from: from.to_string(),
                 to: to.to_string(),
             })
             .collect();
+        self.settings.correction_sets.push(NamedCorrectionSet {
+            id: id.to_string(),
+            name: id.to_string(),
+            entries,
+        });
+        if let Some(m) = self.active_mode_mut() {
+            m.correction_set_ids.push(id.to_string());
+        }
+        self
+    }
+
+    /// Replace the active correction sets with a single harness set containing
+    /// the given rules. Does not change the active mode's correction_set_ids;
+    /// combine with `with_use_corrections` to enable/disable.
+    pub fn with_corrections(mut self, rules: &[(&str, &str)]) -> Self {
+        let entries = rules
+            .iter()
+            .map(|(from, to)| CorrectionEntry {
+                from: from.to_string(),
+                to: to.to_string(),
+            })
+            .collect();
+        self.settings.correction_sets = vec![NamedCorrectionSet {
+            id: HARNESS_CORRECTION_SET_ID.to_string(),
+            name: "Harness Corrections".to_string(),
+            entries,
+        }];
         self
     }
 
@@ -113,10 +142,15 @@ impl PipelineHarness {
         self
     }
 
-    /// Override the `use_corrections` flag on the active mode.
+    /// Set the active mode's correction_set_ids to point at the harness correction
+    /// set (enabled=true) or clear them (enabled=false).
     pub fn with_use_corrections(mut self, enabled: bool) -> Self {
         if let Some(m) = self.active_mode_mut() {
-            m.use_corrections = enabled;
+            m.correction_set_ids = if enabled {
+                vec![HARNESS_CORRECTION_SET_ID.to_string()]
+            } else {
+                vec![]
+            };
         }
         self
     }

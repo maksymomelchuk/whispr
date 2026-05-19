@@ -1,7 +1,7 @@
 use crate::api_key_validation::{self, ApiKeyValidation};
 use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
 use crate::config::{
-    self, CleanupAuthMode, CorrectionEntry, HotkeyBinding, NamedTermSet, Settings, SnippetEntry,
+    self, CleanupAuthMode, HotkeyBinding, NamedCorrectionSet, NamedTermSet, Settings, SnippetEntry,
 };
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::mode::{Mode, ModeId, SetId};
@@ -22,7 +22,7 @@ pub struct SettingsView {
     pub assemblyai_api_key_configured: bool,
     pub hotkey_bindings: Vec<HotkeyBinding>,
     pub term_sets: Vec<NamedTermSet>,
-    pub corrections: Vec<CorrectionEntry>,
+    pub correction_sets: Vec<NamedCorrectionSet>,
     pub snippets: Vec<SnippetEntry>,
     pub modes: Vec<Mode>,
     pub default_mode_id: ModeId,
@@ -55,7 +55,7 @@ impl From<Settings> for SettingsView {
                 .is_some_and(|k| !k.is_empty()),
             hotkey_bindings: s.hotkey_bindings,
             term_sets: s.term_sets,
-            corrections: s.corrections,
+            correction_sets: s.correction_sets,
             snippets: s.snippets,
             modes: s.modes,
             default_mode_id: s.default_mode_id,
@@ -210,11 +210,27 @@ pub fn delete_term_set(app: AppHandle, id: SetId) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn set_corrections(
-    app: AppHandle,
-    corrections: Vec<CorrectionEntry>,
-) -> Result<(), String> {
-    config::update(&app, |s| s.corrections = corrections)
+pub fn add_correction_set(app: AppHandle, set: NamedCorrectionSet) -> Result<(), String> {
+    config::update(&app, |s| s.correction_sets.push(set))
+}
+
+#[tauri::command]
+pub fn update_correction_set(app: AppHandle, set: NamedCorrectionSet) -> Result<(), String> {
+    config::update(&app, |s| {
+        if let Some(cs) = s.correction_sets.iter_mut().find(|cs| cs.id == set.id) {
+            *cs = set;
+        }
+    })
+}
+
+#[tauri::command]
+pub fn delete_correction_set(app: AppHandle, set_id: String) -> Result<(), String> {
+    config::update(&app, |s| {
+        s.correction_sets.retain(|cs| cs.id != set_id);
+        for mode in s.modes.iter_mut() {
+            mode.correction_set_ids.retain(|id| id != &set_id);
+        }
+    })
 }
 
 #[tauri::command]

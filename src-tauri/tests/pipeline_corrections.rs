@@ -75,3 +75,31 @@ async fn use_corrections_off_raw_and_final_text_are_identical() {
 
     assert_eq!(outcome.history_entry.raw_text, outcome.history_entry.final_text);
 }
+
+/// Rules from multiple named sets are all applied when the mode references them.
+#[tokio::test]
+async fn multiple_correction_sets_all_rules_fire() {
+    let outcome = run_under_deadline(|| {
+        PipelineHarness::new()
+            .with_correction_set("set-a", &[("mongo", "MongoDB")])
+            .with_correction_set("set-b", &[("js", "JavaScript")])
+            .run("I use mongo and js")
+    })
+    .await;
+
+    assert_eq!(outcome.history_entry.final_text, "I use MongoDB and JavaScript");
+}
+
+/// When two sets define a rule for the same `from` term, the later set wins.
+#[tokio::test]
+async fn later_correction_set_overrides_earlier_on_collision() {
+    let outcome = run_under_deadline(|| {
+        PipelineHarness::new()
+            .with_correction_set("set-a", &[("ts", "TypeScript-A")])
+            .with_correction_set("set-b", &[("ts", "TypeScript-B")])
+            .run("I write ts")
+    })
+    .await;
+
+    assert_eq!(outcome.history_entry.final_text, "I write TypeScript-B");
+}

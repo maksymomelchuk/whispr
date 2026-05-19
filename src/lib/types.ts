@@ -14,6 +14,12 @@ export interface CorrectionEntry {
   to: string;
 }
 
+export interface NamedCorrectionSet {
+  id: string;
+  name: string;
+  entries: CorrectionEntry[];
+}
+
 export interface Snippet {
   id: string;
   trigger: string;
@@ -90,7 +96,7 @@ export interface Mode {
   translate: TranslateTarget;
   ai_cleanup: ModeCleanup;
   term_set_ids: string[];
-  use_corrections: boolean;
+  correction_set_ids: string[];
   use_snippets: boolean;
   provider_model: ProviderModel;
 }
@@ -103,7 +109,7 @@ export interface Settings {
   assemblyai_api_key_configured: boolean;
   hotkey_bindings: HotkeyBinding[];
   term_sets: NamedTermSet[];
-  corrections: CorrectionEntry[];
+  correction_sets: NamedCorrectionSet[];
   snippets: Snippet[];
   modes: Mode[];
   default_mode_id: string;

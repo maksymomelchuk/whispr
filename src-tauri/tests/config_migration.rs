@@ -5,7 +5,7 @@
 //! the resulting `Settings` has the expected shape.  These complement the
 //! fine-grained unit tests in `config.rs` by exercising realistic multi-field
 //! blobs rather than surgically minimal JSON strings.
-use whispr_lib::config::{self, Settings, SEED_TERM_SET_DEFAULT_ID};
+use whispr_lib::config::{self, Settings, DEFAULT_CORRECTION_SET_ID, SEED_TERM_SET_DEFAULT_ID};
 
 // ── Legacy dictionary → terms + corrections ─────────────────────────────────
 // Entries where from == to become Terms; all others become Corrections.
@@ -33,11 +33,16 @@ fn legacy_dictionary_splits_into_term_sets_and_corrections() {
     assert!(default_set.entries.contains(&"Kubernetes".to_string()));
     assert_eq!(default_set.entries.len(), 2);
 
-    assert_eq!(s.corrections.len(), 2, "only from!=to entries become corrections");
-    let dot = s.corrections.iter().find(|c| c.from == "dot").expect("dot correction");
+    let default_set = s
+        .correction_sets
+        .iter()
+        .find(|cs| cs.id == DEFAULT_CORRECTION_SET_ID)
+        .expect("default correction set must exist after migration");
+    assert_eq!(default_set.entries.len(), 2, "only from!=to entries become corrections");
+    let dot = default_set.entries.iter().find(|c| c.from == "dot").expect("dot correction");
     assert_eq!(dot.to, ".");
-    let fix = s
-        .corrections
+    let fix = default_set
+        .entries
         .iter()
         .find(|c| c.from == "anthropik")
         .expect("anthropik correction");
@@ -86,6 +91,10 @@ fn legacy_use_dictionary_false_disables_corrections_and_leaves_term_set_ids_empt
 
     assert!(!mode.use_corrections, "use_corrections must be false when use_dictionary was false");
     assert!(mode.term_set_ids.is_empty(), "no legacy terms → no term_set_ids assigned");
+    assert!(
+        mode.correction_set_ids.is_empty(),
+        "correction_set_ids must be empty when use_corrections was false"
+    );
 }
 
 #[test]
@@ -113,6 +122,44 @@ fn legacy_use_dictionary_true_preserves_corrections_flag() {
     assert!(mode.use_corrections, "use_corrections must remain true when use_dictionary was true");
     // No legacy terms in this JSON, so no Default Terms set is created.
     assert!(mode.term_set_ids.is_empty(), "no legacy terms → no term_set_ids assigned");
+    assert!(
+        mode.correction_set_ids.contains(&DEFAULT_CORRECTION_SET_ID.to_string()),
+        "correction_set_ids must contain the default set when use_corrections was true"
+    );
+}
+
+// ── Legacy corrections → named correction set ───────────────────────────────
+
+#[test]
+fn legacy_corrections_field_seeds_default_correction_set() {
+    let json = r#"{
+        "corrections": [
+            {"from": "mongo", "to": "MongoDB"},
+            {"from": "js",    "to": "JavaScript"}
+        ]
+    }"#;
+
+    let s = config::from_json(json).unwrap();
+
+    let default_set = s
+        .correction_sets
+        .iter()
+        .find(|cs| cs.id == DEFAULT_CORRECTION_SET_ID)
+        .expect("default correction set must exist after migration");
+    assert_eq!(default_set.entries.len(), 2);
+    assert!(default_set.entries.iter().any(|e| e.from == "mongo" && e.to == "MongoDB"));
+    assert!(default_set.entries.iter().any(|e| e.from == "js" && e.to == "JavaScript"));
+}
+
+#[test]
+fn corrections_field_absent_from_reserialized_output() {
+    let json = r#"{"corrections": [{"from": "dot", "to": "."}]}"#;
+    let s = config::from_json(json).unwrap();
+    let reserialized = serde_json::to_string(&s).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
+
+    assert!(v.get("corrections").is_none(), "legacy corrections field must not appear after migration");
+    assert!(v.get("correction_sets").is_some(), "correction_sets must appear in output");
 }
 
 // ── Current-shape config round-trips without modification ───────────────────

@@ -1,4 +1,4 @@
-use crate::config::CorrectionEntry;
+use crate::config::{CorrectionEntry, NamedCorrectionSet};
 
 /// Punctuation whose replacement should glue to both neighbors with no spaces.
 /// Example: "test dot ts" → "test.ts".
@@ -6,6 +6,27 @@ const COMPACT: &[char] = &['.', '/', '-', '_', '@'];
 /// Punctuation whose replacement should lose the leading space but keep a
 /// trailing one. Example: "hello comma world" → "hello, world".
 const CLING_LEFT: &[char] = &[',', ';', ':', '?', '!'];
+
+/// Merges correction entries from the named sets identified by `set_ids`, in
+/// order. On `from` collision (case-insensitive), later-set entries win.
+/// The first-occurrence position is preserved for each key so the output order
+/// is deterministic and matches the order entries appear across all sets.
+pub fn compose_corrections(set_ids: &[String], correction_sets: &[NamedCorrectionSet]) -> Vec<CorrectionEntry> {
+    let mut keys: Vec<String> = Vec::new();
+    let mut map: std::collections::HashMap<String, CorrectionEntry> = std::collections::HashMap::new();
+    for id in set_ids {
+        if let Some(set) = correction_sets.iter().find(|s| &s.id == id) {
+            for entry in &set.entries {
+                let key = entry.from.to_lowercase();
+                if !map.contains_key(&key) {
+                    keys.push(key.clone());
+                }
+                map.insert(key, entry.clone());
+            }
+        }
+    }
+    keys.into_iter().filter_map(|k| map.remove(&k)).collect()
+}
 
 /// Case-insensitive whole-word replacement with a small spacing policy. We
 /// pad the whole transcript with spaces on both ends, then search for `from`
@@ -282,6 +303,71 @@ mod tests {
             &[entry("dash", "-")],
         );
         assert_eq!(out, "--help");
+    }
+
+    fn named_set(id: &str, rules: &[(&str, &str)]) -> NamedCorrectionSet {
+        NamedCorrectionSet {
+            id: id.to_string(),
+            name: id.to_string(),
+            entries: rules.iter().map(|(f, t)| entry(f, t)).collect(),
+        }
+    }
+
+    #[test]
+    fn compose_empty_set_ids_returns_empty() {
+        let sets = vec![named_set("a", &[("foo", "bar")])];
+        assert!(compose_corrections(&[], &sets).is_empty());
+    }
+
+    #[test]
+    fn compose_unknown_set_id_silently_skipped() {
+        let sets = vec![named_set("a", &[("foo", "bar")])];
+        let ids = ["a".to_string(), "nonexistent".to_string()];
+        let result = compose_corrections(&ids, &sets);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].from, "foo");
+    }
+
+    #[test]
+    fn compose_multiple_sets_all_entries_merged() {
+        let sets = vec![
+            named_set("a", &[("mongo", "MongoDB"), ("js", "JavaScript")]),
+            named_set("b", &[("ts", "TypeScript")]),
+        ];
+        let ids = ["a".to_string(), "b".to_string()];
+        let result = compose_corrections(&ids, &sets);
+        assert_eq!(result.len(), 3);
+        let froms: Vec<&str> = result.iter().map(|e| e.from.as_str()).collect();
+        assert!(froms.contains(&"mongo"));
+        assert!(froms.contains(&"js"));
+        assert!(froms.contains(&"ts"));
+    }
+
+    #[test]
+    fn compose_later_set_wins_on_from_collision() {
+        let sets = vec![
+            named_set("a", &[("foo", "bar-a")]),
+            named_set("b", &[("foo", "bar-b")]),
+        ];
+        let ids = ["a".to_string(), "b".to_string()];
+        let result = compose_corrections(&ids, &sets);
+        assert_eq!(result.len(), 1, "collision deduplicates to one entry");
+        assert_eq!(result[0].to, "bar-b", "later set wins");
+    }
+
+    #[test]
+    fn compose_collision_preserves_first_occurrence_position() {
+        let sets = vec![
+            named_set("a", &[("aaa", "AAA"), ("foo", "foo-a")]),
+            named_set("b", &[("foo", "foo-b"), ("zzz", "ZZZ")]),
+        ];
+        let ids = ["a".to_string(), "b".to_string()];
+        let result = compose_corrections(&ids, &sets);
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].from, "aaa");
+        assert_eq!(result[1].from, "foo");
+        assert_eq!(result[1].to, "foo-b");
+        assert_eq!(result[2].from, "zzz");
     }
 
     proptest! {

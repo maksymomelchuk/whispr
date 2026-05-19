@@ -61,6 +61,7 @@ import type {
   HotkeyBinding,
   Mode,
   ModeLanguage,
+  NamedCorrectionSet,
   NamedTermSet,
   ProviderModel,
 } from "../lib/types";
@@ -325,12 +326,14 @@ export function ModeEditor({
   onClose,
   onPersist,
   availableTermSets = [],
+  correctionSets = [],
 }: {
   mode: Mode;
   isNew: boolean;
   onClose: () => void;
   onPersist: (mode: Mode, wasNew: boolean) => void;
   availableTermSets?: NamedTermSet[];
+  correctionSets?: NamedCorrectionSet[];
 }) {
   const [draft, setDraft] = useState<Mode>(mode);
   const [creating, setCreating] = useState(false);
@@ -399,10 +402,15 @@ export function ModeEditor({
         ? [...d.term_set_ids, id]
         : d.term_set_ids.filter((tsid) => tsid !== id),
     }));
-  const setUseCorrections = (use_corrections: boolean) =>
-    setDraft((d) => ({ ...d, use_corrections }));
   const setUseSnippets = (use_snippets: boolean) =>
     setDraft((d) => ({ ...d, use_snippets }));
+  const toggleCorrectionSet = (setId: string, on: boolean) =>
+    setDraft((d) => ({
+      ...d,
+      correction_set_ids: on
+        ? [...d.correction_set_ids, setId]
+        : d.correction_set_ids.filter((id) => id !== setId),
+    }));
 
   const normalized = useMemo<Mode>(
     () => ({
@@ -723,12 +731,26 @@ export function ModeEditor({
               </div>
             )}
           </div>
-          <ToggleRow
-            id="corrections"
-            label="Use corrections"
-            checked={draft.use_corrections}
-            onCheckedChange={setUseCorrections}
-          />
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[13px] text-foreground">Correction sets</span>
+            {correctionSets.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No correction sets — create one in the Corrections page.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-1">
+                {correctionSets.map((cs) => (
+                  <ToggleRow
+                    key={cs.id}
+                    id={`correction-set-${cs.id}`}
+                    label={cs.name}
+                    checked={draft.correction_set_ids.includes(cs.id)}
+                    onCheckedChange={(on) => toggleCorrectionSet(cs.id, on)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
           <ToggleRow
             id="snippets"
             label="Use snippets"
@@ -787,7 +809,7 @@ export function ModesPage() {
       translate: { kind: "off" },
       ai_cleanup: { enabled: false, prompt_override: null },
       term_set_ids: [],
-      use_corrections: true,
+      correction_set_ids: [],
       use_snippets: true,
       provider_model: { provider: "deepgram" },
     };
@@ -879,6 +901,7 @@ export function ModesPage() {
               onClose={closeEditor}
               onPersist={handlePersist}
               availableTermSets={settings.term_sets ?? []}
+              correctionSets={settings.correction_sets ?? []}
             />
           )}
         </SheetContent>

@@ -27,7 +27,7 @@ const BASE_SETTINGS: Settings = {
   assemblyai_api_key_configured: false,
   hotkey_bindings: [],
   term_sets: [],
-  corrections: [],
+  correction_sets: [],
   snippets: [],
   modes: [],
   default_mode_id: "",

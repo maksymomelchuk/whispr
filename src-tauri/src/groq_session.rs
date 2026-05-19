@@ -62,6 +62,7 @@ impl TranscriptionSession for GroqSession {
         mut chunks: UnboundedReceiver<Vec<i16>>,
         language: ModeLanguage,
         terms: Vec<String>,
+        _corrections: Vec<crate::config::CorrectionEntry>,
     ) -> Result<(String, Duration), String> {
         let speak_start = Instant::now();
         let settings = config::load(&app);

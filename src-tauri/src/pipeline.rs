@@ -1,5 +1,5 @@
 use crate::config::Settings;
-use crate::corrections::apply_corrections;
+use crate::corrections::{apply_corrections, compose_corrections};
 use crate::history::{CleanupStatus, HistoryEntry, now_unix_seconds};
 use crate::mode::Mode;
 use crate::snippets::expand_snippets;
@@ -77,8 +77,9 @@ pub fn run_stages(
     if mode.use_snippets {
         final_text = expand_snippets(&final_text, &settings.snippets);
     }
-    if mode.use_corrections {
-        final_text = apply_corrections(&final_text, &settings.corrections);
+    if !mode.correction_set_ids.is_empty() {
+        let entries = compose_corrections(&mode.correction_set_ids, &settings.correction_sets);
+        final_text = apply_corrections(&final_text, &entries);
     }
 
     let pasted_text = format!("{final_text} ");

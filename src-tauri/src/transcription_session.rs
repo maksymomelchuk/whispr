@@ -1,3 +1,4 @@
+use crate::config::CorrectionEntry;
 use crate::mode::ModeLanguage;
 use crate::recorder::AudioFormat;
 use std::time::Duration;
@@ -24,5 +25,6 @@ pub trait TranscriptionSession {
         chunks: UnboundedReceiver<Vec<i16>>,
         language: ModeLanguage,
         terms: Vec<String>,
+        corrections: Vec<CorrectionEntry>,
     ) -> Result<(String, Duration), String>;
 }

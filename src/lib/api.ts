@@ -4,11 +4,11 @@ import type {
   ApiKeyValidation,
   CleanupAuthMode,
   CleanupStats,
-  CorrectionEntry,
   HistoryEntry,
   HistoryLimit,
   HotkeyBinding,
   Mode,
+  NamedCorrectionSet,
   NamedTermSet,
   Settings,
   Snippet,
@@ -58,8 +58,14 @@ export const updateTermSetEntries = (id: string, entries: string[]) =>
 export const deleteTermSet = (id: string) =>
   invoke<void>("delete_term_set", { id });
 
-export const setCorrections = (corrections: CorrectionEntry[]) =>
-  invoke<void>("set_corrections", { corrections });
+export const addCorrectionSet = (set: NamedCorrectionSet) =>
+  invoke<void>("add_correction_set", { set });
+
+export const updateCorrectionSet = (set: NamedCorrectionSet) =>
+  invoke<void>("update_correction_set", { set });
+
+export const deleteCorrectionSet = (setId: string) =>
+  invoke<void>("delete_correction_set", { setId });
 
 export const setSnippets = (snippets: Snippet[]) =>
   invoke<void>("set_snippets", { snippets });
