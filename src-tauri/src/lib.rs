@@ -165,7 +165,6 @@ pub fn run() {
             commands::update_correction_set,
             commands::delete_correction_set,
             commands::set_snippets,
-            commands::set_cleanup_enabled,
             commands::add_mode,
             commands::update_mode,
             commands::delete_mode,

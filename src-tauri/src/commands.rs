@@ -26,7 +26,6 @@ pub struct SettingsView {
     pub snippets: Vec<SnippetEntry>,
     pub modes: Vec<Mode>,
     pub default_mode_id: ModeId,
-    pub ai_cleanup_enabled: bool,
     pub ai_cleanup_auth_mode: CleanupAuthMode,
     pub ai_cleanup_key_configured: bool,
     pub ai_cleanup_oauth_token_configured: bool,
@@ -59,7 +58,6 @@ impl From<Settings> for SettingsView {
             snippets: s.snippets,
             modes: s.modes,
             default_mode_id: s.default_mode_id,
-            ai_cleanup_enabled: s.ai_cleanup.enabled,
             ai_cleanup_auth_mode: s.ai_cleanup.auth_mode,
             ai_cleanup_key_configured: s
                 .ai_cleanup
@@ -239,13 +237,6 @@ pub fn set_snippets(
     snippets: Vec<SnippetEntry>,
 ) -> Result<(), String> {
     config::update(&app, |s| s.snippets = snippets)
-}
-
-/// Sets `ai_cleanup.enabled` on the mode identified by `default_mode_id`.
-/// No-op if that mode is missing — migration guarantees one exists on load.
-#[tauri::command]
-pub fn set_cleanup_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
-    config::update(&app, |s| s.ai_cleanup.enabled = enabled)
 }
 
 #[tauri::command]

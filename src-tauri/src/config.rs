@@ -187,10 +187,12 @@ fn default_cleanup_min_duration_ms() -> u64 {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiCleanupSettings {
-    /// Global master switch. Per-mode `ai_cleanup.enabled` is the opt-in;
-    /// this gates the whole feature without touching every mode individually.
-    #[serde(default = "default_true")]
-    pub enabled: bool,
+    /// Legacy global master switch; per-mode `ai_cleanup.enabled` is now the
+    /// single source of truth. Read during migration: if explicitly `false`,
+    /// every mode's cleanup toggle is forced off (preserving the user's
+    /// previous "all-off" intent). Then dropped from subsequent saves.
+    #[serde(rename = "enabled", default, skip_serializing)]
+    pub legacy_enabled: Option<bool>,
     #[serde(default)]
     pub auth_mode: CleanupAuthMode,
     #[serde(default)]
@@ -212,7 +214,7 @@ pub struct AiCleanupSettings {
 impl Default for AiCleanupSettings {
     fn default() -> Self {
         Self {
-            enabled: true,
+            legacy_enabled: None,
             auth_mode: CleanupAuthMode::default(),
             anthropic_api_key: None,
             anthropic_oauth_token: None,
@@ -424,6 +426,21 @@ fn migrate(s: &mut Settings) -> bool {
     // Drop the legacy flat cleanup toggle; it's now in the mode.
     if s.ai_cleanup_enabled.take().is_some() {
         changed = true;
+    }
+
+    // Drop the legacy global ai_cleanup.enabled switch. If the user had
+    // explicitly turned it off, preserve that intent by forcing every mode's
+    // per-mode cleanup toggle off — otherwise modes that defaulted to enabled
+    // would silently start running cleanup after the migration.
+    match s.ai_cleanup.legacy_enabled.take() {
+        Some(false) => {
+            for mode in s.modes.iter_mut() {
+                mode.ai_cleanup.enabled = false;
+            }
+            changed = true;
+        }
+        Some(true) => changed = true,
+        None => {}
     }
 
     // ── Legacy replacements → dictionary (now terms + corrections) ───────
@@ -794,6 +811,43 @@ mod tests {
         let reserialized = serde_json::to_string(&s).unwrap();
         let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
         assert!(v.get("ai_cleanup_enabled").is_none());
+    }
+
+    #[test]
+    fn migration_global_ai_cleanup_off_forces_every_mode_off() {
+        let json = r#"{"ai_cleanup": {"enabled": false}}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        migrate(&mut s);
+        for mode in &s.modes {
+            assert!(
+                !mode.ai_cleanup.enabled,
+                "mode {} must inherit the previous global-off intent",
+                mode.id
+            );
+        }
+        let reserialized = serde_json::to_string(&s).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
+        assert!(
+            v["ai_cleanup"].get("enabled").is_none(),
+            "ai_cleanup.enabled must drop out of subsequent saves"
+        );
+    }
+
+    #[test]
+    fn migration_global_ai_cleanup_on_leaves_modes_alone() {
+        let json = r#"{"ai_cleanup": {"enabled": true}}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        migrate(&mut s);
+        let cleaned = s.modes.iter().find(|m| m.id == SEED_MODE_CLEANED_EN).unwrap();
+        assert!(
+            cleaned.ai_cleanup.enabled,
+            "global-on must not stomp seed-mode defaults"
+        );
+        let default = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        assert!(
+            !default.ai_cleanup.enabled,
+            "global-on must not enable modes that were off by default"
+        );
     }
 
     #[test]

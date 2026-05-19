@@ -22,7 +22,6 @@ import {
   setAnthropicOauthToken,
   setAssemblyAiApiKey,
   setCleanupAuthMode,
-  setCleanupEnabled,
   setCleanupThresholds,
   setDeepgramApiKey,
   setDefaultMode,
@@ -133,11 +132,6 @@ const COMMANDS: Array<{
     call: () => setSnippets([]),
     cmd: "set_snippets",
     args: { snippets: [] },
-  },
-  {
-    call: () => setCleanupEnabled(true),
-    cmd: "set_cleanup_enabled",
-    args: { enabled: true },
   },
   {
     call: () =>

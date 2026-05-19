@@ -50,7 +50,6 @@ const BASE: Settings = {
   snippets: [],
   modes: [BASE_MODE],
   default_mode_id: "mode-1",
-  ai_cleanup_enabled: false,
   ai_cleanup_auth_mode: "api_key",
   ai_cleanup_key_configured: false,
   ai_cleanup_oauth_token_configured: false,

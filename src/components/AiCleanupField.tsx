@@ -13,16 +13,12 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { cn } from "@/lib/utils";
 
 import { useSettings } from "../context/SettingsContext";
-import { usePersistedToggle } from "../hooks/usePersistedToggle";
 import {
   setAnthropicApiKey as persistApiKey,
   setCleanupAuthMode as persistAuthMode,
-  setCleanupEnabled as persistEnabled,
   setAnthropicOauthToken as persistOauthToken,
   setCleanupThresholds as persistThresholds,
 } from "../lib/api";
@@ -72,19 +68,12 @@ const MODE_COPY: Record<
 export function AiCleanupField() {
   const { settings, setSetting, setSettings } = useSettings();
   const {
-    ai_cleanup_enabled: enabled,
     ai_cleanup_auth_mode: authMode,
     ai_cleanup_key_configured: apiKeyConfigured,
     ai_cleanup_oauth_token_configured: oauthTokenConfigured,
     ai_cleanup_min_words: minWords,
     ai_cleanup_min_duration_ms: minDurationMs,
   } = settings;
-
-  const enabledToggle = usePersistedToggle(
-    enabled,
-    persistEnabled,
-    (next) => setSettings((s) => ({ ...s, ai_cleanup_enabled: next })),
-  );
 
   const handleAuthModeChange = async (val: string) => {
     if (!val || val === authMode) return;
@@ -112,7 +101,6 @@ export function AiCleanupField() {
 
   const watched = thresholdsForm.watch();
   useEffect(() => {
-    if (!enabledToggle.enabled) return;
     const valid = thresholdsSchema.safeParse(watched);
     if (!valid.success) return;
     const wordsNum = Number(watched.minWords);
@@ -137,16 +125,10 @@ export function AiCleanupField() {
       }
     }, 450);
     return () => clearTimeout(t);
-  }, [
-    watched.minWords,
-    watched.minDurationSec,
-    enabledToggle.enabled,
-    setSettings,
-  ]);
+  }, [watched.minWords, watched.minDurationSec, setSettings]);
 
   const configured =
     authMode === "api_key" ? apiKeyConfigured : oauthTokenConfigured;
-  const showWarning = enabledToggle.enabled && !configured;
   const copy = MODE_COPY[authMode];
 
   return (
@@ -154,143 +136,117 @@ export function AiCleanupField() {
       <SectionHeader
         title="AI Cleanup"
         badge={
-          <InfoTip text="Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Adds ~500ms." />
-        }
-        control={
-          <>
-            <span
-              className={cn(
-                "text-form-label",
-                enabledToggle.enabled
-                  ? "text-foreground"
-                  : "text-muted-foreground/70",
-              )}
-            >
-              {enabledToggle.enabled ? "On" : "Off"}
-            </span>
-            <Switch
-              id="ai-cleanup-enabled"
-              aria-label="Enable AI post-processing"
-              checked={enabledToggle.enabled}
-              onCheckedChange={enabledToggle.toggle}
-            />
-          </>
+          <InfoTip text="Removes filler words and applies spoken self-corrections via Claude Haiku 4.5. Enable per-mode in the Modes page. Adds ~500ms." />
         }
         className="items-center"
       />
 
-      {!enabledToggle.enabled ? (
-        <p className="text-xs text-muted-foreground/80">
-          Off — transcriptions are inserted as Deepgram returns them.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-3.5 pt-1">
-          <div className="flex flex-col gap-[6px]">
-            <div className="inline-flex items-center gap-2">
-              <span className="text-form-label text-muted-foreground">
-                Authentication
-              </span>
-              <InfoTip text="API key: pay-as-you-go via console.anthropic.com. OAuth: uses your Claude subscription — mint a token with `claude setup-token`." />
-            </div>
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              value={authMode}
-              onValueChange={handleAuthModeChange}
-              className="w-full"
-            >
-              <ToggleGroupItem value="api_key" className="flex-1 text-xs">
-                Anthropic API key
-              </ToggleGroupItem>
-              <ToggleGroupItem value="oauth" className="flex-1 text-xs">
-                Claude Code OAuth
-              </ToggleGroupItem>
-            </ToggleGroup>
+      <div className="flex flex-col gap-3.5 pt-1">
+        <div className="flex flex-col gap-[6px]">
+          <div className="inline-flex items-center gap-2">
+            <span className="text-form-label text-muted-foreground">
+              Authentication
+            </span>
+            <InfoTip text="API key: pay-as-you-go via console.anthropic.com. OAuth: uses your Claude subscription — mint a token with `claude setup-token`." />
           </div>
-
-          <CredentialField
-            label={copy.fieldLabel}
-            placeholder={copy.placeholderEmpty}
-            isConfigured={configured}
-            persist={authMode === "api_key" ? persistApiKey : persistOauthToken}
-            onConfiguredChange={
-              authMode === "api_key"
-                ? (configured) =>
-                    setSettings((s) => ({
-                      ...s,
-                      ai_cleanup_key_configured: configured,
-                    }))
-                : (configured) =>
-                    setSettings((s) => ({
-                      ...s,
-                      ai_cleanup_oauth_token_configured: configured,
-                    }))
-            }
-          />
-          {showWarning && (
-            <p className="-mt-1.5 text-help text-muted-foreground/80">
-              Cleanup is bypassed until a credential is set.
-            </p>
-          )}
-
-          <div className="flex flex-col gap-[6px]">
-            <div className="inline-flex items-center gap-2">
-              <span className="text-form-label text-muted-foreground">
-                Trigger thresholds
-              </span>
-              <InfoTip text="Cleanup runs only when both are met. Lower values clean shorter dictations; higher values save tokens." />
-            </div>
-            <Form {...thresholdsForm}>
-              <form onSubmit={(e) => e.preventDefault()}>
-                <div className="flex items-end gap-2">
-                  <FormField
-                    control={thresholdsForm.control}
-                    name="minWords"
-                    render={({ field }) => (
-                      <FormItem className="flex-1">
-                        <FormLabel className="text-muted-foreground/70">
-                          Min words
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type="number"
-                            min={0}
-                            step={1}
-                            inputMode="numeric"
-                          />
-                        </FormControl>
-                        <FormMessage className="mt-1.5 text-help" />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={thresholdsForm.control}
-                    name="minDurationSec"
-                    render={({ field }) => (
-                      <FormItem className="flex-1">
-                        <FormLabel className="text-muted-foreground/70">
-                          Min duration (s)
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type="number"
-                            min={0}
-                            step={0.5}
-                            inputMode="decimal"
-                          />
-                        </FormControl>
-                        <FormMessage className="mt-1.5 text-help" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </form>
-            </Form>
-          </div>
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            value={authMode}
+            onValueChange={handleAuthModeChange}
+            className="w-full"
+          >
+            <ToggleGroupItem value="api_key" className="flex-1 text-xs">
+              Anthropic API key
+            </ToggleGroupItem>
+            <ToggleGroupItem value="oauth" className="flex-1 text-xs">
+              Claude Code OAuth
+            </ToggleGroupItem>
+          </ToggleGroup>
         </div>
-      )}
+
+        <CredentialField
+          label={copy.fieldLabel}
+          placeholder={copy.placeholderEmpty}
+          isConfigured={configured}
+          persist={authMode === "api_key" ? persistApiKey : persistOauthToken}
+          onConfiguredChange={
+            authMode === "api_key"
+              ? (configured) =>
+                  setSettings((s) => ({
+                    ...s,
+                    ai_cleanup_key_configured: configured,
+                  }))
+              : (configured) =>
+                  setSettings((s) => ({
+                    ...s,
+                    ai_cleanup_oauth_token_configured: configured,
+                  }))
+          }
+        />
+        {!configured && (
+          <p className="-mt-1.5 text-help text-muted-foreground/80">
+            Set a credential to enable AI cleanup on a mode.
+          </p>
+        )}
+
+        <div className="flex flex-col gap-[6px]">
+          <div className="inline-flex items-center gap-2">
+            <span className="text-form-label text-muted-foreground">
+              Trigger thresholds
+            </span>
+            <InfoTip text="Cleanup runs only when both are met. Lower values clean shorter dictations; higher values save tokens." />
+          </div>
+          <Form {...thresholdsForm}>
+            <form onSubmit={(e) => e.preventDefault()}>
+              <div className="flex items-end gap-2">
+                <FormField
+                  control={thresholdsForm.control}
+                  name="minWords"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormLabel className="text-muted-foreground/70">
+                        Min words
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          min={0}
+                          step={1}
+                          inputMode="numeric"
+                        />
+                      </FormControl>
+                      <FormMessage className="mt-1.5 text-help" />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={thresholdsForm.control}
+                  name="minDurationSec"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormLabel className="text-muted-foreground/70">
+                        Min duration (s)
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          inputMode="decimal"
+                        />
+                      </FormControl>
+                      <FormMessage className="mt-1.5 text-help" />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </form>
+          </Form>
+        </div>
+      </div>
     </section>
   );
 }

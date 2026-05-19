@@ -327,6 +327,7 @@ export function ModeEditor({
   onPersist,
   availableTermSets = [],
   correctionSets = [],
+  cleanupCredentialConfigured = true,
 }: {
   mode: Mode;
   isNew: boolean;
@@ -334,6 +335,7 @@ export function ModeEditor({
   onPersist: (mode: Mode, wasNew: boolean) => void;
   availableTermSets?: NamedTermSet[];
   correctionSets?: NamedCorrectionSet[];
+  cleanupCredentialConfigured?: boolean;
 }) {
   const [draft, setDraft] = useState<Mode>(mode);
   const [creating, setCreating] = useState(false);
@@ -672,8 +674,16 @@ export function ModeEditor({
           <ToggleRow
             id="cleanup"
             label="AI cleanup"
+            info={
+              !cleanupCredentialConfigured && !draft.ai_cleanup.enabled
+                ? "Set Anthropic credentials in Providers to enable cleanup."
+                : undefined
+            }
             checked={draft.ai_cleanup.enabled}
             onCheckedChange={setCleanup}
+            disabled={
+              !cleanupCredentialConfigured && !draft.ai_cleanup.enabled
+            }
           />
           {draft.ai_cleanup.enabled && (
             <Collapsible
@@ -902,6 +912,11 @@ export function ModesPage() {
               onPersist={handlePersist}
               availableTermSets={settings.term_sets ?? []}
               correctionSets={settings.correction_sets ?? []}
+              cleanupCredentialConfigured={
+                settings.ai_cleanup_auth_mode === "api_key"
+                  ? settings.ai_cleanup_key_configured
+                  : settings.ai_cleanup_oauth_token_configured
+              }
             />
           )}
         </SheetContent>

@@ -70,9 +70,6 @@ export const deleteCorrectionSet = (setId: string) =>
 export const setSnippets = (snippets: Snippet[]) =>
   invoke<void>("set_snippets", { snippets });
 
-export const setCleanupEnabled = (enabled: boolean) =>
-  invoke<void>("set_cleanup_enabled", { enabled });
-
 export const addMode = (mode: Mode) => invoke<void>("add_mode", { mode });
 
 export const updateMode = (mode: Mode) => invoke<void>("update_mode", { mode });
