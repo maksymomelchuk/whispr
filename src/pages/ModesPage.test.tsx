@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
-import type { Mode, Settings } from "@/lib/types";
+import type { Mode, NamedCorrectionSet, Settings } from "@/lib/types";
 
 import { SettingsContext } from "../context/SettingsContext";
 import {
@@ -290,5 +290,74 @@ describe("ModesPage – warning badge", () => {
     };
     const { container } = render(<ModesPageWrapper settings={settings} />);
     expect(container.querySelector(".text-amber-500")).not.toBeInTheDocument();
+  });
+});
+
+describe("ModeEditor – correction sets", () => {
+  const SETS: NamedCorrectionSet[] = [
+    { id: "cs-1", name: "Punctuation", entries: [] },
+    { id: "cs-2", name: "Tech Terms", entries: [] },
+  ];
+
+  it("shows a toggle for each correction set", () => {
+    render(
+      <ModeEditor
+        mode={MODE}
+        isNew={false}
+        onClose={vi.fn()}
+        onPersist={vi.fn()}
+        correctionSets={SETS}
+      />,
+    );
+    expect(screen.getByLabelText("Punctuation")).toBeInTheDocument();
+    expect(screen.getByLabelText("Tech Terms")).toBeInTheDocument();
+  });
+
+  it("toggling a set on autosaves with it in correction_set_ids", async () => {
+    render(
+      <ModeEditor
+        mode={{ ...MODE, correction_set_ids: [] }}
+        isNew={false}
+        onClose={vi.fn()}
+        onPersist={vi.fn()}
+        correctionSets={SETS}
+      />,
+    );
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+    fireEvent.click(screen.getByLabelText("Punctuation"));
+
+    await act(async () => {
+      vi.advanceTimersByTime(450);
+    });
+
+    expect(vi.mocked(mockUpdateMode)).toHaveBeenCalledWith(
+      expect.objectContaining({ correction_set_ids: ["cs-1"] }),
+    );
+  });
+
+  it("toggling a set off autosaves without it in correction_set_ids", async () => {
+    render(
+      <ModeEditor
+        mode={{ ...MODE, correction_set_ids: ["cs-1"] }}
+        isNew={false}
+        onClose={vi.fn()}
+        onPersist={vi.fn()}
+        correctionSets={SETS}
+      />,
+    );
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+    fireEvent.click(screen.getByLabelText("Punctuation"));
+
+    await act(async () => {
+      vi.advanceTimersByTime(450);
+    });
+
+    expect(vi.mocked(mockUpdateMode)).toHaveBeenCalledWith(
+      expect.objectContaining({ correction_set_ids: [] }),
+    );
   });
 });
