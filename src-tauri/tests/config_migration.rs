@@ -5,7 +5,9 @@
 //! the resulting `Settings` has the expected shape.  These complement the
 //! fine-grained unit tests in `config.rs` by exercising realistic multi-field
 //! blobs rather than surgically minimal JSON strings.
-use whispr_lib::config::{self, Settings, DEFAULT_CORRECTION_SET_ID, SEED_TERM_SET_DEFAULT_ID};
+use whispr_lib::config::{
+    self, GroqModel, ProviderModel, Settings, DEFAULT_CORRECTION_SET_ID, SEED_TERM_SET_DEFAULT_ID,
+};
 
 // ── Legacy dictionary → terms + corrections ─────────────────────────────────
 // Entries where from == to become Terms; all others become Corrections.
@@ -160,6 +162,82 @@ fn corrections_field_absent_from_reserialized_output() {
 
     assert!(v.get("corrections").is_none(), "legacy corrections field must not appear after migration");
     assert!(v.get("correction_sets").is_some(), "correction_sets must appear in output");
+}
+
+// ── Combined pre-umbrella-73 migration ──────────────────────────────────────
+
+#[test]
+fn full_pre_issue_73_migration_preserves_behavior() {
+    // Realistic settings.json from before all three umbrella slices (#74/#75/#76):
+    // - Groq selected with whisper-large-v3, API key set
+    // - Flat legacy `terms` list
+    // - Flat legacy `corrections` list
+    // - Mode with use_terms=true and use_corrections=true
+    let json = r#"{
+        "transcription_provider": "groq",
+        "groq": {"model": "whisper_large_v3"},
+        "groq_api_key": "sk-groq-test",
+        "terms": ["MongoDB", "Kubernetes"],
+        "corrections": [
+            {"from": "anthropik", "to": "Anthropic"},
+            {"from": "dot",       "to": "."}
+        ],
+        "modes": [{
+            "id":       "mode-default-en",
+            "name":     "Default",
+            "language": {"kind": "exact", "code": "en"},
+            "translate":{"kind": "off"},
+            "ai_cleanup":{"enabled": false, "prompt_override": null},
+            "use_terms": true,
+            "use_corrections": true,
+            "use_snippets": true
+        }],
+        "default_mode_id": "mode-default-en"
+    }"#;
+
+    let s = config::from_json(json).unwrap();
+    let mode = s.modes.iter().find(|m| m.id == "mode-default-en").expect("mode must be present");
+
+    assert_eq!(
+        mode.provider_model,
+        ProviderModel::Groq { model: GroqModel::WhisperLargeV3 },
+        "mode must carry groq+whisper-large-v3 after migration"
+    );
+
+    let term_set = s
+        .term_sets
+        .iter()
+        .find(|ts| ts.id == SEED_TERM_SET_DEFAULT_ID)
+        .expect("Default Terms set must exist");
+    assert!(term_set.entries.contains(&"MongoDB".to_string()));
+    assert!(term_set.entries.contains(&"Kubernetes".to_string()));
+    assert!(
+        mode.term_set_ids.contains(&SEED_TERM_SET_DEFAULT_ID.to_string()),
+        "mode must reference the default term set"
+    );
+
+    let correction_set = s
+        .correction_sets
+        .iter()
+        .find(|cs| cs.id == DEFAULT_CORRECTION_SET_ID)
+        .expect("Default Corrections set must exist");
+    assert!(correction_set.entries.iter().any(|e| e.from == "anthropik" && e.to == "Anthropic"));
+    assert!(correction_set.entries.iter().any(|e| e.from == "dot" && e.to == "."));
+    assert!(
+        mode.correction_set_ids.contains(&DEFAULT_CORRECTION_SET_ID.to_string()),
+        "mode must reference the default correction set"
+    );
+
+    let reserialized = serde_json::to_string(&s).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
+    assert!(v.get("transcription_provider").is_none(), "transcription_provider must not appear");
+    assert!(v.get("terms").is_none(), "legacy terms must not appear");
+    assert!(v.get("corrections").is_none(), "legacy corrections must not appear");
+
+    let mode_v = v["modes"].as_array().unwrap().iter().find(|m| m["id"] == "mode-default-en").unwrap();
+    assert!(mode_v.get("use_terms").is_none(), "use_terms must not appear on mode");
+    assert!(mode_v.get("use_corrections").is_none(), "use_corrections must not appear on mode");
+    assert_eq!(mode_v["provider_model"]["provider"], "groq", "provider_model must serialize to groq on mode");
 }
 
 // ── Current-shape config round-trips without modification ───────────────────
