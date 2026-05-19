@@ -97,7 +97,7 @@ impl TranscriptionSession for AssemblyAiSession {
                                     while audio_buffer.len() >= MIN_SEND_BYTES {
                                         let to_send: Vec<u8> =
                                             audio_buffer.drain(..MIN_SEND_BYTES).collect();
-                                        if let Err(e) =
+                                        if let Err(_) =
                                             sink.send(Message::Binary(to_send.into())).await
                                         {
                                             ws_alive = false;
@@ -126,7 +126,7 @@ impl TranscriptionSession for AssemblyAiSession {
                             preview_state.maybe_emit(&app, &completed_turns, &current_partial);
                         }
                     }
-                    Some(Err(e)) => {
+                    Some(Err(_)) => {
                         ws_alive = false;
                     }
                     None => {
