@@ -254,7 +254,7 @@ function SetCard({
   const count = set.entries.length;
 
   return (
-    <div className="flex flex-col gap-0">
+    <div className="flex flex-col gap-0 group/row">
       <RowCard className={expanded ? "rounded-b-none" : undefined}>
         <div className="flex flex-1 min-w-0 items-center gap-2">
           {renaming ? (
@@ -321,7 +321,7 @@ function SetCard({
       </RowCard>
 
       {expanded && (
-        <div className="border border-t-0 border-border rounded-b-md p-3 flex flex-col gap-2">
+        <div className="border-x border-b border-border group-hover/row:border-ring/55 transition-[border-color] duration-150 rounded-b-md p-3 flex flex-col gap-2">
           <EntriesEditor entries={set.entries} onChange={onEntriesChange} />
         </div>
       )}

@@ -219,10 +219,10 @@ function TermSetRow({
   const count = set.entries.length;
 
   return (
-    <div className="flex flex-col gap-0">
+    <div className="flex flex-col gap-0 group/row">
       <RowCard
         interactive={!renaming}
-        className={expanded ? "rounded-b-none border-b-0" : ""}
+        className={expanded ? "rounded-b-none border-b-0 group-hover/row:border-ring/55" : ""}
         onClick={renaming ? undefined : onToggleExpand}
       >
         <div className="flex flex-1 min-w-0 items-center gap-2">
@@ -282,7 +282,7 @@ function TermSetRow({
       </RowCard>
 
       {expanded && (
-        <div className="border border-t-0 border-border rounded-b-lg px-3 py-3 bg-card">
+        <div className="border-x border-b border-border group-hover/row:border-ring/55 transition-[border-color] duration-150 rounded-b-lg px-3 py-3 bg-card">
           <TermChipInput value={set.entries} onChange={onEntriesChange} />
         </div>
       )}

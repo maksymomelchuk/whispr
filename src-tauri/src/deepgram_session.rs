@@ -1,6 +1,6 @@
 use crate::config::{self, CorrectionEntry};
-use crate::corrections::apply_corrections;
-use crate::mode::ModeLanguage;
+use crate::corrections::{apply_corrections, compose_corrections};
+use crate::mode::{Mode, ModeLanguage};
 use crate::recorder::AudioFormat;
 use crate::transcription_session::TranscriptionSession;
 use crate::groq_audio::{self, AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
@@ -38,7 +38,7 @@ impl TranscriptionSession for DeepgramSession {
         mut chunks: UnboundedReceiver<Vec<i16>>,
         language: ModeLanguage,
         terms: Vec<String>,
-        corrections: Vec<CorrectionEntry>,
+        mode: &Mode,
     ) -> Result<(String, Duration), String> {
         let speak_start = Instant::now();
         let settings = config::load(&app);
@@ -51,6 +51,11 @@ impl TranscriptionSession for DeepgramSession {
             .filter(|k| !k.is_empty())
             .ok_or_else(|| "API key not configured".to_string())?;
         let show_live_preview = settings.show_live_preview;
+        let corrections = if mode.use_corrections {
+            compose_corrections(&mode.correction_set_ids, &settings.correction_sets)
+        } else {
+            Vec::new()
+        };
 
         let url = build_ws_url(&language, format, &terms)?;
         let mut req = url

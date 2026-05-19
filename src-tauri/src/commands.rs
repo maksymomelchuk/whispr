@@ -6,7 +6,7 @@ use crate::config::{
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::mode::{Mode, ModeId, SetId};
 use crate::permissions;
-use crate::provider::{GroqModel, ProviderModel};
+use crate::provider::GroqModel;
 use crate::state::AppState;
 use crate::stats::{self, StatsRow, STATS_UPDATED_EVENT};
 use serde::Serialize;
@@ -460,6 +460,7 @@ pub fn open_microphone_settings() {
 mod tests {
     use super::*;
     use crate::mode::ModeLanguage;
+    use crate::provider::ProviderModel;
 
     #[test]
     fn settings_view_defaults_match_fresh_install() {

@@ -439,10 +439,6 @@ async fn run_session(
     let mode_prompt_override = active_mode.ai_cleanup.prompt_override.clone();
     let session_terms =
         crate::terms::compose_term_hints(&settings.term_sets, &active_mode.term_set_ids);
-    let session_corrections = crate::corrections::compose_corrections(
-        &active_mode.correction_set_ids,
-        &settings.correction_sets,
-    );
 
     let missing_key = match active_mode.provider_model.provider() {
         TranscriptionProvider::Deepgram => settings
@@ -470,38 +466,17 @@ async fn run_session(
     let session_result = match &active_mode.provider_model {
         ProviderModel::Deepgram => {
             DeepgramSession
-                .run(
-                    app.clone(),
-                    format,
-                    chunk_rx,
-                    mode_language,
-                    session_terms,
-                    session_corrections,
-                )
+                .run(app.clone(), format, chunk_rx, mode_language, session_terms, active_mode)
                 .await
         }
         ProviderModel::Groq { model } => {
             GroqSession { model: *model }
-                .run(
-                    app.clone(),
-                    format,
-                    chunk_rx,
-                    mode_language,
-                    session_terms,
-                    session_corrections,
-                )
+                .run(app.clone(), format, chunk_rx, mode_language, session_terms, active_mode)
                 .await
         }
         ProviderModel::AssemblyAi { model } => {
             AssemblyAiSession { model: *model }
-                .run(
-                    app.clone(),
-                    format,
-                    chunk_rx,
-                    mode_language,
-                    session_terms,
-                    session_corrections,
-                )
+                .run(app.clone(), format, chunk_rx, mode_language, session_terms, active_mode)
                 .await
         }
     };

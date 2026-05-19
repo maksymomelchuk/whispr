@@ -17,7 +17,7 @@ use crate::groq_audio::{self, AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
 use crate::terms;
 use crate::groq_audio::encode_to_flac_16k_mono;
 use crate::groq_session_state::{self, Action, Event, Phase, PollFailure, State};
-use crate::mode::ModeLanguage;
+use crate::mode::{Mode, ModeLanguage};
 use crate::recorder::AudioFormat;
 use crate::transcription_session::TranscriptionSession;
 use serde_json::Value;
@@ -62,7 +62,7 @@ impl TranscriptionSession for GroqSession {
         mut chunks: UnboundedReceiver<Vec<i16>>,
         language: ModeLanguage,
         terms: Vec<String>,
-        _corrections: Vec<crate::config::CorrectionEntry>,
+        _mode: &Mode,
     ) -> Result<(String, Duration), String> {
         let speak_start = Instant::now();
         let settings = config::load(&app);

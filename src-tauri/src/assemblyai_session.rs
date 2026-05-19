@@ -1,7 +1,7 @@
 use crate::config;
 use crate::provider::AssemblyAiModel;
 use crate::groq_audio::{self, to_pcm_16k_mono_bytes, AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
-use crate::mode::ModeLanguage;
+use crate::mode::{Mode, ModeLanguage};
 use crate::recorder::AudioFormat;
 use crate::terms;
 use crate::transcription_session::TranscriptionSession;
@@ -36,7 +36,7 @@ impl TranscriptionSession for AssemblyAiSession {
         mut chunks: UnboundedReceiver<Vec<i16>>,
         language: ModeLanguage,
         terms: Vec<String>,
-        _corrections: Vec<crate::config::CorrectionEntry>,
+        _mode: &Mode,
     ) -> Result<(String, Duration), String> {
         let speak_start = Instant::now();
         let settings = config::load(&app);
