@@ -466,16 +466,13 @@ pub fn open_microphone_settings() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::GroqModel;
     use crate::mode::ModeLanguage;
 
     #[test]
     fn settings_view_defaults_match_fresh_install() {
         let view: SettingsView = Settings::default().into();
-        assert_eq!(view.transcription_provider, TranscriptionProvider::Deepgram);
         assert!(!view.deepgram_api_key_configured);
         assert!(!view.groq_api_key_configured);
-        assert_eq!(view.groq.model, GroqModel::WhisperLargeV3Turbo);
         assert_eq!(view.hotkey_bindings.len(), 1);
         assert_eq!(view.hotkey_bindings[0].shortcut.key, "AltRight");
     }
@@ -487,6 +484,19 @@ mod tests {
         assert_eq!(view.default_mode_id, crate::mode::SEED_MODE_DEFAULT_EN);
         let default = view.modes.iter().find(|m| m.id == crate::mode::SEED_MODE_DEFAULT_EN).unwrap();
         assert_eq!(default.language, ModeLanguage::exact("en"));
+    }
+
+    #[test]
+    fn settings_view_modes_default_to_deepgram_provider_model() {
+        let view: SettingsView = Settings::default().into();
+        for mode in &view.modes {
+            assert_eq!(
+                mode.provider_model,
+                ProviderModel::Deepgram,
+                "mode {} should default to Deepgram provider_model",
+                mode.id
+            );
+        }
     }
 
     #[test]
@@ -540,25 +550,17 @@ mod tests {
     }
 
     #[test]
-    fn settings_view_round_trips_groq_settings() {
-        let view: SettingsView = Settings {
-            groq: GroqSettings {
-                model: GroqModel::WhisperLargeV3,
-                language: None,
-            },
-            ..Settings::default()
-        }
-        .into();
-        assert_eq!(view.groq.model, GroqModel::WhisperLargeV3);
-    }
-
-    #[test]
-    fn settings_view_propagates_transcription_provider() {
-        let view: SettingsView = Settings {
-            transcription_provider: TranscriptionProvider::Groq,
-            ..Settings::default()
-        }
-        .into();
-        assert_eq!(view.transcription_provider, TranscriptionProvider::Groq);
+    fn settings_view_carries_per_mode_provider_model() {
+        let mut settings = Settings::default();
+        settings.modes[0].provider_model = ProviderModel::Groq {
+            model: GroqModel::WhisperLargeV3,
+        };
+        let view: SettingsView = settings.into();
+        assert_eq!(
+            view.modes[0].provider_model,
+            ProviderModel::Groq { model: GroqModel::WhisperLargeV3 }
+        );
+        // Remaining modes unchanged.
+        assert_eq!(view.modes[1].provider_model, ProviderModel::Deepgram);
     }
 }

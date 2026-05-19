@@ -6,18 +6,23 @@ import {
   waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Mode } from "@/lib/types";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import type { Mode, Settings } from "@/lib/types";
 
+import { SettingsContext } from "../context/SettingsContext";
 import {
   addMode as mockAddMode,
   updateMode as mockUpdateMode,
 } from "../lib/api";
-import { ModeEditor } from "./ModesPage";
+import { ModeEditor, ModesPage } from "./ModesPage";
 
 vi.mock("@/components/ui/sheet", () => ({
+  Sheet: ({ children }: any) => <div>{children}</div>,
+  SheetContent: ({ children, ...p }: any) => <div {...p}>{children}</div>,
   SheetHeader: ({ children, ...p }: any) => <div {...p}>{children}</div>,
   SheetTitle: ({ children, ...p }: any) => <h2 {...p}>{children}</h2>,
   SheetFooter: ({ children, ...p }: any) => <div {...p}>{children}</div>,
@@ -183,5 +188,107 @@ describe("ModeEditor – autosave", () => {
       expect(vi.mocked(mockAddMode)).toHaveBeenCalledTimes(1),
     );
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+const BASE_SETTINGS: Settings = {
+  deepgram_api_key_configured: false,
+  groq_api_key_configured: false,
+  assemblyai_api_key_configured: false,
+  hotkey_bindings: [],
+  terms: [],
+  corrections: [],
+  snippets: [],
+  modes: [],
+  default_mode_id: "mode-1",
+  ai_cleanup_enabled: true,
+  ai_cleanup_auth_mode: "api_key",
+  ai_cleanup_key_configured: false,
+  ai_cleanup_oauth_token_configured: false,
+  ai_cleanup_min_words: 9,
+  ai_cleanup_min_duration_ms: 3000,
+  input_device: null,
+  pause_media_on_record: true,
+  history_limit: 5,
+  show_in_dock: false,
+  show_live_preview: true,
+};
+
+function ModesPageWrapper({ settings }: { settings: Settings }) {
+  return (
+    <MemoryRouter>
+      <TooltipProvider>
+        <SettingsContext.Provider
+          value={{
+            settings,
+            setSettings: vi.fn(),
+            setSetting: vi.fn(),
+            themePreference: "system",
+            setThemePreference: vi.fn(),
+            accent: "indigo",
+            setAccent: vi.fn(),
+          }}
+        >
+          <ModesPage />
+        </SettingsContext.Provider>
+      </TooltipProvider>
+    </MemoryRouter>
+  );
+}
+
+describe("ModeEditor – provider/model pickers", () => {
+  it("shows Model picker when provider is Groq", () => {
+    const groqMode: Mode = {
+      ...MODE,
+      provider_model: { provider: "groq", model: "whisper_large_v3_turbo" },
+    };
+    render(<EditorWrapper mode={groqMode} />);
+    expect(screen.getByText("Model")).toBeInTheDocument();
+  });
+
+  it("shows Model picker when provider is AssemblyAI", () => {
+    const assemblyMode: Mode = {
+      ...MODE,
+      provider_model: {
+        provider: "assembly_ai",
+        model: "universal_pro_streaming",
+      },
+    };
+    render(<EditorWrapper mode={assemblyMode} />);
+    expect(screen.getByText("Model")).toBeInTheDocument();
+  });
+
+  it("does not show Model picker when provider is Deepgram", () => {
+    render(<EditorWrapper mode={MODE} />);
+    expect(screen.queryByText("Model")).not.toBeInTheDocument();
+  });
+});
+
+describe("ModesPage – warning badge", () => {
+  const modeWithGroq: Mode = {
+    ...MODE,
+    id: "mode-1",
+    name: "Groq Mode",
+    provider_model: { provider: "groq", model: "whisper_large_v3_turbo" },
+  };
+
+  it("shows warning badge when provider key is missing", () => {
+    const settings: Settings = {
+      ...BASE_SETTINGS,
+      groq_api_key_configured: false,
+      modes: [modeWithGroq],
+    };
+    const { container } = render(<ModesPageWrapper settings={settings} />);
+    expect(container.querySelector(".text-amber-500")).toBeInTheDocument();
+  });
+
+  it("does not show warning badge when provider key is configured", () => {
+    const settings: Settings = {
+      ...BASE_SETTINGS,
+      groq_api_key_configured: true,
+      modes: [modeWithGroq],
+    };
+    const { container } = render(<ModesPageWrapper settings={settings} />);
+    expect(container.querySelector(".text-amber-500")).not.toBeInTheDocument();
   });
 });
