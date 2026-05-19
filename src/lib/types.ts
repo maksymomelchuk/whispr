@@ -20,9 +20,29 @@ export interface Snippet {
   expansion: string;
 }
 
-export type TranscriptionProvider = "deepgram" | "groq";
+export type TranscriptionProvider = "deepgram" | "groq" | "assembly_ai";
 
 export type GroqModel = "whisper_large_v3" | "whisper_large_v3_turbo";
+
+export type AssemblyAiModel =
+  | "universal_pro_streaming"
+  | "universal_streaming_english"
+  | "universal_streaming_multilingual"
+  | "whisper_streaming";
+
+export interface AssemblyAiSettings {
+  model: AssemblyAiModel;
+}
+
+export const ASSEMBLYAI_MODEL_SUPPORTED_LANGUAGES: Record<
+  AssemblyAiModel,
+  string[] | null
+> = {
+  universal_pro_streaming: ["en", "es", "de", "fr", "pt", "it"],
+  universal_streaming_english: ["en"],
+  universal_streaming_multilingual: ["en", "es", "de", "fr", "pt", "it"],
+  whisper_streaming: null,
+};
 
 export interface GroqSettings {
   model: GroqModel;
@@ -72,11 +92,13 @@ export interface Settings {
   transcription_provider: TranscriptionProvider;
   deepgram_api_key_configured: boolean;
   groq_api_key_configured: boolean;
+  assemblyai_api_key_configured: boolean;
   hotkey_bindings: HotkeyBinding[];
   terms: string[];
   corrections: CorrectionEntry[];
   snippets: Snippet[];
   groq: GroqSettings;
+  assemblyai: AssemblyAiSettings;
   modes: Mode[];
   default_mode_id: string;
   ai_cleanup_enabled: boolean;

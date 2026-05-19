@@ -5,6 +5,8 @@
 //! means the key will work for real dictation.
 
 use crate::config::GroqModel;
+
+const ASSEMBLYAI_ACCOUNT_URL: &str = "https://api.assemblyai.com/v2/account";
 use crate::groq_audio::encode_to_flac_16k_mono;
 use reqwest::StatusCode;
 use serde::Serialize;
@@ -46,6 +48,24 @@ pub fn groq_model_id(model: GroqModel) -> &'static str {
     match model {
         GroqModel::WhisperLargeV3 => "whisper-large-v3",
         GroqModel::WhisperLargeV3Turbo => "whisper-large-v3-turbo",
+    }
+}
+
+pub async fn validate_assemblyai(api_key: &str) -> ApiKeyValidation {
+    if api_key.is_empty() {
+        return ApiKeyValidation::Invalid;
+    }
+    let client = reqwest::Client::new();
+    match client
+        .get(ASSEMBLYAI_ACCOUNT_URL)
+        .header("Authorization", api_key)
+        .send()
+        .await
+    {
+        Ok(resp) => status_to_validation(resp.status()),
+        Err(e) => ApiKeyValidation::Error {
+            message: format!("Network error: {e}"),
+        },
     }
 }
 

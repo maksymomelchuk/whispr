@@ -42,6 +42,8 @@ mod translation;
 #[cfg(target_os = "macos")]
 mod deepgram_session;
 #[cfg(target_os = "macos")]
+mod assemblyai_session;
+#[cfg(target_os = "macos")]
 mod groq_session;
 #[cfg(target_os = "macos")]
 pub mod transcription_session;
@@ -149,8 +151,11 @@ pub fn run() {
             commands::set_deepgram_api_key,
             commands::set_groq_api_key,
             commands::set_groq_settings,
+            commands::set_assemblyai_api_key,
+            commands::set_assemblyai_settings,
             commands::validate_deepgram_api_key,
             commands::validate_groq_api_key,
+            commands::validate_assemblyai_api_key,
             commands::set_hotkey_bindings,
             commands::set_shortcut_capture_paused,
             commands::open_translation_settings,

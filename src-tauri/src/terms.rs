@@ -32,6 +32,18 @@ pub fn deepgram_keyterms(terms: &[String], remaining_budget: usize) -> Vec<Strin
     result
 }
 
+pub fn assemblyai_keyterms_prompt(terms: &[String]) -> Option<String> {
+    let filtered: Vec<&str> = terms
+        .iter()
+        .map(|t| t.trim())
+        .filter(|t| !t.is_empty())
+        .collect();
+    if filtered.is_empty() {
+        return None;
+    }
+    serde_json::to_string(&filtered).ok()
+}
+
 /// Builds the Groq prompt hint (`"Vocabulary: t1, t2, t3"`) from terms.
 /// Truncates at a comma boundary so the result stays within
 /// `GROQ_PROMPT_BUDGET_CHARS`. Returns `None` when no eligible terms exist.

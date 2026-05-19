@@ -34,6 +34,7 @@ pub enum Phase {
 pub struct InFlight {
     pub id: u64,
     pub dispatched_at: Duration,
+    pub window: Duration,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,6 +129,7 @@ impl State {
                     self.in_flight = Some(InFlight {
                         id,
                         dispatched_at: elapsed,
+                        window,
                     });
                     self.next_poll_at += POLL_INTERVAL;
                     actions.push(Action::DispatchPoll {
@@ -181,7 +183,7 @@ impl State {
                 let covering = self
                     .in_flight
                     .as_ref()
-                    .is_some_and(|p| p.dispatched_at >= elapsed);
+                    .is_some_and(|p| p.dispatched_at >= elapsed && p.window >= elapsed);
                 if covering {
                     self.phase = Phase::AwaitingCoveringPoll;
                 } else {

@@ -8,7 +8,41 @@
 use flacenc::component::BitRepr;
 use flacenc::error::Verify;
 
+pub const AUDIO_LEVEL_EVENT: &str = "audio-level";
+pub const TRANSCRIPT_PARTIAL_EVENT: &str = "transcript-partial";
+
 const TARGET_SAMPLE_RATE: u32 = 16_000;
+
+pub fn compute_level(chunk: &[i16]) -> f32 {
+    if chunk.is_empty() {
+        return 0.0;
+    }
+    let sum_sq: f64 = chunk.iter().map(|&s| (s as f64).powi(2)).sum();
+    let rms = (sum_sq / chunk.len() as f64).sqrt() / i16::MAX as f64;
+    if rms <= 0.0 {
+        return 0.0;
+    }
+    const FLOOR_DB: f64 = -40.0;
+    const CEIL_DB: f64 = -10.0;
+    let db = 20.0 * rms.log10();
+    ((db - FLOOR_DB) / (CEIL_DB - FLOOR_DB)).clamp(0.0, 1.0) as f32
+}
+
+pub fn to_pcm_16k_mono_bytes(
+    samples: &[i16],
+    input_sample_rate: u32,
+    input_channels: u16,
+) -> Result<Vec<u8>, String> {
+    if input_channels == 0 {
+        return Err("input_channels must be > 0".into());
+    }
+    if input_sample_rate == 0 {
+        return Err("input_sample_rate must be > 0".into());
+    }
+    let mono = downmix_to_mono(samples, input_channels);
+    let resampled = resample_linear(&mono, input_sample_rate, TARGET_SAMPLE_RATE);
+    Ok(resampled.iter().flat_map(|s| s.to_le_bytes()).collect())
+}
 
 /// Encode interleaved i16 PCM as a 16 kHz mono FLAC byte buffer.
 ///

@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 import type {
   ApiKeyValidation,
+  AssemblyAiSettings,
   CleanupAuthMode,
   CleanupStats,
   CorrectionEntry,
@@ -31,6 +32,15 @@ export const setGroqApiKey = (apiKey: string) =>
 
 export const setGroqSettings = (groq: GroqSettings) =>
   invoke<void>("set_groq_settings", { groq });
+
+export const setAssemblyAiApiKey = (apiKey: string) =>
+  invoke<void>("set_assemblyai_api_key", { apiKey });
+
+export const setAssemblyAiSettings = (assemblyai: AssemblyAiSettings) =>
+  invoke<void>("set_assemblyai_settings", { assemblyai });
+
+export const validateAssemblyAiApiKey = (apiKey: string) =>
+  invoke<ApiKeyValidation>("validate_assemblyai_api_key", { apiKey });
 
 export const validateDeepgramApiKey = (apiKey: string) =>
   invoke<ApiKeyValidation>("validate_deepgram_api_key", { apiKey });

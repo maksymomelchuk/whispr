@@ -3,6 +3,7 @@ use crate::corrections::apply_corrections;
 use crate::mode::ModeLanguage;
 use crate::recorder::AudioFormat;
 use crate::transcription_session::TranscriptionSession;
+use crate::groq_audio::{self, AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
 use crate::terms;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
@@ -20,11 +21,9 @@ const DEEPGRAM_WS_BASE: &str = "wss://api.deepgram.com/v1/listen";
 /// ms; we cap it so a hung WS never blocks the paste indefinitely.
 const FINAL_RESULTS_TIMEOUT: Duration = Duration::from_secs(3);
 
-const TRANSCRIPT_PARTIAL_EVENT: &str = "transcript-partial";
 /// Bounds the overlay rerender rate — Deepgram interims arrive faster than
 /// React can usefully repaint, and `compose_preview` is non-trivial.
 const PARTIAL_THROTTLE: Duration = Duration::from_millis(100);
-const AUDIO_LEVEL_EVENT: &str = "audio-level";
 /// 30 Hz is smooth enough for the wave; cpal callbacks fire 2–4× faster on
 /// most input configs and would otherwise flood the IPC channel.
 const LEVEL_THROTTLE: Duration = Duration::from_millis(33);
@@ -84,7 +83,7 @@ impl TranscriptionSession for DeepgramSession {
                 maybe_chunk = chunks.recv() => {
                     match maybe_chunk {
                         Some(chunk) => {
-                            let raw_level = compute_level(&chunk);
+                            let raw_level = groq_audio::compute_level(&chunk);
                             if let Err(e) = sink.send(Message::Binary(pcm_bytes(&chunk))).await {
                                 return Err(format!("Deepgram WS send failed: {e}"));
                             }
@@ -258,24 +257,6 @@ fn extract_transcript_message(text: &str) -> Option<(bool, String)> {
     Some((is_final, t.to_string()))
 }
 
-/// dB range maps perceived loudness — linear RMS leaves quiet mics barely
-/// visible. FLOOR_DB clamps room tone to zero so the bars stay flat in
-/// silence.
-fn compute_level(chunk: &[i16]) -> f32 {
-    if chunk.is_empty() {
-        return 0.0;
-    }
-    let sum_sq: f64 = chunk.iter().map(|&s| (s as f64).powi(2)).sum();
-    let rms = (sum_sq / chunk.len() as f64).sqrt() / i16::MAX as f64;
-    if rms <= 0.0 {
-        return 0.0;
-    }
-    const FLOOR_DB: f64 = -40.0;
-    const CEIL_DB: f64 = -10.0;
-    let db = 20.0 * rms.log10();
-    let n = ((db - FLOOR_DB) / (CEIL_DB - FLOOR_DB)).clamp(0.0, 1.0);
-    n as f32
-}
 
 fn pcm_bytes(samples: &[i16]) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(samples.len() * 2);

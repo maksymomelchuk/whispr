@@ -12,6 +12,7 @@
 //! owns the buffer, the timer, and the HTTP requests.
 
 use crate::config::{self, GroqModel};
+use crate::groq_audio::{self, AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
 use crate::terms;
 use crate::groq_audio::encode_to_flac_16k_mono;
 use crate::groq_session_state::{self, Action, Event, Phase, PollFailure, State};
@@ -25,8 +26,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 const GROQ_URL: &str = "https://api.groq.com/openai/v1/audio/transcriptions";
-const AUDIO_LEVEL_EVENT: &str = "audio-level";
-const TRANSCRIPT_PARTIAL_EVENT: &str = "transcript-partial";
+
 const TRANSCRIPTION_ERROR_EVENT: &str = "transcription-error";
 const PTT_ERROR_EVENT: &str = "ptt-error";
 /// Match the Deepgram session's audio-level cadence.
@@ -116,7 +116,7 @@ impl TranscriptionSession for GroqSession {
             tokio::select! {
                 maybe_chunk = chunks.recv() => match maybe_chunk {
                     Some(chunk) => {
-                        let raw = compute_level(&chunk);
+                        let raw = groq_audio::compute_level(&chunk);
                         buffered.lock().unwrap().extend_from_slice(&chunk);
                         let k = if raw > smoothed_level { 0.6 } else { 0.25 };
                         smoothed_level += (raw - smoothed_level) * k;
@@ -416,25 +416,6 @@ fn parse_transcript(body: &str) -> Result<String, String> {
         .and_then(|x| x.as_str())
         .ok_or_else(|| "Groq response missing `text` field".to_string())?;
     Ok(text.trim().to_string())
-}
-
-/// dB range maps perceived loudness — linear RMS leaves quiet mics barely
-/// visible. FLOOR_DB clamps room tone to zero so the bars stay flat in
-/// silence.
-fn compute_level(chunk: &[i16]) -> f32 {
-    if chunk.is_empty() {
-        return 0.0;
-    }
-    let sum_sq: f64 = chunk.iter().map(|&s| (s as f64).powi(2)).sum();
-    let rms = (sum_sq / chunk.len() as f64).sqrt() / i16::MAX as f64;
-    if rms <= 0.0 {
-        return 0.0;
-    }
-    const FLOOR_DB: f64 = -40.0;
-    const CEIL_DB: f64 = -10.0;
-    let db = 20.0 * rms.log10();
-    let n = ((db - FLOOR_DB) / (CEIL_DB - FLOOR_DB)).clamp(0.0, 1.0);
-    n as f32
 }
 
 #[cfg(test)]

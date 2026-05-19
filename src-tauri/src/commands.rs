@@ -1,8 +1,8 @@
 use crate::api_key_validation::{self, ApiKeyValidation};
 use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
 use crate::config::{
-    self, CleanupAuthMode, CorrectionEntry, GroqSettings, HotkeyBinding, Settings, SnippetEntry,
-    TranscriptionProvider,
+    self, AssemblyAiSettings, CleanupAuthMode, CorrectionEntry, GroqSettings, HotkeyBinding,
+    Settings, SnippetEntry, TranscriptionProvider,
 };
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::mode::{Mode, ModeId};
@@ -20,11 +20,13 @@ pub struct SettingsView {
     pub transcription_provider: TranscriptionProvider,
     pub deepgram_api_key_configured: bool,
     pub groq_api_key_configured: bool,
+    pub assemblyai_api_key_configured: bool,
     pub hotkey_bindings: Vec<HotkeyBinding>,
     pub terms: Vec<String>,
     pub corrections: Vec<CorrectionEntry>,
     pub snippets: Vec<SnippetEntry>,
     pub groq: GroqSettings,
+    pub assemblyai: AssemblyAiSettings,
     pub modes: Vec<Mode>,
     pub default_mode_id: ModeId,
     pub ai_cleanup_enabled: bool,
@@ -53,11 +55,16 @@ impl From<Settings> for SettingsView {
             transcription_provider: s.transcription_provider,
             deepgram_api_key_configured,
             groq_api_key_configured,
+            assemblyai_api_key_configured: s
+                .assemblyai_api_key
+                .as_deref()
+                .is_some_and(|k| !k.is_empty()),
             hotkey_bindings: s.hotkey_bindings,
             terms: s.terms,
             corrections: s.corrections,
             snippets: s.snippets,
             groq: s.groq,
+            assemblyai: s.assemblyai.clone(),
             modes: s.modes,
             default_mode_id: s.default_mode_id,
             ai_cleanup_enabled: s.ai_cleanup.enabled,
@@ -104,6 +111,21 @@ pub fn set_deepgram_api_key(app: AppHandle, api_key: String) -> Result<(), Strin
 #[tauri::command]
 pub fn set_groq_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
     config::update(&app, |s| s.groq_api_key = config::non_empty(api_key))
+}
+
+#[tauri::command]
+pub fn set_assemblyai_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
+    config::update(&app, |s| s.assemblyai_api_key = config::non_empty(api_key))
+}
+
+#[tauri::command]
+pub fn set_assemblyai_settings(app: AppHandle, assemblyai: AssemblyAiSettings) -> Result<(), String> {
+    config::update(&app, |s| s.assemblyai = assemblyai)
+}
+
+#[tauri::command]
+pub async fn validate_assemblyai_api_key(api_key: String) -> ApiKeyValidation {
+    api_key_validation::validate_assemblyai(&api_key).await
 }
 
 #[tauri::command]

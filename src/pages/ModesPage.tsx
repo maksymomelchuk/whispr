@@ -55,6 +55,7 @@ import {
   updateMode,
 } from "../lib/api";
 import type { HotkeyBinding, Mode, ModeLanguage } from "../lib/types";
+import { ASSEMBLYAI_MODEL_SUPPORTED_LANGUAGES } from "../lib/types";
 
 const LANGUAGES: { code: string; name: string; flag: string }[] = [
   { code: "en", name: "English", flag: "🇺🇸" },
@@ -270,11 +271,13 @@ export function ModeEditor({
   isNew,
   onClose,
   onPersist,
+  allowedLanguageCodes = null,
 }: {
   mode: Mode;
   isNew: boolean;
   onClose: () => void;
   onPersist: (mode: Mode, wasNew: boolean) => void;
+  allowedLanguageCodes?: string[] | null;
 }) {
   const [draft, setDraft] = useState<Mode>(mode);
   const [creating, setCreating] = useState(false);
@@ -468,9 +471,15 @@ export function ModeEditor({
                         <SelectValue placeholder="+ Add language" />
                       </SelectTrigger>
                       <SelectContent>
-                        {LANGUAGES.filter(
-                          (l) => !restrictCodes.includes(l.code),
-                        ).map((l) => (
+                        {LANGUAGES.filter((l) => {
+                          if (restrictCodes.includes(l.code)) return false;
+                          if (
+                            allowedLanguageCodes !== null &&
+                            !allowedLanguageCodes.includes(l.code)
+                          )
+                            return false;
+                          return true;
+                        }).map((l) => (
                           <SelectItem key={l.code} value={l.code}>
                             {l.flag} {l.name}
                           </SelectItem>
@@ -712,6 +721,11 @@ export function ModesPage() {
               isNew={editor.isNew}
               onClose={closeEditor}
               onPersist={handlePersist}
+              allowedLanguageCodes={
+                settings.transcription_provider === "assembly_ai"
+                  ? ASSEMBLYAI_MODEL_SUPPORTED_LANGUAGES[settings.assemblyai.model]
+                  : null
+              }
             />
           )}
         </SheetContent>

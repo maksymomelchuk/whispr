@@ -1,4 +1,5 @@
 use crate::config::{HotkeyBinding, Shortcut, TranscriptionProvider};
+use crate::assemblyai_session::AssemblyAiSession;
 use crate::deepgram_session::DeepgramSession;
 use crate::groq_session::GroqSession;
 use crate::history::{self, CleanupStatus, HISTORY_UPDATED_EVENT};
@@ -447,6 +448,11 @@ async fn run_session(
         }
         TranscriptionProvider::Groq => {
             GroqSession
+                .run(app.clone(), format, chunk_rx, mode_language, session_terms)
+                .await
+        }
+        TranscriptionProvider::AssemblyAi => {
+            AssemblyAiSession
                 .run(app.clone(), format, chunk_rx, mode_language, session_terms)
                 .await
         }

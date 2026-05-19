@@ -128,6 +128,45 @@ pub enum TranscriptionProvider {
     #[default]
     Deepgram,
     Groq,
+    AssemblyAi,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AssemblyAiModel {
+    #[default]
+    UniversalProStreaming,
+    UniversalStreamingEnglish,
+    UniversalStreamingMultilingual,
+    WhisperStreaming,
+}
+
+impl AssemblyAiModel {
+    pub fn api_id(self) -> &'static str {
+        match self {
+            Self::UniversalProStreaming => "u3-rt-pro",
+            Self::UniversalStreamingEnglish => "universal-streaming-english",
+            Self::UniversalStreamingMultilingual => "universal-streaming-multilingual",
+            Self::WhisperStreaming => "whisper-rt",
+        }
+    }
+
+    pub fn supports_language(self, code: &str) -> bool {
+        match self {
+            Self::UniversalStreamingEnglish => code == "en",
+            Self::UniversalProStreaming | Self::UniversalStreamingMultilingual => {
+                matches!(code, "en" | "es" | "de" | "fr" | "pt" | "it")
+            }
+            Self::WhisperStreaming => true,
+        }
+    }
+
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AssemblyAiSettings {
+    #[serde(default)]
+    pub model: AssemblyAiModel,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -246,6 +285,8 @@ pub struct Settings {
     pub deepgram_api_key: Option<String>,
     #[serde(default)]
     pub groq_api_key: Option<String>,
+    #[serde(default)]
+    pub assemblyai_api_key: Option<String>,
     /// Legacy single-shortcut field; converted to a HotkeyBinding on first load.
     #[serde(rename = "shortcut", default, skip_serializing)]
     pub legacy_shortcut: Shortcut,
@@ -264,6 +305,8 @@ pub struct Settings {
     pub deepgram: DeepgramSettings,
     #[serde(default)]
     pub groq: GroqSettings,
+    #[serde(default)]
+    pub assemblyai: AssemblyAiSettings,
     #[serde(default)]
     pub ai_cleanup: AiCleanupSettings,
     #[serde(default)]
@@ -291,6 +334,7 @@ impl Default for Settings {
             transcription_provider: TranscriptionProvider::default(),
             deepgram_api_key: None,
             groq_api_key: None,
+            assemblyai_api_key: None,
             legacy_shortcut: Shortcut::default(),
             hotkey_bindings: default_hotkey_bindings(),
             legacy_dictionary: vec![],
@@ -299,6 +343,7 @@ impl Default for Settings {
             snippets: vec![],
             deepgram: DeepgramSettings::default(),
             groq: GroqSettings::default(),
+            assemblyai: AssemblyAiSettings::default(),
             ai_cleanup: AiCleanupSettings::default(),
             modes: vec![
                 Mode::seed_default_en(false),
