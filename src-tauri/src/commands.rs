@@ -6,7 +6,7 @@ use crate::config::{
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::mode::{Mode, ModeId};
 use crate::permissions;
-use crate::provider::{AssemblyAiModel, GroqModel, ProviderModel, TranscriptionProvider};
+use crate::provider::{GroqModel, ProviderModel};
 use crate::state::AppState;
 use crate::stats::{self, StatsRow, STATS_UPDATED_EVENT};
 use serde::Serialize;
@@ -82,72 +82,9 @@ impl From<Settings> for SettingsView {
     }
 }
 
-#[derive(Debug, Serialize)]
-pub struct ModelEntry {
-    pub id: ProviderModel,
-    pub supported_language_codes: Option<Vec<&'static str>>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ProviderEntry {
-    pub id: TranscriptionProvider,
-    pub models: Vec<ModelEntry>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct CapabilityMatrix {
-    pub providers: Vec<ProviderEntry>,
-}
-
 #[tauri::command]
 pub fn get_settings(app: AppHandle) -> SettingsView {
     config::load(&app).into()
-}
-
-#[tauri::command]
-pub fn get_capability_matrix() -> CapabilityMatrix {
-    CapabilityMatrix {
-        providers: vec![
-            ProviderEntry {
-                id: TranscriptionProvider::Deepgram,
-                models: vec![],
-            },
-            ProviderEntry {
-                id: TranscriptionProvider::Groq,
-                models: vec![
-                    ModelEntry {
-                        id: ProviderModel::Groq { model: GroqModel::WhisperLargeV3Turbo },
-                        supported_language_codes: None,
-                    },
-                    ModelEntry {
-                        id: ProviderModel::Groq { model: GroqModel::WhisperLargeV3 },
-                        supported_language_codes: None,
-                    },
-                ],
-            },
-            ProviderEntry {
-                id: TranscriptionProvider::AssemblyAi,
-                models: vec![
-                    ModelEntry {
-                        id: ProviderModel::AssemblyAi { model: AssemblyAiModel::UniversalProStreaming },
-                        supported_language_codes: AssemblyAiModel::UniversalProStreaming.supported_language_codes(),
-                    },
-                    ModelEntry {
-                        id: ProviderModel::AssemblyAi { model: AssemblyAiModel::UniversalStreamingEnglish },
-                        supported_language_codes: AssemblyAiModel::UniversalStreamingEnglish.supported_language_codes(),
-                    },
-                    ModelEntry {
-                        id: ProviderModel::AssemblyAi { model: AssemblyAiModel::UniversalStreamingMultilingual },
-                        supported_language_codes: AssemblyAiModel::UniversalStreamingMultilingual.supported_language_codes(),
-                    },
-                    ModelEntry {
-                        id: ProviderModel::AssemblyAi { model: AssemblyAiModel::WhisperStreaming },
-                        supported_language_codes: AssemblyAiModel::WhisperStreaming.supported_language_codes(),
-                    },
-                ],
-            },
-        ],
-    }
 }
 
 #[tauri::command]

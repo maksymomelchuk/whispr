@@ -2,7 +2,6 @@ import { invoke } from "@tauri-apps/api/core";
 
 import type {
   ApiKeyValidation,
-  CapabilityMatrix,
   CleanupAuthMode,
   CleanupStats,
   CorrectionEntry,
@@ -18,9 +17,6 @@ import type {
 export { formatShortcut } from "./shortcut";
 
 export const getSettings = () => invoke<Settings>("get_settings");
-
-export const getCapabilityMatrix = () =>
-  invoke<CapabilityMatrix>("get_capability_matrix");
 
 export const setDeepgramApiKey = (apiKey: string) =>
   invoke<void>("set_deepgram_api_key", { apiKey });

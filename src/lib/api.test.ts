@@ -7,7 +7,6 @@ import {
   clearStats,
   deleteMode,
   duplicateMode,
-  getCapabilityMatrix,
   getCleanupStats,
   getHistory,
   getSettings,
@@ -47,7 +46,6 @@ const COMMANDS: Array<{
   args?: Record<string, unknown>;
 }> = [
   { call: () => getSettings(), cmd: "get_settings" },
-  { call: () => getCapabilityMatrix(), cmd: "get_capability_matrix" },
   {
     call: () => setDeepgramApiKey("dk"),
     cmd: "set_deepgram_api_key",

@@ -148,7 +148,6 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
-            commands::get_capability_matrix,
             commands::set_deepgram_api_key,
             commands::set_groq_api_key,
             commands::set_assemblyai_api_key,

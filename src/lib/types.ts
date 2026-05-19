@@ -114,22 +114,6 @@ export interface Settings {
   show_live_preview: boolean;
 }
 
-// ── Capability matrix (from Tauri backend) ────────────────────────────────────
-
-export interface ModelEntry {
-  id: ProviderModel;
-  supported_language_codes: string[] | null;
-}
-
-export interface ProviderEntry {
-  id: TranscriptionProvider;
-  models: ModelEntry[];
-}
-
-export interface CapabilityMatrix {
-  providers: ProviderEntry[];
-}
-
 export type CleanupStatus =
   | { kind: "disabled" }
   | { kind: "skipped_below_min_words" }

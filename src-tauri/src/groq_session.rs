@@ -70,7 +70,7 @@ impl TranscriptionSession for GroqSession {
             .clone()
             .filter(|k| !k.is_empty())
             .ok_or_else(|| "API key missing for Groq".to_string())?;
-        let model = groq_model_api_id(self.model);
+        let model = self.model.api_id();
         let language = language.as_code().map(str::to_string);
         let prompt = terms::groq_prompt_hint(&terms);
         let show_live_preview = settings.show_live_preview;
@@ -345,13 +345,6 @@ fn spawn_final_post(
     });
 }
 
-fn groq_model_api_id(model: GroqModel) -> &'static str {
-    match model {
-        GroqModel::WhisperLargeV3 => "whisper-large-v3",
-        GroqModel::WhisperLargeV3Turbo => "whisper-large-v3-turbo",
-    }
-}
-
 fn http_client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
     CLIENT.get_or_init(reqwest::Client::new)
@@ -424,18 +417,6 @@ fn parse_transcript(body: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn maps_groq_model_to_api_id() {
-        assert_eq!(
-            groq_model_api_id(GroqModel::WhisperLargeV3),
-            "whisper-large-v3"
-        );
-        assert_eq!(
-            groq_model_api_id(GroqModel::WhisperLargeV3Turbo),
-            "whisper-large-v3-turbo"
-        );
-    }
 
     #[test]
     fn parses_transcript_text() {
