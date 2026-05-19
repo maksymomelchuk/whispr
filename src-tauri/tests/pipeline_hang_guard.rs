@@ -21,6 +21,7 @@ async fn identity_correction_terminates_within_deadline() {
     let outcome = run_under_deadline(|| {
         PipelineHarness::new()
             .with_corrections(&[("getmany", "Getmany")])
+            .with_use_corrections(true)
             .run("I love Getmany.")
     })
     .await;
@@ -35,6 +36,7 @@ async fn identity_correction_with_mixed_case_input_terminates() {
     let outcome = run_under_deadline(|| {
         PipelineHarness::new()
             .with_corrections(&[("getmany", "Getmany"), ("hello", "Hello")])
+            .with_use_corrections(true)
             .run("getmany hello world")
     })
     .await;
@@ -48,6 +50,7 @@ async fn non_identity_correction_applies_and_terminates() {
     let outcome = run_under_deadline(|| {
         PipelineHarness::new()
             .with_corrections(&[("dash", "-")])
+            .with_use_corrections(true)
             .run("dash dash help")
     })
     .await;
@@ -74,6 +77,7 @@ async fn cleanup_output_flows_through_pipeline() {
     let outcome = run_under_deadline(|| {
         PipelineHarness::new()
             .with_corrections(&[("mongo", "MongoDB")])
+            .with_use_corrections(true)
             .with_cleanup("I prefer Mongo")
             .run("raw transcript that cleanup replaced")
     })
@@ -91,6 +95,7 @@ async fn elapsed_time_is_populated() {
     let outcome = run_under_deadline(|| {
         PipelineHarness::new()
             .with_corrections(&[("getmany", "Getmany")])
+            .with_use_corrections(true)
             .run("I love Getmany.")
     })
     .await;

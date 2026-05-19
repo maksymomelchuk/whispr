@@ -29,6 +29,7 @@ async fn deepgram_preset_with_corrections_applied() {
     let outcome = run_under_deadline(|| {
         PipelineHarness::new()
             .with_corrections(&[("deepgram", "Deepgram")])
+            .with_use_corrections(true)
             .run("transcribed by deepgram provider")
     })
     .await;

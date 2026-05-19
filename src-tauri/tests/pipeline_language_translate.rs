@@ -77,6 +77,7 @@ async fn translate_apple_stub_with_downstream_corrections() {
         PipelineHarness::new()
             .with_translated_text("hello from ukraine")
             .with_corrections(&[("ukraine", "Ukraine")])
+            .with_use_corrections(true)
             .run("привіт з україни")
     })
     .await;

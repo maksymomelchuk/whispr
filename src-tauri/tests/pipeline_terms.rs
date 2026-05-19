@@ -45,6 +45,7 @@ async fn no_term_sets_does_not_suppress_corrections() {
     let outcome = run_under_deadline(|| {
         PipelineHarness::new()
             .with_corrections(&[("mongo", "MongoDB")])
+            .with_use_corrections(true)
             .with_snippets(&[])
             .run("I use mongo for storage")
     })

@@ -95,6 +95,7 @@ async fn cleanup_success_corrections_apply_on_cleaned_text() {
     let outcome = run_under_deadline(|| {
         PipelineHarness::new()
             .with_corrections(&[("mongo", "MongoDB")])
+            .with_use_corrections(true)
             .with_cleanup("I prefer mongo for storage")
             .run("uh I like mongo")
     })
