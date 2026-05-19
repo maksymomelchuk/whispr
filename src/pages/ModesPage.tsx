@@ -341,7 +341,7 @@ function SetMultiSelect({
   const selected = selectedIds
     .map((id) => byId.get(id))
     .filter((s): s is { id: string; name: string } => !!s);
-  const hasUnselected = available.length > selected.length;
+  const unselected = available.filter((s) => !selectedIds.includes(s.id));
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -349,26 +349,27 @@ function SetMultiSelect({
       {available.length === 0 ? (
         <p className="text-xs text-muted-foreground">{emptyHint}</p>
       ) : (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {hasUnselected && (
-            <Select value="" onValueChange={(id) => id && onAdd(id)}>
-              <SelectTrigger size="sm" className="w-auto">
-                <SelectValue placeholder={addPlaceholder} />
-              </SelectTrigger>
-              <SelectContent>
-                {available
-                  .filter((s) => !selectedIds.includes(s.id))
-                  .map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          )}
+        <div className="min-h-[40px] flex flex-wrap gap-1 items-center p-2 rounded-lg bg-card border border-border shadow-xs">
           {selected.map((s) => (
             <Chip key={s.id} label={s.name} onRemove={() => onRemove(s.id)} />
           ))}
+          {unselected.length > 0 && (
+            <Select value="" onValueChange={(id) => id && onAdd(id)}>
+              <SelectTrigger
+                size="sm"
+                className="h-7 w-auto border-0 shadow-none bg-transparent px-2 text-muted-foreground hover:text-foreground dark:bg-transparent dark:hover:bg-transparent"
+              >
+                <SelectValue placeholder={addPlaceholder} />
+              </SelectTrigger>
+              <SelectContent>
+                {unselected.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
       )}
     </div>
@@ -794,12 +795,14 @@ export function ModeEditor({
             onAdd={(id) => toggleCorrectionSet(id, true)}
             onRemove={(id) => toggleCorrectionSet(id, false)}
           />
-          <ToggleRow
-            id="snippets"
-            label="Use snippets"
-            checked={draft.use_snippets}
-            onCheckedChange={setUseSnippets}
-          />
+          <div className="mt-2 pt-3 border-t border-border/60">
+            <ToggleRow
+              id="snippets"
+              label="Use snippets"
+              checked={draft.use_snippets}
+              onCheckedChange={setUseSnippets}
+            />
+          </div>
         </div>
       </div>
 
