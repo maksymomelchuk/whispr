@@ -298,45 +298,38 @@ describe("ModeEditor – correction sets", () => {
     { id: "cs-2", name: "Tech Terms", entries: [] },
   ];
 
-  it("shows a toggle for each correction set", () => {
+  it("renders a chip for each selected correction set", () => {
     render(
       <ModeEditor
-        mode={MODE}
+        mode={{ ...MODE, correction_set_ids: ["cs-1"] }}
         isNew={false}
         onClose={vi.fn()}
         onPersist={vi.fn()}
         correctionSets={SETS}
       />,
     );
-    expect(screen.getByLabelText("Punctuation")).toBeInTheDocument();
-    expect(screen.getByLabelText("Tech Terms")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Remove Punctuation" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Remove Tech Terms" }),
+    ).not.toBeInTheDocument();
   });
 
-  it("toggling a set on autosaves with it in correction_set_ids", async () => {
+  it("shows the add picker when not every set is selected", () => {
     render(
       <ModeEditor
-        mode={{ ...MODE, correction_set_ids: [] }}
+        mode={{ ...MODE, correction_set_ids: ["cs-1"] }}
         isNew={false}
         onClose={vi.fn()}
         onPersist={vi.fn()}
         correctionSets={SETS}
       />,
     );
-
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-
-    fireEvent.click(screen.getByLabelText("Punctuation"));
-
-    await act(async () => {
-      vi.advanceTimersByTime(450);
-    });
-
-    expect(vi.mocked(mockUpdateMode)).toHaveBeenCalledWith(
-      expect.objectContaining({ correction_set_ids: ["cs-1"] }),
-    );
+    expect(screen.getByText("+ Add correction set")).toBeInTheDocument();
   });
 
-  it("toggling a set off autosaves without it in correction_set_ids", async () => {
+  it("removing a chip autosaves without that set in correction_set_ids", async () => {
     render(
       <ModeEditor
         mode={{ ...MODE, correction_set_ids: ["cs-1"] }}
@@ -349,7 +342,9 @@ describe("ModeEditor – correction sets", () => {
 
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 
-    fireEvent.click(screen.getByLabelText("Punctuation"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove Punctuation" }),
+    );
 
     await act(async () => {
       vi.advanceTimersByTime(450);

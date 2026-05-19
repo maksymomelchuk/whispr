@@ -320,6 +320,61 @@ function ModeRow({
   );
 }
 
+function SetMultiSelect({
+  label,
+  emptyHint,
+  addPlaceholder,
+  available,
+  selectedIds,
+  onAdd,
+  onRemove,
+}: {
+  label: string;
+  emptyHint: string;
+  addPlaceholder: string;
+  available: { id: string; name: string }[];
+  selectedIds: string[];
+  onAdd: (id: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  const byId = new Map(available.map((s) => [s.id, s]));
+  const selected = selectedIds
+    .map((id) => byId.get(id))
+    .filter((s): s is { id: string; name: string } => !!s);
+  const hasUnselected = available.length > selected.length;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[13px] text-foreground">{label}</span>
+      {available.length === 0 ? (
+        <p className="text-xs text-muted-foreground">{emptyHint}</p>
+      ) : (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {hasUnselected && (
+            <Select value="" onValueChange={(id) => id && onAdd(id)}>
+              <SelectTrigger size="sm" className="w-auto">
+                <SelectValue placeholder={addPlaceholder} />
+              </SelectTrigger>
+              <SelectContent>
+                {available
+                  .filter((s) => !selectedIds.includes(s.id))
+                  .map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          )}
+          {selected.map((s) => (
+            <Chip key={s.id} label={s.name} onRemove={() => onRemove(s.id)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ModeEditor({
   mode,
   isNew,
@@ -486,7 +541,7 @@ export function ModeEditor({
         <SheetTitle>{isNew ? "New Mode" : "Edit Mode"}</SheetTitle>
       </SheetHeader>
 
-      <div className="flex flex-col gap-4 px-4 pb-6 overflow-y-auto flex-1">
+      <div className="flex flex-col gap-4 px-4 pb-10 overflow-y-auto flex-1 min-h-0 [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb:hover]:bg-muted-foreground/40">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="mode-name" className="text-[13px]">
             Name
@@ -721,46 +776,24 @@ export function ModeEditor({
             </span>
             <div className="flex-1 h-px bg-border/60" />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[13px] text-foreground">Term sets</span>
-            {availableTermSets.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                No term sets — create one in the Terms page.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-1">
-                {availableTermSets.map((ts) => (
-                  <ToggleRow
-                    key={ts.id}
-                    id={`term-set-${ts.id}`}
-                    label={ts.name}
-                    checked={draft.term_set_ids.includes(ts.id)}
-                    onCheckedChange={(checked) => toggleTermSet(ts.id, checked)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[13px] text-foreground">Correction sets</span>
-            {correctionSets.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                No correction sets — create one in the Corrections page.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-1">
-                {correctionSets.map((cs) => (
-                  <ToggleRow
-                    key={cs.id}
-                    id={`correction-set-${cs.id}`}
-                    label={cs.name}
-                    checked={draft.correction_set_ids.includes(cs.id)}
-                    onCheckedChange={(on) => toggleCorrectionSet(cs.id, on)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          <SetMultiSelect
+            label="Term sets"
+            emptyHint="No term sets — create one in the Terms page."
+            addPlaceholder="+ Add term set"
+            available={availableTermSets}
+            selectedIds={draft.term_set_ids}
+            onAdd={(id) => toggleTermSet(id, true)}
+            onRemove={(id) => toggleTermSet(id, false)}
+          />
+          <SetMultiSelect
+            label="Correction sets"
+            emptyHint="No correction sets — create one in the Corrections page."
+            addPlaceholder="+ Add correction set"
+            available={correctionSets}
+            selectedIds={draft.correction_set_ids}
+            onAdd={(id) => toggleCorrectionSet(id, true)}
+            onRemove={(id) => toggleCorrectionSet(id, false)}
+          />
           <ToggleRow
             id="snippets"
             label="Use snippets"
