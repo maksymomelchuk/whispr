@@ -10,7 +10,7 @@ const MOCK_SETTINGS: Settings = {
   groq_api_key_configured: false,
   assemblyai_api_key_configured: false,
   hotkey_bindings: [],
-  terms: [],
+  term_sets: [],
   corrections: [],
   snippets: [],
   modes: [],

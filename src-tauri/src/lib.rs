@@ -13,7 +13,7 @@ mod corrections;
 // terms helpers are consumed by macOS-only session modules; allow
 // unused items on non-macOS so the module still ships and its tests run.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-mod terms;
+pub mod terms;
 // groq_audio is only used by groq_session (macOS-gated); allow unused
 // items on non-macOS builds so the module still ships and its tests
 // run, but the binary doesn't warn about dead code.
@@ -157,7 +157,10 @@ pub fn run() {
             commands::set_hotkey_bindings,
             commands::set_shortcut_capture_paused,
             commands::open_translation_settings,
-            commands::set_terms,
+            commands::create_term_set,
+            commands::rename_term_set,
+            commands::update_term_set_entries,
+            commands::delete_term_set,
             commands::set_corrections,
             commands::set_snippets,
             commands::set_cleanup_enabled,

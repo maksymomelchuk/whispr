@@ -1,10 +1,10 @@
 use crate::api_key_validation::{self, ApiKeyValidation};
 use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
 use crate::config::{
-    self, CleanupAuthMode, CorrectionEntry, HotkeyBinding, Settings, SnippetEntry,
+    self, CleanupAuthMode, CorrectionEntry, HotkeyBinding, NamedTermSet, Settings, SnippetEntry,
 };
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
-use crate::mode::{Mode, ModeId};
+use crate::mode::{Mode, ModeId, SetId};
 use crate::permissions;
 use crate::provider::{GroqModel, ProviderModel};
 use crate::state::AppState;
@@ -21,7 +21,7 @@ pub struct SettingsView {
     pub groq_api_key_configured: bool,
     pub assemblyai_api_key_configured: bool,
     pub hotkey_bindings: Vec<HotkeyBinding>,
-    pub terms: Vec<String>,
+    pub term_sets: Vec<NamedTermSet>,
     pub corrections: Vec<CorrectionEntry>,
     pub snippets: Vec<SnippetEntry>,
     pub modes: Vec<Mode>,
@@ -54,7 +54,7 @@ impl From<Settings> for SettingsView {
                 .as_deref()
                 .is_some_and(|k| !k.is_empty()),
             hotkey_bindings: s.hotkey_bindings,
-            terms: s.terms,
+            term_sets: s.term_sets,
             corrections: s.corrections,
             snippets: s.snippets,
             modes: s.modes,
@@ -162,11 +162,51 @@ pub fn set_shortcut_capture_paused(state: State<'_, AppState>, paused: bool) {
 }
 
 #[tauri::command]
-pub fn set_terms(
+pub fn create_term_set(app: AppHandle, name: String) -> Result<NamedTermSet, String> {
+    let ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let set = NamedTermSet {
+        id: format!("term-set-{ms}"),
+        name: name.trim().to_string(),
+        entries: vec![],
+    };
+    let result = set.clone();
+    config::update(&app, |s| s.term_sets.push(set))?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn rename_term_set(app: AppHandle, id: SetId, name: String) -> Result<(), String> {
+    config::update(&app, |s| {
+        if let Some(ts) = s.term_sets.iter_mut().find(|ts| ts.id == id) {
+            ts.name = name.trim().to_string();
+        }
+    })
+}
+
+#[tauri::command]
+pub fn update_term_set_entries(
     app: AppHandle,
-    terms: Vec<String>,
+    id: SetId,
+    entries: Vec<String>,
 ) -> Result<(), String> {
-    config::update(&app, |s| s.terms = terms)
+    config::update(&app, |s| {
+        if let Some(ts) = s.term_sets.iter_mut().find(|ts| ts.id == id) {
+            ts.entries = entries;
+        }
+    })
+}
+
+#[tauri::command]
+pub fn delete_term_set(app: AppHandle, id: SetId) -> Result<(), String> {
+    config::update(&app, |s| {
+        s.term_sets.retain(|ts| ts.id != id);
+        for mode in s.modes.iter_mut() {
+            mode.term_set_ids.retain(|tsid| *tsid != id);
+        }
+    })
 }
 
 #[tauri::command]
@@ -412,6 +452,7 @@ mod tests {
         assert!(!view.groq_api_key_configured);
         assert_eq!(view.hotkey_bindings.len(), 1);
         assert_eq!(view.hotkey_bindings[0].shortcut.key, "AltRight");
+        assert!(view.term_sets.is_empty());
     }
 
     #[test]

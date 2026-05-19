@@ -9,6 +9,7 @@ import type {
   HistoryLimit,
   HotkeyBinding,
   Mode,
+  NamedTermSet,
   Settings,
   Snippet,
   StatsRow,
@@ -45,8 +46,17 @@ export const setShortcutCapturePaused = (paused: boolean) =>
 export const openTranslationSettings = () =>
   invoke<void>("open_translation_settings");
 
-export const setTerms = (terms: string[]) =>
-  invoke<void>("set_terms", { terms });
+export const createTermSet = (name: string) =>
+  invoke<NamedTermSet>("create_term_set", { name });
+
+export const renameTermSet = (id: string, name: string) =>
+  invoke<void>("rename_term_set", { id, name });
+
+export const updateTermSetEntries = (id: string, entries: string[]) =>
+  invoke<void>("update_term_set_entries", { id, entries });
+
+export const deleteTermSet = (id: string) =>
+  invoke<void>("delete_term_set", { id });
 
 export const setCorrections = (corrections: CorrectionEntry[]) =>
   invoke<void>("set_corrections", { corrections });

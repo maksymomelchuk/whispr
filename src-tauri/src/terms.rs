@@ -1,3 +1,5 @@
+use crate::config::NamedTermSet;
+
 /// 4 KB ceiling — Deepgram's documented maximum is ~8 KB; halving gives
 /// comfortable headroom for the base URL and engine parameters that precede
 /// any keyterm pairs.
@@ -6,6 +8,26 @@ pub const DEEPGRAM_KEYTERM_BUDGET_BYTES: usize = 4096;
 /// Whisper's prompt parameter is documented as up to 224 tokens; 800 chars
 /// stays well within that window for typical English vocabulary lists.
 pub const GROQ_PROMPT_BUDGET_CHARS: usize = 800;
+
+/// Collects the active term hints for a recording session. Iterates `set_ids`
+/// in order, appending each set's entries while skipping exact duplicates
+/// (first-seen wins). Blank entries are discarded.
+pub fn compose_term_hints(term_sets: &[NamedTermSet], set_ids: &[String]) -> Vec<String> {
+    let mut result = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for id in set_ids {
+        let Some(set) = term_sets.iter().find(|ts| &ts.id == id) else {
+            continue;
+        };
+        for entry in &set.entries {
+            let trimmed = entry.trim().to_string();
+            if !trimmed.is_empty() && seen.insert(trimmed.clone()) {
+                result.push(trimmed);
+            }
+        }
+    }
+    result
+}
 
 /// Returns terms suitable for Deepgram `keyterm` query params, truncating in
 /// insertion order once the next term would push consumed bytes past
@@ -68,6 +90,67 @@ pub fn groq_prompt_hint(terms: &[String]) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::NamedTermSet;
+
+    fn make_set(id: &str, entries: &[&str]) -> NamedTermSet {
+        NamedTermSet {
+            id: id.to_string(),
+            name: id.to_string(),
+            entries: entries.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    // ── compose_term_hints ───────────────────────────────────────────────
+
+    #[test]
+    fn compose_returns_empty_when_no_set_ids() {
+        let sets = vec![make_set("s1", &["MongoDB"])];
+        assert!(compose_term_hints(&sets, &[]).is_empty());
+    }
+
+    #[test]
+    fn compose_returns_empty_when_set_id_not_found() {
+        let sets = vec![make_set("s1", &["MongoDB"])];
+        let result = compose_term_hints(&sets, &["nonexistent".to_string()]);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn compose_single_set_returns_its_entries() {
+        let sets = vec![make_set("s1", &["MongoDB", "TypeScript"])];
+        let result = compose_term_hints(&sets, &["s1".to_string()]);
+        assert_eq!(result, vec!["MongoDB", "TypeScript"]);
+    }
+
+    #[test]
+    fn compose_multi_set_concatenates_in_order() {
+        let sets = vec![make_set("a", &["alpha"]), make_set("b", &["beta"])];
+        let result = compose_term_hints(&sets, &["a".to_string(), "b".to_string()]);
+        assert_eq!(result, vec!["alpha", "beta"]);
+    }
+
+    #[test]
+    fn compose_deduplicates_preserving_first_seen() {
+        let sets = vec![
+            make_set("a", &["MongoDB", "shared"]),
+            make_set("b", &["shared", "TypeScript"]),
+        ];
+        let result = compose_term_hints(&sets, &["a".to_string(), "b".to_string()]);
+        assert_eq!(result, vec!["MongoDB", "shared", "TypeScript"]);
+    }
+
+    #[test]
+    fn compose_skips_blank_entries() {
+        let sets = vec![make_set("s1", &["  ", "MongoDB", "\t"])];
+        let result = compose_term_hints(&sets, &["s1".to_string()]);
+        assert_eq!(result, vec!["MongoDB"]);
+    }
+
+    #[test]
+    fn compose_empty_set_ids_with_populated_sets_returns_empty() {
+        let sets = vec![make_set("s1", &["MongoDB"])];
+        assert!(compose_term_hints(&sets, &[]).is_empty());
+    }
 
     // ── deepgram_keyterms ────────────────────────────────────────────────
 

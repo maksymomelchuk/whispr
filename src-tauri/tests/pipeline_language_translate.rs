@@ -12,6 +12,7 @@ mod common;
 use common::{run_under_deadline, PipelineHarness};
 use whispr_lib::mode::{ModeCleanup, ModeLanguage, Mode, TranslateTarget};
 use whispr_lib::pipeline::{merge_notices, Notice};
+use whispr_lib::provider::ProviderModel;
 
 // ── Translate Off ────────────────────────────────────────────────────────────
 
@@ -136,5 +137,7 @@ fn mode_with_language_off(language: ModeLanguage) -> Mode {
         use_terms: true,
         use_corrections: true,
         use_snippets: true,
+        provider_model: ProviderModel::Deepgram,
+        term_set_ids: vec![],
     }
 }

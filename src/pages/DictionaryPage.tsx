@@ -1,15 +1,12 @@
 import { TrashIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 
 import { EmptyRowCard } from "@/components/EmptyRowCard";
 import { RowCard } from "@/components/RowCard";
 import { SectionHeader } from "@/components/SectionHeader";
-import { TermChipInput } from "@/components/TermChipInput";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Tooltip,
   TooltipContent,
@@ -18,101 +15,27 @@ import {
 
 import { useSettings } from "../context/SettingsContext";
 import { useFlash } from "../hooks/useFlash";
-import {
-  setCorrections as persistCorrections,
-  setTerms as persistTerms,
-} from "../lib/api";
+import { setCorrections as persistCorrections } from "../lib/api";
 import type { CorrectionEntry } from "../lib/types";
-
-type Tab = "terms" | "corrections";
 
 export function DictionaryPage() {
   const { settings, setSettings } = useSettings();
-  const [activeTab, setActiveTab] = useState<Tab>("terms");
 
-  const termsCount = settings.terms?.length ?? 0;
   const correctionsCount = settings.corrections?.length ?? 0;
-
   const trailing =
-    activeTab === "terms"
-      ? termsCount > 0
-        ? `${termsCount} ${termsCount === 1 ? "term" : "terms"}`
-        : undefined
-      : correctionsCount > 0
-        ? `${correctionsCount} ${correctionsCount === 1 ? "entry" : "entries"}`
-        : undefined;
+    correctionsCount > 0
+      ? `${correctionsCount} ${correctionsCount === 1 ? "entry" : "entries"}`
+      : undefined;
 
   return (
     <div className="p-6 flex flex-col gap-8">
       <SectionHeader title="Dictionary" trailing={trailing} />
-
-      <ToggleGroup
-        type="single"
-        variant="outline"
-        value={activeTab}
-        onValueChange={(v) => {
-          if (v === "terms" || v === "corrections") setActiveTab(v);
-        }}
-        className="w-fit"
-      >
-        <ToggleGroupItem value="terms" className="px-4 text-xs">
-          Terms
-        </ToggleGroupItem>
-        <ToggleGroupItem value="corrections" className="px-4 text-xs">
-          Corrections
-        </ToggleGroupItem>
-      </ToggleGroup>
-
-      {activeTab === "terms" ? (
-        <TermsTab
-          initial={settings.terms ?? []}
-          onSaved={(saved) =>
-            setSettings((s) => ({ ...s, terms: saved }))
-          }
-        />
-      ) : (
-        <CorrectionsTab
-          corrections={settings.corrections ?? []}
-          onPersist={(next) =>
-            setSettings((s) => ({ ...s, corrections: next }))
-          }
-        />
-      )}
-    </div>
-  );
-}
-
-function TermsTab({
-  initial,
-  onSaved,
-}: {
-  initial: string[];
-  onSaved: (saved: string[]) => void;
-}) {
-  const [terms, setTerms] = useState(initial);
-  // Guard against out-of-order persist completions.
-  const requestIdRef = useRef(0);
-
-  const handleChange = async (next: string[]) => {
-    setTerms(next);
-    const id = ++requestIdRef.current;
-    try {
-      await persistTerms(next);
-      if (id !== requestIdRef.current) return;
-      onSaved(next);
-    } catch (e) {
-      if (id !== requestIdRef.current) return;
-      toast.error("Couldn't save terms", { description: String(e) });
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-2.5">
-      <p className="text-[12px] text-muted-foreground/85 max-w-prose">
-        Vocabulary hints sent to the recognizer so it picks your exact spelling.
-        Terms bias transcription — no find-and-replace happens here.
-      </p>
-      <TermChipInput value={terms} onChange={handleChange} />
+      <CorrectionsTab
+        corrections={settings.corrections ?? []}
+        onPersist={(next) =>
+          setSettings((s) => ({ ...s, corrections: next }))
+        }
+      />
     </div>
   );
 }

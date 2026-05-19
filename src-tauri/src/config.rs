@@ -1,5 +1,5 @@
 use crate::mode::{
-    Mode, ModeId, ModeLanguage, SEED_MODE_CLEANED_EN, SEED_MODE_DEFAULT_EN, SEED_MODE_UA_EN,
+    Mode, ModeId, ModeLanguage, SetId, SEED_MODE_CLEANED_EN, SEED_MODE_DEFAULT_EN, SEED_MODE_UA_EN,
     SEED_MODE_UKRAINIAN,
 };
 pub use crate::provider::{AssemblyAiModel, GroqModel, ProviderModel, TranscriptionProvider};
@@ -10,6 +10,15 @@ use std::path::PathBuf;
 use tauri::Manager;
 
 const SETTINGS_FILE: &str = "settings.json";
+
+pub const SEED_TERM_SET_DEFAULT_ID: &str = "term-set-default";
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NamedTermSet {
+    pub id: SetId,
+    pub name: String,
+    pub entries: Vec<String>,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Shortcut {
@@ -247,8 +256,11 @@ pub struct Settings {
     /// Legacy unified dictionary field; split into terms + corrections during migration.
     #[serde(rename = "dictionary", default, skip_serializing)]
     pub legacy_dictionary: Vec<DictionaryEntry>,
-    #[serde(default)]
+    /// Legacy flat term list; read during migration to seed a NamedTermSet, never written back.
+    #[serde(default, skip_serializing)]
     pub terms: Vec<String>,
+    #[serde(default)]
+    pub term_sets: Vec<NamedTermSet>,
     #[serde(default = "default_corrections")]
     pub corrections: Vec<CorrectionEntry>,
     #[serde(default)]
@@ -291,6 +303,7 @@ impl Default for Settings {
             hotkey_bindings: default_hotkey_bindings(),
             legacy_dictionary: vec![],
             terms: vec![],
+            term_sets: vec![],
             corrections: default_corrections(),
             snippets: vec![],
             deepgram: DeepgramSettings::default(),
@@ -428,7 +441,6 @@ fn migrate(s: &mut Settings) -> bool {
         }
     }
 
-    // ── Mode migration: stamp per-mode provider_model from legacy global ──
     // Only runs when the global provider was explicitly non-default (Groq or
     // AssemblyAI) AND a mode still has the default Deepgram — which means it
     // was loaded from old JSON that predates per-mode providers.
@@ -441,6 +453,30 @@ fn migrate(s: &mut Settings) -> bool {
                 changed = true;
             }
         }
+    }
+
+    // ── Term sets migration: flat terms → NamedTermSet ───────────────────
+    // If legacy flat terms remain, fold them into the Default Terms set
+    // and wire each mode that had use_terms=true to reference it.
+    if !s.terms.is_empty() {
+        let entries: Vec<String> = std::mem::take(&mut s.terms);
+        if !s.term_sets.iter().any(|ts| ts.id == SEED_TERM_SET_DEFAULT_ID) {
+            s.term_sets.push(NamedTermSet {
+                id: SEED_TERM_SET_DEFAULT_ID.to_string(),
+                name: "Default Terms".to_string(),
+                entries,
+            });
+        }
+        for mode in s.modes.iter_mut() {
+            if mode.use_terms
+                && !mode
+                    .term_set_ids
+                    .contains(&SEED_TERM_SET_DEFAULT_ID.to_string())
+            {
+                mode.term_set_ids.push(SEED_TERM_SET_DEFAULT_ID.to_string());
+            }
+        }
+        changed = true;
     }
 
     // ── Legacy shortcut → hotkey_bindings ────────────────────────────────
@@ -727,35 +763,45 @@ mod tests {
         assert_eq!(s.corrections.len(), 1);
         assert_eq!(s.corrections[0].from, "dot");
         assert_eq!(s.corrections[0].to, ".");
+        // terms is drained into term_sets during migration
         assert!(s.terms.is_empty());
         assert!(s.legacy_replacements.is_none());
-        // Serialized form must not contain "replacements" or "dictionary".
+        // Serialized form must not contain legacy fields.
         let reserialized = serde_json::to_string(&s).unwrap();
         let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
         assert!(v.get("replacements").is_none());
         assert!(v.get("dictionary").is_none(), "dictionary must not be written back");
+        assert!(v.get("terms").is_none(), "terms is skip_serializing");
         assert!(v.get("corrections").is_some());
     }
 
     #[test]
     fn migration_splits_dictionary_from_eq_to_as_term() {
-        // "MongoDB → MongoDB" (from == to) becomes a Term.
+        // "MongoDB → MongoDB" (from == to) becomes a term entry in the Default Terms set.
         let json = r#"{"dictionary": [{"from": "MongoDB", "to": "MongoDB"}]}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         let changed = migrate(&mut s);
         assert!(changed);
-        assert_eq!(s.terms, vec!["MongoDB"]);
+        // terms is drained into the Default Terms set
+        assert!(s.terms.is_empty());
+        let default_set = s
+            .term_sets
+            .iter()
+            .find(|ts| ts.id == SEED_TERM_SET_DEFAULT_ID)
+            .expect("Default Terms set must be created");
+        assert_eq!(default_set.entries, vec!["MongoDB"]);
         assert!(s.corrections.is_empty());
     }
 
     #[test]
     fn migration_splits_dictionary_from_ne_to_as_correction() {
-        // "anthropik → Anthropic" becomes a Correction.
+        // "anthropik → Anthropic" becomes a Correction; no term set is created.
         let json = r#"{"dictionary": [{"from": "anthropik", "to": "Anthropic"}]}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         let changed = migrate(&mut s);
         assert!(changed);
         assert!(s.terms.is_empty());
+        assert!(s.term_sets.is_empty(), "no terms to seed a Default Terms set");
         assert_eq!(s.corrections.len(), 1);
         assert_eq!(s.corrections[0].from, "anthropik");
         assert_eq!(s.corrections[0].to, "Anthropic");
@@ -770,7 +816,14 @@ mod tests {
         ]}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
-        assert_eq!(s.terms, vec!["MongoDB"]);
+        // MongoDB ends up in the Default Terms set
+        assert!(s.terms.is_empty());
+        let default_set = s
+            .term_sets
+            .iter()
+            .find(|ts| ts.id == SEED_TERM_SET_DEFAULT_ID)
+            .expect("Default Terms set must exist");
+        assert_eq!(default_set.entries, vec!["MongoDB"]);
         assert_eq!(s.corrections.len(), 2);
         assert_eq!(s.corrections[0].from, "dot");
         assert_eq!(s.corrections[1].from, "anthropik");
@@ -782,14 +835,20 @@ mod tests {
         let json = r#"{"dictionary": [{"from": "MongoDB", "to": "MongoDB"}]}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
-        // Second run: legacy_dictionary is empty, terms/corrections are already set.
+        // Second run: legacy_dictionary and terms are empty; term_sets already set.
         let changed2 = migrate(&mut s);
         assert!(!changed2, "second migrate must be a no-op");
-        assert_eq!(s.terms, vec!["MongoDB"]);
+        assert!(s.terms.is_empty());
+        let default_set = s
+            .term_sets
+            .iter()
+            .find(|ts| ts.id == SEED_TERM_SET_DEFAULT_ID)
+            .expect("Default Terms set must exist");
+        assert_eq!(default_set.entries, vec!["MongoDB"]);
     }
 
     #[test]
-    fn migration_mode_use_dictionary_false_sets_both_flags_false() {
+    fn migration_mode_use_dictionary_false_sets_corrections_false() {
         let json = r#"{"modes": [
             {"id":"mode-default-en","name":"D","language":{"kind":"exact","code":"en"},
              "translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},
@@ -799,12 +858,13 @@ mod tests {
         // Absorb the seed-mode migrations too.
         migrate(&mut s);
         let mode = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
-        assert!(!mode.use_terms, "use_terms must be false");
         assert!(!mode.use_corrections, "use_corrections must be false");
+        // use_terms=false means term_set_ids is empty (no Default Terms set created — no legacy terms)
+        assert!(mode.term_set_ids.is_empty(), "term_set_ids must be empty when use_dictionary was false");
     }
 
     #[test]
-    fn migration_mode_use_dictionary_true_leaves_flags_true() {
+    fn migration_mode_use_dictionary_true_leaves_corrections_true() {
         let json = r#"{"modes": [
             {"id":"mode-default-en","name":"D","language":{"kind":"exact","code":"en"},
              "translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},
@@ -813,8 +873,118 @@ mod tests {
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
         let mode = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
-        assert!(mode.use_terms, "use_terms must remain true");
         assert!(mode.use_corrections, "use_corrections must remain true");
+        // No legacy terms in this JSON so no Default Terms set is created
+        assert!(mode.term_set_ids.is_empty(), "no legacy terms to migrate");
+    }
+
+    // ── Term sets migration tests ─────────────────────────────────────────
+
+    #[test]
+    fn migration_empty_legacy_terms_creates_no_term_set() {
+        let json = r#"{}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        migrate(&mut s);
+        assert!(s.term_sets.is_empty(), "no legacy terms → no Default Terms set");
+        let default_mode = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        assert!(default_mode.term_set_ids.is_empty());
+    }
+
+    #[test]
+    fn migration_nonempty_legacy_terms_seeds_default_term_set() {
+        let json = r#"{"terms": ["MongoDB", "TypeScript"]}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        migrate(&mut s);
+        let set = s
+            .term_sets
+            .iter()
+            .find(|ts| ts.id == SEED_TERM_SET_DEFAULT_ID)
+            .expect("Default Terms set must exist");
+        assert_eq!(set.name, "Default Terms");
+        assert_eq!(set.entries, vec!["MongoDB", "TypeScript"]);
+        assert!(s.terms.is_empty(), "legacy terms must be drained");
+    }
+
+    #[test]
+    fn migration_modes_with_use_terms_true_reference_default_set() {
+        // All seed modes default use_terms=true; with legacy terms present they should
+        // all reference the Default Terms set.
+        let json = r#"{"terms": ["MongoDB"]}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        migrate(&mut s);
+        for mode in &s.modes {
+            assert!(
+                mode.term_set_ids.contains(&SEED_TERM_SET_DEFAULT_ID.to_string()),
+                "mode '{}' must reference Default Terms set",
+                mode.id
+            );
+        }
+    }
+
+    #[test]
+    fn migration_mode_with_use_terms_false_does_not_reference_default_set() {
+        let json = r#"{
+            "terms": ["MongoDB"],
+            "modes": [
+                {"id":"mode-default-en","name":"D","language":{"kind":"exact","code":"en"},
+                 "translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},
+                 "use_terms":false,"use_corrections":true,"use_snippets":true,"term_set_ids":[]}
+            ],
+            "default_mode_id": "mode-default-en"
+        }"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        migrate(&mut s);
+        let mode = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        assert!(
+            !mode.term_set_ids.contains(&SEED_TERM_SET_DEFAULT_ID.to_string()),
+            "mode with use_terms=false must not reference the Default Terms set"
+        );
+    }
+
+    #[test]
+    fn migration_term_sets_is_idempotent() {
+        let json = r#"{"terms": ["MongoDB"]}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        migrate(&mut s);
+        let set_count = s.term_sets.len();
+        let changed2 = migrate(&mut s);
+        assert!(!changed2, "second migrate must be a no-op");
+        assert_eq!(s.term_sets.len(), set_count, "no duplicate term sets");
+    }
+
+    #[test]
+    fn migration_modes_already_in_new_shape_are_unchanged() {
+        // Modes with term_set_ids already set and no legacy terms → idempotent.
+        let json = r#"{
+            "term_sets": [{"id":"ts-1","name":"My Set","entries":["Rust"]}],
+            "modes": [
+                {"id":"mode-default-en","name":"D","language":{"kind":"exact","code":"en"},
+                 "translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},
+                 "use_corrections":true,"use_snippets":true,"term_set_ids":["ts-1"]}
+            ],
+            "default_mode_id": "mode-default-en"
+        }"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        migrate(&mut s);
+        let mode = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        assert_eq!(mode.term_set_ids, vec!["ts-1"], "term_set_ids must be unchanged");
+        assert_eq!(s.term_sets.len(), 1, "no extra sets added");
+    }
+
+    #[test]
+    fn serialized_settings_has_no_terms_field_and_no_use_terms_on_modes() {
+        let mut s = Settings::default();
+        s.terms = vec!["MongoDB".to_string()];
+        migrate(&mut s);
+        let json = serde_json::to_string(&s).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(v.get("terms").is_none(), "terms is skip_serializing");
+        for mode in v["modes"].as_array().unwrap() {
+            assert!(
+                mode.get("use_terms").is_none(),
+                "use_terms is skip_serializing on Mode"
+            );
+        }
     }
 
     #[test]

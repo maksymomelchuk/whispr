@@ -8,6 +8,7 @@ import {
   LightningIcon,
   MicrophoneIcon,
   SlidersIcon,
+  TextTIcon,
 } from "@phosphor-icons/react";
 import { useEffect } from "react";
 import {
@@ -19,6 +20,7 @@ import {
 } from "react-router-dom";
 
 import { DictionaryPage } from "../pages/DictionaryPage";
+import { TermsPage } from "../pages/TermsPage";
 import { GeneralPage } from "../pages/GeneralPage";
 import { HistoryPage } from "../pages/HistoryPage";
 import { HomePage } from "../pages/HomePage";
@@ -60,6 +62,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: "Hotkeys", icon: KeyboardIcon, path: "/hotkeys" },
       { label: "Providers", icon: MicrophoneIcon, path: "/providers" },
+      { label: "Terms", icon: TextTIcon, path: "/terms" },
       { label: "Dictionary", icon: BookIcon, path: "/dictionary" },
       { label: "Modes", icon: SlidersIcon, path: "/modes" },
       { label: "Snippets", icon: LightningIcon, path: "/snippets" },
@@ -205,6 +208,7 @@ function ShellInner() {
               <Route path="/general" element={<GeneralPage />} />
               <Route path="/hotkeys" element={<HotkeysPage />} />
               <Route path="/providers" element={<ProvidersPage />} />
+              <Route path="/terms" element={<TermsPage />} />
               <Route path="/dictionary" element={<DictionaryPage />} />
               <Route path="/modes" element={<ModesPage />} />
               <Route path="/snippets" element={<SnippetsPage />} />

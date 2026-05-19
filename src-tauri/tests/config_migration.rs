@@ -5,13 +5,13 @@
 //! the resulting `Settings` has the expected shape.  These complement the
 //! fine-grained unit tests in `config.rs` by exercising realistic multi-field
 //! blobs rather than surgically minimal JSON strings.
-use whispr_lib::config::{self, Settings};
+use whispr_lib::config::{self, Settings, SEED_TERM_SET_DEFAULT_ID};
 
 // ── Legacy dictionary → terms + corrections ─────────────────────────────────
 // Entries where from == to become Terms; all others become Corrections.
 
 #[test]
-fn legacy_dictionary_splits_into_terms_and_corrections() {
+fn legacy_dictionary_splits_into_term_sets_and_corrections() {
     let json = r#"{
         "dictionary": [
             {"from": "MongoDB",  "to": "MongoDB"},
@@ -23,9 +23,15 @@ fn legacy_dictionary_splits_into_terms_and_corrections() {
 
     let s = config::from_json(json).unwrap();
 
-    assert!(s.terms.contains(&"MongoDB".to_string()));
-    assert!(s.terms.contains(&"Kubernetes".to_string()));
-    assert_eq!(s.terms.len(), 2, "only from==to entries become terms");
+    // from==to entries become the Default Terms set
+    let default_set = s
+        .term_sets
+        .iter()
+        .find(|ts| ts.id == SEED_TERM_SET_DEFAULT_ID)
+        .expect("Default Terms set must exist");
+    assert!(default_set.entries.contains(&"MongoDB".to_string()));
+    assert!(default_set.entries.contains(&"Kubernetes".to_string()));
+    assert_eq!(default_set.entries.len(), 2);
 
     assert_eq!(s.corrections.len(), 2, "only from!=to entries become corrections");
     let dot = s.corrections.iter().find(|c| c.from == "dot").expect("dot correction");
@@ -47,15 +53,17 @@ fn legacy_dictionary_fields_absent_from_reserialized_output() {
 
     assert!(v.get("dictionary").is_none(), "legacy field must not appear after migration");
     assert!(v.get("replacements").is_none(), "legacy field must not appear after migration");
-    assert!(v.get("terms").is_some(), "migrated terms must appear in output");
+    assert!(v.get("terms").is_none(), "terms is skip_serializing — absorbed into term_sets");
+    assert!(v.get("term_sets").is_some(), "term_sets must appear in output");
 }
 
 // ── Legacy use_dictionary → use_terms + use_corrections ────────────────────
 
 #[test]
-fn legacy_use_dictionary_false_disables_both_term_flags() {
-    // A pre-split settings file has use_dictionary (no use_terms / use_corrections).
-    // Setting it to false must disable both successor flags.
+fn legacy_use_dictionary_false_disables_corrections_and_leaves_term_set_ids_empty() {
+    // A pre-split settings file has use_dictionary (no use_corrections / term_set_ids).
+    // Setting it to false must disable use_corrections; no term sets are created since
+    // there are no legacy terms to migrate.
     let json = r#"{
         "modes": [{
             "id":       "mode-default-en",
@@ -76,12 +84,12 @@ fn legacy_use_dictionary_false_disables_both_term_flags() {
         .find(|m| m.id == "mode-default-en")
         .expect("mode must be present after migration");
 
-    assert!(!mode.use_terms, "use_terms must be false when use_dictionary was false");
     assert!(!mode.use_corrections, "use_corrections must be false when use_dictionary was false");
+    assert!(mode.term_set_ids.is_empty(), "no legacy terms → no term_set_ids assigned");
 }
 
 #[test]
-fn legacy_use_dictionary_true_preserves_both_term_flags() {
+fn legacy_use_dictionary_true_preserves_corrections_flag() {
     let json = r#"{
         "modes": [{
             "id":       "mode-default-en",
@@ -102,8 +110,9 @@ fn legacy_use_dictionary_true_preserves_both_term_flags() {
         .find(|m| m.id == "mode-default-en")
         .expect("mode must be present after migration");
 
-    assert!(mode.use_terms, "use_terms must remain true when use_dictionary was true");
     assert!(mode.use_corrections, "use_corrections must remain true when use_dictionary was true");
+    // No legacy terms in this JSON, so no Default Terms set is created.
+    assert!(mode.term_set_ids.is_empty(), "no legacy terms → no term_set_ids assigned");
 }
 
 // ── Current-shape config round-trips without modification ───────────────────

@@ -4,17 +4,13 @@ import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { SettingsContext, useSettings } from "@/context/SettingsContext";
+import { SettingsContext } from "@/context/SettingsContext";
 import type { Settings } from "@/lib/types";
 
-import {
-  setCorrections as mockSetCorrections,
-  setTerms as mockSetTerms,
-} from "../lib/api";
+import { setCorrections as mockSetCorrections } from "../lib/api";
 import { DictionaryPage } from "./DictionaryPage";
 
 vi.mock("../lib/api", () => ({
-  setTerms: vi.fn(),
   setCorrections: vi.fn(),
   formatShortcut: vi.fn(),
 }));
@@ -28,7 +24,7 @@ const BASE: Settings = {
   groq_api_key_configured: false,
   assemblyai_api_key_configured: false,
   hotkey_bindings: [],
-  terms: [],
+  term_sets: [],
   corrections: [],
   snippets: [],
   modes: [],
@@ -45,13 +41,6 @@ const BASE: Settings = {
   show_in_dock: true,
   show_live_preview: true,
 };
-
-function TermsObserver() {
-  const { settings } = useSettings();
-  return (
-    <output data-testid="terms-count">{settings.terms.length}</output>
-  );
-}
 
 function Wrapper({ initial = BASE }: { initial?: Settings }) {
   const [settings, setRawSettings] = useState<Settings>(initial);
@@ -71,14 +60,12 @@ function Wrapper({ initial = BASE }: { initial?: Settings }) {
         }}
       >
         <DictionaryPage />
-        <TermsObserver />
       </SettingsContext.Provider>
     </TooltipProvider>
   );
 }
 
 beforeEach(() => {
-  vi.mocked(mockSetTerms).mockResolvedValue(undefined);
   vi.mocked(mockSetCorrections).mockResolvedValue(undefined);
 });
 
@@ -86,42 +73,9 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("Terms tab", () => {
-  it("out-of-order persist: later edit wins", async () => {
-    let resolveFirst!: () => void;
-    const firstDeferred = new Promise<void>((r) => {
-      resolveFirst = r;
-    });
-    vi.mocked(mockSetTerms)
-      .mockReturnValueOnce(firstDeferred)
-      .mockResolvedValueOnce(undefined);
-
-    render(<Wrapper />);
-    const input = screen.getByRole("textbox");
-
-    await userEvent.type(input, "alpha{Enter}");
-    await userEvent.type(input, "beta{Enter}");
-
-    // Second request resolves immediately; settings must reflect both terms.
-    await waitFor(() =>
-      expect(screen.getByTestId("terms-count")).toHaveTextContent("2"),
-    );
-
-    // Resolve the stale first request — guard must not revert to 1 term.
-    resolveFirst();
-    await new Promise((r) => setTimeout(r, 0));
-    expect(screen.getByTestId("terms-count")).toHaveTextContent("2");
-  });
-});
-
-describe("Corrections tab", () => {
-  async function switchToCorrections() {
-    await userEvent.click(screen.getByText("Corrections"));
-  }
-
+describe("DictionaryPage – corrections", () => {
   it("add: saves new entry", async () => {
     render(<Wrapper />);
-    await switchToCorrections();
     await userEvent.click(
       screen.getByRole("button", { name: /add correction/i }),
     );
@@ -143,7 +97,6 @@ describe("Corrections tab", () => {
         initial={{ ...BASE, corrections: [{ from: "hey", to: "hello" }] }}
       />,
     );
-    await switchToCorrections();
     await userEvent.click(screen.getByRole("button", { name: "Edit" }));
     const fromInput = screen.getByPlaceholderText("spoken");
     await userEvent.clear(fromInput);
@@ -163,7 +116,6 @@ describe("Corrections tab", () => {
         initial={{ ...BASE, corrections: [{ from: "foo", to: "bar" }] }}
       />,
     );
-    await switchToCorrections();
     await userEvent.click(
       screen.getByRole("button", { name: "Delete correction" }),
     );
@@ -173,7 +125,6 @@ describe("Corrections tab", () => {
 
   it("cancel: closes editor without persisting", async () => {
     render(<Wrapper />);
-    await switchToCorrections();
     await userEvent.click(
       screen.getByRole("button", { name: /add correction/i }),
     );
@@ -186,36 +137,14 @@ describe("Corrections tab", () => {
 
   it("empty-from validation: shows error, blocks persist", async () => {
     render(<Wrapper />);
-    await switchToCorrections();
     await userEvent.click(
       screen.getByRole("button", { name: /add correction/i }),
     );
-    // EditorRow handles Ctrl+Enter → calls onSave with empty from
     await userEvent.keyboard("{Control>}{Enter}{/Control}");
 
     expect(
       screen.getByText("Spoken form cannot be empty."),
     ).toBeInTheDocument();
     expect(mockSetCorrections).not.toHaveBeenCalled();
-  });
-});
-
-describe("Tab switching", () => {
-  it("saved corrections survive a round-trip through the Terms tab", async () => {
-    render(<Wrapper />);
-    await userEvent.click(screen.getByText("Corrections"));
-
-    await userEvent.click(
-      screen.getByRole("button", { name: /add correction/i }),
-    );
-    await userEvent.type(screen.getByPlaceholderText("spoken"), "hi");
-    await userEvent.type(screen.getByPlaceholderText("text"), "hello");
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(screen.getByText("hi")).toBeInTheDocument());
-
-    await userEvent.click(screen.getByText("Terms"));
-    await userEvent.click(screen.getByText("Corrections"));
-
-    expect(screen.getByText("hi")).toBeInTheDocument();
   });
 });

@@ -2,6 +2,7 @@ use crate::provider::ProviderModel;
 use serde::{Deserialize, Serialize};
 
 pub type ModeId = String;
+pub type SetId = String;
 
 pub const SEED_MODE_DEFAULT_EN: &str = "mode-default-en";
 pub const SEED_MODE_CLEANED_EN: &str = "mode-cleaned-en";
@@ -92,7 +93,8 @@ pub struct Mode {
     /// Legacy field; migrated to use_terms + use_corrections on first load.
     #[serde(rename = "use_dictionary", default, skip_serializing)]
     pub legacy_use_dictionary: Option<bool>,
-    #[serde(default = "default_true")]
+    /// Legacy boolean; read on load to populate term_set_ids, then not written back.
+    #[serde(default = "default_true", skip_serializing)]
     pub use_terms: bool,
     #[serde(default = "default_true")]
     pub use_corrections: bool,
@@ -100,6 +102,8 @@ pub struct Mode {
     pub use_snippets: bool,
     #[serde(default)]
     pub provider_model: ProviderModel,
+    #[serde(default)]
+    pub term_set_ids: Vec<SetId>,
 }
 
 impl Mode {
@@ -121,6 +125,7 @@ impl Mode {
             use_corrections: true,
             use_snippets: true,
             provider_model: ProviderModel::Deepgram,
+            term_set_ids: vec![],
         }
     }
 
@@ -140,6 +145,7 @@ impl Mode {
             use_corrections: true,
             use_snippets: true,
             provider_model: ProviderModel::Deepgram,
+            term_set_ids: vec![],
         }
     }
 
@@ -159,6 +165,7 @@ impl Mode {
             use_corrections: true,
             use_snippets: true,
             provider_model: ProviderModel::Deepgram,
+            term_set_ids: vec![],
         }
     }
 
@@ -180,6 +187,7 @@ impl Mode {
             use_corrections: true,
             use_snippets: true,
             provider_model: ProviderModel::Deepgram,
+            term_set_ids: vec![],
         }
     }
 }
@@ -293,9 +301,9 @@ mod tests {
         assert_eq!(decoded.name, "Default English");
         assert_eq!(decoded.language, ModeLanguage::exact("en"));
         assert!(!decoded.ai_cleanup.enabled);
-        assert!(decoded.use_terms);
         assert!(decoded.use_corrections);
         assert!(decoded.use_snippets);
+        assert!(decoded.term_set_ids.is_empty());
     }
 
     #[test]
@@ -323,12 +331,13 @@ mod tests {
     }
 
     #[test]
-    fn seed_mode_does_not_serialize_use_dictionary() {
+    fn seed_mode_does_not_serialize_legacy_fields() {
         let mode = Mode::seed_default_en(false);
         let json = serde_json::to_string(&mode).unwrap();
-        assert!(!json.contains("use_dictionary"));
-        assert!(json.contains("use_terms"));
+        assert!(!json.contains("use_dictionary"), "use_dictionary must not appear");
+        assert!(!json.contains("use_terms"), "use_terms is skip_serializing");
         assert!(json.contains("use_corrections"));
+        assert!(json.contains("term_set_ids"));
     }
 
     #[test]

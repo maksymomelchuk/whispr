@@ -433,13 +433,12 @@ async fn run_session(
         .find(|m| m.id == mode_id)
         .unwrap_or_else(|| config::get_default_mode(&settings));
     let mode_cleanup_enabled = settings.ai_cleanup.enabled && active_mode.ai_cleanup.enabled;
-    let mode_use_terms = active_mode.use_terms;
     let mode_translate = active_mode.translate.clone();
     let mode_language = active_mode.language.clone();
     let mode_source_lang = active_mode.language.as_code().map(str::to_string);
     let mode_prompt_override = active_mode.ai_cleanup.prompt_override.clone();
-
-    let session_terms = if mode_use_terms { settings.terms.clone() } else { vec![] };
+    let session_terms =
+        crate::terms::compose_term_hints(&settings.term_sets, &active_mode.term_set_ids);
 
     let missing_key = match active_mode.provider_model.provider() {
         TranscriptionProvider::Deepgram => settings

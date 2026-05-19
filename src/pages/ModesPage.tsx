@@ -61,6 +61,7 @@ import type {
   HotkeyBinding,
   Mode,
   ModeLanguage,
+  NamedTermSet,
   ProviderModel,
 } from "../lib/types";
 import { providerModelLanguageCodes } from "../lib/types";
@@ -323,11 +324,13 @@ export function ModeEditor({
   isNew,
   onClose,
   onPersist,
+  availableTermSets = [],
 }: {
   mode: Mode;
   isNew: boolean;
   onClose: () => void;
   onPersist: (mode: Mode, wasNew: boolean) => void;
+  availableTermSets?: NamedTermSet[];
 }) {
   const [draft, setDraft] = useState<Mode>(mode);
   const [creating, setCreating] = useState(false);
@@ -389,8 +392,13 @@ export function ModeEditor({
       translate:
         value === "off" ? { kind: "off" } : { kind: "apple", target: value },
     }));
-  const setUseTerms = (use_terms: boolean) =>
-    setDraft((d) => ({ ...d, use_terms }));
+  const toggleTermSet = (id: string, checked: boolean) =>
+    setDraft((d) => ({
+      ...d,
+      term_set_ids: checked
+        ? [...d.term_set_ids, id]
+        : d.term_set_ids.filter((tsid) => tsid !== id),
+    }));
   const setUseCorrections = (use_corrections: boolean) =>
     setDraft((d) => ({ ...d, use_corrections }));
   const setUseSnippets = (use_snippets: boolean) =>
@@ -695,12 +703,26 @@ export function ModeEditor({
             </span>
             <div className="flex-1 h-px bg-border/60" />
           </div>
-          <ToggleRow
-            id="terms"
-            label="Use terms"
-            checked={draft.use_terms}
-            onCheckedChange={setUseTerms}
-          />
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[13px] text-foreground">Term sets</span>
+            {availableTermSets.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No term sets — create one in the Terms page.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-1">
+                {availableTermSets.map((ts) => (
+                  <ToggleRow
+                    key={ts.id}
+                    id={`term-set-${ts.id}`}
+                    label={ts.name}
+                    checked={draft.term_set_ids.includes(ts.id)}
+                    onCheckedChange={(checked) => toggleTermSet(ts.id, checked)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
           <ToggleRow
             id="corrections"
             label="Use corrections"
@@ -764,7 +786,7 @@ export function ModesPage() {
       language: { kind: "exact", code: "en" },
       translate: { kind: "off" },
       ai_cleanup: { enabled: false, prompt_override: null },
-      use_terms: true,
+      term_set_ids: [],
       use_corrections: true,
       use_snippets: true,
       provider_model: { provider: "deepgram" },
@@ -856,6 +878,7 @@ export function ModesPage() {
               isNew={editor.isNew}
               onClose={closeEditor}
               onPersist={handlePersist}
+              availableTermSets={settings.term_sets ?? []}
             />
           )}
         </SheetContent>

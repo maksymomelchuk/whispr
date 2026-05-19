@@ -71,9 +71,17 @@ impl PipelineHarness {
         self
     }
 
-    /// Replace the active terms list.
-    pub fn with_terms(mut self, terms: &[&str]) -> Self {
-        self.settings.terms = terms.iter().map(|s| s.to_string()).collect();
+    /// Add a named term set to settings and reference it from the active mode.
+    pub fn with_term_set(mut self, id: &str, entries: &[&str]) -> Self {
+        use whispr_lib::config::NamedTermSet;
+        self.settings.term_sets.push(NamedTermSet {
+            id: id.to_string(),
+            name: id.to_string(),
+            entries: entries.iter().map(|s| s.to_string()).collect(),
+        });
+        if let Some(m) = self.active_mode_mut() {
+            m.term_set_ids.push(id.to_string());
+        }
         self
     }
 
@@ -102,14 +110,6 @@ impl PipelineHarness {
     /// falls back to the raw transcript and records the failure status.
     pub fn with_cleanup_error(mut self, status: CleanupStatus) -> Self {
         self.cleanup_error = Some(status);
-        self
-    }
-
-    /// Override the `use_terms` flag on the active mode.
-    pub fn with_use_terms(mut self, enabled: bool) -> Self {
-        if let Some(m) = self.active_mode_mut() {
-            m.use_terms = enabled;
-        }
         self
     }
 

@@ -76,6 +76,12 @@ export interface ModeCleanup {
   prompt_override: string | null;
 }
 
+export interface NamedTermSet {
+  id: string;
+  name: string;
+  entries: string[];
+}
+
 export interface Mode {
   id: string;
   name: string;
@@ -83,7 +89,7 @@ export interface Mode {
   language: ModeLanguage;
   translate: TranslateTarget;
   ai_cleanup: ModeCleanup;
-  use_terms: boolean;
+  term_set_ids: string[];
   use_corrections: boolean;
   use_snippets: boolean;
   provider_model: ProviderModel;
@@ -96,7 +102,7 @@ export interface Settings {
   groq_api_key_configured: boolean;
   assemblyai_api_key_configured: boolean;
   hotkey_bindings: HotkeyBinding[];
-  terms: string[];
+  term_sets: NamedTermSet[];
   corrections: CorrectionEntry[];
   snippets: Snippet[];
   modes: Mode[];
