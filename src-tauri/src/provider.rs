@@ -263,17 +263,15 @@ mod tests {
 
     #[test]
     fn local_model_path_large_v3_under_models_subdir() {
-        use std::path::Path;
         let data_dir = Path::new("/app/data");
         let path = local_model_path(data_dir, LocalWhisperModel::LargeV3);
-        assert_eq!(path, std::path::PathBuf::from("/app/data/models/ggml-large-v3.bin"));
+        assert_eq!(path, PathBuf::from("/app/data/models/ggml-large-v3.bin"));
     }
 
     #[test]
     fn local_model_path_large_v3_turbo_under_models_subdir() {
-        use std::path::Path;
         let data_dir = Path::new("/app/data");
         let path = local_model_path(data_dir, LocalWhisperModel::LargeV3Turbo);
-        assert_eq!(path, std::path::PathBuf::from("/app/data/models/ggml-large-v3-turbo.bin"));
+        assert_eq!(path, PathBuf::from("/app/data/models/ggml-large-v3-turbo.bin"));
     }
 }

@@ -391,7 +391,6 @@ fn maybe_resume_media(state: &AppState) {
     tauri::async_runtime::spawn_blocking(media::unmute_output);
 }
 
-/// Spawned synchronously on PTT press so the Deepgram WS handshake overlaps
 fn local_model_readiness(data_dir: &std::path::Path, model: LocalWhisperModel) -> Result<(), String> {
     let path = provider::local_model_path(data_dir, model);
     if path.exists() {
@@ -401,6 +400,7 @@ fn local_model_readiness(data_dir: &std::path::Path, model: LocalWhisperModel) -
     }
 }
 
+/// Spawned synchronously on PTT press so the Deepgram WS handshake overlaps
 /// with the user's first words. Release closes the chunk channel; this task
 /// drains STT, runs optional LLM cleanup, pastes, and only then hides the
 /// overlay so it bridges the post-release processing.
