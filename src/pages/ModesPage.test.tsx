@@ -216,6 +216,7 @@ const BASE_SETTINGS: Settings = {
   history_limit: 5,
   show_in_dock: false,
   show_live_preview: true,
+  local_whisper_idle_timeout: "fifteen_minutes",
 };
 
 function ModesPageWrapper({ settings }: { settings: Settings }) {

@@ -126,6 +126,19 @@ pub fn run() {
                 if let Err(e) = overlay::create(&app.handle()) {
                     eprintln!("Failed to create overlay window: {e}");
                 }
+
+                let eviction_cache = app_state.model_cache.clone();
+                let eviction_app = app.handle().clone();
+                std::thread::spawn(move || {
+                    loop {
+                        std::thread::sleep(std::time::Duration::from_secs(60));
+                        let idle_timeout = config::load(&eviction_app).local_whisper.idle_timeout;
+                        let Some(threshold) = idle_timeout.as_duration() else {
+                            continue;
+                        };
+                        eviction_cache.lock().unwrap().retain(|_, m| m.last_used.elapsed() < threshold);
+                    }
+                });
             }
 
             if let Err(e) = tray::setup(app.handle()) {
@@ -195,6 +208,7 @@ pub fn run() {
             commands::start_model_download,
             commands::cancel_model_download,
             commands::delete_local_model,
+            commands::set_local_whisper_idle_timeout,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

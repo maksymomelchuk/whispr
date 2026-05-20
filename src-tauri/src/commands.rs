@@ -1,7 +1,7 @@
 use crate::api_key_validation::{self, ApiKeyValidation};
 use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
 use crate::config::{
-    self, CleanupAuthMode, HotkeyBinding, NamedCorrectionSet, NamedTermSet, Settings, SnippetEntry,
+    self, CleanupAuthMode, HotkeyBinding, LocalWhisperIdleTimeout, NamedCorrectionSet, NamedTermSet, Settings, SnippetEntry,
 };
 use crate::download::{self, LocalModelStatus, MODEL_DOWNLOAD_COMPLETE_EVENT, MODEL_DOWNLOAD_ERROR_EVENT};
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
@@ -39,6 +39,7 @@ pub struct SettingsView {
     pub history_limit: Option<usize>,
     pub show_in_dock: bool,
     pub show_live_preview: bool,
+    pub local_whisper_idle_timeout: LocalWhisperIdleTimeout,
 }
 
 impl From<Settings> for SettingsView {
@@ -79,6 +80,7 @@ impl From<Settings> for SettingsView {
             history_limit: s.history_limit,
             show_in_dock: s.show_in_dock,
             show_live_preview: s.show_live_preview,
+            local_whisper_idle_timeout: s.local_whisper.idle_timeout,
         }
     }
 }
@@ -536,6 +538,13 @@ pub fn delete_local_model(app: AppHandle, model: LocalWhisperModel) -> Result<()
     Ok(())
 }
 
+#[tauri::command]
+pub fn set_local_whisper_idle_timeout(app: AppHandle, timeout: LocalWhisperIdleTimeout) -> Result<(), String> {
+    config::update(&app, |s| {
+        s.local_whisper.idle_timeout = timeout;
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -550,6 +559,12 @@ mod tests {
         assert_eq!(view.hotkey_bindings.len(), 1);
         assert_eq!(view.hotkey_bindings[0].shortcut.key, "AltRight");
         assert!(view.term_sets.is_empty());
+    }
+
+    #[test]
+    fn settings_view_exposes_local_whisper_idle_timeout_with_fifteen_minute_default() {
+        let view: SettingsView = Settings::default().into();
+        assert_eq!(view.local_whisper_idle_timeout, LocalWhisperIdleTimeout::FifteenMinutes);
     }
 
     #[test]

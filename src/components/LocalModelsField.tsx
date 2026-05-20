@@ -3,19 +3,29 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import {
   cancelModelDownload,
   deleteLocalModel,
   getLocalModelStatuses,
+  setLocalWhisperIdleTimeout,
   startModelDownload,
 } from "../lib/api";
 import type {
   LocalModelStatus,
+  LocalWhisperIdleTimeout,
   LocalWhisperModel,
   ModelDownloadError,
   ModelDownloadProgress,
 } from "../lib/types";
+import { useSettings } from "../context/SettingsContext";
 import { SectionCard } from "./SectionCard";
 
 const MODEL_LABELS: Record<LocalWhisperModel, string> = {
@@ -27,6 +37,14 @@ const MODEL_SIZE_LABELS: Record<LocalWhisperModel, string> = {
   large_v3: "~1.5 GB",
   large_v3_turbo: "~809 MB",
 };
+
+const IDLE_TIMEOUT_OPTIONS: { value: LocalWhisperIdleTimeout; label: string }[] = [
+  { value: "five_minutes", label: "5 min" },
+  { value: "fifteen_minutes", label: "15 min" },
+  { value: "thirty_minutes", label: "30 min" },
+  { value: "one_hour", label: "1 hour" },
+  { value: "never", label: "Never" },
+];
 
 type DownloadState =
   | { kind: "idle" }
@@ -113,6 +131,7 @@ function ModelRow({ status, downloadState, onDownload, onCancel, onDelete }: Mod
 }
 
 export function LocalModelsField() {
+  const { settings, setSetting } = useSettings();
   const [statuses, setStatuses] = useState<LocalModelStatus[]>([]);
   const [downloadStates, setDownloadStates] = useState<Record<string, DownloadState>>({});
 
@@ -234,6 +253,30 @@ export function LocalModelsField() {
             onDelete={() => handleDelete(status.model)}
           />
         ))}
+      </div>
+      <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
+        <span className="text-sm text-muted-foreground">Idle timeout</span>
+        <Select
+          value={settings.local_whisper_idle_timeout}
+          onValueChange={(value) =>
+            setSetting(
+              "local_whisper_idle_timeout",
+              value as LocalWhisperIdleTimeout,
+              () => setLocalWhisperIdleTimeout(value as LocalWhisperIdleTimeout),
+            )
+          }
+        >
+          <SelectTrigger className="w-28 h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {IDLE_TIMEOUT_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     </SectionCard>
   );

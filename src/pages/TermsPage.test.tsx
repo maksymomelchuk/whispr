@@ -60,6 +60,7 @@ const BASE: Settings = {
   history_limit: null,
   show_in_dock: true,
   show_live_preview: true,
+  local_whisper_idle_timeout: "fifteen_minutes",
 };
 
 function Wrapper({ initial = BASE }: { initial?: Settings }) {

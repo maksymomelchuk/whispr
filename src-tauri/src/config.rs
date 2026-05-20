@@ -237,6 +237,35 @@ fn default_mode_id() -> ModeId {
     SEED_MODE_DEFAULT_EN.to_string()
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LocalWhisperIdleTimeout {
+    FiveMinutes,
+    #[default]
+    FifteenMinutes,
+    ThirtyMinutes,
+    OneHour,
+    Never,
+}
+
+impl LocalWhisperIdleTimeout {
+    pub fn as_duration(self) -> Option<std::time::Duration> {
+        match self {
+            Self::FiveMinutes => Some(std::time::Duration::from_secs(300)),
+            Self::FifteenMinutes => Some(std::time::Duration::from_secs(900)),
+            Self::ThirtyMinutes => Some(std::time::Duration::from_secs(1800)),
+            Self::OneHour => Some(std::time::Duration::from_secs(3600)),
+            Self::Never => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct LocalWhisperSettings {
+    #[serde(default)]
+    pub idle_timeout: LocalWhisperIdleTimeout,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     /// Legacy single-provider field. Read on load for migration into
@@ -302,6 +331,8 @@ pub struct Settings {
     pub show_in_dock: bool,
     #[serde(default = "default_true")]
     pub show_live_preview: bool,
+    #[serde(default)]
+    pub local_whisper: LocalWhisperSettings,
 }
 
 impl Default for Settings {
@@ -347,6 +378,7 @@ impl Default for Settings {
             history_limit: default_history_limit(),
             show_in_dock: false,
             show_live_preview: true,
+            local_whisper: LocalWhisperSettings::default(),
         }
     }
 }
@@ -1482,5 +1514,61 @@ mod tests {
             v.get("groq").and_then(|g| g.get("model")).is_none(),
             "groq.model must be skipped on serialization"
         );
+    }
+
+    #[test]
+    fn local_whisper_idle_timeout_default_is_fifteen_minutes() {
+        assert_eq!(LocalWhisperIdleTimeout::default(), LocalWhisperIdleTimeout::FifteenMinutes);
+        assert_eq!(LocalWhisperSettings::default().idle_timeout, LocalWhisperIdleTimeout::FifteenMinutes);
+    }
+
+    #[test]
+    fn local_whisper_idle_timeout_as_duration_returns_correct_values() {
+        use std::time::Duration;
+        assert_eq!(LocalWhisperIdleTimeout::FiveMinutes.as_duration(), Some(Duration::from_secs(300)));
+        assert_eq!(LocalWhisperIdleTimeout::FifteenMinutes.as_duration(), Some(Duration::from_secs(900)));
+        assert_eq!(LocalWhisperIdleTimeout::ThirtyMinutes.as_duration(), Some(Duration::from_secs(1800)));
+        assert_eq!(LocalWhisperIdleTimeout::OneHour.as_duration(), Some(Duration::from_secs(3600)));
+        assert_eq!(LocalWhisperIdleTimeout::Never.as_duration(), None);
+    }
+
+    #[test]
+    fn local_whisper_settings_round_trips_through_json() {
+        let settings = LocalWhisperSettings { idle_timeout: LocalWhisperIdleTimeout::ThirtyMinutes };
+        let json = serde_json::to_string(&settings).unwrap();
+        let decoded: LocalWhisperSettings = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded, settings);
+    }
+
+    #[test]
+    fn local_whisper_idle_timeout_serializes_as_snake_case() {
+        let v = serde_json::to_value(LocalWhisperIdleTimeout::FifteenMinutes).unwrap();
+        assert_eq!(v, serde_json::json!("fifteen_minutes"));
+        let v = serde_json::to_value(LocalWhisperIdleTimeout::OneHour).unwrap();
+        assert_eq!(v, serde_json::json!("one_hour"));
+        let v = serde_json::to_value(LocalWhisperIdleTimeout::Never).unwrap();
+        assert_eq!(v, serde_json::json!("never"));
+    }
+
+    #[test]
+    fn settings_default_has_fifteen_minute_local_whisper_idle_timeout() {
+        let s = Settings::default();
+        assert_eq!(s.local_whisper.idle_timeout, LocalWhisperIdleTimeout::FifteenMinutes);
+    }
+
+    #[test]
+    fn settings_preserves_local_whisper_idle_timeout_through_json() {
+        let mut s = Settings::default();
+        s.local_whisper.idle_timeout = LocalWhisperIdleTimeout::OneHour;
+        let json = serde_json::to_string(&s).unwrap();
+        let decoded: Settings = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.local_whisper.idle_timeout, LocalWhisperIdleTimeout::OneHour);
+    }
+
+    #[test]
+    fn settings_without_local_whisper_field_defaults_to_fifteen_minutes() {
+        let json = r#"{}"#;
+        let s: Settings = serde_json::from_str(json).unwrap();
+        assert_eq!(s.local_whisper.idle_timeout, LocalWhisperIdleTimeout::FifteenMinutes);
     }
 }

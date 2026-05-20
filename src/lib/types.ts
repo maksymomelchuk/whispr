@@ -48,6 +48,13 @@ export const ASSEMBLYAI_MODEL_SUPPORTED_LANGUAGES: Record<
 
 export type LocalWhisperModel = "large_v3" | "large_v3_turbo";
 
+export type LocalWhisperIdleTimeout =
+  | "five_minutes"
+  | "fifteen_minutes"
+  | "thirty_minutes"
+  | "one_hour"
+  | "never";
+
 export type ProviderModel =
   | { provider: "deepgram" }
   | { provider: "groq"; model: GroqModel }
@@ -126,6 +133,7 @@ export interface Settings {
   history_limit: HistoryLimit;
   show_in_dock: boolean;
   show_live_preview: boolean;
+  local_whisper_idle_timeout: LocalWhisperIdleTimeout;
 }
 
 // ── Local model download types ─────────────────────────────────────────────

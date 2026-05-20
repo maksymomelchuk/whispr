@@ -2,8 +2,11 @@ use crate::groq_audio::{self, AUDIO_LEVEL_EVENT};
 use crate::mode::{Mode, ModeLanguage};
 use crate::provider::{self, LocalWhisperModel};
 use crate::recorder::AudioFormat;
+use crate::state::{AppState, LoadedModel};
 use crate::terms;
 use crate::transcription_session::TranscriptionSession;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -54,15 +57,22 @@ impl TranscriptionSession for LocalSession {
             .path()
             .app_data_dir()
             .map_err(|e| format!("Cannot resolve app data directory: {e}"))?;
-        let path_buf = provider::local_model_path(&data_dir, self.model);
-        let model_path = path_buf
-            .to_str()
-            .ok_or_else(|| "Model path is not valid UTF-8".to_string())?
-            .to_string();
+        let model_path = {
+            let path_buf = provider::local_model_path(&data_dir, self.model);
+            path_buf
+                .to_str()
+                .ok_or_else(|| "Model path is not valid UTF-8".to_string())?
+                .to_string()
+        };
         let language_code = language.as_code().map(str::to_string);
         let initial_prompt = terms::groq_prompt_hint(&terms);
+        let model = self.model;
+        let cache: Arc<Mutex<HashMap<LocalWhisperModel, LoadedModel>>> =
+            app.state::<AppState>().model_cache.clone();
         tokio::task::spawn_blocking(move || {
-            run_whisper(
+            run_whisper_cached(
+                &cache,
+                model,
                 &model_path,
                 &audio_f32,
                 language_code.as_deref(),
@@ -75,7 +85,9 @@ impl TranscriptionSession for LocalSession {
     }
 }
 
-fn run_whisper(
+fn run_whisper_cached(
+    cache: &Mutex<HashMap<LocalWhisperModel, LoadedModel>>,
+    model: LocalWhisperModel,
     model_path: &str,
     audio: &[f32],
     language: Option<&str>,
@@ -83,9 +95,22 @@ fn run_whisper(
 ) -> Result<String, String> {
     use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
-    let ctx = WhisperContext::new_with_params(model_path, WhisperContextParameters::default())
-        .map_err(|e| format!("Failed to load whisper model: {e}"))?;
-    let mut state = ctx
+    let mut guard = cache.lock().unwrap();
+
+    if !guard.contains_key(&model) {
+        let context = WhisperContext::new_with_params(model_path, WhisperContextParameters::default())
+            .map_err(|e| format!("Failed to load whisper model: {e}"))?;
+        guard.insert(model, LoadedModel { context, last_used: Instant::now() });
+    }
+
+    let loaded = guard.get_mut(&model).unwrap();
+    loaded.last_used = Instant::now();
+
+    // WhisperState borrows from the context inside the guard; the guard must
+    // remain live for the duration of inference. PTT sessions are serialized by
+    // the ptt_active flag, so holding the mutex here does not cause contention.
+    let mut state = loaded
+        .context
         .create_state()
         .map_err(|e| format!("Failed to create whisper state: {e}"))?;
 

@@ -3,6 +3,8 @@ use crate::provider::LocalWhisperModel;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
+#[cfg(target_os = "macos")]
+use std::time::Instant;
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct ModifierState {
@@ -26,6 +28,13 @@ impl ModifierState {
     }
 }
 
+/// Cached whisper.cpp model context with last-use tracking for idle eviction.
+#[cfg(target_os = "macos")]
+pub struct LoadedModel {
+    pub context: whisper_rs::WhisperContext,
+    pub last_used: Instant,
+}
+
 /// Tauri-managed state. All fields are Arcs so cloning is cheap and the
 /// CGEventTap listener thread and the command handlers share the same data.
 #[derive(Clone, Default)]
@@ -46,4 +55,6 @@ pub struct AppState {
     /// capture keystrokes for shortcut rebinding without firing dictation.
     pub shortcut_capture_paused: Arc<Mutex<bool>>,
     pub download_cancel_flags: Arc<Mutex<HashMap<LocalWhisperModel, Arc<AtomicBool>>>>,
+    #[cfg(target_os = "macos")]
+    pub model_cache: Arc<Mutex<HashMap<LocalWhisperModel, LoadedModel>>>,
 }

@@ -25,6 +25,7 @@ const MOCK_SETTINGS: Settings = {
   history_limit: null,
   show_in_dock: true,
   show_live_preview: true,
+  local_whisper_idle_timeout: "fifteen_minutes",
 };
 
 function TestWrapper({ children }: { children: React.ReactNode }) {
