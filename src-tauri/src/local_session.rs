@@ -9,6 +9,10 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc::UnboundedReceiver;
 
 const LEVEL_THROTTLE: Duration = Duration::from_millis(33);
+// Exponential smoothing coefficients for audio level: faster rise (0.6) to catch
+// sudden loud sounds, slower decay (0.25) to avoid flickering on ambient noise.
+const LEVEL_SMOOTH_RISE: f32 = 0.6;
+const LEVEL_SMOOTH_FALL: f32 = 0.25;
 
 pub struct LocalSession {
     pub model: LocalWhisperModel,
@@ -30,7 +34,7 @@ impl TranscriptionSession for LocalSession {
         let mut last_level_emit: Option<Instant> = None;
         while let Some(chunk) = chunks.recv().await {
             let raw = groq_audio::compute_level(&chunk);
-            let k = if raw > smoothed_level { 0.6 } else { 0.25 };
+            let k = if raw > smoothed_level { LEVEL_SMOOTH_RISE } else { LEVEL_SMOOTH_FALL };
             smoothed_level += (raw - smoothed_level) * k;
             let now = Instant::now();
             if last_level_emit.map_or(true, |t| now.duration_since(t) >= LEVEL_THROTTLE) {

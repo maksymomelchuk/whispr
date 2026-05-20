@@ -1335,7 +1335,6 @@ mod tests {
         assert!(!coex_timer_should_fire(&state, captured_generation));
     }
 
-    // ── Local model readiness guard ──────────────────────────────────────────
     #[test]
     fn local_readiness_fails_when_model_file_absent() {
         let dir = tempfile::tempdir().unwrap();
