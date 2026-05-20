@@ -26,7 +26,7 @@ export interface Snippet {
   expansion: string;
 }
 
-export type TranscriptionProvider = "deepgram" | "groq" | "assembly_ai";
+export type TranscriptionProvider = "deepgram" | "groq" | "assembly_ai" | "local";
 
 export type GroqModel = "whisper_large_v3" | "whisper_large_v3_turbo";
 
@@ -46,10 +46,13 @@ export const ASSEMBLYAI_MODEL_SUPPORTED_LANGUAGES: Record<
   whisper_streaming: null,
 };
 
+export type LocalWhisperModel = "large_v3" | "large_v3_turbo";
+
 export type ProviderModel =
   | { provider: "deepgram" }
   | { provider: "groq"; model: GroqModel }
-  | { provider: "assembly_ai"; model: AssemblyAiModel };
+  | { provider: "assembly_ai"; model: AssemblyAiModel }
+  | { provider: "local"; model: LocalWhisperModel };
 
 export function providerModelLanguageCodes(pm: ProviderModel): string[] | null {
   if (pm.provider !== "assembly_ai") return null;

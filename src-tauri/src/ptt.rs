@@ -1,5 +1,5 @@
 use crate::config::{HotkeyBinding, Shortcut};
-use crate::provider::{ProviderModel, TranscriptionProvider};
+use crate::provider::{self, LocalWhisperModel, ProviderModel, TranscriptionProvider};
 use crate::assemblyai_session::AssemblyAiSession;
 use crate::deepgram_session::DeepgramSession;
 use crate::groq_session::GroqSession;
@@ -392,6 +392,15 @@ fn maybe_resume_media(state: &AppState) {
 }
 
 /// Spawned synchronously on PTT press so the Deepgram WS handshake overlaps
+fn local_model_readiness(data_dir: &std::path::Path, model: LocalWhisperModel) -> Result<(), String> {
+    let path = provider::local_model_path(data_dir, model);
+    if path.exists() {
+        Ok(())
+    } else {
+        Err("Local model not downloaded. Go to Settings → Local Models to download it.".to_string())
+    }
+}
+
 /// with the user's first words. Release closes the chunk channel; this task
 /// drains STT, runs optional LLM cleanup, pastes, and only then hides the
 /// overlay so it bridges the post-release processing.
@@ -453,14 +462,26 @@ async fn run_session(
             .assemblyai_api_key
             .as_deref()
             .is_none_or(|k| k.is_empty()),
+        TranscriptionProvider::Local => false,
     };
     if missing_key {
         let name = match active_mode.provider_model.provider() {
             TranscriptionProvider::Deepgram => "Deepgram",
             TranscriptionProvider::Groq => "Groq",
             TranscriptionProvider::AssemblyAi => "AssemblyAI",
+            TranscriptionProvider::Local => unreachable!(),
         };
         return Err(format!("API key missing for {name}"));
+    }
+
+    if let ProviderModel::Local { model } = &active_mode.provider_model {
+        let data_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("Cannot resolve app data directory: {e}"))?;
+        if let Err(e) = local_model_readiness(&data_dir, *model) {
+            return Err(e);
+        }
     }
 
     let session_result = match &active_mode.provider_model {
@@ -479,6 +500,7 @@ async fn run_session(
                 .run(app.clone(), format, chunk_rx, mode_language, session_terms, active_mode)
                 .await
         }
+        ProviderModel::Local { .. } => Err("Local inference not yet implemented.".to_string()),
     };
 
     let (raw_text, speak_duration) = match session_result {
@@ -1303,5 +1325,38 @@ mod tests {
 
         advance_tap_state(&mut state, TapEvent::OtherKey, base + Duration::from_millis(10));
         assert!(!coex_timer_should_fire(&state, captured_generation));
+    }
+
+    // ── Local model readiness guard ──────────────────────────────────────────
+    #[test]
+    fn local_readiness_fails_when_model_file_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        let result = local_model_readiness(dir.path(), LocalWhisperModel::LargeV3);
+        assert!(result.is_err());
+        let msg = result.unwrap_err();
+        assert!(msg.contains("Settings → Local Models"), "message was: {msg}");
+    }
+
+    #[test]
+    fn local_readiness_passes_when_model_file_present() {
+        use std::fs;
+        let dir = tempfile::tempdir().unwrap();
+        let path = crate::provider::local_model_path(dir.path(), LocalWhisperModel::LargeV3Turbo);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, b"stub").unwrap();
+        assert!(local_model_readiness(dir.path(), LocalWhisperModel::LargeV3Turbo).is_ok());
+    }
+
+    #[test]
+    fn local_readiness_checks_correct_variant() {
+        use std::fs;
+        let dir = tempfile::tempdir().unwrap();
+        let path_v3 = crate::provider::local_model_path(dir.path(), LocalWhisperModel::LargeV3);
+        fs::create_dir_all(path_v3.parent().unwrap()).unwrap();
+        fs::write(&path_v3, b"stub").unwrap();
+        // LargeV3 present → ok
+        assert!(local_model_readiness(dir.path(), LocalWhisperModel::LargeV3).is_ok());
+        // LargeV3Turbo still absent → err
+        assert!(local_model_readiness(dir.path(), LocalWhisperModel::LargeV3Turbo).is_err());
     }
 }
