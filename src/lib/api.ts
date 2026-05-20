@@ -151,5 +151,8 @@ export const cancelModelDownload = (model: LocalWhisperModel) =>
 export const deleteLocalModel = (model: LocalWhisperModel) =>
   invoke<void>("delete_local_model", { model });
 
+export const getLocalModelPath = (model: LocalWhisperModel) =>
+  invoke<string>("get_local_model_path", { model });
+
 export const setLocalWhisperIdleTimeout = (timeout: LocalWhisperIdleTimeout) =>
   invoke<void>("set_local_whisper_idle_timeout", { timeout });

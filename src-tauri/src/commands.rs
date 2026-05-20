@@ -539,6 +539,18 @@ pub fn delete_local_model(app: AppHandle, model: LocalWhisperModel) -> Result<()
 }
 
 #[tauri::command]
+pub fn get_local_model_path(app: AppHandle, model: LocalWhisperModel) -> Result<String, String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let path = local_model_path(&data_dir, model);
+    if !path.exists() {
+        return Err("Model file not found".to_string());
+    }
+    path.to_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| "Model path is not valid UTF-8".to_string())
+}
+
+#[tauri::command]
 pub fn set_local_whisper_idle_timeout(app: AppHandle, timeout: LocalWhisperIdleTimeout) -> Result<(), String> {
     config::update(&app, |s| {
         s.local_whisper.idle_timeout = timeout;

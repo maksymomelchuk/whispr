@@ -1,4 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -14,6 +15,7 @@ import {
 import {
   cancelModelDownload,
   deleteLocalModel,
+  getLocalModelPath,
   getLocalModelStatuses,
   setLocalWhisperIdleTimeout,
   startModelDownload,
@@ -63,9 +65,10 @@ interface ModelRowProps {
   onDownload: () => void;
   onCancel: () => void;
   onDelete: () => void;
+  onReveal: () => void;
 }
 
-function ModelRow({ status, downloadState, onDownload, onCancel, onDelete }: ModelRowProps) {
+function ModelRow({ status, downloadState, onDownload, onCancel, onDelete, onReveal }: ModelRowProps) {
   const label = MODEL_LABELS[status.model];
   const sizeLabel = MODEL_SIZE_LABELS[status.model];
   const isDownloading = downloadState.kind === "downloading";
@@ -82,6 +85,14 @@ function ModelRow({ status, downloadState, onDownload, onCancel, onDelete }: Mod
           {status.downloaded ? (
             <>
               <span className="text-xs text-muted-foreground">Downloaded</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onReveal}
+                className="text-muted-foreground text-xs h-7 px-2"
+              >
+                Show in Finder
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
@@ -238,6 +249,15 @@ export function LocalModelsField() {
     }
   };
 
+  const handleReveal = async (model: LocalWhisperModel) => {
+    try {
+      const path = await getLocalModelPath(model);
+      await revealItemInDir(path);
+    } catch (e) {
+      toast.error("Couldn't open Finder", { description: String(e) });
+    }
+  };
+
   if (statuses.length === 0) return null;
 
   return (
@@ -251,6 +271,7 @@ export function LocalModelsField() {
             onDownload={() => handleDownload(status.model)}
             onCancel={() => handleCancel(status.model)}
             onDelete={() => handleDelete(status.model)}
+            onReveal={() => handleReveal(status.model)}
           />
         ))}
       </div>

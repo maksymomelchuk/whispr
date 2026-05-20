@@ -208,6 +208,7 @@ pub fn run() {
             commands::start_model_download,
             commands::cancel_model_download,
             commands::delete_local_model,
+            commands::get_local_model_path,
             commands::set_local_whisper_idle_timeout,
         ])
         .run(tauri::generate_context!())
