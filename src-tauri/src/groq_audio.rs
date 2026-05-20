@@ -46,7 +46,9 @@ pub fn to_pcm_16k_mono_bytes(
 
 /// Convert interleaved i16 PCM to 16 kHz mono f32 samples for whisper inference.
 ///
-/// Samples are normalized to [-1.0, 1.0] by dividing by `i16::MAX`.
+/// Samples are normalized to [-1.0, 1.0] by dividing by `32768.0` — the absolute
+/// magnitude of `i16::MIN`. Dividing by `i16::MAX` (32767) would push `i16::MIN`
+/// to ≈ -1.0000305, outside the [-1, 1] range whisper expects.
 pub fn to_pcm_16k_mono_f32(
     samples: &[i16],
     input_sample_rate: u32,
@@ -60,8 +62,10 @@ pub fn to_pcm_16k_mono_f32(
     }
     let mono = downmix_to_mono(samples, input_channels);
     let resampled = resample_linear(&mono, input_sample_rate, TARGET_SAMPLE_RATE);
-    Ok(resampled.iter().map(|&s| s as f32 / i16::MAX as f32).collect())
+    Ok(resampled.iter().map(|&s| s as f32 / I16_NORM_DIVISOR).collect())
 }
+
+const I16_NORM_DIVISOR: f32 = 32_768.0;
 
 /// Encode interleaved i16 PCM as a 16 kHz mono FLAC byte buffer.
 ///
@@ -267,18 +271,17 @@ mod tests {
         let input: Vec<i16> = vec![100, -100, 0, 200];
         let out = to_pcm_16k_mono_f32(&input, 16_000, 1).unwrap();
         assert_eq!(out.len(), input.len());
-        assert!((out[0] - 100.0 / i16::MAX as f32).abs() < 1e-4);
-        assert!((out[1] - (-100.0 / i16::MAX as f32)).abs() < 1e-4);
+        assert!((out[0] - 100.0 / I16_NORM_DIVISOR).abs() < 1e-4);
+        assert!((out[1] - (-100.0 / I16_NORM_DIVISOR)).abs() < 1e-4);
         assert_eq!(out[2], 0.0);
     }
 
     #[test]
     fn f32_downmixes_stereo_then_normalizes() {
-        // Two stereo frames: [100, 200] → mono 150; [-100, 200] → mono 50
         let input: Vec<i16> = vec![100, 200, -100, 200];
         let out = to_pcm_16k_mono_f32(&input, 16_000, 2).unwrap();
         assert_eq!(out.len(), 2);
-        assert!((out[0] - 150.0 / i16::MAX as f32).abs() < 1e-4);
-        assert!((out[1] - 50.0 / i16::MAX as f32).abs() < 1e-4);
+        assert!((out[0] - 150.0 / I16_NORM_DIVISOR).abs() < 1e-4);
+        assert!((out[1] - 50.0 / I16_NORM_DIVISOR).abs() < 1e-4);
     }
 }
