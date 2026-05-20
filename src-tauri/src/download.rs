@@ -13,7 +13,6 @@ pub const MODEL_DOWNLOAD_COMPLETE_EVENT: &str = "model-download-complete";
 pub const MODEL_DOWNLOAD_ERROR_EVENT: &str = "model-download-error";
 
 // SHA256 checksums from huggingface.co/ggerganov/whisper.cpp.
-// Verify against the HuggingFace model card before shipping.
 const LARGE_V3_URL: &str =
     "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin";
 const LARGE_V3_TURBO_URL: &str =
@@ -95,20 +94,40 @@ fn hex_encode(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
+/// Groups the parameters for a file download. Passed to `download_to_dir`.
+pub struct DownloadSpec {
+    pub models_dir: PathBuf,
+    pub filename: String,
+    pub url: String,
+    pub expected_sha256: String,
+    pub cancel_flag: Arc<AtomicBool>,
+}
+
+/// Hashes the bytes already written to a `.part` file so a resumed download
+/// can continue updating a single hasher over the full file contents.
+fn hash_partial_file(path: &Path) -> Result<Sha256, String> {
+    let mut hasher = Sha256::new();
+    let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut buf = [0u8; 65536];
+    loop {
+        let n = file.read(&mut buf).map_err(|e| e.to_string())?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hasher)
+}
+
 /// Core download logic; accepts an explicit URL so tests can point at a mock server.
 pub async fn download_to_dir(
-    models_dir: &Path,
-    filename: &str,
-    url: &str,
-    expected_sha256: &str,
-    cancel_flag: Arc<AtomicBool>,
+    spec: &DownloadSpec,
     on_progress: impl Fn(u64, u64) + Send,
 ) -> Result<(), String> {
-    std::fs::create_dir_all(models_dir).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&spec.models_dir).map_err(|e| e.to_string())?;
 
-    let final_path = models_dir.join(filename);
-    let part_path = models_dir.join(format!("{}.part", filename));
-
+    let final_path = spec.models_dir.join(&spec.filename);
+    let part_path = spec.models_dir.join(format!("{}.part", spec.filename));
     let mut cleanup = DownloadCleanup::new(part_path.clone());
 
     let existing_bytes = if part_path.exists() {
@@ -118,13 +137,12 @@ pub async fn download_to_dir(
     };
 
     let client = reqwest::Client::new();
-    let mut request = client.get(url);
+    let mut request = client.get(&spec.url);
     if existing_bytes > 0 {
         request = request.header("Range", format!("bytes={}-", existing_bytes));
     }
 
     let response = request.send().await.map_err(|e| e.to_string())?;
-
     let status = response.status();
     if !status.is_success() {
         return Err(format!("HTTP {status}"));
@@ -133,22 +151,14 @@ pub async fn download_to_dir(
     // 206 Partial Content means the server honoured the Range header.
     // 200 means it returned the full file — discard any existing .part data.
     let actual_existing = if status.as_u16() == 206 { existing_bytes } else { 0 };
-
     let content_length = response.content_length().unwrap_or(0);
     let total_bytes = actual_existing + content_length;
 
-    let mut hasher = Sha256::new();
-    if actual_existing > 0 {
-        let mut existing_file = std::fs::File::open(&part_path).map_err(|e| e.to_string())?;
-        let mut buf = [0u8; 65536];
-        loop {
-            let n = existing_file.read(&mut buf).map_err(|e| e.to_string())?;
-            if n == 0 {
-                break;
-            }
-            hasher.update(&buf[..n]);
-        }
-    }
+    let mut hasher = if actual_existing > 0 {
+        hash_partial_file(&part_path)?
+    } else {
+        Sha256::new()
+    };
 
     let mut file = if actual_existing > 0 {
         std::fs::OpenOptions::new()
@@ -161,9 +171,8 @@ pub async fn download_to_dir(
 
     let mut downloaded = actual_existing;
     let mut stream = response.bytes_stream();
-
     while let Some(result) = stream.next().await {
-        if cancel_flag.load(Ordering::Relaxed) {
+        if spec.cancel_flag.load(Ordering::Relaxed) {
             return Err("Cancelled".to_string());
         }
         let chunk = result.map_err(|e| e.to_string())?;
@@ -172,12 +181,11 @@ pub async fn download_to_dir(
         downloaded += chunk.len() as u64;
         on_progress(downloaded, total_bytes);
     }
-
     drop(file);
 
     let computed = hex_encode(&hasher.finalize());
-    if computed != expected_sha256 {
-        return Err(format!("SHA256 mismatch: expected {expected_sha256}, got {computed}"));
+    if computed != spec.expected_sha256 {
+        return Err(format!("SHA256 mismatch: expected {}, got {computed}", spec.expected_sha256));
     }
 
     std::fs::rename(&part_path, &final_path).map_err(|e| e.to_string())?;
@@ -191,14 +199,16 @@ pub async fn download_model(
     cancel_flag: Arc<AtomicBool>,
 ) -> Result<(), String> {
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    let models_dir = data_dir.join("models");
+    let spec = DownloadSpec {
+        models_dir: data_dir.join("models"),
+        filename: model.filename().to_string(),
+        url: model_url(model).to_string(),
+        expected_sha256: model_sha256(model).to_string(),
+        cancel_flag,
+    };
     let app_clone = app.clone();
     download_to_dir(
-        &models_dir,
-        model.filename(),
-        model_url(model),
-        model_sha256(model),
-        cancel_flag,
+        &spec,
         move |downloaded, total| {
             let percentage = if total > 0 {
                 ((downloaded as f64 / total as f64) * 100.0).min(100.0) as u8
@@ -239,11 +249,14 @@ mod tests {
             .create_async()
             .await;
 
-        let url = format!("{}/model.bin", server.url());
-        let cancel = Arc::new(AtomicBool::new(false));
-        download_to_dir(dir.path(), "model.bin", &url, &expected_hash, cancel, |_, _| {})
-            .await
-            .unwrap();
+        let spec = DownloadSpec {
+            models_dir: dir.path().to_path_buf(),
+            filename: "model.bin".to_string(),
+            url: format!("{}/model.bin", server.url()),
+            expected_sha256: expected_hash,
+            cancel_flag: Arc::new(AtomicBool::new(false)),
+        };
+        download_to_dir(&spec, |_, _| {}).await.unwrap();
 
         assert!(dir.path().join("model.bin").exists(), ".bin file must exist after success");
         assert!(!dir.path().join("model.bin.part").exists(), ".part file must be removed after success");
@@ -264,10 +277,14 @@ mod tests {
             .create_async()
             .await;
 
-        let url = format!("{}/model.bin", server.url());
-        let cancel = Arc::new(AtomicBool::new(false));
-        let result =
-            download_to_dir(dir.path(), "model.bin", &url, wrong_hash, cancel, |_, _| {}).await;
+        let spec = DownloadSpec {
+            models_dir: dir.path().to_path_buf(),
+            filename: "model.bin".to_string(),
+            url: format!("{}/model.bin", server.url()),
+            expected_sha256: wrong_hash.to_string(),
+            cancel_flag: Arc::new(AtomicBool::new(false)),
+        };
+        let result = download_to_dir(&spec, |_, _| {}).await;
 
         assert!(result.is_err(), "should return an error on SHA256 mismatch");
         assert!(result.unwrap_err().contains("SHA256 mismatch"));
@@ -288,10 +305,14 @@ mod tests {
             .create_async()
             .await;
 
-        let url = format!("{}/model.bin", server.url());
-        let cancel = Arc::new(AtomicBool::new(true)); // pre-cancelled
-        let result =
-            download_to_dir(dir.path(), "model.bin", &url, "any", cancel, |_, _| {}).await;
+        let spec = DownloadSpec {
+            models_dir: dir.path().to_path_buf(),
+            filename: "model.bin".to_string(),
+            url: format!("{}/model.bin", server.url()),
+            expected_sha256: "any".to_string(),
+            cancel_flag: Arc::new(AtomicBool::new(true)), // pre-cancelled
+        };
+        let result = download_to_dir(&spec, |_, _| {}).await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Cancelled");
@@ -307,7 +328,6 @@ mod tests {
         let full: Vec<u8> = existing.iter().chain(rest.iter()).copied().collect();
         let expected_hash = sha256_of(&full);
 
-        // Pre-populate the .part file with the first half
         std::fs::write(dir.path().join("model.bin.part"), existing).unwrap();
 
         let mut server = mockito::Server::new_async().await;
@@ -319,11 +339,14 @@ mod tests {
             .create_async()
             .await;
 
-        let url = format!("{}/model.bin", server.url());
-        let cancel = Arc::new(AtomicBool::new(false));
-        download_to_dir(dir.path(), "model.bin", &url, &expected_hash, cancel, |_, _| {})
-            .await
-            .unwrap();
+        let spec = DownloadSpec {
+            models_dir: dir.path().to_path_buf(),
+            filename: "model.bin".to_string(),
+            url: format!("{}/model.bin", server.url()),
+            expected_sha256: expected_hash,
+            cancel_flag: Arc::new(AtomicBool::new(false)),
+        };
+        download_to_dir(&spec, |_, _| {}).await.unwrap();
 
         mock.assert_async().await;
         assert!(dir.path().join("model.bin").exists());
