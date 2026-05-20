@@ -465,6 +465,7 @@ async fn run_session(
         TranscriptionProvider::Local => false,
     };
     if missing_key {
+        recorder.stop();
         let name = match active_mode.provider_model.provider() {
             TranscriptionProvider::Deepgram => "Deepgram",
             TranscriptionProvider::Groq => "Groq",
@@ -475,11 +476,13 @@ async fn run_session(
     }
 
     if let ProviderModel::Local { model } = &active_mode.provider_model {
-        let data_dir = app
+        let check = app
             .path()
             .app_data_dir()
-            .map_err(|e| format!("Cannot resolve app data directory: {e}"))?;
-        if let Err(e) = local_model_readiness(&data_dir, *model) {
+            .map_err(|e| format!("Cannot resolve app data directory: {e}"))
+            .and_then(|dir| local_model_readiness(&dir, *model));
+        if let Err(e) = check {
+            recorder.stop();
             return Err(e);
         }
     }
