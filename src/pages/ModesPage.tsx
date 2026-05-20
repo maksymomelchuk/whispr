@@ -546,16 +546,28 @@ export function ModeEditor({
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     let unlisten: (() => void) | undefined;
-    listen<LocalWhisperModel>("model-download-complete", (e) => {
-      const model = e.payload;
-      setLocalStatuses((prev) =>
-        prev?.map((s) => (s.model === model ? { ...s, downloaded: true } : s)) ?? prev,
-      );
-    }).then((fn) => {
+
+    const attach = async () => {
+      const fn = await listen<LocalWhisperModel>("model-download-complete", (e) => {
+        const model = e.payload;
+        setLocalStatuses((prev) =>
+          prev?.map((s) => (s.model === model ? { ...s, downloaded: true } : s)) ?? prev,
+        );
+      });
+      if (cancelled) {
+        fn();
+        return;
+      }
       unlisten = fn;
-    });
-    return () => { unlisten?.(); };
+    };
+
+    attach();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
   }, []);
 
   const handleCreate = async () => {
