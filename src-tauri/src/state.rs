@@ -1,4 +1,7 @@
 use crate::config::{HotkeyBinding, Shortcut};
+use crate::provider::LocalWhisperModel;
+use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -42,4 +45,5 @@ pub struct AppState {
     /// When true, the CGEventTap skips PTT matching so the settings UI can
     /// capture keystrokes for shortcut rebinding without firing dictation.
     pub shortcut_capture_paused: Arc<Mutex<bool>>,
+    pub download_cancel_flags: Arc<Mutex<HashMap<LocalWhisperModel, Arc<AtomicBool>>>>,
 }

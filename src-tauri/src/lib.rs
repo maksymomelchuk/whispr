@@ -1,6 +1,7 @@
 mod api_key_validation;
 mod commands;
 pub mod config;
+pub mod download;
 pub mod history;
 pub mod mode;
 pub mod provider;
@@ -188,6 +189,10 @@ pub fn run() {
             commands::open_accessibility_settings,
             commands::check_permissions,
             commands::open_microphone_settings,
+            commands::get_local_model_statuses,
+            commands::start_model_download,
+            commands::cancel_model_download,
+            commands::delete_local_model,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -7,6 +7,8 @@ import type {
   HistoryEntry,
   HistoryLimit,
   HotkeyBinding,
+  LocalModelStatus,
+  LocalWhisperModel,
   Mode,
   NamedCorrectionSet,
   NamedTermSet,
@@ -135,3 +137,15 @@ export const openMicrophoneSettings = () =>
   invoke<void>("open_microphone_settings");
 export const openAccessibilitySettings = () =>
   invoke<void>("open_accessibility_settings");
+
+export const getLocalModelStatuses = () =>
+  invoke<LocalModelStatus[]>("get_local_model_statuses");
+
+export const startModelDownload = (model: LocalWhisperModel) =>
+  invoke<void>("start_model_download", { model });
+
+export const cancelModelDownload = (model: LocalWhisperModel) =>
+  invoke<void>("cancel_model_download", { model });
+
+export const deleteLocalModel = (model: LocalWhisperModel) =>
+  invoke<void>("delete_local_model", { model });

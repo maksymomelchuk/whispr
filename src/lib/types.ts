@@ -128,6 +128,27 @@ export interface Settings {
   show_live_preview: boolean;
 }
 
+// ── Local model download types ─────────────────────────────────────────────
+
+export interface LocalModelStatus {
+  model: LocalWhisperModel;
+  downloaded: boolean;
+  downloading: boolean;
+  size_bytes: number;
+}
+
+export interface ModelDownloadProgress {
+  model: LocalWhisperModel;
+  bytes_downloaded: number;
+  total_bytes: number;
+  percentage: number;
+}
+
+export interface ModelDownloadError {
+  model: LocalWhisperModel;
+  message: string;
+}
+
 export type CleanupStatus =
   | { kind: "disabled" }
   | { kind: "skipped_below_min_words" }

@@ -18,6 +18,10 @@ vi.mock("../lib/api", () => ({
   setAnthropicApiKey: vi.fn(),
   setAnthropicOauthToken: vi.fn(),
   setCleanupThresholds: vi.fn(),
+  getLocalModelStatuses: vi.fn().mockResolvedValue([]),
+  startModelDownload: vi.fn(),
+  cancelModelDownload: vi.fn(),
+  deleteLocalModel: vi.fn(),
 }));
 
 const BASE_SETTINGS: Settings = {

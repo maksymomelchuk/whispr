@@ -3,14 +3,17 @@ use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
 use crate::config::{
     self, CleanupAuthMode, HotkeyBinding, NamedCorrectionSet, NamedTermSet, Settings, SnippetEntry,
 };
+use crate::download::{self, LocalModelStatus, MODEL_DOWNLOAD_COMPLETE_EVENT, MODEL_DOWNLOAD_ERROR_EVENT};
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::mode::{Mode, ModeId, SetId};
 use crate::permissions;
-use crate::provider::GroqModel;
+use crate::provider::{local_model_path, GroqModel, LocalWhisperModel};
 use crate::state::AppState;
 use crate::stats::{self, StatsRow, STATS_UPDATED_EVENT};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use tauri::{AppHandle, Emitter, Manager, State};
 
 /// Public projection of Settings for the webview. Omits API keys so a
 /// webview XSS cannot read them back over IPC. Keys are write-only from the
@@ -445,6 +448,92 @@ pub fn check_permissions() -> PermissionsStatus {
 #[tauri::command]
 pub fn open_microphone_settings() {
     permissions::open_microphone_settings();
+}
+
+#[tauri::command]
+pub fn get_local_model_statuses(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Vec<LocalModelStatus> {
+    let data_dir = match app.path().app_data_dir() {
+        Ok(d) => d,
+        Err(_) => return vec![],
+    };
+    let flags = state.download_cancel_flags.lock().unwrap();
+    [LocalWhisperModel::LargeV3, LocalWhisperModel::LargeV3Turbo]
+        .iter()
+        .map(|&model| {
+            let path = local_model_path(&data_dir, model);
+            LocalModelStatus {
+                model,
+                downloaded: path.exists(),
+                downloading: flags.contains_key(&model),
+                size_bytes: download::model_size_bytes(model),
+            }
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub async fn start_model_download(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    model: LocalWhisperModel,
+) -> Result<(), String> {
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    {
+        let mut flags = state.download_cancel_flags.lock().unwrap();
+        if flags.contains_key(&model) {
+            return Err("Download already in progress".to_string());
+        }
+        flags.insert(model, cancel_flag.clone());
+    }
+
+    let cancel_flags = Arc::clone(&state.download_cancel_flags);
+    let app_clone = app.clone();
+    tokio::spawn(async move {
+        let result = download::download_model(app_clone.clone(), model, cancel_flag).await;
+        cancel_flags.lock().unwrap().remove(&model);
+        match result {
+            Ok(()) => {
+                let _ = app_clone.emit(MODEL_DOWNLOAD_COMPLETE_EVENT, model);
+            }
+            Err(ref msg) if msg == "Cancelled" => {}
+            Err(e) => {
+                let _ = app_clone.emit(
+                    MODEL_DOWNLOAD_ERROR_EVENT,
+                    download::ModelDownloadError { model, message: e },
+                );
+            }
+        }
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn cancel_model_download(
+    state: State<'_, AppState>,
+    model: LocalWhisperModel,
+) -> Result<(), String> {
+    let flags = state.download_cancel_flags.lock().unwrap();
+    match flags.get(&model) {
+        Some(flag) => {
+            flag.store(true, Ordering::Relaxed);
+            Ok(())
+        }
+        None => Err("No active download for this model".to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn delete_local_model(app: AppHandle, model: LocalWhisperModel) -> Result<(), String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let path = local_model_path(&data_dir, model);
+    if path.exists() {
+        std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
