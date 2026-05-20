@@ -660,7 +660,7 @@ async fn maybe_cleanup(
     let _ = app.emit(PTT_THINKING_EVENT, ());
 
     let prompt = cleanup::effective_prompt(prompt_override);
-    match cleanup::run(transcript, credential, prompt).await {
+    match cleanup::run(transcript, credential, &prompt).await {
         Ok((cleaned, usage)) => {
             cleanup_stats::record(app, usage.input_tokens, usage.output_tokens);
             (cleaned, CleanupStatus::Ran, Notice::None)
