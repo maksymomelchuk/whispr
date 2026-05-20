@@ -12,7 +12,9 @@ pub const MODEL_DOWNLOAD_PROGRESS_EVENT: &str = "model-download-progress";
 pub const MODEL_DOWNLOAD_COMPLETE_EVENT: &str = "model-download-complete";
 pub const MODEL_DOWNLOAD_ERROR_EVENT: &str = "model-download-error";
 
-// SHA256 checksums from huggingface.co/ggerganov/whisper.cpp.
+// Sizes and SHA256s come from the Hugging Face tree API for
+// ggerganov/whisper.cpp at main. Refresh via:
+//   curl -s 'https://huggingface.co/api/models/ggerganov/whisper.cpp/tree/main'
 const LARGE_V3_URL: &str =
     "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin";
 const LARGE_V3_TURBO_URL: &str =
@@ -20,9 +22,9 @@ const LARGE_V3_TURBO_URL: &str =
 const LARGE_V3_SHA256: &str =
     "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2";
 const LARGE_V3_TURBO_SHA256: &str =
-    "4af2b29d7ec8dbbb9e7df5c8e52e4df6da4ec57fde8a6e71a25d70e9ac8dce53";
-const LARGE_V3_SIZE_BYTES: u64 = 1_550_000_000;
-const LARGE_V3_TURBO_SIZE_BYTES: u64 = 809_000_000;
+    "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69";
+const LARGE_V3_SIZE_BYTES: u64 = 3_095_033_483;
+const LARGE_V3_TURBO_SIZE_BYTES: u64 = 1_624_555_275;
 
 #[derive(Debug, Serialize, Clone)]
 pub struct DownloadProgress {

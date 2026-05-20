@@ -34,8 +34,8 @@ const MODEL_LABELS: Record<LocalWhisperModel, string> = {
 };
 
 const MODEL_SIZE_LABELS: Record<LocalWhisperModel, string> = {
-  large_v3: "~1.5 GB",
-  large_v3_turbo: "~809 MB",
+  large_v3: "~2.9 GB",
+  large_v3_turbo: "~1.5 GB",
 };
 
 const IDLE_TIMEOUT_OPTIONS: { value: LocalWhisperIdleTimeout; label: string }[] = [

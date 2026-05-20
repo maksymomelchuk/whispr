@@ -88,7 +88,7 @@ describe("LocalModelsField idle timeout", () => {
   it("shows idle timeout label when local models are present", async () => {
     const { getLocalModelStatuses } = await import("../lib/api");
     vi.mocked(getLocalModelStatuses).mockResolvedValue([
-      { model: "large_v3_turbo", downloaded: true, downloading: false, size_bytes: 809_000_000 },
+      { model: "large_v3_turbo", downloaded: true, downloading: false, size_bytes: 1_624_555_275 },
     ]);
     render(<Wrapper />);
     await waitFor(() => expect(screen.getByText("Idle timeout")).toBeInTheDocument());
