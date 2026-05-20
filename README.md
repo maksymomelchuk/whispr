@@ -17,6 +17,7 @@ persisted to disk beyond a local transcript history.
 - [Rust](https://rustup.rs/) stable
 - [pnpm](https://pnpm.io/installation)
 - Xcode Command Line Tools (`xcode-select --install`)
+- [cmake](https://cmake.org/download/) — required to compile whisper.cpp for the local Whisper engine (`brew install cmake`)
 
 ## Setup
 

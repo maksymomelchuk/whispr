@@ -44,6 +44,29 @@ pub fn to_pcm_16k_mono_bytes(
     Ok(resampled.iter().flat_map(|s| s.to_le_bytes()).collect())
 }
 
+/// Convert interleaved i16 PCM to 16 kHz mono f32 samples for whisper inference.
+///
+/// Samples are normalized to [-1.0, 1.0] by dividing by `32768.0` — the absolute
+/// magnitude of `i16::MIN`. Dividing by `i16::MAX` (32767) would push `i16::MIN`
+/// to ≈ -1.0000305, outside the [-1, 1] range whisper expects.
+pub fn to_pcm_16k_mono_f32(
+    samples: &[i16],
+    input_sample_rate: u32,
+    input_channels: u16,
+) -> Result<Vec<f32>, String> {
+    if input_channels == 0 {
+        return Err("input_channels must be > 0".into());
+    }
+    if input_sample_rate == 0 {
+        return Err("input_sample_rate must be > 0".into());
+    }
+    let mono = downmix_to_mono(samples, input_channels);
+    let resampled = resample_linear(&mono, input_sample_rate, TARGET_SAMPLE_RATE);
+    Ok(resampled.iter().map(|&s| s as f32 / I16_NORM_DIVISOR).collect())
+}
+
+const I16_NORM_DIVISOR: f32 = 32_768.0;
+
 /// Encode interleaved i16 PCM as a 16 kHz mono FLAC byte buffer.
 ///
 /// `samples` is treated as interleaved when `input_channels > 1`. Samples past
@@ -213,5 +236,52 @@ mod tests {
     fn rejects_zero_channels() {
         let r = encode_to_flac_16k_mono(&[0i16; 16], 48_000, 0);
         assert!(r.is_err());
+    }
+
+    #[test]
+    fn f32_rejects_zero_channels() {
+        assert!(to_pcm_16k_mono_f32(&[0i16; 16], 48_000, 0).is_err());
+    }
+
+    #[test]
+    fn f32_rejects_zero_sample_rate() {
+        assert!(to_pcm_16k_mono_f32(&[0i16; 16], 0, 1).is_err());
+    }
+
+    #[test]
+    fn f32_samples_are_normalized() {
+        let input: Vec<i16> = vec![i16::MAX, i16::MIN, 0];
+        let out = to_pcm_16k_mono_f32(&input, 16_000, 1).unwrap();
+        for &s in &out {
+            assert!(s >= -1.0 && s <= 1.0, "sample {s} out of [-1, 1]");
+        }
+    }
+
+    #[test]
+    fn f32_resamples_48k_mono_to_16k() {
+        let input = synth_sine(440.0, 48_000, 1, 1.0);
+        let out = to_pcm_16k_mono_f32(&input, 48_000, 1).unwrap();
+        let expected_len = 16_000usize;
+        let diff = out.len().abs_diff(expected_len);
+        assert!(diff <= 1, "expected ~{expected_len} samples, got {}", out.len());
+    }
+
+    #[test]
+    fn f32_passthrough_when_already_16k_mono() {
+        let input: Vec<i16> = vec![100, -100, 0, 200];
+        let out = to_pcm_16k_mono_f32(&input, 16_000, 1).unwrap();
+        assert_eq!(out.len(), input.len());
+        assert!((out[0] - 100.0 / I16_NORM_DIVISOR).abs() < 1e-4);
+        assert!((out[1] - (-100.0 / I16_NORM_DIVISOR)).abs() < 1e-4);
+        assert_eq!(out[2], 0.0);
+    }
+
+    #[test]
+    fn f32_downmixes_stereo_then_normalizes() {
+        let input: Vec<i16> = vec![100, 200, -100, 200];
+        let out = to_pcm_16k_mono_f32(&input, 16_000, 2).unwrap();
+        assert_eq!(out.len(), 2);
+        assert!((out[0] - 150.0 / I16_NORM_DIVISOR).abs() < 1e-4);
+        assert!((out[1] - 50.0 / I16_NORM_DIVISOR).abs() < 1e-4);
     }
 }

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -7,6 +8,7 @@ pub enum TranscriptionProvider {
     Deepgram,
     Groq,
     AssemblyAi,
+    Local,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -67,6 +69,27 @@ impl AssemblyAiModel {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LocalWhisperModel {
+    LargeV3,
+    #[default]
+    LargeV3Turbo,
+}
+
+impl LocalWhisperModel {
+    pub fn filename(self) -> &'static str {
+        match self {
+            Self::LargeV3 => "ggml-large-v3.bin",
+            Self::LargeV3Turbo => "ggml-large-v3-turbo.bin",
+        }
+    }
+}
+
+pub fn local_model_path(data_dir: &Path, model: LocalWhisperModel) -> PathBuf {
+    data_dir.join("models").join(model.filename())
+}
+
 /// Per-mode provider + model selection. The tag field doubles as the provider
 /// identifier so the frontend only needs one discriminant for both.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -76,6 +99,7 @@ pub enum ProviderModel {
     Deepgram,
     Groq { model: GroqModel },
     AssemblyAi { model: AssemblyAiModel },
+    Local { model: LocalWhisperModel },
 }
 
 impl ProviderModel {
@@ -84,6 +108,7 @@ impl ProviderModel {
             Self::Deepgram => TranscriptionProvider::Deepgram,
             Self::Groq { .. } => TranscriptionProvider::Groq,
             Self::AssemblyAi { .. } => TranscriptionProvider::AssemblyAi,
+            Self::Local { .. } => TranscriptionProvider::Local,
         }
     }
 
@@ -96,6 +121,7 @@ impl ProviderModel {
             TranscriptionProvider::Deepgram => Self::Deepgram,
             TranscriptionProvider::Groq => Self::Groq { model: groq_model },
             TranscriptionProvider::AssemblyAi => Self::AssemblyAi { model: assemblyai_model },
+            TranscriptionProvider::Local => Self::Local { model: LocalWhisperModel::default() },
         }
     }
 }
@@ -186,5 +212,66 @@ mod tests {
     fn groq_model_api_id_correct() {
         assert_eq!(GroqModel::WhisperLargeV3.api_id(), "whisper-large-v3");
         assert_eq!(GroqModel::WhisperLargeV3Turbo.api_id(), "whisper-large-v3-turbo");
+    }
+
+    #[test]
+    fn local_whisper_model_large_v3_serializes_as_snake_case() {
+        let v: serde_json::Value = serde_json::to_value(LocalWhisperModel::LargeV3).unwrap();
+        assert_eq!(v, "large_v3");
+    }
+
+    #[test]
+    fn local_whisper_model_large_v3_turbo_serializes_as_snake_case() {
+        let v: serde_json::Value = serde_json::to_value(LocalWhisperModel::LargeV3Turbo).unwrap();
+        assert_eq!(v, "large_v3_turbo");
+    }
+
+    #[test]
+    fn local_whisper_model_round_trips() {
+        for model in [LocalWhisperModel::LargeV3, LocalWhisperModel::LargeV3Turbo] {
+            let json = serde_json::to_string(&model).unwrap();
+            let decoded: LocalWhisperModel = serde_json::from_str(&json).unwrap();
+            assert_eq!(decoded, model);
+        }
+    }
+
+    #[test]
+    fn provider_model_local_serializes_with_provider_and_model() {
+        let m = ProviderModel::Local { model: LocalWhisperModel::LargeV3 };
+        let v: serde_json::Value = serde_json::to_value(&m).unwrap();
+        assert_eq!(v["provider"], "local");
+        assert_eq!(v["model"], "large_v3");
+    }
+
+    #[test]
+    fn provider_model_local_turbo_serializes() {
+        let m = ProviderModel::Local { model: LocalWhisperModel::LargeV3Turbo };
+        let v: serde_json::Value = serde_json::to_value(&m).unwrap();
+        assert_eq!(v["provider"], "local");
+        assert_eq!(v["model"], "large_v3_turbo");
+    }
+
+    #[test]
+    fn provider_model_local_round_trips() {
+        for model in [LocalWhisperModel::LargeV3, LocalWhisperModel::LargeV3Turbo] {
+            let pm = ProviderModel::Local { model };
+            let json = serde_json::to_string(&pm).unwrap();
+            let decoded: ProviderModel = serde_json::from_str(&json).unwrap();
+            assert_eq!(decoded, pm);
+        }
+    }
+
+    #[test]
+    fn local_model_path_large_v3_under_models_subdir() {
+        let data_dir = Path::new("/app/data");
+        let path = local_model_path(data_dir, LocalWhisperModel::LargeV3);
+        assert_eq!(path, PathBuf::from("/app/data/models/ggml-large-v3.bin"));
+    }
+
+    #[test]
+    fn local_model_path_large_v3_turbo_under_models_subdir() {
+        let data_dir = Path::new("/app/data");
+        let path = local_model_path(data_dir, LocalWhisperModel::LargeV3Turbo);
+        assert_eq!(path, PathBuf::from("/app/data/models/ggml-large-v3-turbo.bin"));
     }
 }

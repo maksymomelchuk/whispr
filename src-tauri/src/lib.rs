@@ -1,6 +1,7 @@
 mod api_key_validation;
 mod commands;
 pub mod config;
+pub mod download;
 pub mod history;
 pub mod mode;
 pub mod provider;
@@ -46,6 +47,8 @@ mod deepgram_session;
 mod assemblyai_session;
 #[cfg(target_os = "macos")]
 mod groq_session;
+#[cfg(target_os = "macos")]
+mod local_session;
 #[cfg(target_os = "macos")]
 pub mod transcription_session;
 
@@ -123,6 +126,19 @@ pub fn run() {
                 if let Err(e) = overlay::create(&app.handle()) {
                     eprintln!("Failed to create overlay window: {e}");
                 }
+
+                let eviction_cache = app_state.model_cache.clone();
+                let eviction_app = app.handle().clone();
+                std::thread::spawn(move || {
+                    loop {
+                        std::thread::sleep(std::time::Duration::from_secs(60));
+                        let idle_timeout = config::load(&eviction_app).local_whisper.idle_timeout;
+                        let Some(threshold) = idle_timeout.as_duration() else {
+                            continue;
+                        };
+                        eviction_cache.lock().unwrap().retain(|_, m| m.last_used.elapsed() < threshold);
+                    }
+                });
             }
 
             if let Err(e) = tray::setup(app.handle()) {
@@ -188,6 +204,12 @@ pub fn run() {
             commands::open_accessibility_settings,
             commands::check_permissions,
             commands::open_microphone_settings,
+            commands::get_local_model_statuses,
+            commands::start_model_download,
+            commands::cancel_model_download,
+            commands::delete_local_model,
+            commands::get_local_model_path,
+            commands::set_local_whisper_idle_timeout,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

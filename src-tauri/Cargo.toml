@@ -25,8 +25,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["sync", "macros", "time", "rt"] }
 tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
-reqwest = { version = "0.12", features = ["json", "multipart"] }
+reqwest = { version = "0.12", features = ["json", "multipart", "stream"] }
 futures-util = { version = "0.3", default-features = false, features = ["sink"] }
+sha2 = "0.10"
 url = "2"
 time = { version = "0.3", features = ["local-offset", "formatting", "parsing", "macros"] }
 # Two FLAC crates because each is single-direction: flacenc encodes,
@@ -38,6 +39,9 @@ flacenc = { version = "0.5", default-features = false }
 [dev-dependencies]
 proptest = "1"
 serde_json = "1"
+tempfile = "3"
+mockito = "1"
+tokio = { version = "1", features = ["rt", "macros"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 macos-accessibility-client = "0.0.1"
@@ -46,4 +50,5 @@ core-graphics = "0.24"
 cpal = "0.15"
 objc2 = "0.6"
 objc2-foundation = "0.3"
+whisper-rs = { version = "0.13", features = ["metal"] }
 

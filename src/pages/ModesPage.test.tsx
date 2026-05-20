@@ -16,6 +16,7 @@ import type { Mode, NamedCorrectionSet, Settings } from "@/lib/types";
 import { SettingsContext } from "../context/SettingsContext";
 import {
   addMode as mockAddMode,
+  getLocalModelStatuses as mockGetLocalModelStatuses,
   updateMode as mockUpdateMode,
 } from "../lib/api";
 import { ModeEditor, ModesPage } from "./ModesPage";
@@ -36,6 +37,7 @@ vi.mock("../lib/api", () => ({
   getSettings: vi.fn(),
   setDefaultMode: vi.fn(),
   formatShortcut: vi.fn(),
+  getLocalModelStatuses: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("sonner", () => ({
@@ -67,18 +69,21 @@ function EditorWrapper({
   onPersist?: (m: Mode, wasNew: boolean) => void;
 }) {
   return (
-    <ModeEditor
-      mode={mode}
-      isNew={isNew}
-      onClose={onClose}
-      onPersist={onPersist}
-    />
+    <MemoryRouter>
+      <ModeEditor
+        mode={mode}
+        isNew={isNew}
+        onClose={onClose}
+        onPersist={onPersist}
+      />
+    </MemoryRouter>
   );
 }
 
 beforeEach(() => {
   vi.mocked(mockUpdateMode).mockResolvedValue(undefined);
   vi.mocked(mockAddMode).mockResolvedValue(undefined);
+  vi.mocked(mockGetLocalModelStatuses).mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -211,6 +216,7 @@ const BASE_SETTINGS: Settings = {
   history_limit: 5,
   show_in_dock: false,
   show_live_preview: true,
+  local_whisper_idle_timeout: "fifteen_minutes",
 };
 
 function ModesPageWrapper({ settings }: { settings: Settings }) {
@@ -353,5 +359,44 @@ describe("ModeEditor – correction sets", () => {
     expect(vi.mocked(mockUpdateMode)).toHaveBeenCalledWith(
       expect.objectContaining({ correction_set_ids: [] }),
     );
+  });
+});
+
+describe("ModeEditor – local model picker", () => {
+  const LOCAL_MODE: Mode = {
+    ...MODE,
+    provider_model: { provider: "local", model: "large_v3_turbo" },
+  };
+
+  it("shows Model picker when provider is Local", () => {
+    render(<EditorWrapper mode={LOCAL_MODE} />);
+    expect(screen.getByText("Model")).toBeInTheDocument();
+  });
+
+  it("shows download hint when some local models are not downloaded", async () => {
+    vi.mocked(mockGetLocalModelStatuses).mockResolvedValue([
+      { model: "large_v3_turbo", downloaded: false, downloading: false, size_bytes: 0 },
+      { model: "large_v3", downloaded: false, downloading: false, size_bytes: 0 },
+    ]);
+    render(<EditorWrapper mode={LOCAL_MODE} />);
+    await waitFor(() =>
+      expect(screen.getByText(/Providers → Local Models/)).toBeInTheDocument(),
+    );
+  });
+
+  it("does not show download hint when all local models are downloaded", async () => {
+    vi.mocked(mockGetLocalModelStatuses).mockResolvedValue([
+      { model: "large_v3_turbo", downloaded: true, downloading: false, size_bytes: 0 },
+      { model: "large_v3", downloaded: true, downloading: false, size_bytes: 0 },
+    ]);
+    render(<EditorWrapper mode={LOCAL_MODE} />);
+    await waitFor(() =>
+      expect(screen.queryByText(/Providers → Local Models/)).not.toBeInTheDocument(),
+    );
+  });
+
+  it("does not show Model picker when provider is Deepgram", () => {
+    render(<EditorWrapper mode={MODE} />);
+    expect(screen.queryByText("Model")).not.toBeInTheDocument();
   });
 });

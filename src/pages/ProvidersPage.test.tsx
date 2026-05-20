@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -18,6 +18,11 @@ vi.mock("../lib/api", () => ({
   setAnthropicApiKey: vi.fn(),
   setAnthropicOauthToken: vi.fn(),
   setCleanupThresholds: vi.fn(),
+  getLocalModelStatuses: vi.fn().mockResolvedValue([]),
+  startModelDownload: vi.fn(),
+  cancelModelDownload: vi.fn(),
+  deleteLocalModel: vi.fn(),
+  setLocalWhisperIdleTimeout: vi.fn().mockResolvedValue(undefined),
 }));
 
 const BASE_SETTINGS: Settings = {
@@ -40,6 +45,7 @@ const BASE_SETTINGS: Settings = {
   history_limit: 5,
   show_in_dock: false,
   show_live_preview: true,
+  local_whisper_idle_timeout: "fifteen_minutes",
 };
 
 function Wrapper({ settings = BASE_SETTINGS }: { settings?: Settings }) {
@@ -75,5 +81,24 @@ describe("ProvidersPage", () => {
     render(<Wrapper />);
     const apiKeyLabels = screen.getAllByText("API key");
     expect(apiKeyLabels.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("LocalModelsField idle timeout", () => {
+  it("shows idle timeout label when local models are present", async () => {
+    const { getLocalModelStatuses } = await import("../lib/api");
+    vi.mocked(getLocalModelStatuses).mockResolvedValue([
+      { model: "large_v3_turbo", downloaded: true, downloading: false, size_bytes: 1_624_555_275 },
+    ]);
+    render(<Wrapper />);
+    await waitFor(() => expect(screen.getByText("Idle timeout")).toBeInTheDocument());
+  });
+
+  it("does not show idle timeout when no local models are present", async () => {
+    const { getLocalModelStatuses } = await import("../lib/api");
+    vi.mocked(getLocalModelStatuses).mockResolvedValue([]);
+    render(<Wrapper />);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText("Idle timeout")).not.toBeInTheDocument();
   });
 });

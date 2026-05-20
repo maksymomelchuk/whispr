@@ -1,16 +1,19 @@
 use crate::api_key_validation::{self, ApiKeyValidation};
 use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
 use crate::config::{
-    self, CleanupAuthMode, HotkeyBinding, NamedCorrectionSet, NamedTermSet, Settings, SnippetEntry,
+    self, CleanupAuthMode, HotkeyBinding, LocalWhisperIdleTimeout, NamedCorrectionSet, NamedTermSet, Settings, SnippetEntry,
 };
+use crate::download::{self, LocalModelStatus, MODEL_DOWNLOAD_COMPLETE_EVENT, MODEL_DOWNLOAD_ERROR_EVENT};
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::mode::{Mode, ModeId, SetId};
 use crate::permissions;
-use crate::provider::GroqModel;
+use crate::provider::{local_model_path, GroqModel, LocalWhisperModel};
 use crate::state::AppState;
 use crate::stats::{self, StatsRow, STATS_UPDATED_EVENT};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use tauri::{AppHandle, Emitter, Manager, State};
 
 /// Public projection of Settings for the webview. Omits API keys so a
 /// webview XSS cannot read them back over IPC. Keys are write-only from the
@@ -36,6 +39,7 @@ pub struct SettingsView {
     pub history_limit: Option<usize>,
     pub show_in_dock: bool,
     pub show_live_preview: bool,
+    pub local_whisper_idle_timeout: LocalWhisperIdleTimeout,
 }
 
 impl From<Settings> for SettingsView {
@@ -76,6 +80,7 @@ impl From<Settings> for SettingsView {
             history_limit: s.history_limit,
             show_in_dock: s.show_in_dock,
             show_live_preview: s.show_live_preview,
+            local_whisper_idle_timeout: s.local_whisper.idle_timeout,
         }
     }
 }
@@ -447,6 +452,111 @@ pub fn open_microphone_settings() {
     permissions::open_microphone_settings();
 }
 
+#[tauri::command]
+pub fn get_local_model_statuses(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Vec<LocalModelStatus> {
+    let data_dir = match app.path().app_data_dir() {
+        Ok(d) => d,
+        Err(_) => return vec![],
+    };
+    let flags = state.download_cancel_flags.lock().unwrap();
+    [LocalWhisperModel::LargeV3, LocalWhisperModel::LargeV3Turbo]
+        .iter()
+        .map(|&model| {
+            let path = local_model_path(&data_dir, model);
+            LocalModelStatus {
+                model,
+                downloaded: path.exists(),
+                downloading: flags.contains_key(&model),
+                size_bytes: download::model_size_bytes(model),
+            }
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub async fn start_model_download(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    model: LocalWhisperModel,
+) -> Result<(), String> {
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    {
+        let mut flags = state.download_cancel_flags.lock().unwrap();
+        if flags.contains_key(&model) {
+            return Err("Download already in progress".to_string());
+        }
+        flags.insert(model, cancel_flag.clone());
+    }
+
+    let cancel_flags = Arc::clone(&state.download_cancel_flags);
+    let app_clone = app.clone();
+    tokio::spawn(async move {
+        let result = download::download_model(app_clone.clone(), model, cancel_flag).await;
+        cancel_flags.lock().unwrap().remove(&model);
+        match result {
+            Ok(()) => {
+                let _ = app_clone.emit(MODEL_DOWNLOAD_COMPLETE_EVENT, model);
+            }
+            Err(ref msg) if msg == "Cancelled" => {}
+            Err(e) => {
+                let _ = app_clone.emit(
+                    MODEL_DOWNLOAD_ERROR_EVENT,
+                    download::ModelDownloadError { model, message: e },
+                );
+            }
+        }
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn cancel_model_download(
+    state: State<'_, AppState>,
+    model: LocalWhisperModel,
+) -> Result<(), String> {
+    let flags = state.download_cancel_flags.lock().unwrap();
+    match flags.get(&model) {
+        Some(flag) => {
+            flag.store(true, Ordering::Relaxed);
+            Ok(())
+        }
+        None => Err("No active download for this model".to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn delete_local_model(app: AppHandle, model: LocalWhisperModel) -> Result<(), String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let path = local_model_path(&data_dir, model);
+    if path.exists() {
+        std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_local_model_path(app: AppHandle, model: LocalWhisperModel) -> Result<String, String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let path = local_model_path(&data_dir, model);
+    if !path.exists() {
+        return Err("Model file not found".to_string());
+    }
+    path.to_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| "Model path is not valid UTF-8".to_string())
+}
+
+#[tauri::command]
+pub fn set_local_whisper_idle_timeout(app: AppHandle, timeout: LocalWhisperIdleTimeout) -> Result<(), String> {
+    config::update(&app, |s| {
+        s.local_whisper.idle_timeout = timeout;
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -461,6 +571,12 @@ mod tests {
         assert_eq!(view.hotkey_bindings.len(), 1);
         assert_eq!(view.hotkey_bindings[0].shortcut.key, "AltRight");
         assert!(view.term_sets.is_empty());
+    }
+
+    #[test]
+    fn settings_view_exposes_local_whisper_idle_timeout_with_fifteen_minute_default() {
+        let view: SettingsView = Settings::default().into();
+        assert_eq!(view.local_whisper_idle_timeout, LocalWhisperIdleTimeout::FifteenMinutes);
     }
 
     #[test]

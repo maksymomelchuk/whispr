@@ -6,8 +6,9 @@ import {
   TrashIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react";
+import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +52,7 @@ import {
   deleteMode,
   duplicateMode,
   formatShortcut,
+  getLocalModelStatuses,
   getSettings,
   setDefaultMode,
   updateMode,
@@ -59,6 +61,8 @@ import type {
   AssemblyAiModel,
   GroqModel,
   HotkeyBinding,
+  LocalModelStatus,
+  LocalWhisperModel,
   Mode,
   ModeLanguage,
   NamedCorrectionSet,
@@ -72,7 +76,13 @@ const PROVIDER_OPTIONS: { value: ProviderModel["provider"]; label: string }[] =
     { value: "deepgram", label: "Deepgram" },
     { value: "groq", label: "Groq" },
     { value: "assembly_ai", label: "AssemblyAI" },
+    { value: "local", label: "Local — Whisper" },
   ];
+
+const LOCAL_MODEL_OPTIONS: { value: LocalWhisperModel; label: string }[] = [
+  { value: "large_v3_turbo", label: "Large v3 Turbo" },
+  { value: "large_v3", label: "Large v3" },
+];
 
 const GROQ_MODEL_OPTIONS: { value: GroqModel; label: string }[] = [
   { value: "whisper_large_v3_turbo", label: "Whisper Large v3-turbo" },
@@ -96,6 +106,8 @@ function defaultProviderModel(
     return { provider: "groq", model: "whisper_large_v3_turbo" };
   if (provider === "assembly_ai")
     return { provider: "assembly_ai", model: "universal_pro_streaming" };
+  if (provider === "local")
+    return { provider: "local", model: "large_v3_turbo" };
   return { provider: "deepgram" };
 }
 
@@ -398,6 +410,7 @@ export function ModeEditor({
   const [promptOpen, setPromptOpen] = useState(
     !!mode.ai_cleanup.prompt_override,
   );
+  const [localStatuses, setLocalStatuses] = useState<LocalModelStatus[] | null>(null);
 
   // Language UI state — kept separate so chip list survives toggling to Auto.
   const [langMode, setLangMode] = useState<"auto" | "restrict">(
@@ -432,6 +445,9 @@ export function ModeEditor({
 
   const setAssemblyAiModel = (model: AssemblyAiModel) =>
     setProviderModel({ provider: "assembly_ai", model });
+
+  const setLocalModel = (model: LocalWhisperModel) =>
+    setProviderModel({ provider: "local", model });
 
   const setName = (name: string) => setDraft((d) => ({ ...d, name }));
   const setCleanup = (enabled: boolean) =>
@@ -522,6 +538,37 @@ export function ModeEditor({
         });
     };
   }, [isNew]);
+
+  useEffect(() => {
+    getLocalModelStatuses()
+      .then(setLocalStatuses)
+      .catch(() => setLocalStatuses([]));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    const attach = async () => {
+      const fn = await listen<LocalWhisperModel>("model-download-complete", (e) => {
+        const model = e.payload;
+        setLocalStatuses((prev) =>
+          prev?.map((s) => (s.model === model ? { ...s, downloaded: true } : s)) ?? prev,
+        );
+      });
+      if (cancelled) {
+        fn();
+        return;
+      }
+      unlisten = fn;
+    };
+
+    attach();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
 
   const handleCreate = async () => {
     setCreating(true);
@@ -614,6 +661,49 @@ export function ModeEditor({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+        )}
+
+        {draft.provider_model.provider === "local" && (
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[13px]">Model</Label>
+            <Select
+              value={draft.provider_model.model}
+              onValueChange={(v) => setLocalModel(v as LocalWhisperModel)}
+            >
+              <SelectTrigger size="sm" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LOCAL_MODEL_OPTIONS.map((opt) => {
+                  const downloaded =
+                    localStatuses?.find((s) => s.model === opt.value)
+                      ?.downloaded ?? false;
+                  return (
+                    <SelectItem
+                      key={opt.value}
+                      value={opt.value}
+                      disabled={!downloaded}
+                    >
+                      {opt.label}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+            {localStatuses !== null &&
+              localStatuses.some((s) => !s.downloaded) && (
+                <p className="text-help text-muted-foreground">
+                  Download models in{" "}
+                  <Link
+                    to="/providers"
+                    className="underline hover:text-foreground transition-colors"
+                  >
+                    Providers → Local Models
+                  </Link>
+                  .
+                </p>
+              )}
           </div>
         )}
 
