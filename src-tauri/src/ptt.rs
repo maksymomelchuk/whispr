@@ -3,6 +3,7 @@ use crate::provider::{self, LocalWhisperModel, ProviderModel, TranscriptionProvi
 use crate::assemblyai_session::AssemblyAiSession;
 use crate::deepgram_session::DeepgramSession;
 use crate::groq_session::GroqSession;
+use crate::local_session::LocalSession;
 use crate::history::{self, CleanupStatus, HISTORY_UPDATED_EVENT};
 use crate::mode::TranslateTarget;
 use crate::pipeline::{self, merge_notices, CleanupOutput, Notice};
@@ -503,7 +504,11 @@ async fn run_session(
                 .run(app.clone(), format, chunk_rx, mode_language, session_terms, active_mode)
                 .await
         }
-        ProviderModel::Local { .. } => Err("Local inference not yet implemented.".to_string()),
+        ProviderModel::Local { model } => {
+            LocalSession { model: *model }
+                .run(app.clone(), format, chunk_rx, mode_language, session_terms, active_mode)
+                .await
+        }
     };
 
     let (raw_text, speak_duration) = match session_result {

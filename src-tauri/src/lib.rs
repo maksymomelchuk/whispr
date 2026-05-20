@@ -48,6 +48,8 @@ mod assemblyai_session;
 #[cfg(target_os = "macos")]
 mod groq_session;
 #[cfg(target_os = "macos")]
+mod local_session;
+#[cfg(target_os = "macos")]
 pub mod transcription_session;
 
 // Modules that wrap macOS-only APIs (CGEventTap, CGEventPost, CoreAudio via
