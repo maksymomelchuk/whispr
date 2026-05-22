@@ -262,7 +262,6 @@ export function StatsTab() {
     <section className="flex flex-col gap-5">
       <SectionHeader
         title="Dictation stats"
-        badge={<InfoTip text="Words dictated and your effective words per minute." />}
         control={
           <div className="flex items-center gap-2">
             {hasAny && (

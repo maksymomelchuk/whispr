@@ -1,7 +1,7 @@
 use crate::api_key_validation::{self, ApiKeyValidation};
 use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
 use crate::config::{
-    self, CleanupAuthMode, HotkeyBinding, LocalWhisperIdleTimeout, NamedCorrectionSet, NamedTermSet, Settings, SnippetEntry,
+    self, CleanupAuthMode, HotkeyAction, HotkeyBinding, LocalWhisperIdleTimeout, NamedCorrectionSet, NamedTermSet, Settings, SnippetEntry,
 };
 use crate::download::{self, LocalModelStatus, MODEL_DOWNLOAD_COMPLETE_EVENT, MODEL_DOWNLOAD_ERROR_EVENT};
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
@@ -133,7 +133,7 @@ pub fn set_hotkey_bindings(
     bindings: Vec<HotkeyBinding>,
 ) -> Result<(), String> {
     config::check_hotkey_conflicts(&bindings)?;
-    config::check_one_binding_per_mode(&bindings)?;
+    config::check_action_constraints(&bindings)?;
     config::update(&app, |s| s.hotkey_bindings = bindings.clone())?;
     // Live-update the PTT listener so the change takes effect immediately.
     *state.hotkey_bindings.lock().unwrap() = bindings;
@@ -268,12 +268,20 @@ pub fn delete_mode(
     config::update_fallible(&app, |s| {
         config::check_delete_mode(s, &id)?;
         s.modes.retain(|m| m.id != id);
-        s.hotkey_bindings.retain(|b| b.mode_id != id);
+        s.hotkey_bindings.retain(|b| !is_ptt_for_mode(&b.action, &id));
         Ok(())
     })?;
     // Live-update the PTT listener.
-    state.hotkey_bindings.lock().unwrap().retain(|b| b.mode_id != id);
+    state
+        .hotkey_bindings
+        .lock()
+        .unwrap()
+        .retain(|b| !is_ptt_for_mode(&b.action, &id));
     Ok(())
+}
+
+fn is_ptt_for_mode(action: &HotkeyAction, id: &str) -> bool {
+    matches!(action, HotkeyAction::Ptt { mode_id } if mode_id == id)
 }
 
 #[tauri::command]

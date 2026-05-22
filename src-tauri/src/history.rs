@@ -104,6 +104,23 @@ pub fn clear(app: &tauri::AppHandle) -> Result<(), String> {
     save(app, &[])
 }
 
+/// Returns the most recent history entry, or `None` if history is empty or
+/// disabled. History is stored newest-first, so this is just the head.
+pub fn latest(app: &tauri::AppHandle) -> Option<HistoryEntry> {
+    load(app).into_iter().next()
+}
+
+/// The text that was originally pasted for `entry` — `final_text` if cleanup
+/// ran, otherwise `replaced_text`. Matches the resolution used by the
+/// dictation pipeline so "paste latest" reproduces what the user already saw.
+pub fn pasted_text(entry: &HistoryEntry) -> &str {
+    if matches!(entry.cleanup_status, CleanupStatus::Ran) {
+        &entry.final_text
+    } else {
+        &entry.replaced_text
+    }
+}
+
 /// Apply the limit to the existing on-disk history. Used when the user
 /// changes the limit setting so the change takes effect immediately rather
 /// than waiting for the next dictation.

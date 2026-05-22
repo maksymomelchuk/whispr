@@ -39,16 +39,74 @@ impl Default for Shortcut {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum HotkeyAction {
+    Ptt { mode_id: ModeId },
+    PasteLatest,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct HotkeyBinding {
     pub shortcut: Shortcut,
-    pub mode_id: ModeId,
+    pub action: HotkeyAction,
+}
+
+impl HotkeyBinding {
+    pub fn ptt(shortcut: Shortcut, mode_id: ModeId) -> Self {
+        Self {
+            shortcut,
+            action: HotkeyAction::Ptt { mode_id },
+        }
+    }
+
+    pub fn paste_latest(shortcut: Shortcut) -> Self {
+        Self {
+            shortcut,
+            action: HotkeyAction::PasteLatest,
+        }
+    }
+}
+
+/// Accepts both the new `{shortcut, action}` shape and the legacy
+/// `{shortcut, mode_id}` shape. Legacy entries deserialize as
+/// `HotkeyAction::Ptt { mode_id }` so existing settings.json files keep
+/// working across this upgrade.
+impl<'de> Deserialize<'de> for HotkeyBinding {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Raw {
+            shortcut: Shortcut,
+            #[serde(default)]
+            action: Option<HotkeyAction>,
+            #[serde(default)]
+            mode_id: Option<ModeId>,
+        }
+
+        let raw = Raw::deserialize(deserializer)?;
+        let action = match (raw.action, raw.mode_id) {
+            (Some(action), _) => action,
+            (None, Some(mode_id)) => HotkeyAction::Ptt { mode_id },
+            (None, None) => {
+                return Err(serde::de::Error::custom(
+                    "hotkey binding must have either `action` or legacy `mode_id`",
+                ))
+            }
+        };
+        Ok(HotkeyBinding {
+            shortcut: raw.shortcut,
+            action,
+        })
+    }
 }
 
 pub fn default_hotkey_bindings() -> Vec<HotkeyBinding> {
-    vec![HotkeyBinding {
-        shortcut: Shortcut::default(),
-        mode_id: SEED_MODE_DEFAULT_EN.to_string(),
-    }]
+    vec![HotkeyBinding::ptt(
+        Shortcut::default(),
+        SEED_MODE_DEFAULT_EN.to_string(),
+    )]
 }
 
 /// Returns `Err` if any two bindings share the same (key, modifiers, is_double_tap) triple.
@@ -67,17 +125,30 @@ pub fn check_hotkey_conflicts(bindings: &[HotkeyBinding]) -> Result<(), String> 
     Ok(())
 }
 
-/// Each mode supports at most one hotkey binding. Two bindings for the same
-/// mode would fire identical actions on different gestures — redundant and
-/// confusing in the UI.
-pub fn check_one_binding_per_mode(bindings: &[HotkeyBinding]) -> Result<(), String> {
-    let mut seen: HashSet<&str> = HashSet::new();
+/// At most one binding per PTT mode_id, and at most one PasteLatest binding total.
+/// Two bindings for the same action would fire identically on different gestures —
+/// redundant and confusing in the UI.
+pub fn check_action_constraints(bindings: &[HotkeyBinding]) -> Result<(), String> {
+    let mut seen_modes: HashSet<&str> = HashSet::new();
+    let mut paste_latest_count = 0;
     for b in bindings {
-        if !seen.insert(b.mode_id.as_str()) {
-            return Err(format!(
-                "Mode '{}' already has a hotkey. Each mode supports a single binding.",
-                b.mode_id
-            ));
+        match &b.action {
+            HotkeyAction::Ptt { mode_id } => {
+                if !seen_modes.insert(mode_id.as_str()) {
+                    return Err(format!(
+                        "Mode '{mode_id}' already has a hotkey. Each mode supports a single binding."
+                    ));
+                }
+            }
+            HotkeyAction::PasteLatest => {
+                paste_latest_count += 1;
+                if paste_latest_count > 1 {
+                    return Err(
+                        "Paste Latest already has a hotkey. Only one Paste Latest binding is allowed."
+                            .to_string(),
+                    );
+                }
+            }
         }
     }
     Ok(())
@@ -576,30 +647,44 @@ fn migrate(s: &mut Settings) -> bool {
     // On first load after this upgrade the bindings list will be empty
     // (the old JSON only has "shortcut"). Seed it from the legacy field.
     if s.hotkey_bindings.is_empty() {
-        s.hotkey_bindings.push(HotkeyBinding {
-            shortcut: s.legacy_shortcut.clone(),
-            mode_id: s.default_mode_id.clone(),
-        });
+        s.hotkey_bindings.push(HotkeyBinding::ptt(
+            s.legacy_shortcut.clone(),
+            s.default_mode_id.clone(),
+        ));
         changed = true;
     }
 
-    // Drop bindings that reference a mode that no longer exists.
+    // Drop PTT bindings that reference a mode that no longer exists.
+    // PasteLatest bindings are independent of modes and always retained.
     {
         let mode_ids: HashSet<&str> = s.modes.iter().map(|m| m.id.as_str()).collect();
         let before = s.hotkey_bindings.len();
-        s.hotkey_bindings
-            .retain(|b| mode_ids.contains(b.mode_id.as_str()));
+        s.hotkey_bindings.retain(|b| match &b.action {
+            HotkeyAction::Ptt { mode_id } => mode_ids.contains(mode_id.as_str()),
+            HotkeyAction::PasteLatest => true,
+        });
         if s.hotkey_bindings.len() != before {
             changed = true;
         }
     }
 
-    // Collapse to one binding per mode. Older settings (pre one-binding-per-mode)
+    // Collapse duplicates per action. Older settings (pre one-binding-per-action)
     // could carry duplicates; keep the first occurrence and drop the rest.
     {
         let before = s.hotkey_bindings.len();
-        let mut seen: HashSet<String> = HashSet::new();
-        s.hotkey_bindings.retain(|b| seen.insert(b.mode_id.clone()));
+        let mut seen_modes: HashSet<String> = HashSet::new();
+        let mut seen_paste_latest = false;
+        s.hotkey_bindings.retain(|b| match &b.action {
+            HotkeyAction::Ptt { mode_id } => seen_modes.insert(mode_id.clone()),
+            HotkeyAction::PasteLatest => {
+                if seen_paste_latest {
+                    false
+                } else {
+                    seen_paste_latest = true;
+                    true
+                }
+            }
+        });
         if s.hotkey_bindings.len() != before {
             changed = true;
         }
@@ -1276,7 +1361,12 @@ mod tests {
         assert!(changed);
         assert_eq!(s.hotkey_bindings.len(), 1);
         assert_eq!(s.hotkey_bindings[0].shortcut.key, "MetaRight");
-        assert_eq!(s.hotkey_bindings[0].mode_id, SEED_MODE_DEFAULT_EN);
+        assert_eq!(
+            s.hotkey_bindings[0].action,
+            HotkeyAction::Ptt {
+                mode_id: SEED_MODE_DEFAULT_EN.to_string()
+            }
+        );
         // Serialized form must not contain legacy "shortcut" key.
         let reserialized = serde_json::to_string(&s).unwrap();
         let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
@@ -1299,19 +1389,24 @@ mod tests {
     #[test]
     fn migration_drops_orphaned_bindings_for_deleted_modes() {
         let mut s = Settings::default();
-        s.hotkey_bindings.push(HotkeyBinding {
-            shortcut: Shortcut {
+        s.hotkey_bindings.push(HotkeyBinding::ptt(
+            Shortcut {
                 key: "MetaRight".to_string(),
                 modifiers: vec![],
                 is_double_tap: false,
             },
-            mode_id: "mode-nonexistent".to_string(),
-        });
+            "mode-nonexistent".to_string(),
+        ));
         assert_eq!(s.hotkey_bindings.len(), 2);
         let changed = migrate(&mut s);
         assert!(changed);
         assert_eq!(s.hotkey_bindings.len(), 1);
-        assert_eq!(s.hotkey_bindings[0].mode_id, SEED_MODE_DEFAULT_EN);
+        assert_eq!(
+            s.hotkey_bindings[0].action,
+            HotkeyAction::Ptt {
+                mode_id: SEED_MODE_DEFAULT_EN.to_string()
+            }
+        );
     }
 
     #[test]
@@ -1319,20 +1414,25 @@ mod tests {
         let s = Settings::default();
         assert_eq!(s.hotkey_bindings.len(), 1);
         assert_eq!(s.hotkey_bindings[0].shortcut.key, "AltRight");
-        assert_eq!(s.hotkey_bindings[0].mode_id, SEED_MODE_DEFAULT_EN);
+        assert_eq!(
+            s.hotkey_bindings[0].action,
+            HotkeyAction::Ptt {
+                mode_id: SEED_MODE_DEFAULT_EN.to_string()
+            }
+        );
     }
 
     #[test]
     fn check_hotkey_conflicts_allows_distinct_shortcuts() {
         let bindings = vec![
-            HotkeyBinding {
-                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
-                mode_id: "mode-default-en".to_string(),
-            },
-            HotkeyBinding {
-                shortcut: Shortcut { key: "MetaRight".to_string(), modifiers: vec![], is_double_tap: false },
-                mode_id: "mode-cleaned-en".to_string(),
-            },
+            HotkeyBinding::ptt(
+                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                "mode-default-en".to_string(),
+            ),
+            HotkeyBinding::ptt(
+                Shortcut { key: "MetaRight".to_string(), modifiers: vec![], is_double_tap: false },
+                "mode-cleaned-en".to_string(),
+            ),
         ];
         assert!(check_hotkey_conflicts(&bindings).is_ok());
     }
@@ -1340,14 +1440,14 @@ mod tests {
     #[test]
     fn check_hotkey_conflicts_rejects_duplicate_shortcuts() {
         let bindings = vec![
-            HotkeyBinding {
-                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
-                mode_id: "mode-default-en".to_string(),
-            },
-            HotkeyBinding {
-                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
-                mode_id: "mode-cleaned-en".to_string(),
-            },
+            HotkeyBinding::ptt(
+                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                "mode-default-en".to_string(),
+            ),
+            HotkeyBinding::ptt(
+                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                "mode-cleaned-en".to_string(),
+            ),
         ];
         assert!(check_hotkey_conflicts(&bindings).is_err());
     }
@@ -1363,60 +1463,93 @@ mod tests {
     #[test]
     fn check_hotkey_conflicts_allows_single_press_and_double_tap_same_key() {
         let bindings = vec![
-            HotkeyBinding {
-                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
-                mode_id: "mode-default-en".to_string(),
-            },
-            HotkeyBinding {
-                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
-                mode_id: "mode-cleaned-en".to_string(),
-            },
+            HotkeyBinding::ptt(
+                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                "mode-default-en".to_string(),
+            ),
+            HotkeyBinding::ptt(
+                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
+                "mode-cleaned-en".to_string(),
+            ),
         ];
         assert!(check_hotkey_conflicts(&bindings).is_ok());
     }
 
     #[test]
-    fn check_one_binding_per_mode_allows_distinct_modes() {
+    fn check_action_constraints_allows_distinct_modes() {
         let bindings = vec![
-            HotkeyBinding {
-                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
-                mode_id: "mode-default-en".to_string(),
-            },
-            HotkeyBinding {
-                shortcut: Shortcut { key: "MetaRight".to_string(), modifiers: vec![], is_double_tap: false },
-                mode_id: "mode-cleaned-en".to_string(),
-            },
+            HotkeyBinding::ptt(
+                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                "mode-default-en".to_string(),
+            ),
+            HotkeyBinding::ptt(
+                Shortcut { key: "MetaRight".to_string(), modifiers: vec![], is_double_tap: false },
+                "mode-cleaned-en".to_string(),
+            ),
         ];
-        assert!(check_one_binding_per_mode(&bindings).is_ok());
+        assert!(check_action_constraints(&bindings).is_ok());
     }
 
     #[test]
-    fn check_one_binding_per_mode_rejects_duplicate_mode() {
+    fn check_action_constraints_rejects_duplicate_mode() {
         let bindings = vec![
-            HotkeyBinding {
-                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
-                mode_id: "mode-default-en".to_string(),
-            },
-            HotkeyBinding {
-                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
-                mode_id: "mode-default-en".to_string(),
-            },
+            HotkeyBinding::ptt(
+                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                "mode-default-en".to_string(),
+            ),
+            HotkeyBinding::ptt(
+                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
+                "mode-default-en".to_string(),
+            ),
         ];
-        assert!(check_one_binding_per_mode(&bindings).is_err());
+        assert!(check_action_constraints(&bindings).is_err());
+    }
+
+    #[test]
+    fn check_action_constraints_rejects_two_paste_latest_bindings() {
+        let bindings = vec![
+            HotkeyBinding::paste_latest(Shortcut {
+                key: "F1".to_string(),
+                modifiers: vec![],
+                is_double_tap: false,
+            }),
+            HotkeyBinding::paste_latest(Shortcut {
+                key: "F2".to_string(),
+                modifiers: vec![],
+                is_double_tap: false,
+            }),
+        ];
+        assert!(check_action_constraints(&bindings).is_err());
+    }
+
+    #[test]
+    fn check_action_constraints_allows_ptt_and_paste_latest_together() {
+        let bindings = vec![
+            HotkeyBinding::ptt(
+                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                "mode-default-en".to_string(),
+            ),
+            HotkeyBinding::paste_latest(Shortcut {
+                key: "F1".to_string(),
+                modifiers: vec![],
+                is_double_tap: false,
+            }),
+        ];
+        assert!(check_action_constraints(&bindings).is_ok());
     }
 
     #[test]
     fn migration_collapses_duplicate_mode_bindings_to_first() {
         let mut s = Settings::default();
         s.hotkey_bindings = vec![
-            HotkeyBinding {
-                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
-                mode_id: SEED_MODE_DEFAULT_EN.to_string(),
-            },
-            HotkeyBinding {
-                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
-                mode_id: SEED_MODE_DEFAULT_EN.to_string(),
-            },
+            HotkeyBinding::ptt(
+                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                SEED_MODE_DEFAULT_EN.to_string(),
+            ),
+            HotkeyBinding::ptt(
+                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
+                SEED_MODE_DEFAULT_EN.to_string(),
+            ),
         ];
         let changed = migrate(&mut s);
         assert!(changed);
@@ -1426,16 +1559,104 @@ mod tests {
     }
 
     #[test]
+    fn migration_collapses_duplicate_paste_latest_bindings_to_first() {
+        let mut s = Settings::default();
+        s.hotkey_bindings.push(HotkeyBinding::paste_latest(Shortcut {
+            key: "F1".to_string(),
+            modifiers: vec![],
+            is_double_tap: false,
+        }));
+        s.hotkey_bindings.push(HotkeyBinding::paste_latest(Shortcut {
+            key: "F2".to_string(),
+            modifiers: vec![],
+            is_double_tap: false,
+        }));
+        let changed = migrate(&mut s);
+        assert!(changed);
+        let paste_latest_count = s
+            .hotkey_bindings
+            .iter()
+            .filter(|b| matches!(b.action, HotkeyAction::PasteLatest))
+            .count();
+        assert_eq!(paste_latest_count, 1);
+    }
+
+    #[test]
+    fn legacy_hotkey_binding_with_mode_id_deserializes_as_ptt_action() {
+        let json = r#"{"shortcut": {"key": "AltRight", "modifiers": []}, "mode_id": "mode-default-en"}"#;
+        let binding: HotkeyBinding = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            binding.action,
+            HotkeyAction::Ptt {
+                mode_id: "mode-default-en".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn legacy_settings_with_mode_id_bindings_migrate_to_ptt_actions() {
+        let json = r#"{
+            "hotkey_bindings": [
+                {"shortcut": {"key": "AltRight", "modifiers": []}, "mode_id": "mode-default-en"}
+            ]
+        }"#;
+        let s = from_json(json).unwrap();
+        assert_eq!(s.hotkey_bindings.len(), 1);
+        assert_eq!(
+            s.hotkey_bindings[0].action,
+            HotkeyAction::Ptt {
+                mode_id: "mode-default-en".to_string()
+            }
+        );
+        let reserialized = serde_json::to_string(&s).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
+        let bindings = v["hotkey_bindings"].as_array().unwrap();
+        assert!(
+            bindings[0].get("mode_id").is_none(),
+            "legacy mode_id must drop out of subsequent saves"
+        );
+        assert!(bindings[0].get("action").is_some());
+    }
+
+    #[test]
+    fn paste_latest_binding_round_trips_through_json() {
+        let binding = HotkeyBinding::paste_latest(Shortcut {
+            key: "F1".to_string(),
+            modifiers: vec![],
+            is_double_tap: false,
+        });
+        let json = serde_json::to_string(&binding).unwrap();
+        let decoded: HotkeyBinding = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded, binding);
+    }
+
+    #[test]
     fn check_hotkey_conflicts_rejects_two_double_tap_same_key() {
         let bindings = vec![
-            HotkeyBinding {
-                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
-                mode_id: "mode-default-en".to_string(),
-            },
-            HotkeyBinding {
-                shortcut: Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
-                mode_id: "mode-cleaned-en".to_string(),
-            },
+            HotkeyBinding::ptt(
+                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
+                "mode-default-en".to_string(),
+            ),
+            HotkeyBinding::ptt(
+                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
+                "mode-cleaned-en".to_string(),
+            ),
+        ];
+        assert!(check_hotkey_conflicts(&bindings).is_err());
+    }
+
+    #[test]
+    fn check_hotkey_conflicts_rejects_ptt_and_paste_latest_sharing_shortcut() {
+        let bindings = vec![
+            HotkeyBinding::ptt(
+                Shortcut { key: "F1".to_string(), modifiers: vec![], is_double_tap: false },
+                "mode-default-en".to_string(),
+            ),
+            HotkeyBinding::paste_latest(Shortcut {
+                key: "F1".to_string(),
+                modifiers: vec![],
+                is_double_tap: false,
+            }),
         ];
         assert!(check_hotkey_conflicts(&bindings).is_err());
     }

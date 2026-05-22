@@ -1,4 +1,4 @@
-use crate::config::{HotkeyBinding, Shortcut};
+use crate::config::{HotkeyAction, HotkeyBinding, Shortcut};
 use crate::provider::{self, LocalWhisperModel, ProviderModel, TranscriptionProvider};
 use crate::assemblyai_session::AssemblyAiSession;
 use crate::deepgram_session::DeepgramSession;
@@ -739,14 +739,19 @@ async fn maybe_cleanup(
 /// PTT-start sequence: mark active, capture the target app, spawn the STT
 /// session, show the overlay, notify the UI, and (optionally) pause media.
 /// Safe to call from the CGEventTap callback or from a tokio task.
-fn start_ptt(app: &AppHandle, state: &AppState, recorder: &Recorder, binding: &HotkeyBinding) {
+fn start_ptt(
+    app: &AppHandle,
+    state: &AppState,
+    recorder: &Recorder,
+    shortcut: &Shortcut,
+    mode_id: String,
+) {
     let mut active = state.ptt_active.lock().unwrap();
     if *active {
         return;
     }
     *active = true;
-    *state.active_shortcut.lock().unwrap() = Some(binding.shortcut.clone());
-    let mode_id = binding.mode_id.clone();
+    *state.active_shortcut.lock().unwrap() = Some(shortcut.clone());
     let device = state.input_device.lock().unwrap().clone();
     // Capture frontmost app before overlay::show so the worker's
     // frontmostApplication() lookup can't race any window-server bookkeeping
@@ -756,9 +761,52 @@ fn start_ptt(app: &AppHandle, state: &AppState, recorder: &Recorder, binding: &H
     // waiting for PTT release.
     spawn_session(app.clone(), recorder.clone(), device, mode_id);
     overlay::show(app);
-    let _ = app.emit(PTT_PRESSED_EVENT, &binding.shortcut);
+    let _ = app.emit(PTT_PRESSED_EVENT, shortcut);
     maybe_pause_media(state);
 }
+
+/// Fire-and-forget paste of the latest history entry. No overlay, no recording,
+/// no state mutation — re-injects the text the user already saw at the current
+/// cursor. Silent no-op when history is empty. Spawned off the CGEventTap
+/// callback so file I/O can't stall the event loop.
+fn fire_paste_latest(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(entry) = history::latest(&app) else {
+            return;
+        };
+        let text = history::pasted_text(&entry).to_string();
+        if text.is_empty() {
+            return;
+        }
+        paste::paste_text(text);
+    });
+}
+
+/// Dispatches a matched binding on KeyDown. PTT bindings flip into recording
+/// state and wait for the matching KeyUp; PasteLatest bindings fire-and-forget
+/// against the latest history entry. PasteLatest is suppressed while a PTT
+/// session is active so a stray double-tap during recording can't fire a
+/// stale paste at the same target.
+fn dispatch_binding(
+    app: &AppHandle,
+    state: &AppState,
+    recorder: &Recorder,
+    binding: &HotkeyBinding,
+) {
+    match &binding.action {
+        HotkeyAction::Ptt { mode_id } => {
+            start_ptt(app, state, recorder, &binding.shortcut, mode_id.clone());
+        }
+        HotkeyAction::PasteLatest => {
+            if *state.ptt_active.lock().unwrap() {
+                return;
+            }
+            fire_paste_latest(app);
+        }
+    }
+}
+
 
 pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
     std::thread::spawn(move || {
@@ -916,7 +964,7 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                             };
                             match outcome {
                                 CoexDown::FireDoubleTap => {
-                                    start_ptt(&app, &state, &recorder, dt_b);
+                                    dispatch_binding(&app, &state, &recorder, dt_b);
                                 }
                                 CoexDown::ScheduleSinglePress { captured_generation } => {
                                     let tap_states_for_timer = tap_states.clone();
@@ -940,7 +988,7 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                                             true
                                         };
                                         if should_fire {
-                                            start_ptt(
+                                            dispatch_binding(
                                                 &app_for_timer,
                                                 &state_for_timer,
                                                 &recorder_for_timer,
@@ -959,12 +1007,12 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                                 advance_tap_state(ts, TapEvent::Down, now)
                             };
                             if dispatch == Dispatch::StartPtt {
-                                start_ptt(&app, &state, &recorder, dt_b);
+                                dispatch_binding(&app, &state, &recorder, dt_b);
                             }
                         }
                         (Some(sp_b), None) => {
                             // Single-press only: fire immediately, no regression.
-                            start_ptt(&app, &state, &recorder, sp_b);
+                            dispatch_binding(&app, &state, &recorder, sp_b);
                         }
                         (None, None) => {}
                     }
@@ -1124,25 +1172,25 @@ mod tests {
     }
 
     fn sp_binding(key: &str) -> HotkeyBinding {
-        HotkeyBinding {
-            shortcut: Shortcut {
+        HotkeyBinding::ptt(
+            Shortcut {
                 key: key.to_string(),
                 modifiers: vec![],
                 is_double_tap: false,
             },
-            mode_id: "mode-a".to_string(),
-        }
+            "mode-a".to_string(),
+        )
     }
 
     fn dt_binding(key: &str) -> HotkeyBinding {
-        HotkeyBinding {
-            shortcut: Shortcut {
+        HotkeyBinding::ptt(
+            Shortcut {
                 key: key.to_string(),
                 modifiers: vec![],
                 is_double_tap: true,
             },
-            mode_id: "mode-b".to_string(),
-        }
+            "mode-b".to_string(),
+        )
     }
 
     #[test]
@@ -1166,14 +1214,14 @@ mod tests {
 
     #[test]
     fn key_has_both_kinds_distinguishes_by_modifiers() {
-        let with_shift = HotkeyBinding {
-            shortcut: Shortcut {
+        let with_shift = HotkeyBinding::ptt(
+            Shortcut {
                 key: "AltRight".to_string(),
                 modifiers: vec!["Shift".to_string()],
                 is_double_tap: true,
             },
-            mode_id: "mode-x".to_string(),
-        };
+            "mode-x".to_string(),
+        );
         let bindings = vec![sp_binding("AltRight"), with_shift];
         assert!(!key_has_both_kinds(&bindings, &bindings[0].shortcut));
         assert!(!key_has_both_kinds(&bindings, &bindings[1].shortcut));

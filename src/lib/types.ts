@@ -4,9 +4,32 @@ export interface Shortcut {
   is_double_tap?: boolean;
 }
 
+export type HotkeyAction =
+  | { type: "Ptt"; mode_id: string }
+  | { type: "PasteLatest" };
+
 export interface HotkeyBinding {
   shortcut: Shortcut;
-  mode_id: string;
+  action: HotkeyAction;
+}
+
+export function pttBinding(
+  shortcut: Shortcut,
+  modeId: string,
+): HotkeyBinding {
+  return { shortcut, action: { type: "Ptt", mode_id: modeId } };
+}
+
+export function pasteLatestBinding(shortcut: Shortcut): HotkeyBinding {
+  return { shortcut, action: { type: "PasteLatest" } };
+}
+
+export function isPasteLatestBinding(b: HotkeyBinding): boolean {
+  return b.action.type === "PasteLatest";
+}
+
+export function pttModeId(b: HotkeyBinding): string | null {
+  return b.action.type === "Ptt" ? b.action.mode_id : null;
 }
 
 export interface CorrectionEntry {

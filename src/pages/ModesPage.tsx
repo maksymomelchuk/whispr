@@ -69,7 +69,7 @@ import type {
   NamedTermSet,
   ProviderModel,
 } from "../lib/types";
-import { providerModelLanguageCodes } from "../lib/types";
+import { providerModelLanguageCodes, pttModeId } from "../lib/types";
 
 const PROVIDER_OPTIONS: { value: ProviderModel["provider"]; label: string }[] =
   [
@@ -998,7 +998,7 @@ export function ModesPage() {
               isDefault={mode.id === settings.default_mode_id}
               isLast={settings.modes.length === 1}
               bindings={settings.hotkey_bindings.filter(
-                (b) => b.mode_id === mode.id,
+                (b) => pttModeId(b) === mode.id,
               )}
               missingProviderKey={missingProviderKey}
               onEdit={() => openEditor(mode)}

@@ -15,6 +15,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+import { Separator } from "@/components/ui/separator";
+
 import { useSettings } from "../context/SettingsContext";
 import { useFlash } from "../hooks/useFlash";
 import { usePtt } from "../hooks/usePtt";
@@ -26,17 +28,42 @@ import {
   shortcutKey,
   shortcutsEqual,
 } from "../lib/shortcut";
+import {
+  isPasteLatestBinding,
+  pasteLatestBinding,
+  pttBinding,
+  pttModeId,
+} from "../lib/types";
 import type { HotkeyBinding, Mode, Shortcut } from "../lib/types";
 
 const CONFLICT_MESSAGE =
   "Two bindings use the same shortcut. Remove the conflict before saving.";
 
 const DEFAULT_SHORTCUT: Shortcut = { key: "AltRight", modifiers: [] };
+const PASTE_LATEST_TARGET_ID = "__paste_latest__";
+
+type RecorderTargetKind =
+  | { kind: "mode"; modeId: string }
+  | { kind: "paste_latest" };
 
 interface RecorderTarget {
-  modeId: string;
+  target: RecorderTargetKind;
   bindingIndex: number | null;
   current: Shortcut;
+}
+
+function targetId(target: RecorderTargetKind): string {
+  return target.kind === "mode" ? target.modeId : PASTE_LATEST_TARGET_ID;
+}
+
+function makeBindingForTarget(
+  target: RecorderTargetKind,
+  shortcut: Shortcut,
+): HotkeyBinding {
+  if (target.kind === "mode") {
+    return pttBinding(shortcut, target.modeId);
+  }
+  return pasteLatestBinding(shortcut);
 }
 
 function ArmedDot() {
@@ -230,7 +257,7 @@ export function HotkeysPage() {
 
   const persist = async (
     next: HotkeyBinding[],
-    flashSig?: { modeId: string; shortcut: Shortcut },
+    flashSig?: { targetId: string; shortcut: Shortcut },
   ) => {
     const hasAnyConflict = next.some((_, i) => hasConflict(next, i));
     if (hasAnyConflict) {
@@ -242,7 +269,7 @@ export function HotkeysPage() {
       await setHotkeyBindings(next);
       setSettings((s) => ({ ...s, hotkey_bindings: next }));
       if (flashSig) {
-        flash(rowFlashId(flashSig.modeId, flashSig.shortcut));
+        flash(rowFlashId(flashSig.targetId, flashSig.shortcut));
       }
     } catch (e) {
       setError(String(e));
@@ -255,39 +282,50 @@ export function HotkeysPage() {
 
   const handleRecordSave = async (shortcut: Shortcut) => {
     if (!recorderTarget) return;
-    const { modeId, bindingIndex } = recorderTarget;
+    const { target, bindingIndex } = recorderTarget;
     setRecorderTarget(null);
 
     let next: HotkeyBinding[];
     if (bindingIndex === null) {
-      next = [...bindings, { shortcut, mode_id: modeId }];
+      next = [...bindings, makeBindingForTarget(target, shortcut)];
     } else {
       next = bindings.map((b, i) =>
         i === bindingIndex ? { ...b, shortcut } : b,
       );
     }
-    await persist(next, { modeId, shortcut });
+    await persist(next, { targetId: targetId(target), shortcut });
   };
 
   const modeBindings = (mode: Mode) =>
     bindings
       .map((b, i) => ({ binding: b, index: i }))
-      .filter(({ binding }) => binding.mode_id === mode.id);
+      .filter(({ binding }) => pttModeId(binding) === mode.id);
 
-  const rowFlashId = (modeId: string, shortcut: Shortcut) =>
-    `${modeId}|${shortcutKey(shortcut)}`;
+  const pasteLatestBindings = bindings
+    .map((b, i) => ({ binding: b, index: i }))
+    .filter(({ binding }) => isPasteLatestBinding(binding));
+
+  const rowFlashId = (targetIdValue: string, shortcut: Shortcut) =>
+    `${targetIdValue}|${shortcutKey(shortcut)}`;
 
   return (
-    <div className="p-6 flex flex-col gap-8">
+    <div className="p-6 flex flex-col gap-6">
       {error && (
         <Alert variant="destructive" className="font-medium">
           {error}
         </Alert>
       )}
 
+      <div className="flex flex-col gap-5">
+        <p className="font-mono text-eyebrow uppercase text-foreground">
+          Dictation Modes
+        </p>
+        <div className="flex flex-col gap-8">
       {settings.modes.map((mode, modeIdx) => {
         const rows = modeBindings(mode);
-        const isRecordingForThisMode = recorderTarget?.modeId === mode.id;
+        const isRecordingForThisMode =
+          recorderTarget?.target.kind === "mode" &&
+          recorderTarget.target.modeId === mode.id;
         const recordingExistingIndex =
           isRecordingForThisMode && recorderTarget?.bindingIndex !== null
             ? recorderTarget?.bindingIndex
@@ -297,7 +335,12 @@ export function HotkeysPage() {
         const startRecording = (
           bindingIndex: number | null,
           current: Shortcut,
-        ) => setRecorderTarget({ modeId: mode.id, bindingIndex, current });
+        ) =>
+          setRecorderTarget({
+            target: { kind: "mode", modeId: mode.id },
+            bindingIndex,
+            current,
+          });
 
         return (
           <section key={mode.id} className="flex flex-col gap-2.5">
@@ -358,6 +401,110 @@ export function HotkeysPage() {
           </section>
         );
       })}
+        </div>
+      </div>
+
+      <Separator />
+
+      <PasteLatestSection
+        rows={pasteLatestBindings}
+        recorderTarget={recorderTarget}
+        setRecorderTarget={setRecorderTarget}
+        bindings={bindings}
+        onSave={handleRecordSave}
+        onRemove={handleRemove}
+        isFlashing={isFlashing}
+        rowFlashId={rowFlashId}
+      />
     </div>
+  );
+}
+
+interface PasteLatestSectionProps {
+  rows: { binding: HotkeyBinding; index: number }[];
+  recorderTarget: RecorderTarget | null;
+  setRecorderTarget: (target: RecorderTarget | null) => void;
+  bindings: HotkeyBinding[];
+  onSave: (shortcut: Shortcut) => void;
+  onRemove: (index: number) => void;
+  isFlashing: (id: string) => boolean;
+  rowFlashId: (targetId: string, shortcut: Shortcut) => string;
+}
+
+function PasteLatestSection({
+  rows,
+  recorderTarget,
+  setRecorderTarget,
+  bindings,
+  onSave,
+  onRemove,
+  isFlashing,
+  rowFlashId,
+}: PasteLatestSectionProps) {
+  const isRecordingHere = recorderTarget?.target.kind === "paste_latest";
+  const recordingExistingIndex =
+    isRecordingHere && recorderTarget?.bindingIndex !== null
+      ? recorderTarget?.bindingIndex
+      : null;
+  const recordingNewBinding =
+    isRecordingHere && recorderTarget?.bindingIndex === null;
+
+  const startRecording = (
+    bindingIndex: number | null,
+    current: Shortcut,
+  ) =>
+    setRecorderTarget({
+      target: { kind: "paste_latest" },
+      bindingIndex,
+      current,
+    });
+
+  return (
+    <section className="flex flex-col gap-2.5">
+      <SectionHeader title="Paste Latest Transcription" />
+
+      {rows.length === 0 ? (
+        recordingNewBinding ? (
+          <RecordingRow
+            initial={recorderTarget!.current}
+            onSave={onSave}
+            onCancel={() => setRecorderTarget(null)}
+          />
+        ) : (
+          <EmptyModeCard onAdd={() => startRecording(null, DEFAULT_SHORTCUT)} />
+        )
+      ) : (
+        <div className="flex flex-col gap-2">
+          {rows.map(({ binding, index: bindingIndex }) => {
+            if (recordingExistingIndex === bindingIndex) {
+              return (
+                <RecordingRow
+                  key={bindingIndex}
+                  initial={recorderTarget!.current}
+                  onSave={onSave}
+                  onCancel={() => setRecorderTarget(null)}
+                />
+              );
+            }
+            const flashing = isFlashing(
+              rowFlashId(PASTE_LATEST_TARGET_ID, binding.shortcut),
+            );
+            return (
+              <BindingRow
+                key={bindingIndex}
+                binding={binding}
+                conflict={hasConflict(bindings, bindingIndex)}
+                armed={false}
+                flashing={flashing}
+                onEdit={() =>
+                  startRecording(bindingIndex, binding.shortcut)
+                }
+                onRemove={() => onRemove(bindingIndex)}
+              />
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }
