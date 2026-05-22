@@ -318,3 +318,12 @@ main {
     overflow: visible;
   }
 }
+
+.abstract-loops {
+  --loops-primary: hsl(var(--shadcn-primary));
+  --loops-warm: #f59e0b;
+}
+
+.dark .abstract-loops {
+  --loops-warm: #fbbf24;
+}

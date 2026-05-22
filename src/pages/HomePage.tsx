@@ -1,23 +1,15 @@
 import { KeyboardIcon, MicrophoneIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 
+import { AbstractLoops } from "@/components/AbstractLoops";
 import { SectionHeader } from "@/components/SectionHeader";
 import { Button } from "@/components/ui/button";
-import { WaveField } from "@/components/WaveField";
 import {
   checkPermissions,
-  getStats,
   openAccessibilitySettings,
   openMicrophoneSettings,
   type PermissionsStatus,
 } from "../lib/api";
-import type { StatsRow } from "../lib/types";
-
-function todayISO(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 function timeGreeting(): string {
   const h = new Date().getHours();
@@ -28,21 +20,9 @@ function timeGreeting(): string {
 
 export function HomePage() {
   const [permissions, setPermissions] = useState<PermissionsStatus | null>(null);
-  const [todayWords, setTodayWords] = useState(0);
-  const [todayDictations, setTodayDictations] = useState(0);
 
   useEffect(() => {
     checkPermissions().then(setPermissions).catch(() => {});
-    getStats()
-      .then((rows: StatsRow[]) => {
-        const today = todayISO();
-        const row = rows.find((r) => r.date === today);
-        if (row) {
-          setTodayWords(row.words);
-          setTodayDictations(row.dictations);
-        }
-      })
-      .catch(() => {});
   }, []);
 
   const allReady =
@@ -56,11 +36,27 @@ export function HomePage() {
         : "Grant permissions below to get started.";
 
   return (
-    <div className="flex flex-col">
-      <WaveField ready={allReady} />
+    <div className="relative flex min-h-full items-center justify-center px-10 py-10 overflow-hidden">
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          maskImage:
+            "radial-gradient(ellipse 22% 28% at 50% 50%, transparent 0%, rgba(0,0,0,0.15) 35%, black 75%)",
+          WebkitMaskImage:
+            "radial-gradient(ellipse 22% 28% at 50% 50%, transparent 0%, rgba(0,0,0,0.15) 35%, black 75%)",
+        }}
+        aria-hidden="true"
+      >
+        <AbstractLoops
+          active={allReady}
+          fillMode="cover"
+          scale={1.6}
+          className="absolute inset-0 w-full h-full opacity-70"
+        />
+      </div>
 
-      <div className="px-6 pt-4 pb-6 flex flex-col gap-6">
-        <div className="flex flex-col gap-1">
+      <div className="relative w-full max-w-sm flex flex-col gap-7">
+        <div className="flex flex-col gap-1.5">
           <h1 className="text-page-title text-foreground text-balance">
             {timeGreeting()}
           </h1>
@@ -86,26 +82,6 @@ export function HomePage() {
             />
           </ul>
         </section>
-
-        {todayWords > 0 && (
-          <section className="flex flex-col gap-3">
-            <SectionHeader
-              title="Today"
-              control={
-                <Link
-                  to="/stats"
-                  className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  View stats →
-                </Link>
-              }
-            />
-            <div className="flex gap-8 pt-0.5">
-              <TodayStat value={todayWords.toLocaleString()} label="words" />
-              <TodayStat value={String(todayDictations)} label="dictations" />
-            </div>
-          </section>
-        )}
       </div>
     </div>
   );
@@ -135,16 +111,5 @@ function PermissionRow({ icon: Icon, label, granted, onGrant }: PermissionRowPro
         </Button>
       )}
     </li>
-  );
-}
-
-function TodayStat({ value, label }: { value: string; label: string }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-2xl font-semibold tabular-nums leading-none text-foreground">
-        {value}
-      </span>
-      <span className="text-[11px] text-muted-foreground">{label}</span>
-    </div>
   );
 }

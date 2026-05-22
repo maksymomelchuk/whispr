@@ -156,6 +156,8 @@ function useNavShortcuts() {
 
 function ShellInner() {
   useNavShortcuts();
+  const { pathname } = useLocation();
+  const isHome = pathname === "/";
   let counter = 0;
 
   return (
@@ -222,7 +224,12 @@ function ShellInner() {
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
           <UpdateBanner />
 
-          <main className="flex-1 overflow-y-auto bg-background scrollbar-gutter-stable">
+          <main
+            className={
+              "flex-1 overflow-y-auto bg-background " +
+              (isHome ? "" : "scrollbar-gutter-stable")
+            }
+          >
             <Routes>
               <Route index element={<HomePage />} />
               <Route path="/general" element={<GeneralPage />} />
