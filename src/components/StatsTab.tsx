@@ -384,7 +384,7 @@ function ActivityChart({ data, period }: { data: ChartPoint[]; period: Period })
           axisLine={false}
           tickMargin={4}
           tick={{ fontSize: 11 }}
-          width={28}
+          width={40}
           allowDecimals={false}
         />
         <ChartTooltip
