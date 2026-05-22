@@ -46,7 +46,7 @@ const HAIKU_INPUT_PER_MTOK_USD = 1;
 const HAIKU_OUTPUT_PER_MTOK_USD = 5;
 
 const chartConfig = {
-  words: { label: "Words", color: "hsl(224 76% 56%)" },
+  words: { label: "Words", color: "var(--color-primary)" },
 } satisfies ChartConfig;
 
 interface ChartPoint {
