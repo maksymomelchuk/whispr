@@ -409,21 +409,21 @@ function ActivityChart({ data, period }: { data: ChartPoint[]; period: Period })
 function CleanupRow({ spec }: { spec: CleanupRowSpec }) {
   const cost = estimateCostUsd(spec.input, spec.output);
   return (
-    <li className="flex flex-col gap-1 px-4 py-3.5 [&+li]:border-t [&+li]:border-border">
-      <div className="flex items-baseline justify-between gap-3">
+    <li className="flex items-baseline justify-between gap-3 px-4 py-3.5 [&+li]:border-t [&+li]:border-border">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
         <span className="text-[13px] font-medium text-foreground">{spec.label}</span>
-        <span className="inline-flex items-baseline gap-1 tabular-nums">
-          <span className="text-lg font-semibold leading-none text-foreground">
-            {formatCost(cost)}
-          </span>
-          <span className="text-eyebrow uppercase text-muted-foreground/70">est.</span>
+        <span className="flex items-baseline gap-1.5 text-xs tabular-nums text-muted-foreground">
+          <span className="whitespace-nowrap">{formatCount(spec.input)} input</span>
+          <span aria-hidden="true" className="select-none text-muted-foreground/70">·</span>
+          <span className="whitespace-nowrap">{formatCount(spec.output)} output</span>
         </span>
       </div>
-      <div className="flex flex-wrap items-baseline gap-1.5 text-xs tabular-nums text-muted-foreground">
-        <span className="whitespace-nowrap">{formatCount(spec.input)} input</span>
-        <span aria-hidden="true" className="select-none text-muted-foreground/70">·</span>
-        <span className="whitespace-nowrap">{formatCount(spec.output)} output</span>
-      </div>
+      <span className="inline-flex shrink-0 items-baseline gap-1 tabular-nums">
+        <span className="text-lg font-semibold leading-none text-foreground">
+          {formatCost(cost)}
+        </span>
+        <span className="text-eyebrow uppercase text-muted-foreground/70">est.</span>
+      </span>
     </li>
   );
 }
