@@ -32,6 +32,7 @@ const PTT_ERROR_EVENT: &str = "ptt-error";
 
 const ERROR_FLASH: Duration = Duration::from_millis(800);
 const DOUBLE_TAP_THRESHOLD: Duration = Duration::from_millis(400);
+const MIN_SPEAK_DURATION: Duration = Duration::from_millis(300);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TapEvent {
@@ -520,7 +521,7 @@ async fn run_session(
             return Err(e);
         }
     };
-    if raw_text.is_empty() {
+    if raw_text.is_empty() || speak_duration < MIN_SPEAK_DURATION {
         return Ok(());
     }
 
@@ -539,13 +540,32 @@ async fn run_session(
 
     let notice = merge_notices(translate_notice, cleanup_notice);
 
-    let pipeline::Outcome { pasted_text, history_entry, .. } = pipeline::run_stages(
+    let pipeline::Outcome { pasted_text, mut history_entry, .. } = pipeline::run_stages(
         &raw_text,
         speak_duration,
         active_mode,
         &settings,
         CleanupOutput { replaced_text, status: cleanup_status },
     );
+
+    let resolved_app = {
+        let rx = app
+            .state::<crate::state::AppState>()
+            .pending_app_rx
+            .lock()
+            .unwrap()
+            .take();
+        match rx {
+            Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
+                .await
+                .ok()
+                .and_then(|r| r.ok())
+                .flatten(),
+            None => None,
+        }
+    };
+    history_entry.app_name = resolved_app.as_ref().map(|(_, name)| name.clone());
+    history_entry.bundle_id = resolved_app.map(|(id, _)| id);
 
     // paste_handle must complete before any notify_error: set_focus()
     // during the modifier-release wait would steal focus mid-paste.

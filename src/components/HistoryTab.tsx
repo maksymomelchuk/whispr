@@ -25,6 +25,7 @@ import {
   setHistoryLimit as persistHistoryLimit,
 } from "../lib/api";
 import type { CleanupStatus, HistoryEntry, HistoryLimit } from "../lib/types";
+import { providerModelLabel } from "../lib/types";
 
 const LIMIT_OPTIONS: { label: string; value: string }[] = [
   { label: "Off", value: "0" },
@@ -477,7 +478,14 @@ function HistoryTrace({ entry, cleanupNote }: TraceProps) {
   const cleanupTextChanged = entry.replaced_text !== entry.raw_text;
   return (
     <div className="flex flex-col gap-2 rounded-lg bg-muted/60 px-3 py-2.5">
-      <Stage label="Deepgram" text={entry.raw_text} />
+      <Stage
+        label={
+          entry.provider_model
+            ? providerModelLabel(entry.provider_model)
+            : "Transcription"
+        }
+        text={entry.raw_text}
+      />
       <Stage
         label="AI cleanup"
         text={entry.replaced_text}

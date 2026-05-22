@@ -390,7 +390,8 @@ async fn post_to_groq(
     if !status.is_success() {
         return Err(GroqHttpError::Other(format_groq_error(status, &body)));
     }
-    parse_transcript(&body).map_err(GroqHttpError::Other)
+    let text = parse_transcript(&body).map_err(GroqHttpError::Other)?;
+    Ok(strip_prompt_echo(&text, prompt))
 }
 
 fn format_groq_error(status: reqwest::StatusCode, body: &str) -> String {
@@ -403,6 +404,21 @@ fn format_groq_error(status: reqwest::StatusCode, body: &str) -> String {
     } else {
         format!("Groq {status}: {message}")
     }
+}
+
+// Whisper repeats its prompt when it can't transcribe short or silent audio.
+// The vocabulary hint always begins with "Vocabulary: " — any transcript that
+// starts with that prefix (or its comma variant produced by some Whisper
+// variants) is an echo, not real speech.
+fn strip_prompt_echo(text: &str, prompt: Option<&str>) -> String {
+    if prompt.is_none() || text.is_empty() {
+        return text.to_string();
+    }
+    let lower = text.to_lowercase();
+    if lower.starts_with("vocabulary:") || lower.starts_with("vocabulary,") {
+        return String::new();
+    }
+    text.to_string()
 }
 
 fn parse_transcript(body: &str) -> Result<String, String> {
@@ -468,5 +484,54 @@ mod tests {
             msg.contains("<html>nope</html>"),
             "expected snippet, got: {msg}"
         );
+    }
+
+    #[test]
+    fn strip_prompt_echo_discards_vocabulary_colon_prefix() {
+        let text = "Vocabulary: Claude Code, OAuth, UUID, JWT";
+        assert_eq!(strip_prompt_echo(text, Some("Vocabulary: Claude Code")), "");
+    }
+
+    #[test]
+    fn strip_prompt_echo_discards_vocabulary_comma_prefix() {
+        // Whisper sometimes renders the colon as a comma
+        let text = "Vocabulary, Claude Code, OAuth, UUID, JWT";
+        assert_eq!(strip_prompt_echo(text, Some("Vocabulary: Claude Code")), "");
+    }
+
+    #[test]
+    fn strip_prompt_echo_discards_lowercase_variant() {
+        let text = "vocabulary: Claude Code, OAuth";
+        assert_eq!(strip_prompt_echo(text, Some("Vocabulary: Claude Code")), "");
+    }
+
+    #[test]
+    fn strip_prompt_echo_preserves_real_speech() {
+        let text = "Let's build something fancy";
+        assert_eq!(
+            strip_prompt_echo(text, Some("Vocabulary: Claude Code")),
+            "Let's build something fancy"
+        );
+    }
+
+    #[test]
+    fn strip_prompt_echo_preserves_vocabulary_in_context() {
+        // "vocabulary" as a word mid-sentence is not a hallucination
+        let text = "expand your vocabulary every day";
+        assert_eq!(
+            strip_prompt_echo(text, Some("Vocabulary: Claude Code")),
+            "expand your vocabulary every day"
+        );
+    }
+
+    #[test]
+    fn strip_prompt_echo_passthrough_when_no_prompt() {
+        let text = "Vocabulary: whatever";
+        assert_eq!(strip_prompt_echo(text, None), "Vocabulary: whatever");
+    }
+
+    #[test]
+    fn strip_prompt_echo_passthrough_for_empty_text() {
+        assert_eq!(strip_prompt_echo("", Some("Vocabulary: foo")), "");
     }
 }

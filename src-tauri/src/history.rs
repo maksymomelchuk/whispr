@@ -1,4 +1,5 @@
 use crate::config;
+use crate::provider::ProviderModel;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -32,6 +33,14 @@ pub struct HistoryEntry {
     pub replaced_text: String,
     pub final_text: String,
     pub cleanup_status: CleanupStatus,
+    // Optional so existing on-disk histories written before this field was added
+    // still deserialize. Old entries fall back to a generic label in the UI.
+    #[serde(default)]
+    pub provider_model: Option<ProviderModel>,
+    #[serde(default)]
+    pub app_name: Option<String>,
+    #[serde(default)]
+    pub bundle_id: Option<String>,
 }
 
 fn history_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {

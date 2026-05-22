@@ -91,6 +91,9 @@ pub fn run_stages(
         replaced_text,
         final_text,
         cleanup_status,
+        provider_model: Some(mode.provider_model.clone()),
+        app_name: None,
+        bundle_id: None,
     };
 
     Outcome {

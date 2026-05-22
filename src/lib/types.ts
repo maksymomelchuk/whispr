@@ -66,6 +66,36 @@ export function providerModelLanguageCodes(pm: ProviderModel): string[] | null {
   return ASSEMBLYAI_MODEL_SUPPORTED_LANGUAGES[pm.model];
 }
 
+const GROQ_MODEL_LABELS: Record<GroqModel, string> = {
+  whisper_large_v3: "Whisper Large v3",
+  whisper_large_v3_turbo: "Whisper Large v3-turbo",
+};
+
+const ASSEMBLYAI_MODEL_LABELS: Record<AssemblyAiModel, string> = {
+  universal_pro_streaming: "Universal-3 Pro",
+  universal_streaming_english: "Universal English",
+  universal_streaming_multilingual: "Universal Multilingual",
+  whisper_streaming: "Whisper Streaming",
+};
+
+const LOCAL_MODEL_LABELS: Record<LocalWhisperModel, string> = {
+  large_v3: "Large v3",
+  large_v3_turbo: "Large v3 Turbo",
+};
+
+export function providerModelLabel(pm: ProviderModel): string {
+  switch (pm.provider) {
+    case "deepgram":
+      return "Deepgram";
+    case "groq":
+      return `Groq · ${GROQ_MODEL_LABELS[pm.model]}`;
+    case "assembly_ai":
+      return `AssemblyAI · ${ASSEMBLYAI_MODEL_LABELS[pm.model]}`;
+    case "local":
+      return `Local Whisper · ${LOCAL_MODEL_LABELS[pm.model]}`;
+  }
+}
+
 /// `null` = unlimited, `0` = off, `n` = keep last n.
 export type HistoryLimit = number | null;
 
@@ -174,6 +204,9 @@ export interface HistoryEntry {
   replaced_text: string;
   final_text: string;
   cleanup_status: CleanupStatus;
+  provider_model?: ProviderModel | null;
+  app_name?: string | null;
+  bundle_id?: string | null;
 }
 
 export interface StatsRow {

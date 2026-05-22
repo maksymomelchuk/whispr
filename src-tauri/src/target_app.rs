@@ -11,7 +11,8 @@ use std::process::{Command, Stdio};
 use std::sync::{Mutex, OnceLock};
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
+use tokio::sync::oneshot;
 
 const TARGET_APP_EVENT: &str = "target-app";
 
@@ -63,13 +64,26 @@ end run
 "#;
 
 /// Safe to call from the CGEventTap callback — all work runs on a blocking
-/// worker thread.
+/// worker thread. Also wires up a oneshot so the session task can record the
+/// resolved app in the history entry without a second osascript call.
 pub fn capture(app: AppHandle) {
+    use crate::state::AppState;
+
+    let (tx, rx) = oneshot::channel();
+    if let Some(state) = app.try_state::<AppState>() {
+        *state.pending_app_rx.lock().unwrap() = Some(rx);
+    }
+
     tauri::async_runtime::spawn_blocking(move || {
         let (bundle_id, name) = match resolve_bundle() {
             Some(b) => b,
-            None => return,
+            None => {
+                let _ = tx.send(None);
+                return;
+            }
         };
+
+        let _ = tx.send(Some((bundle_id.clone(), name.clone())));
 
         if let Some(cached) = cache().lock().unwrap().get(&bundle_id).cloned() {
             let _ = app.emit(TARGET_APP_EVENT, &cached);

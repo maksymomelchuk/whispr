@@ -3,6 +3,7 @@ use crate::provider::LocalWhisperModel;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
+use tokio::sync::oneshot;
 #[cfg(target_os = "macos")]
 use std::time::Instant;
 
@@ -55,6 +56,9 @@ pub struct AppState {
     /// capture keystrokes for shortcut rebinding without firing dictation.
     pub shortcut_capture_paused: Arc<Mutex<bool>>,
     pub download_cancel_flags: Arc<Mutex<HashMap<LocalWhisperModel, Arc<AtomicBool>>>>,
+    /// Receives the frontmost app captured at PTT press so the session task
+    /// can record it in the history entry without a second osascript call.
+    pub pending_app_rx: Arc<Mutex<Option<oneshot::Receiver<Option<(String, String)>>>>>,
     #[cfg(target_os = "macos")]
     pub model_cache: Arc<Mutex<HashMap<LocalWhisperModel, LoadedModel>>>,
 }
