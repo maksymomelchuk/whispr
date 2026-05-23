@@ -11,6 +11,11 @@ import {
 import type { ChartConfig } from "@/components/ui/chart";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 import { useConfirmAction } from "../hooks/useConfirmAction";
@@ -444,9 +449,9 @@ function AppsUsed({ apps }: { apps: AppEntry[] }) {
   }, [apps]);
 
   return (
-    <ul className="m-0 list-none overflow-hidden rounded-lg border border-border bg-card p-0">
+    <ul className="m-0 flex list-none flex-wrap items-center gap-2 p-0">
       {apps.map((app) => (
-        <AppRow
+        <AppBadge
           key={app.bundleId}
           app={app}
           icon={icons[app.bundleId]}
@@ -456,21 +461,35 @@ function AppsUsed({ apps }: { apps: AppEntry[] }) {
   );
 }
 
-function AppRow({
+function AppBadge({
   app,
   icon,
 }: {
   app: AppEntry;
   icon: string | null | undefined;
 }) {
+  const noun = app.count === 1 ? "dictation" : "dictations";
+  const label = `${app.name} · ${formatCount(app.count)} ${noun}`;
   return (
-    <li className="flex items-center gap-3 px-3 py-2.5 [&+li]:border-t [&+li]:border-border">
-      <AppIcon name={app.name} src={icon} />
-      <span className="text-[13px] text-foreground">{app.name}</span>
-      <span className="ml-auto text-[12px] tabular-nums text-muted-foreground">
-        {formatCount(app.count)}{" "}
-        {app.count === 1 ? "dictation" : "dictations"}
-      </span>
+    <li>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            tabIndex={0}
+            aria-label={label}
+            className="inline-flex rounded-[8px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <AppIcon name={app.name} src={icon} />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>
+          {app.name}
+          <span aria-hidden="true" className="mx-1.5 opacity-50">·</span>
+          <span className="tabular-nums opacity-75">
+            {formatCount(app.count)} {noun}
+          </span>
+        </TooltipContent>
+      </Tooltip>
     </li>
   );
 }
