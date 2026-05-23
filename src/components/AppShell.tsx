@@ -100,7 +100,7 @@ function NavMenuButton({
   icon: Icon,
   path,
   shortcut,
-}: NavItem & { shortcut: string }) {
+}: NavItem & { shortcut: string | null }) {
   const { pathname } = useLocation();
   const { state } = useSidebar();
   const isActive = path === "/" ? pathname === "/" : pathname.startsWith(path);
@@ -110,18 +110,18 @@ function NavMenuButton({
     <SidebarMenuButton
       asChild
       isActive={isActive}
-      tooltip={collapsed ? `${label}  ${shortcut}` : undefined}
-      className="group/nav-item h-8 gap-2.5"
+      tooltip={collapsed ? (shortcut ? `${label}  ${shortcut}` : label) : undefined}
+      className="group/nav-item h-8 gap-2.5 data-[active=true]:font-normal"
     >
       <NavLink to={path} end={path === "/"}>
         <Icon
           size={15}
           className="shrink-0 text-muted-foreground group-data-[active=true]/nav-item:text-foreground"
         />
-        <span className="flex-1 text-[13px] group-data-[active=true]/nav-item:font-medium">
+        <span className="flex-1 text-[13px]">
           {label}
         </span>
-        {!collapsed && (
+        {!collapsed && shortcut && (
           <kbd
             aria-hidden
             className={
@@ -195,7 +195,7 @@ function ShellInner() {
                 <SidebarMenu>
                   {section.items.map((item) => {
                     counter += 1;
-                    const shortcut = `⌘${counter}`;
+                    const shortcut = counter <= 9 ? `⌘${counter}` : null;
                     return (
                       <SidebarMenuItem key={item.path}>
                         <NavMenuButton {...item} shortcut={shortcut} />
@@ -210,7 +210,7 @@ function ShellInner() {
             <SidebarMenu>
               {FOOTER_NAV.map((item) => {
                 counter += 1;
-                const shortcut = `⌘${counter}`;
+                const shortcut = counter <= 9 ? `⌘${counter}` : null;
                 return (
                   <SidebarMenuItem key={item.path}>
                     <NavMenuButton {...item} shortcut={shortcut} />

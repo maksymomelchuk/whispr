@@ -20,6 +20,7 @@ import type { ThemePreference } from "../hooks/useTheme";
 import {
   setShowInDock as persistShowInDock,
   setShowLivePreview as persistShowLivePreview,
+  setStartAtLogin as persistStartAtLogin,
 } from "../lib/api";
 import { SectionCard } from "./SectionCard";
 import { ToggleRow } from "./ToggleRow";
@@ -94,7 +95,12 @@ export function AppearanceField() {
     persistShowLivePreview,
     (next) => setSettings((s) => ({ ...s, show_live_preview: next })),
   );
-  const saveError = dock.error ?? preview.error;
+  const startAtLogin = usePersistedToggle(
+    settings.start_at_login,
+    persistStartAtLogin,
+    (next) => setSettings((s) => ({ ...s, start_at_login: next })),
+  );
+  const saveError = dock.error ?? preview.error ?? startAtLogin.error;
 
   return (
     <SectionCard title="Appearance">
@@ -176,6 +182,13 @@ export function AppearanceField() {
         label="Show live preview while dictating"
         checked={preview.enabled}
         onCheckedChange={preview.toggle}
+      />
+
+      <ToggleRow
+        id="start-at-login"
+        label="Start at login"
+        checked={startAtLogin.enabled}
+        onCheckedChange={startAtLogin.toggle}
       />
 
       {saveError && (

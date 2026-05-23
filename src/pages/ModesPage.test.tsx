@@ -215,6 +215,7 @@ const BASE_SETTINGS: Settings = {
   pause_media_on_record: true,
   history_limit: 5,
   show_in_dock: false,
+  start_at_login: false,
   show_live_preview: true,
   local_whisper_idle_timeout: "fifteen_minutes",
 };

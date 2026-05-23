@@ -400,6 +400,8 @@ pub struct Settings {
     pub history_limit: Option<usize>,
     #[serde(default)]
     pub show_in_dock: bool,
+    #[serde(default)]
+    pub start_at_login: bool,
     #[serde(default = "default_true")]
     pub show_live_preview: bool,
     #[serde(default)]
@@ -448,6 +450,7 @@ impl Default for Settings {
             pause_media_on_record: true,
             history_limit: default_history_limit(),
             show_in_dock: false,
+            start_at_login: false,
             show_live_preview: true,
             local_whisper: LocalWhisperSettings::default(),
         }

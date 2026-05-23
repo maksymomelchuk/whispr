@@ -38,6 +38,7 @@ pub struct SettingsView {
     pub pause_media_on_record: bool,
     pub history_limit: Option<usize>,
     pub show_in_dock: bool,
+    pub start_at_login: bool,
     pub show_live_preview: bool,
     pub local_whisper_idle_timeout: LocalWhisperIdleTimeout,
 }
@@ -79,6 +80,7 @@ impl From<Settings> for SettingsView {
             pause_media_on_record: s.pause_media_on_record,
             history_limit: s.history_limit,
             show_in_dock: s.show_in_dock,
+            start_at_login: s.start_at_login,
             show_live_preview: s.show_live_preview,
             local_whisper_idle_timeout: s.local_whisper.idle_timeout,
         }
@@ -357,6 +359,18 @@ pub fn set_pause_media_on_record(
 #[tauri::command]
 pub fn set_show_live_preview(app: AppHandle, enabled: bool) -> Result<(), String> {
     config::update(&app, |s| s.show_live_preview = enabled)
+}
+
+#[tauri::command]
+pub fn set_start_at_login(app: AppHandle, enabled: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let manager = app.autolaunch();
+    if enabled {
+        manager.enable().map_err(|e| format!("Failed to enable autostart: {e}"))?;
+    } else {
+        manager.disable().map_err(|e| format!("Failed to disable autostart: {e}"))?;
+    }
+    config::update(&app, |s| s.start_at_login = enabled)
 }
 
 #[tauri::command]

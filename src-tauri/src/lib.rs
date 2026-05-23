@@ -79,6 +79,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![]),
+        ))
         .on_window_event(|window, event| {
             // The settings window's red X should hide the app rather than
             // destroy the instance — the tray icon re-shows the same
@@ -113,6 +117,23 @@ pub fn run() {
             permissions::ensure_accessibility_trust();
 
             let settings = config::load(&app.handle());
+
+            // Reconcile the OS-level Login Item with our persisted intent. The
+            // user may have toggled it directly in System Settings; settings.json
+            // is the source of truth.
+            {
+                use tauri_plugin_autostart::ManagerExt;
+                let manager = app.handle().autolaunch();
+                let result = if settings.start_at_login {
+                    manager.enable()
+                } else {
+                    manager.disable()
+                };
+                if let Err(e) = result {
+                    eprintln!("Failed to reconcile autostart state: {e}");
+                }
+            }
+
             let app_state = AppState::default();
             *app_state.hotkey_bindings.lock().unwrap() = settings.hotkey_bindings;
             *app_state.input_device.lock().unwrap() = settings.input_device;
@@ -194,6 +215,7 @@ pub fn run() {
             commands::set_input_device,
             commands::set_pause_media_on_record,
             commands::set_show_in_dock,
+            commands::set_start_at_login,
             commands::set_show_live_preview,
             commands::get_history,
             commands::clear_history,

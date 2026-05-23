@@ -59,6 +59,7 @@ const BASE: Settings = {
   pause_media_on_record: false,
   history_limit: null,
   show_in_dock: true,
+  start_at_login: false,
   show_live_preview: true,
   local_whisper_idle_timeout: "fifteen_minutes",
 };

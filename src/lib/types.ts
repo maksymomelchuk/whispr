@@ -185,6 +185,7 @@ export interface Settings {
   pause_media_on_record: boolean;
   history_limit: HistoryLimit;
   show_in_dock: boolean;
+  start_at_login: boolean;
   show_live_preview: boolean;
   local_whisper_idle_timeout: LocalWhisperIdleTimeout;
 }
