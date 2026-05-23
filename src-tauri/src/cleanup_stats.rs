@@ -1,4 +1,4 @@
-//! Three rolling token counters for the LLM cleanup pass: today, this
+//! Rolling token counters for the LLM cleanup pass: this week, this
 //! calendar month, and all-time.
 
 use serde::{Deserialize, Serialize};
@@ -31,6 +31,8 @@ pub struct CleanupStats {
     #[serde(default)]
     pub today: PeriodCounter,
     #[serde(default)]
+    pub week: PeriodCounter,
+    #[serde(default)]
     pub month: PeriodCounter,
     #[serde(default)]
     pub overall: TotalCounter,
@@ -51,6 +53,13 @@ fn local_now() -> OffsetDateTime {
 
 fn current_day_key(now: &OffsetDateTime) -> String {
     now.date().to_string()
+}
+
+fn current_week_key(now: &OffsetDateTime) -> String {
+    // Days since the Unix epoch (1970-01-04 was a Sunday, so +4 shifts to Monday-anchor).
+    let days = now.date().to_julian_day();
+    let week_number = (days + 3) / 7;
+    format!("W{week_number}")
 }
 
 fn current_month_key(now: &OffsetDateTime) -> String {
@@ -102,6 +111,7 @@ pub fn load(app: &tauri::AppHandle) -> CleanupStats {
     let mut stats = read_from_disk(app);
     let now = local_now();
     rollover(&mut stats.today, &current_day_key(&now));
+    rollover(&mut stats.week, &current_week_key(&now));
     rollover(&mut stats.month, &current_month_key(&now));
     stats
 }
@@ -110,10 +120,13 @@ pub fn record(app: &tauri::AppHandle, input_tokens: u64, output_tokens: u64) {
     let mut stats = read_from_disk(app);
     let now = local_now();
     rollover(&mut stats.today, &current_day_key(&now));
+    rollover(&mut stats.week, &current_week_key(&now));
     rollover(&mut stats.month, &current_month_key(&now));
 
     stats.today.input_tokens = stats.today.input_tokens.saturating_add(input_tokens);
     stats.today.output_tokens = stats.today.output_tokens.saturating_add(output_tokens);
+    stats.week.input_tokens = stats.week.input_tokens.saturating_add(input_tokens);
+    stats.week.output_tokens = stats.week.output_tokens.saturating_add(output_tokens);
     stats.month.input_tokens = stats.month.input_tokens.saturating_add(input_tokens);
     stats.month.output_tokens = stats.month.output_tokens.saturating_add(output_tokens);
     stats.overall.input_tokens = stats.overall.input_tokens.saturating_add(input_tokens);

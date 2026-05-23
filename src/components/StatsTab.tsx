@@ -60,8 +60,7 @@ interface Aggregate {
   seconds: number;
 }
 
-interface CleanupRowSpec {
-  label: string;
+interface CleanupTokens {
   input: number;
   output: number;
 }
@@ -186,14 +185,12 @@ export function StatsTab() {
   );
   const chartData = useMemo(() => buildChartData(rows, period), [rows, period]);
 
-  const cleanupRows: CleanupRowSpec[] = useMemo(() => {
-    if (!cleanup) return [];
-    return [
-      { label: "Today", input: cleanup.today.input_tokens, output: cleanup.today.output_tokens },
-      { label: "This month", input: cleanup.month.input_tokens, output: cleanup.month.output_tokens },
-      { label: "Overall", input: cleanup.overall.input_tokens, output: cleanup.overall.output_tokens },
-    ];
-  }, [cleanup]);
+  const cleanupTokens: CleanupTokens | null = useMemo(() => {
+    if (!cleanup) return null;
+    if (period === "week") return { input: cleanup.week.input_tokens, output: cleanup.week.output_tokens };
+    if (period === "month") return { input: cleanup.month.input_tokens, output: cleanup.month.output_tokens };
+    return { input: cleanup.overall.input_tokens, output: cleanup.overall.output_tokens };
+  }, [cleanup, period]);
 
   const { confirming: confirmingClear, trigger: handleClear } =
     useConfirmAction(async () => {
@@ -302,11 +299,7 @@ export function StatsTab() {
             title="AI Cleanup"
             badge={<InfoTip text="Anthropic Claude Haiku 4.5 token usage and estimated cost." />}
           />
-          <ul className="m-0 list-none overflow-hidden rounded-lg border border-border bg-card p-0">
-            {cleanupRows.map((row) => (
-              <CleanupRow key={row.label} spec={row} />
-            ))}
-          </ul>
+          {cleanupTokens && <CleanupRow tokens={cleanupTokens} />}
         </>
       )}
     </section>
@@ -405,25 +398,24 @@ function ActivityChart({ data, period }: { data: ChartPoint[]; period: Period })
   );
 }
 
-function CleanupRow({ spec }: { spec: CleanupRowSpec }) {
-  const cost = estimateCostUsd(spec.input, spec.output);
+function CleanupRow({ tokens }: { tokens: CleanupTokens }) {
+  const cost = estimateCostUsd(tokens.input, tokens.output);
   return (
-    <li className="flex items-baseline justify-between gap-3 px-4 py-3.5 [&+li]:border-t [&+li]:border-border">
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="text-[13px] font-medium text-foreground">{spec.label}</span>
+    <ul className="m-0 list-none overflow-hidden rounded-lg border border-border bg-card p-0">
+      <li className="flex items-baseline justify-between gap-3 px-4 py-3.5">
         <span className="flex items-baseline gap-1.5 text-xs tabular-nums text-muted-foreground">
-          <span className="whitespace-nowrap">{formatCount(spec.input)} input</span>
+          <span className="whitespace-nowrap">{formatCount(tokens.input)} input</span>
           <span aria-hidden="true" className="select-none text-muted-foreground/70">·</span>
-          <span className="whitespace-nowrap">{formatCount(spec.output)} output</span>
+          <span className="whitespace-nowrap">{formatCount(tokens.output)} output</span>
         </span>
-      </div>
-      <span className="inline-flex shrink-0 items-baseline gap-1 tabular-nums">
-        <span className="text-lg font-semibold leading-none text-foreground">
-          {formatCost(cost)}
+        <span className="inline-flex shrink-0 items-baseline gap-1 tabular-nums">
+          <span className="text-lg font-semibold leading-none text-foreground">
+            {formatCost(cost)}
+          </span>
+          <span className="text-eyebrow uppercase text-muted-foreground/70">est.</span>
         </span>
-        <span className="text-eyebrow uppercase text-muted-foreground/70">est.</span>
-      </span>
-    </li>
+      </li>
+    </ul>
   );
 }
 

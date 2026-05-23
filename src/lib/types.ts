@@ -253,6 +253,7 @@ export interface TotalCounter {
 
 export interface CleanupStats {
   today: PeriodCounter;
+  week: PeriodCounter;
   month: PeriodCounter;
   overall: TotalCounter;
 }
