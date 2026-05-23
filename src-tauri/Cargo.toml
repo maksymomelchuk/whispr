@@ -50,5 +50,9 @@ core-graphics = "0.24"
 cpal = "0.15"
 objc2 = "0.6"
 objc2-foundation = "0.3"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = [
+    "NSBitmapImageRep", "NSGraphics", "NSGraphicsContext",
+    "NSImage", "NSImageRep", "NSWorkspace",
+] }
 whisper-rs = { version = "0.13", features = ["metal"] }
 

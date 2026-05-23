@@ -1,9 +1,9 @@
 //! Snapshot the frontmost app at PTT press so the overlay can show whose
 //! window the dictated text will land in. A short System Events probe gets
 //! the bundle id; a cache hit emits immediately, a miss falls through to a
-//! second AppleScriptObjC pass that renders the icon via NSWorkspace. Both
-//! passes run on a blocking worker — the CGEventTap callback must never
-//! wait for osascript.
+//! native NSWorkspace call that renders the icon into a 64×64 bitmap.
+//! Both passes run on a blocking worker — the CGEventTap callback must never
+//! block.
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -35,33 +35,6 @@ const BUNDLE_SCRIPT: &str = r#"tell application "System Events"
 end tell
 "#;
 
-/// `setSize:` on the source NSImage is only a hint, so we render explicitly
-/// into a fresh 64×64 bitmap rep — otherwise TIFFRepresentation hands back
-/// the multi-megabyte 1024px source.
-const ICON_SCRIPT: &str = r#"use framework "AppKit"
-use scripting additions
-on run argv
-  set bid to item 1 of argv
-  set ws to current application's NSWorkspace's sharedWorkspace
-  set appURL to ws's URLForApplicationWithBundleIdentifier:bid
-  if appURL is missing value then return ""
-  set appPath to (appURL's |path|() as text)
-  set img to ws's iconForFile:appPath
-  if img is missing value then return ""
-
-  set bm to current application's NSBitmapImageRep's alloc()'s initWithBitmapDataPlanes:(missing value) pixelsWide:64 pixelsHigh:64 bitsPerSample:8 samplesPerPixel:4 hasAlpha:true isPlanar:false colorSpaceName:(current application's NSDeviceRGBColorSpace) bytesPerRow:0 bitsPerPixel:0
-  bm's setSize:(current application's NSMakeSize(64, 64))
-
-  set ctx to current application's NSGraphicsContext's graphicsContextWithBitmapImageRep:bm
-  current application's NSGraphicsContext's saveGraphicsState()
-  current application's NSGraphicsContext's setCurrentContext:ctx
-  img's drawInRect:(current application's NSMakeRect(0, 0, 64, 64)) fromRect:(current application's NSZeroRect) operation:2 fraction:1.0
-  current application's NSGraphicsContext's restoreGraphicsState()
-
-  set png to (bm's representationUsingType:4 |properties|:(missing value))
-  return ((png's base64EncodedStringWithOptions:0) as text)
-end run
-"#;
 
 /// Safe to call from the CGEventTap callback — all work runs on a blocking
 /// worker thread. Also wires up a oneshot so the session task can record the
@@ -116,11 +89,55 @@ fn resolve_bundle() -> Option<(String, String)> {
 }
 
 pub fn resolve_icon(bundle_id: &str) -> Option<String> {
-    let b64 = run_osascript(ICON_SCRIPT, &[bundle_id])?;
-    if b64.is_empty() {
-        return None;
+    use objc2::runtime::AnyObject;
+    use objc2::AnyThread;
+    use objc2_app_kit::{
+        NSBitmapImageFileType, NSBitmapImageRep, NSDeviceRGBColorSpace, NSGraphicsContext,
+        NSWorkspace,
+    };
+    use objc2_foundation::{
+        NSDataBase64EncodingOptions, NSDictionary, NSPoint, NSRect, NSSize, NSString,
+    };
+
+    unsafe {
+        let workspace = NSWorkspace::sharedWorkspace();
+        let bundle_id_ns = NSString::from_str(bundle_id);
+        let app_url = workspace.URLForApplicationWithBundleIdentifier(&bundle_id_ns)?;
+        let app_path = app_url.path()?;
+        let icon = workspace.iconForFile(&app_path);
+
+        let bitmap_rep = NSBitmapImageRep::initWithBitmapDataPlanes_pixelsWide_pixelsHigh_bitsPerSample_samplesPerPixel_hasAlpha_isPlanar_colorSpaceName_bytesPerRow_bitsPerPixel(
+            NSBitmapImageRep::alloc(),
+            std::ptr::null_mut(),
+            64, 64, 8, 4, true, false,
+            NSDeviceRGBColorSpace,
+            0, 0,
+        )?;
+
+        let size = NSSize { width: 64.0, height: 64.0 };
+        bitmap_rep.setSize(size);
+
+        let ctx = NSGraphicsContext::graphicsContextWithBitmapImageRep(&bitmap_rep)?;
+        NSGraphicsContext::saveGraphicsState_class();
+        NSGraphicsContext::setCurrentContext(Some(&ctx));
+
+        let rect = NSRect {
+            origin: NSPoint { x: 0.0, y: 0.0 },
+            size,
+        };
+        icon.drawInRect(rect);
+
+        NSGraphicsContext::restoreGraphicsState_class();
+
+        let props = NSDictionary::<NSString, AnyObject>::new();
+        let png_data = bitmap_rep.representationUsingType_properties(
+            NSBitmapImageFileType::PNG,
+            &props,
+        )?;
+
+        let b64 = png_data.base64EncodedStringWithOptions(NSDataBase64EncodingOptions(0));
+        Some(format!("data:image/png;base64,{b64}"))
     }
-    Some(format!("data:image/png;base64,{b64}"))
 }
 
 fn run_osascript(script: &str, args: &[&str]) -> Option<String> {
