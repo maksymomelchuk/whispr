@@ -1,6 +1,6 @@
 import { ChartBarIcon } from "@phosphor-icons/react";
 import { listen } from "@tauri-apps/api/event";
-import { useMemo, useState, useEffect } from "react";
+import { useRef, useMemo, useState, useEffect } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import {
@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 
 import { useConfirmAction } from "../hooks/useConfirmAction";
 import {
+  getAppIcon,
   getCleanupStats,
   getHistory,
   getStats,
@@ -31,13 +32,12 @@ type Period = "week" | "month" | "all";
 interface PeriodSpec {
   id: Period;
   label: string;
-  days: number | null;
 }
 
 const PERIOD_SPECS: PeriodSpec[] = [
-  { id: "week", label: "Week", days: 7 },
-  { id: "month", label: "Month", days: 30 },
-  { id: "all", label: "All Time", days: null },
+  { id: "week", label: "Week" },
+  { id: "month", label: "Month" },
+  { id: "all", label: "All Time" },
 ];
 
 const TYPING_WPM_BASELINE = 45;
@@ -58,6 +58,12 @@ interface Aggregate {
   words: number;
   dictations: number;
   seconds: number;
+}
+
+interface AppEntry {
+  bundleId: string;
+  name: string;
+  count: number;
 }
 
 interface CleanupTokens {
@@ -98,14 +104,22 @@ function aggregateRows(rows: StatsRow[], period: Period): Aggregate {
   return agg;
 }
 
-function countUniqueApps(entries: HistoryEntry[], period: Period): number {
+function collectAppStats(entries: HistoryEntry[], period: Period): AppEntry[] {
   const cutoff = timestampCutoff(period);
-  const ids = new Set<string>();
+  const map = new Map<string, { name: string; count: number }>();
   for (const e of entries) {
     if (cutoff !== null && e.timestamp < cutoff) continue;
-    if (e.bundle_id) ids.add(e.bundle_id);
+    if (!e.bundle_id) continue;
+    const existing = map.get(e.bundle_id);
+    if (existing) {
+      existing.count++;
+    } else {
+      map.set(e.bundle_id, { name: e.app_name ?? e.bundle_id, count: 1 });
+    }
   }
-  return ids.size;
+  return Array.from(map.entries())
+    .map(([bundleId, { name, count }]) => ({ bundleId, name, count }))
+    .sort((a, b) => b.count - a.count);
 }
 
 function buildChartData(rows: StatsRow[], period: Period): ChartPoint[] {
@@ -179,10 +193,7 @@ export function StatsTab() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const agg = useMemo(() => aggregateRows(rows, period), [rows, period]);
-  const appsUsed = useMemo(
-    () => countUniqueApps(history, period),
-    [history, period],
-  );
+  const appStats = useMemo(() => collectAppStats(history, period), [history, period]);
   const chartData = useMemo(() => buildChartData(rows, period), [rows, period]);
 
   const cleanupTokens: CleanupTokens | null = useMemo(() => {
@@ -279,17 +290,24 @@ export function StatsTab() {
 
       {hasAny && (
         <>
-          <KpiGrid
-            words={agg.words}
-            wpm={formatWpm(agg.words, agg.seconds)}
-            appsUsed={appsUsed}
+          <StatSummary
+            words={formatCount(agg.words)}
             timeSaved={formatTimeSaved(agg.words, agg.seconds)}
+            wpm={formatWpm(agg.words, agg.seconds)}
+            dictations={agg.dictations}
           />
 
-          <div className="rounded-lg border border-border bg-card p-4">
+          <div>
             <p className="mb-3 text-[13px] font-semibold text-foreground">Activity</p>
             <ActivityChart data={chartData} period={period} />
           </div>
+        </>
+      )}
+
+      {appStats.length > 0 && (
+        <>
+          <SectionHeader title="Apps used" />
+          <AppsUsed apps={appStats} />
         </>
       )}
 
@@ -327,31 +345,44 @@ function PeriodToggle({ value, onChange }: { value: Period; onChange: (p: Period
   );
 }
 
-interface KpiGridProps {
-  words: number;
-  wpm: string;
-  appsUsed: number;
+interface StatSummaryProps {
+  words: string;
   timeSaved: string;
+  wpm: string;
+  dictations: number;
 }
 
-function KpiGrid({ words, wpm, appsUsed, timeSaved }: KpiGridProps) {
+function StatSummary({ words, timeSaved, wpm, dictations }: StatSummaryProps) {
   return (
-    <div className="grid grid-cols-4 overflow-hidden rounded-lg border border-border bg-card">
-      <KpiCard value={formatCount(words)} label="Words" />
-      <KpiCard value={wpm} label="Avg WPM" />
-      <KpiCard value={String(appsUsed)} label="Apps Used" />
-      <KpiCard value={timeSaved} label="Time Saved" />
-    </div>
-  );
-}
+    <div className="flex items-baseline gap-6 px-1 py-1">
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-[28px] font-semibold tabular-nums leading-none text-foreground">
+          {words}
+        </span>
+        <span className="text-[12px] text-muted-foreground">words</span>
+      </div>
 
-function KpiCard({ value, label }: { value: string; label: string }) {
-  return (
-    <div className="flex flex-col items-center gap-1 px-4 py-4 [&+div]:border-l [&+div]:border-border">
-      <span className="text-2xl font-bold tabular-nums leading-none text-foreground">
-        {value}
-      </span>
-      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <span className="text-border select-none text-base">·</span>
+
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-[28px] font-semibold tabular-nums leading-none text-foreground">
+          {timeSaved}
+        </span>
+        <span className="text-[12px] text-muted-foreground">saved</span>
+      </div>
+
+      <div className="ml-auto flex items-center gap-4 text-[12px] text-muted-foreground">
+        <span>
+          <span className="font-medium tabular-nums text-foreground">{wpm}</span>{" "}
+          WPM avg
+        </span>
+        <span>
+          <span className="font-medium tabular-nums text-foreground">
+            {formatCount(dictations)}
+          </span>{" "}
+          {dictations === 1 ? "dictation" : "dictations"}
+        </span>
+      </div>
     </div>
   );
 }
@@ -398,24 +429,103 @@ function ActivityChart({ data, period }: { data: ChartPoint[]; period: Period })
   );
 }
 
+function AppsUsed({ apps }: { apps: AppEntry[] }) {
+  const fetchedRef = useRef(new Set<string>());
+  const [icons, setIcons] = useState<Record<string, string | null>>({});
+
+  useEffect(() => {
+    for (const { bundleId } of apps) {
+      if (fetchedRef.current.has(bundleId)) continue;
+      fetchedRef.current.add(bundleId);
+      getAppIcon(bundleId)
+        .then((url) => setIcons((prev) => ({ ...prev, [bundleId]: url ?? null })))
+        .catch(() => setIcons((prev) => ({ ...prev, [bundleId]: null })));
+    }
+  }, [apps]);
+
+  return (
+    <ul className="m-0 list-none overflow-hidden rounded-lg border border-border bg-card p-0">
+      {apps.map((app) => (
+        <AppRow
+          key={app.bundleId}
+          app={app}
+          icon={icons[app.bundleId]}
+        />
+      ))}
+    </ul>
+  );
+}
+
+function AppRow({
+  app,
+  icon,
+}: {
+  app: AppEntry;
+  icon: string | null | undefined;
+}) {
+  return (
+    <li className="flex items-center gap-3 px-3 py-2.5 [&+li]:border-t [&+li]:border-border">
+      <AppIcon name={app.name} src={icon} />
+      <span className="text-[13px] text-foreground">{app.name}</span>
+      <span className="ml-auto text-[12px] tabular-nums text-muted-foreground">
+        {formatCount(app.count)}{" "}
+        {app.count === 1 ? "dictation" : "dictations"}
+      </span>
+    </li>
+  );
+}
+
+function AppIcon({ name, src }: { name: string; src: string | null | undefined }) {
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    setLoaded(false);
+  }, [src]);
+
+  return (
+    <div className="relative size-7 shrink-0">
+      <div
+        className={cn(
+          "absolute inset-0 flex items-center justify-center rounded-[6px] bg-muted transition-opacity duration-150",
+          loaded && src ? "opacity-0" : "opacity-100",
+        )}
+      >
+        <span className="select-none text-[11px] font-medium text-muted-foreground">
+          {name[0]?.toUpperCase() ?? "?"}
+        </span>
+      </div>
+      {src && (
+        <img
+          src={src}
+          alt={name}
+          draggable={false}
+          onLoad={() => setLoaded(true)}
+          className={cn(
+            "absolute inset-0 size-7 select-none object-contain transition-opacity duration-150",
+            loaded ? "opacity-100" : "opacity-0",
+          )}
+        />
+      )}
+    </div>
+  );
+}
+
 function CleanupRow({ tokens }: { tokens: CleanupTokens }) {
   const cost = estimateCostUsd(tokens.input, tokens.output);
   return (
-    <ul className="m-0 list-none overflow-hidden rounded-lg border border-border bg-card p-0">
-      <li className="flex items-baseline justify-between gap-3 px-4 py-3.5">
-        <span className="flex items-baseline gap-1.5 text-xs tabular-nums text-muted-foreground">
-          <span className="whitespace-nowrap">{formatCount(tokens.input)} input</span>
-          <span aria-hidden="true" className="select-none text-muted-foreground/70">·</span>
-          <span className="whitespace-nowrap">{formatCount(tokens.output)} output</span>
+    <div className="flex items-baseline justify-between gap-3 overflow-hidden rounded-lg border border-border bg-card px-4 py-3.5">
+      <span className="flex items-baseline gap-1.5 text-xs tabular-nums text-muted-foreground">
+        <span className="whitespace-nowrap">{formatCount(tokens.input)} input</span>
+        <span aria-hidden="true" className="select-none text-muted-foreground/70">·</span>
+        <span className="whitespace-nowrap">{formatCount(tokens.output)} output</span>
+      </span>
+      <span className="inline-flex shrink-0 items-baseline gap-1 tabular-nums">
+        <span className="text-lg font-semibold leading-none text-foreground">
+          {formatCost(cost)}
         </span>
-        <span className="inline-flex shrink-0 items-baseline gap-1 tabular-nums">
-          <span className="text-lg font-semibold leading-none text-foreground">
-            {formatCost(cost)}
-          </span>
-          <span className="text-eyebrow uppercase text-muted-foreground/70">est.</span>
-        </span>
-      </li>
-    </ul>
+        <span className="text-eyebrow uppercase text-muted-foreground/70">est.</span>
+      </span>
+    </div>
   );
 }
 

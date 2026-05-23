@@ -115,7 +115,7 @@ fn resolve_bundle() -> Option<(String, String)> {
     Some((bundle_id, name))
 }
 
-fn resolve_icon(bundle_id: &str) -> Option<String> {
+pub fn resolve_icon(bundle_id: &str) -> Option<String> {
     let b64 = run_osascript(ICON_SCRIPT, &[bundle_id])?;
     if b64.is_empty() {
         return None;

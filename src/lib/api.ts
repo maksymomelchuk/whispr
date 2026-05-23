@@ -156,3 +156,6 @@ export const getLocalModelPath = (model: LocalWhisperModel) =>
 
 export const setLocalWhisperIdleTimeout = (timeout: LocalWhisperIdleTimeout) =>
   invoke<void>("set_local_whisper_idle_timeout", { timeout });
+
+export const getAppIcon = (bundleId: string) =>
+  invoke<string | null>("get_app_icon", { bundleId });

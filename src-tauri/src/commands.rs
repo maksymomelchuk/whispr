@@ -432,6 +432,14 @@ pub fn clear_stats(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn get_app_icon(bundle_id: String) -> Option<String> {
+    tauri::async_runtime::spawn_blocking(move || crate::target_app::resolve_icon(&bundle_id))
+        .await
+        .ok()
+        .flatten()
+}
+
+#[tauri::command]
 pub fn get_cleanup_stats(app: AppHandle) -> CleanupStats {
     cleanup_stats::load(&app)
 }

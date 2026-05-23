@@ -200,6 +200,7 @@ pub fn run() {
             commands::set_history_limit,
             commands::get_stats,
             commands::clear_stats,
+            commands::get_app_icon,
             commands::get_cleanup_stats,
             commands::open_accessibility_settings,
             commands::check_permissions,
