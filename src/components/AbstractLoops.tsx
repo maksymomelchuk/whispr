@@ -174,6 +174,7 @@ export function AbstractLoops({
     let raf = 0;
     let running = true;
     const t0 = performance.now();
+    scaleRef.current = radius;
 
     const tick = (now: number) => {
       if (!running) return;
