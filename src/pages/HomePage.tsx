@@ -7,6 +7,7 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { Button } from "@/components/ui/button";
 import {
   checkPermissions,
+  ensurePttStarted,
   openAccessibilitySettings,
   openMicrophoneSettings,
   type PermissionsStatus,
@@ -23,23 +24,37 @@ export function HomePage() {
   const [permissions, setPermissions] = useState<PermissionsStatus | null>(null);
 
   useEffect(() => {
-    checkPermissions().then(setPermissions).catch(() => {});
-
-    let unlisten: (() => void) | undefined;
     let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    let listenCancelled = false;
+
+    const refresh = () => {
+      checkPermissions()
+        .then((perms) => {
+          if (cancelled) return;
+          setPermissions(perms);
+          if (perms.accessibility) ensurePttStarted().catch(() => {});
+        })
+        .catch(() => {});
+    };
+
+    refresh();
+    const intervalId = setInterval(refresh, 3000);
 
     getCurrentWindow()
       .onFocusChanged(({ payload: focused }) => {
-        if (focused) checkPermissions().then(setPermissions).catch(() => {});
+        if (focused) refresh();
       })
       .then((un) => {
-        if (cancelled) un();
+        if (listenCancelled) un();
         else unlisten = un;
       })
       .catch(() => {});
 
     return () => {
       cancelled = true;
+      listenCancelled = true;
+      clearInterval(intervalId);
       unlisten?.();
     };
   }, []);

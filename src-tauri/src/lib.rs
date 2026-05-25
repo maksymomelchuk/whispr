@@ -92,21 +92,6 @@ pub fn run() {
                     api.prevent_close();
                     let _ = window.hide();
                 }
-                #[cfg(target_os = "macos")]
-                WindowEvent::Focused(true) => {
-                    use std::sync::atomic::Ordering;
-                    let Some(app_state) = window.app_handle().try_state::<AppState>() else {
-                        return;
-                    };
-                    if !app_state.ptt_running.load(Ordering::Acquire)
-                        && permissions::check_accessibility_permission()
-                    {
-                        let recorder_opt = app_state.recorder.lock().unwrap().clone();
-                        if let Some(rec) = recorder_opt {
-                            ptt::start(window.app_handle().clone(), (*app_state).clone(), rec);
-                        }
-                    }
-                }
                 _ => {}
             }
         })
@@ -243,6 +228,7 @@ pub fn run() {
             commands::open_accessibility_settings,
             commands::check_permissions,
             commands::open_microphone_settings,
+            commands::ensure_ptt_started,
             commands::get_local_model_statuses,
             commands::start_model_download,
             commands::cancel_model_download,

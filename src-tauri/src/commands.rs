@@ -483,6 +483,26 @@ pub fn open_microphone_settings() {
 }
 
 #[tauri::command]
+pub fn ensure_ptt_started(app: AppHandle, state: State<'_, AppState>) {
+    use std::sync::atomic::Ordering;
+    if state.ptt_running.load(Ordering::Acquire) {
+        return;
+    }
+    if !permissions::check_accessibility_permission() {
+        return;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let recorder_opt = state.recorder.lock().unwrap().clone();
+        if let Some(rec) = recorder_opt {
+            crate::ptt::start(app, (*state).clone(), rec);
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = app;
+}
+
+#[tauri::command]
 pub fn get_local_model_statuses(
     app: AppHandle,
     state: State<'_, AppState>,
