@@ -485,21 +485,30 @@ pub fn open_microphone_settings() {
 #[tauri::command]
 pub fn ensure_ptt_started(app: AppHandle, state: State<'_, AppState>) {
     use std::sync::atomic::Ordering;
-    if state.ptt_running.load(Ordering::Acquire) {
+    if !permissions::check_accessibility_permission() {
         return;
     }
-    if !permissions::check_accessibility_permission() {
+    // CAS so concurrent polls can't double-spawn the tap thread.
+    if state
+        .ptt_running
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
         return;
     }
     #[cfg(target_os = "macos")]
     {
         let recorder_opt = state.recorder.lock().unwrap().clone();
-        if let Some(rec) = recorder_opt {
-            crate::ptt::start(app, (*state).clone(), rec);
+        match recorder_opt {
+            Some(rec) => crate::ptt::start(app, (*state).clone(), rec),
+            None => state.ptt_running.store(false, Ordering::Release),
         }
     }
     #[cfg(not(target_os = "macos"))]
-    let _ = app;
+    {
+        state.ptt_running.store(false, Ordering::Release);
+        let _ = app;
+    }
 }
 
 #[tauri::command]

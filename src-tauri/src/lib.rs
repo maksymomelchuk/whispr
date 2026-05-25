@@ -144,7 +144,15 @@ pub fn run() {
             {
                 let recorder = recorder::Recorder::spawn();
                 *app_state.recorder.lock().unwrap() = Some(recorder.clone());
-                ptt::start(app.handle().clone(), app_state.clone(), recorder);
+                // CGEventTapCreate without Accessibility returns a tap that
+                // only sees own-process events; that crippled state sticks
+                // until relaunch. Defer creation until permission lands.
+                if permissions::check_accessibility_permission() {
+                    app_state
+                        .ptt_running
+                        .store(true, std::sync::atomic::Ordering::Release);
+                    ptt::start(app.handle().clone(), app_state.clone(), recorder);
+                }
                 if let Err(e) = overlay::create(&app.handle()) {
                     eprintln!("Failed to create overlay window: {e}");
                 }

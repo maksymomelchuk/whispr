@@ -808,9 +808,10 @@ fn dispatch_binding(
 }
 
 
+/// Caller must set `state.ptt_running` to true (via CAS) before invoking.
+/// This function only clears it on `CGEventTap::new` failure.
 pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
     std::thread::spawn(move || {
-        state.ptt_running.store(true, std::sync::atomic::Ordering::Release);
         let ptt_running = state.ptt_running.clone();
 
         let mod_state = Mutex::new(ModKeyState::default());
