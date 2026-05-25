@@ -47,6 +47,34 @@ pub fn check_microphone_permission() -> bool {
     status == 3
 }
 
+/// Routes the mic prompt through AVFoundation so AVCaptureDevice's cached
+/// status reflects the grant. If the first mic access comes from cpal's
+/// CoreAudio path instead, `authorizationStatusForMediaType:` stays stuck at
+/// NotDetermined for the rest of the session. Idempotent: once status is
+/// determined, requestAccess returns immediately without re-prompting.
+#[cfg(target_os = "macos")]
+pub fn ensure_microphone_trust() {
+    use objc2::msg_send;
+    use objc2::runtime::{AnyClass, Bool};
+    use objc2_foundation::ns_string;
+
+    let Some(cls) = AnyClass::get(c"AVCaptureDevice") else {
+        return;
+    };
+    type CompletionBlock = Option<extern "C" fn(Bool)>;
+    let completion: CompletionBlock = None;
+    unsafe {
+        let _: () = msg_send![
+            cls,
+            requestAccessForMediaType: ns_string!("soun"),
+            completionHandler: completion
+        ];
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn ensure_microphone_trust() {}
+
 #[cfg(not(target_os = "macos"))]
 pub fn check_microphone_permission() -> bool {
     true

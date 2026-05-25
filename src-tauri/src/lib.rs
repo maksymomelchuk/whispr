@@ -115,6 +115,9 @@ pub fn run() {
             // user isn't left wondering why PTT silently does nothing. No-op
             // on other platforms.
             permissions::ensure_accessibility_trust();
+            // Prompts via AVFoundation so AVCaptureDevice's status cache
+            // tracks the grant — cpal's CoreAudio prompt doesn't refresh it.
+            permissions::ensure_microphone_trust();
 
             let settings = config::load(&app.handle());
 
