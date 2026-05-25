@@ -84,15 +84,30 @@ pub fn run() {
             Some(vec![]),
         ))
         .on_window_event(|window, event| {
-            // The settings window's red X should hide the app rather than
-            // destroy the instance — the tray icon re-shows the same
-            // window in place. Cmd+Q still routes through the default
-            // macOS menu (app.exit), which does not trigger this event.
-            if window.label() == MAIN_LABEL {
-                if let WindowEvent::CloseRequested { api, .. } = event {
+            if window.label() != MAIN_LABEL {
+                return;
+            }
+            match event {
+                WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
                     let _ = window.hide();
                 }
+                #[cfg(target_os = "macos")]
+                WindowEvent::Focused(true) => {
+                    use std::sync::atomic::Ordering;
+                    let Some(app_state) = window.app_handle().try_state::<AppState>() else {
+                        return;
+                    };
+                    if !app_state.ptt_running.load(Ordering::Acquire)
+                        && permissions::check_accessibility_permission()
+                    {
+                        let recorder_opt = app_state.recorder.lock().unwrap().clone();
+                        if let Some(rec) = recorder_opt {
+                            ptt::start(window.app_handle().clone(), (*app_state).clone(), rec);
+                        }
+                    }
+                }
+                _ => {}
             }
         })
         .setup(|app| {
@@ -143,6 +158,7 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             {
                 let recorder = recorder::Recorder::spawn();
+                *app_state.recorder.lock().unwrap() = Some(recorder.clone());
                 ptt::start(app.handle().clone(), app_state.clone(), recorder);
                 if let Err(e) = overlay::create(&app.handle()) {
                     eprintln!("Failed to create overlay window: {e}");

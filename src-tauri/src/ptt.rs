@@ -573,7 +573,7 @@ async fn run_session(
 
     let words = history_entry.final_text.split_whitespace().count() as u64;
     let seconds = speak_duration.as_secs() as u32;
-    stats::record(app, words, seconds);
+    stats::record(app, words, seconds, history_entry.bundle_id.as_deref(), history_entry.app_name.as_deref());
 
     match history::append(app, history_entry) {
         Ok(_) => {
@@ -810,6 +810,8 @@ fn dispatch_binding(
 
 pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
     std::thread::spawn(move || {
+        state.ptt_running.store(true, std::sync::atomic::Ordering::Release);
+        let ptt_running = state.ptt_running.clone();
 
         let mod_state = Mutex::new(ModKeyState::default());
         // Shared handle to the tap's mach port so the callback can re-enable
@@ -1067,6 +1069,7 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                 eprintln!(
                     "Failed to create CGEventTap. Grant Accessibility permission to this binary and relaunch."
                 );
+                ptt_running.store(false, std::sync::atomic::Ordering::Release);
                 return;
             }
         };

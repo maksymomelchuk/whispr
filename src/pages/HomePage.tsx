@@ -1,4 +1,5 @@
 import { KeyboardIcon, MicrophoneIcon } from "@phosphor-icons/react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
 
 import { AbstractLoops } from "@/components/AbstractLoops";
@@ -23,6 +24,24 @@ export function HomePage() {
 
   useEffect(() => {
     checkPermissions().then(setPermissions).catch(() => {});
+
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+
+    getCurrentWindow()
+      .onFocusChanged(({ payload: focused }) => {
+        if (focused) checkPermissions().then(setPermissions).catch(() => {});
+      })
+      .then((un) => {
+        if (cancelled) un();
+        else unlisten = un;
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
   }, []);
 
   const allReady =

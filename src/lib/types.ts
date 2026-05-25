@@ -233,11 +233,17 @@ export interface HistoryEntry {
   bundle_id?: string | null;
 }
 
+export interface AppUsage {
+  name: string;
+  count: number;
+}
+
 export interface StatsRow {
   date: string;
   words: number;
   dictations: number;
   total_seconds: number;
+  app_counts?: Record<string, AppUsage>;
 }
 
 export interface PeriodCounter {

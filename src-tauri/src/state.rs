@@ -6,6 +6,8 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
 #[cfg(target_os = "macos")]
 use std::time::Instant;
+#[cfg(target_os = "macos")]
+use crate::recorder::Recorder;
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct ModifierState {
@@ -59,6 +61,12 @@ pub struct AppState {
     /// Receives the frontmost app captured at PTT press so the session task
     /// can record it in the history entry without a second osascript call.
     pub pending_app_rx: Arc<Mutex<Option<oneshot::Receiver<Option<(String, String)>>>>>,
+    /// True while the CGEventTap thread is alive. Used to detect when
+    /// Accessibility permission was granted after startup so we can restart
+    /// the tap without a full app relaunch.
+    pub ptt_running: Arc<AtomicBool>,
+    #[cfg(target_os = "macos")]
+    pub recorder: Arc<Mutex<Option<Recorder>>>,
     #[cfg(target_os = "macos")]
     pub model_cache: Arc<Mutex<HashMap<LocalWhisperModel, LoadedModel>>>,
 }

@@ -22,11 +22,10 @@ import { useConfirmAction } from "../hooks/useConfirmAction";
 import {
   getAppIcon,
   getCleanupStats,
-  getHistory,
   getStats,
   clearStats as persistClearStats,
 } from "../lib/api";
-import type { CleanupStats, HistoryEntry, StatsRow } from "../lib/types";
+import type { CleanupStats, StatsRow } from "../lib/types";
 import { EmptyPanel } from "./EmptyPanel";
 import { InfoTip } from "./InfoTip";
 import { SectionHeader } from "./SectionHeader";
@@ -91,11 +90,6 @@ function dateCutoff(period: Period): string | null {
   return localDateISO(d);
 }
 
-function timestampCutoff(period: Period): number | null {
-  if (period === "all") return null;
-  const days = period === "week" ? 7 : 30;
-  return Math.floor(Date.now() / 1000) - days * 86400;
-}
 
 function aggregateRows(rows: StatsRow[], period: Period): Aggregate {
   const cutoff = dateCutoff(period);
@@ -109,17 +103,18 @@ function aggregateRows(rows: StatsRow[], period: Period): Aggregate {
   return agg;
 }
 
-function collectAppStats(entries: HistoryEntry[], period: Period): AppEntry[] {
-  const cutoff = timestampCutoff(period);
+function collectAppStats(rows: StatsRow[], period: Period): AppEntry[] {
+  const cutoff = dateCutoff(period);
   const map = new Map<string, { name: string; count: number }>();
-  for (const e of entries) {
-    if (cutoff !== null && e.timestamp < cutoff) continue;
-    if (!e.bundle_id) continue;
-    const existing = map.get(e.bundle_id);
-    if (existing) {
-      existing.count++;
-    } else {
-      map.set(e.bundle_id, { name: e.app_name ?? e.bundle_id, count: 1 });
+  for (const r of rows) {
+    if (cutoff !== null && r.date < cutoff) continue;
+    for (const [bundleId, usage] of Object.entries(r.app_counts ?? {})) {
+      const existing = map.get(bundleId);
+      if (existing) {
+        existing.count += usage.count;
+      } else {
+        map.set(bundleId, { name: usage.name, count: usage.count });
+      }
     }
   }
   return Array.from(map.entries())
@@ -192,13 +187,12 @@ function formatCost(cost: number): string {
 export function StatsTab() {
   const [period, setPeriod] = useState<Period>("week");
   const [rows, setRows] = useState<StatsRow[]>([]);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [cleanup, setCleanup] = useState<CleanupStats | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const agg = useMemo(() => aggregateRows(rows, period), [rows, period]);
-  const appStats = useMemo(() => collectAppStats(history, period), [history, period]);
+  const appStats = useMemo(() => collectAppStats(rows, period), [rows, period]);
   const chartData = useMemo(() => buildChartData(rows, period), [rows, period]);
 
   const cleanupTokens: CleanupTokens | null = useMemo(() => {
@@ -213,7 +207,6 @@ export function StatsTab() {
       try {
         await persistClearStats();
         setRows([]);
-        setHistory([]);
         setCleanup(null);
       } catch (e) {
         console.error("clear stats failed", e);
@@ -221,10 +214,9 @@ export function StatsTab() {
     });
 
   const refresh = () => {
-    Promise.all([getStats(), getHistory(), getCleanupStats()])
-      .then(([statRows, historyEntries, cs]) => {
+    Promise.all([getStats(), getCleanupStats()])
+      .then(([statRows, cs]) => {
         setRows(statRows);
-        setHistory(historyEntries);
         setCleanup(cs);
         setLoadState("ready");
       })
@@ -247,7 +239,6 @@ export function StatsTab() {
         .catch((e) => console.error(`${event} listen failed`, e));
     attach("stats-updated");
     attach("cleanup-stats-updated");
-    attach("history-updated");
     return () => {
       cancelled = true;
       unsubs.forEach((u) => u());

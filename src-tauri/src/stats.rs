@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use tauri::{Emitter, Manager};
@@ -10,11 +11,19 @@ const RETENTION_DAYS: i64 = 365;
 pub const STATS_UPDATED_EVENT: &str = "stats-updated";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppUsage {
+    pub name: String,
+    pub count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StatsRow {
     pub date: String,
     pub words: u64,
     pub dictations: u32,
     pub total_seconds: u32,
+    #[serde(default)]
+    pub app_counts: HashMap<String, AppUsage>,
 }
 
 fn stats_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -64,7 +73,7 @@ fn local_now() -> OffsetDateTime {
     OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc())
 }
 
-pub fn record(app: &tauri::AppHandle, words: u64, seconds: u32) {
+pub fn record(app: &tauri::AppHandle, words: u64, seconds: u32, bundle_id: Option<&str>, app_name: Option<&str>) {
     let today = local_now().date();
     let today_str = today.to_string();
     let cutoff_str = (today - time::Duration::days(RETENTION_DAYS)).to_string();
@@ -75,12 +84,24 @@ pub fn record(app: &tauri::AppHandle, words: u64, seconds: u32) {
         row.words = row.words.saturating_add(words);
         row.dictations = row.dictations.saturating_add(1);
         row.total_seconds = row.total_seconds.saturating_add(seconds);
+        if let (Some(id), Some(name)) = (bundle_id, app_name) {
+            let entry = row.app_counts.entry(id.to_string()).or_insert_with(|| AppUsage {
+                name: name.to_string(),
+                count: 0,
+            });
+            entry.count = entry.count.saturating_add(1);
+        }
     } else {
+        let mut app_counts = HashMap::new();
+        if let (Some(id), Some(name)) = (bundle_id, app_name) {
+            app_counts.insert(id.to_string(), AppUsage { name: name.to_string(), count: 1 });
+        }
         rows.push(StatsRow {
             date: today_str,
             words,
             dictations: 1,
             total_seconds: seconds,
+            app_counts,
         });
     }
 
