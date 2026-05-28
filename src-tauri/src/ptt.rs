@@ -599,8 +599,8 @@ async fn run_session(
             None => None,
         }
     };
-    history_entry.app_name = resolved_app.as_ref().map(|(_, name)| name.clone());
-    history_entry.bundle_id = resolved_app.map(|(id, _)| id);
+    history_entry.app_name = resolved_app.as_ref().map(|a| a.name.clone());
+    history_entry.bundle_id = resolved_app.map(|a| a.bundle_id);
 
     // paste_handle must complete before any notify_error: set_focus()
     // during the modifier-release wait would steal focus mid-paste.

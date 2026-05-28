@@ -16,6 +16,15 @@ use tokio::sync::oneshot;
 
 const TARGET_APP_EVENT: &str = "target-app";
 
+/// The frontmost app at PTT-down, resolved by osascript. Plumbed from the
+/// capture worker to the session task via a oneshot so history can attribute
+/// the dictation to a specific app without a second probe.
+#[derive(Debug, Clone)]
+pub struct FrontmostApp {
+    pub bundle_id: String,
+    pub name: String,
+}
+
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct TargetApp {
@@ -48,36 +57,32 @@ pub fn capture(app: AppHandle) {
     }
 
     tauri::async_runtime::spawn_blocking(move || {
-        let (bundle_id, name) = match resolve_bundle() {
-            Some(b) => b,
-            None => {
-                let _ = tx.send(None);
-                return;
-            }
+        let Some(frontmost) = resolve_bundle() else {
+            let _ = tx.send(None);
+            return;
         };
 
-        let _ = tx.send(Some((bundle_id.clone(), name.clone())));
+        let _ = tx.send(Some(frontmost.clone()));
 
-        if let Some(cached) = cache().lock().unwrap().get(&bundle_id).cloned() {
+        if let Some(cached) = cache().lock().unwrap().get(&frontmost.bundle_id).cloned() {
             let _ = app.emit(TARGET_APP_EVENT, &cached);
             return;
         }
 
-        let icon_data_url = match resolve_icon(&bundle_id) {
-            Some(i) => i,
-            None => return,
+        let Some(icon_data_url) = resolve_icon(&frontmost.bundle_id) else {
+            return;
         };
         let target = TargetApp {
-            bundle_id: bundle_id.clone(),
-            name,
+            bundle_id: frontmost.bundle_id.clone(),
+            name: frontmost.name,
             icon_data_url,
         };
-        cache().lock().unwrap().insert(bundle_id, target.clone());
+        cache().lock().unwrap().insert(frontmost.bundle_id, target.clone());
         let _ = app.emit(TARGET_APP_EVENT, &target);
     });
 }
 
-fn resolve_bundle() -> Option<(String, String)> {
+fn resolve_bundle() -> Option<FrontmostApp> {
     let output = run_osascript(BUNDLE_SCRIPT, &[])?;
     let mut parts = output.splitn(2, "|||");
     let bundle_id = parts.next()?.trim().to_string();
@@ -85,7 +90,7 @@ fn resolve_bundle() -> Option<(String, String)> {
     if bundle_id.is_empty() {
         return None;
     }
-    Some((bundle_id, name))
+    Some(FrontmostApp { bundle_id, name })
 }
 
 pub fn resolve_icon(bundle_id: &str) -> Option<String> {

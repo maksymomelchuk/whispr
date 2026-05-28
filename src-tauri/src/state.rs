@@ -1,5 +1,6 @@
 use crate::config::{HotkeyBinding, Shortcut};
 use crate::provider::LocalWhisperModel;
+use crate::target_app::FrontmostApp;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
@@ -64,7 +65,7 @@ pub struct AppState {
     pub download_cancel_flags: Arc<Mutex<HashMap<LocalWhisperModel, Arc<AtomicBool>>>>,
     /// Receives the frontmost app captured at PTT press so the session task
     /// can record it in the history entry without a second osascript call.
-    pub pending_app_rx: Arc<Mutex<Option<oneshot::Receiver<Option<(String, String)>>>>>,
+    pub pending_app_rx: Arc<Mutex<Option<oneshot::Receiver<Option<FrontmostApp>>>>>,
     /// True while the CGEventTap thread is alive. Used to detect when
     /// Accessibility permission was granted after startup so we can restart
     /// the tap without a full app relaunch.
