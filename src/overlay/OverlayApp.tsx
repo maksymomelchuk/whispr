@@ -84,17 +84,19 @@ function ErrorIcon() {
   );
 }
 
+const BAR_COUNT = 5;
+const BAR_MIN_HEIGHT = 4;
+const BAR_MAX_HEIGHT = 16;
+
 const Waveform = ({
   levelRef,
 }: {
   levelRef: React.RefObject<HTMLDivElement | null>;
 }) => (
   <div ref={levelRef} className="overlay-wave" aria-hidden="true">
-    <span className="overlay-bar" />
-    <span className="overlay-bar" />
-    <span className="overlay-bar" />
-    <span className="overlay-bar" />
-    <span className="overlay-bar" />
+    {Array.from({ length: BAR_COUNT }).map((_, i) => (
+      <span key={i} className="overlay-bar" style={{ height: `var(--bar-${i})` }} />
+    ))}
   </div>
 );
 
@@ -115,9 +117,21 @@ export function OverlayApp() {
   const waveRef = useRef<HTMLDivElement>(null);
 
   // Imperative write so 30 Hz mic frames don't churn React state.
+  // Per-bar sine modulation: each bar's phase is fixed by its index, and the
+  // level enters the sine argument so the standing wave shifts across the
+  // bars as the level changes — porting AudioWaveformView from typewhisper-mac.
   const applyLevel = (level: number) => {
     const node = waveRef.current;
-    if (node) node.style.setProperty("--overlay-level", level.toFixed(3));
+    if (!node) return;
+    const clamped = Math.min(1, Math.max(0, level));
+    for (let i = 0; i < BAR_COUNT; i++) {
+      const phase = (i / BAR_COUNT) * Math.PI * 2;
+      const waveOffset = Math.sin(phase + Math.PI * 0.75 + clamped * 3) * 0.12 + 0.88;
+      let barLevel = clamped * waveOffset;
+      if (i === 0) barLevel *= 0.85;
+      const height = BAR_MIN_HEIGHT + barLevel * (BAR_MAX_HEIGHT - BAR_MIN_HEIGHT);
+      node.style.setProperty(`--bar-${i}`, `${height.toFixed(2)}px`);
+    }
   };
 
   useEffect(() => {
