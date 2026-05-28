@@ -193,6 +193,16 @@ body:has(.overlay-root) {
   color: #ff5a5a;
 }
 
+.overlay-cancel-icon {
+  display: block;
+  flex-shrink: 0;
+  color: #ff5a5a;
+}
+
+.overlay-pill.cancelled {
+  background: rgba(15, 15, 15, 0.9);
+}
+
 /* Rotates in 12 discrete steps so the brightest tick "chases" around the
    wheel rather than smoothly spinning. */
 .overlay-spinner {

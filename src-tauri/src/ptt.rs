@@ -29,8 +29,10 @@ const PTT_PRESSED_EVENT: &str = "ptt-pressed";
 const PTT_RELEASED_EVENT: &str = "ptt-released";
 const PTT_THINKING_EVENT: &str = "ptt-thinking";
 const PTT_ERROR_EVENT: &str = "ptt-error";
+const PTT_CANCELLED_EVENT: &str = "ptt-cancelled";
 
 const ERROR_FLASH: Duration = Duration::from_millis(800);
+const CANCEL_FLASH: Duration = Duration::from_millis(800);
 const DOUBLE_TAP_THRESHOLD: Duration = Duration::from_millis(400);
 const MIN_SPEAK_DURATION: Duration = Duration::from_millis(300);
 
@@ -370,6 +372,27 @@ fn is_modifier_code(code: &str) -> bool {
     )
 }
 
+/// True iff this event should cancel the in-flight Session. Escape press while
+/// recording — modifiers intentionally ignored so held-modifier PTT shortcuts
+/// (e.g. hold Right-Alt) still allow cancellation without releasing PTT first.
+pub fn is_cancel_event(code: &str, is_press: bool, ptt_active: bool) -> bool {
+    code == "Escape" && is_press && ptt_active
+}
+
+/// Tear down the recording side of a Session: mark cancelled, drop the active
+/// shortcut, stop the recorder, resume muted media, emit the cancel event.
+/// The downstream short-circuit in run_session is what skips paste / history /
+/// stats / translate / cleanup — this function only handles the immediate
+/// mic-and-overlay teardown that mirrors a normal release.
+fn cancel_session(app: &AppHandle, state: &AppState, recorder: &Recorder) {
+    state.session_cancelled.store(true, Ordering::Release);
+    *state.ptt_active.lock().unwrap() = false;
+    *state.active_shortcut.lock().unwrap() = None;
+    recorder.stop();
+    maybe_resume_media(state);
+    let _ = app.emit(PTT_CANCELLED_EVENT, ());
+}
+
 /// Mute system audio output when the user starts dictating. Runs in
 /// spawn_blocking because we shell out to osascript, which can take tens of
 /// milliseconds — too long to block the CGEventTap callback.
@@ -511,6 +534,18 @@ async fn run_session(
                 .await
         }
     };
+
+    if app
+        .state::<AppState>()
+        .session_cancelled
+        .load(Ordering::Acquire)
+    {
+        // cancel_session already stopped the recorder; whatever session_result
+        // we got is discarded. Hold the "Cancelled" pill visible for the flash
+        // window before spawn_session hides the overlay.
+        tokio::time::sleep(CANCEL_FLASH).await;
+        return Ok(());
+    }
 
     let (raw_text, speak_duration) = match session_result {
         Ok(r) => r,
@@ -751,6 +786,7 @@ fn start_ptt(
         return;
     }
     *active = true;
+    state.session_cancelled.store(false, Ordering::Release);
     *state.active_shortcut.lock().unwrap() = Some(shortcut.clone());
     let device = state.input_device.lock().unwrap().clone();
     // Capture frontmost app before overlay::show so the worker's
@@ -907,6 +943,16 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
 
                 let now = Instant::now();
                 let ptt_active_now = *state.ptt_active.lock().unwrap();
+
+                // Cancel takes precedence over every other tap path. Bypasses
+                // the relevance filter (Escape doesn't match any PTT shortcut)
+                // and the coexistence timer (modifier state is irrelevant —
+                // see is_cancel_event).
+                if is_cancel_event(code, is_press, ptt_active_now) {
+                    cancel_session(&app, &state, &recorder);
+                    return None;
+                }
+
                 let bindings = state.hotkey_bindings.lock().unwrap().clone();
                 let modifiers_val = *state.modifiers.lock().unwrap();
 
@@ -1405,6 +1451,32 @@ mod tests {
 
         advance_tap_state(&mut state, TapEvent::OtherKey, base + Duration::from_millis(10));
         assert!(!coex_timer_should_fire(&state, captured_generation));
+    }
+
+    #[test]
+    fn cancel_predicate_fires_on_escape_press_during_active_session() {
+        assert!(is_cancel_event("Escape", true, true));
+    }
+
+    #[test]
+    fn cancel_predicate_inert_when_no_session_active() {
+        assert!(!is_cancel_event("Escape", true, false));
+    }
+
+    #[test]
+    fn cancel_predicate_ignores_escape_release() {
+        assert!(!is_cancel_event("Escape", false, true));
+    }
+
+    #[test]
+    fn cancel_predicate_ignores_non_escape_keys() {
+        assert!(!is_cancel_event("Space", true, true));
+        assert!(!is_cancel_event("KeyA", true, true));
+    }
+
+    #[test]
+    fn cancel_predicate_ignores_escape_release_when_idle() {
+        assert!(!is_cancel_event("Escape", false, false));
     }
 
     #[test]

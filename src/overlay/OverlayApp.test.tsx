@@ -68,6 +68,33 @@ describe("OverlayApp", () => {
     expect(container.querySelector(".overlay-spinner")).not.toBeInTheDocument();
   });
 
+  it("ptt-cancelled renders cancel icon and Cancelled label", async () => {
+    const { container, getByText } = await renderAndSettle();
+    fire("ptt-cancelled");
+    expect(container.querySelector(".overlay-cancel-icon")).toBeInTheDocument();
+    expect(getByText("Cancelled")).toBeInTheDocument();
+    expect(container.querySelector(".overlay-wave")).not.toBeInTheDocument();
+    expect(container.querySelector(".overlay-spinner")).not.toBeInTheDocument();
+  });
+
+  it("ptt-pressed after ptt-cancelled resets to recording", async () => {
+    const { container } = await renderAndSettle();
+    fire("ptt-cancelled");
+    expect(container.querySelector(".overlay-cancel-icon")).toBeInTheDocument();
+    fire("ptt-pressed");
+    expect(container.querySelector(".overlay-wave")).toBeInTheDocument();
+    expect(
+      container.querySelector(".overlay-cancel-icon"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("transcript-partial during cancelled state does not render preview", async () => {
+    const { container } = await renderAndSettle();
+    fire("ptt-cancelled");
+    fire("transcript-partial", "leaked words");
+    expect(container.querySelector(".overlay-partial")).not.toBeInTheDocument();
+  });
+
   it("overlay-reset returns to recording mode and shows waveform", async () => {
     const { container } = await renderAndSettle();
     fire("ptt-thinking");

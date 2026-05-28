@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import "./OverlayApp.css";
 
-type Mode = "recording" | "thinking" | "error";
+type Mode = "recording" | "thinking" | "error" | "cancelled";
 
 type TargetApp = {
   bundleId: string;
@@ -42,6 +42,27 @@ function Spinner() {
           transform={`rotate(${i * (360 / SPINNER_TICKS)} 12 12)`}
         />
       ))}
+    </svg>
+  );
+}
+
+function CancelIcon() {
+  return (
+    <svg
+      className="overlay-cancel-icon"
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="10" fill="currentColor" />
+      <path
+        d="M8 8 L16 16 M16 8 L8 16"
+        stroke="#0f0f0f"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -158,6 +179,10 @@ export function OverlayApp() {
         setMode("error");
         setPartial("");
       }),
+      listen("ptt-cancelled", () => {
+        setMode("cancelled");
+        setPartial("");
+      }),
       listen<string>("transcript-partial", (e) => {
         setPartial(e.payload ?? "");
       }),
@@ -201,11 +226,14 @@ export function OverlayApp() {
                 />
               )}
             </div>
-            <span className="overlay-timer">{formatElapsed(elapsedSec)}</span>
+            <span className="overlay-timer">
+              {mode === "cancelled" ? "Cancelled" : formatElapsed(elapsedSec)}
+            </span>
           </div>
           {mode === "recording" && <Waveform levelRef={waveRef} />}
           {mode === "thinking" && <Spinner />}
           {mode === "error" && <ErrorIcon />}
+          {mode === "cancelled" && <CancelIcon />}
         </div>
       </div>
     </div>
