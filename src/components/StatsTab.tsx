@@ -407,6 +407,7 @@ function ActivityChart({ data, period }: { data: ChartPoint[]; period: Period })
           allowDecimals={false}
         />
         <ChartTooltip
+          isAnimationActive={false}
           content={
             <ChartTooltipContent
               formatter={(value) => [formatCount(value as number), "words"]}
