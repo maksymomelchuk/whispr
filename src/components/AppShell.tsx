@@ -30,7 +30,6 @@ import { ModesPage } from "../pages/ModesPage";
 import { SnippetsPage } from "../pages/SnippetsPage";
 import { StatsPage } from "../pages/StatsPage";
 import { AiProvidersPage } from "../pages/AiProvidersPage";
-import { ProvidersPage } from "../pages/ProvidersPage";
 import { SpeechModelsPage } from "../pages/SpeechModelsPage";
 import {
   Sidebar,
@@ -67,7 +66,6 @@ const NAV_SECTIONS: NavSection[] = [
       { label: "Profiles", icon: SlidersIcon, path: "/modes" },
       { label: "Speech models", icon: WaveformIcon, path: "/speech-models" },
       { label: "AI Providers", icon: SparkleIcon, path: "/ai-providers" },
-      { label: "Providers", icon: WaveformIcon, path: "/providers" },
       { label: "Vocabulary", icon: TextTIcon, path: "/terms" },
       { label: "Corrections", icon: ArrowsHorizontalIcon, path: "/corrections" },
       { label: "Snippets", icon: LightningIcon, path: "/snippets" },
@@ -241,7 +239,6 @@ function ShellInner() {
               <Route path="/hotkeys" element={<HotkeysPage />} />
               <Route path="/speech-models" element={<SpeechModelsPage />} />
               <Route path="/ai-providers" element={<AiProvidersPage />} />
-              <Route path="/providers" element={<ProvidersPage />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/corrections" element={<CorrectionsPage />} />
               <Route path="/modes" element={<ModesPage />} />

@@ -696,10 +696,10 @@ export function ModeEditor({
                 <p className="text-help text-muted-foreground">
                   Download models in{" "}
                   <Link
-                    to="/providers"
+                    to="/speech-models"
                     className="underline hover:text-foreground transition-colors"
                   >
-                    Providers → Local Models
+                    Speech models
                   </Link>
                   .
                 </p>
@@ -822,7 +822,7 @@ export function ModeEditor({
             label="AI cleanup"
             info={
               !cleanupCredentialConfigured && !draft.ai_cleanup.enabled
-                ? "Set Anthropic credentials in Providers to enable cleanup."
+                ? "Set Anthropic credentials in AI Providers to enable cleanup."
                 : undefined
             }
             checked={draft.ai_cleanup.enabled}

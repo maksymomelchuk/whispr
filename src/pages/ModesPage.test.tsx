@@ -381,7 +381,7 @@ describe("ModeEditor – local model picker", () => {
     ]);
     render(<EditorWrapper mode={LOCAL_MODE} />);
     await waitFor(() =>
-      expect(screen.getByText(/Providers → Local Models/)).toBeInTheDocument(),
+      expect(screen.getByText(/Speech models/)).toBeInTheDocument(),
     );
   });
 
@@ -392,7 +392,7 @@ describe("ModeEditor – local model picker", () => {
     ]);
     render(<EditorWrapper mode={LOCAL_MODE} />);
     await waitFor(() =>
-      expect(screen.queryByText(/Providers → Local Models/)).not.toBeInTheDocument(),
+      expect(screen.queryByText(/Speech models/)).not.toBeInTheDocument(),
     );
   });
 
