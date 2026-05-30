@@ -16,8 +16,8 @@ vi.mock("@/components/ui/dialog", () => ({
   DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
   DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
-  DialogClose: ({ children, onClick, ...props }: any) => (
-    <button type="button" onClick={onClick} {...props}>
+  DialogClose: ({ children, onClick }: { children?: React.ReactNode; onClick?: React.MouseEventHandler<HTMLButtonElement> }) => (
+    <button type="button" onClick={onClick}>
       {children}
     </button>
   ),

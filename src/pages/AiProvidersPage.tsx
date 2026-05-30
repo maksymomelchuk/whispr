@@ -26,7 +26,7 @@ import {
   setCleanupThresholds as persistThresholds,
 } from "../lib/api";
 import type { EngineDescriptor } from "../lib/speechModelCatalog";
-import type { CleanupAuthMode, Settings } from "../lib/types";
+import type { Settings } from "../lib/types";
 
 const ANTHROPIC_API_KEY_DESCRIPTOR: EngineDescriptor = {
   id: "anthropic",
@@ -38,6 +38,7 @@ const ANTHROPIC_API_KEY_DESCRIPTOR: EngineDescriptor = {
   helpUrl: "https://console.anthropic.com/settings/keys",
   selectConfigured: (s: Settings) => s.ai_cleanup_key_configured,
   persist: persistApiKey,
+  // No client-side validation endpoint for Anthropic keys; auth failures surface at cleanup time.
   validate: async () => ({ kind: "valid" as const }),
 };
 
@@ -51,6 +52,7 @@ const ANTHROPIC_OAUTH_DESCRIPTOR: EngineDescriptor = {
   helpUrl: "https://claude.ai/",
   selectConfigured: (s: Settings) => s.ai_cleanup_oauth_token_configured,
   persist: persistOauthToken,
+  // No client-side validation endpoint for Anthropic keys; auth failures surface at cleanup time.
   validate: async () => ({ kind: "valid" as const }),
 };
 
@@ -91,11 +93,11 @@ export function AiProvidersPage() {
 
   const handleAuthModeChange = async (val: string) => {
     if (!val || val === authMode) return;
-    const mode = val as CleanupAuthMode;
+    if (val !== "api_key" && val !== "oauth") return;
     await setSetting(
       "ai_cleanup_auth_mode",
-      mode,
-      () => persistAuthMode(mode),
+      val,
+      () => persistAuthMode(val),
       (e) => toast.error("Couldn't change auth mode", { description: String(e) }),
     );
   };
