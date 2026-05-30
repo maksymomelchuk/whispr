@@ -7,6 +7,7 @@ import {
   KeyboardIcon,
   LightningIcon,
   SlidersIcon,
+  SparkleIcon,
   TextTIcon,
   WaveformIcon,
 } from "@phosphor-icons/react";
@@ -28,6 +29,7 @@ import { HotkeysPage } from "../pages/HotkeysPage";
 import { ModesPage } from "../pages/ModesPage";
 import { SnippetsPage } from "../pages/SnippetsPage";
 import { StatsPage } from "../pages/StatsPage";
+import { AiProvidersPage } from "../pages/AiProvidersPage";
 import { ProvidersPage } from "../pages/ProvidersPage";
 import { SpeechModelsPage } from "../pages/SpeechModelsPage";
 import {
@@ -64,6 +66,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: "Hotkeys", icon: KeyboardIcon, path: "/hotkeys" },
       { label: "Profiles", icon: SlidersIcon, path: "/modes" },
       { label: "Speech models", icon: WaveformIcon, path: "/speech-models" },
+      { label: "AI Providers", icon: SparkleIcon, path: "/ai-providers" },
       { label: "Providers", icon: WaveformIcon, path: "/providers" },
       { label: "Vocabulary", icon: TextTIcon, path: "/terms" },
       { label: "Corrections", icon: ArrowsHorizontalIcon, path: "/corrections" },
@@ -237,6 +240,7 @@ function ShellInner() {
               <Route path="/general" element={<GeneralPage />} />
               <Route path="/hotkeys" element={<HotkeysPage />} />
               <Route path="/speech-models" element={<SpeechModelsPage />} />
+              <Route path="/ai-providers" element={<AiProvidersPage />} />
               <Route path="/providers" element={<ProvidersPage />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/corrections" element={<CorrectionsPage />} />
