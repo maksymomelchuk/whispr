@@ -213,7 +213,7 @@ export function LocalModelCard({ status }: Props) {
         </div>
       </div>
 
-      {isDownloading && downloadState.kind === "downloading" && (
+      {isDownloading && (
         <div className="flex flex-col gap-1">
           <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
             <div
