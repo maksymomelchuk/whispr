@@ -49,19 +49,6 @@ impl ModeLanguage {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum TranslateTarget {
-    Off,
-    Apple { target: String },
-}
-
-impl Default for TranslateTarget {
-    fn default() -> Self {
-        TranslateTarget::Off
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModeCleanup {
     pub enabled: bool,
@@ -88,7 +75,6 @@ pub struct Mode {
     #[serde(default)]
     pub icon: Option<String>,
     pub language: ModeLanguage,
-    pub translate: TranslateTarget,
     pub ai_cleanup: ModeCleanup,
     /// Legacy field; migrated to use_terms + use_corrections on first load.
     #[serde(rename = "use_dictionary", default, skip_serializing)]
@@ -118,7 +104,6 @@ impl Mode {
             name: "Default English".to_string(),
             icon: None,
             language: ModeLanguage::exact("en"),
-            translate: TranslateTarget::Off,
             ai_cleanup: ModeCleanup {
                 enabled: cleanup_enabled,
                 prompt_override: None,
@@ -139,7 +124,6 @@ impl Mode {
             name: "Cleaned English".to_string(),
             icon: None,
             language: ModeLanguage::exact("en"),
-            translate: TranslateTarget::Off,
             ai_cleanup: ModeCleanup {
                 enabled: true,
                 prompt_override: None,
@@ -160,7 +144,6 @@ impl Mode {
             name: "Ukrainian".to_string(),
             icon: None,
             language: ModeLanguage::exact("uk"),
-            translate: TranslateTarget::Off,
             ai_cleanup: ModeCleanup {
                 enabled: false,
                 prompt_override: None,
@@ -181,12 +164,13 @@ impl Mode {
             name: "UA \u{2192} EN".to_string(),
             icon: None,
             language: ModeLanguage::exact("uk"),
-            translate: TranslateTarget::Apple {
-                target: "en".to_string(),
-            },
             ai_cleanup: ModeCleanup {
                 enabled: true,
-                prompt_override: None,
+                prompt_override: Some(
+                    "Translate the following Ukrainian transcription to English. \
+                     Output only the translated text, nothing else."
+                        .to_string(),
+                ),
             },
             legacy_use_dictionary: None,
             use_terms: true,
@@ -266,40 +250,6 @@ mod tests {
     }
 
     #[test]
-    fn translate_target_off_serializes_with_kind() {
-        let t = TranslateTarget::Off;
-        let json = serde_json::to_string(&t).unwrap();
-        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert_eq!(v["kind"], "off");
-    }
-
-    #[test]
-    fn translate_target_apple_serializes_with_kind_and_target() {
-        let t = TranslateTarget::Apple {
-            target: "en".to_string(),
-        };
-        let json = serde_json::to_string(&t).unwrap();
-        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert_eq!(v["kind"], "apple");
-        assert_eq!(v["target"], "en");
-    }
-
-    #[test]
-    fn translate_target_round_trips() {
-        let cases = vec![
-            TranslateTarget::Off,
-            TranslateTarget::Apple {
-                target: "en".to_string(),
-            },
-        ];
-        for case in cases {
-            let json = serde_json::to_string(&case).unwrap();
-            let decoded: TranslateTarget = serde_json::from_str(&json).unwrap();
-            assert_eq!(decoded, case);
-        }
-    }
-
-    #[test]
     fn mode_round_trips() {
         let mode = Mode::seed_default_en(false);
         let json = serde_json::to_string(&mode).unwrap();
@@ -315,7 +265,7 @@ mod tests {
 
     #[test]
     fn use_dictionary_false_deserializes_to_legacy_field() {
-        let json = r#"{"id":"x","name":"X","language":{"kind":"exact","code":"en"},"translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_dictionary":false,"use_snippets":true}"#;
+        let json = r#"{"id":"x","name":"X","language":{"kind":"exact","code":"en"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_dictionary":false,"use_snippets":true}"#;
         let mode: Mode = serde_json::from_str(json).unwrap();
         assert_eq!(mode.legacy_use_dictionary, Some(false));
         // use_terms and use_corrections default to true until migrated
@@ -325,14 +275,14 @@ mod tests {
 
     #[test]
     fn use_dictionary_true_deserializes_to_legacy_field() {
-        let json = r#"{"id":"x","name":"X","language":{"kind":"exact","code":"en"},"translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_dictionary":true,"use_snippets":true}"#;
+        let json = r#"{"id":"x","name":"X","language":{"kind":"exact","code":"en"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_dictionary":true,"use_snippets":true}"#;
         let mode: Mode = serde_json::from_str(json).unwrap();
         assert_eq!(mode.legacy_use_dictionary, Some(true));
     }
 
     #[test]
     fn use_dictionary_absent_gives_none() {
-        let json = r#"{"id":"x","name":"X","language":{"kind":"exact","code":"en"},"translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_terms":true,"use_corrections":true,"use_snippets":true}"#;
+        let json = r#"{"id":"x","name":"X","language":{"kind":"exact","code":"en"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_terms":true,"use_corrections":true,"use_snippets":true}"#;
         let mode: Mode = serde_json::from_str(json).unwrap();
         assert_eq!(mode.legacy_use_dictionary, None);
     }
@@ -357,17 +307,27 @@ mod tests {
     }
 
     #[test]
-    fn seed_ua_en_has_apple_translate_target() {
+    fn seed_ua_en_uses_ai_cleanup_with_translation_prompt() {
         let m = Mode::seed_ua_en();
         assert_eq!(m.id, SEED_MODE_UA_EN);
         assert_eq!(m.language, ModeLanguage::exact("uk"));
-        assert_eq!(
-            m.translate,
-            TranslateTarget::Apple {
-                target: "en".to_string()
-            }
-        );
         assert!(m.ai_cleanup.enabled);
+        assert!(
+            m.ai_cleanup
+                .prompt_override
+                .as_deref()
+                .unwrap_or("")
+                .contains("Ukrainian"),
+            "prompt_override must ask for Ukrainian → English translation"
+        );
+    }
+
+    #[test]
+    fn old_config_with_translate_field_deserializes_without_error() {
+        let json = r#"{"id":"x","name":"X","language":{"kind":"exact","code":"en"},"translate":{"kind":"apple","target":"en"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_snippets":true}"#;
+        let mode: Mode = serde_json::from_str(json).unwrap();
+        assert_eq!(mode.id, "x");
+        assert_eq!(mode.language, ModeLanguage::exact("en"));
     }
 
     #[test]

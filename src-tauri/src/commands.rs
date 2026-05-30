@@ -142,25 +142,6 @@ pub fn set_hotkey_bindings(
     Ok(())
 }
 
-/// Opens System Settings to the Language & Region pane — the "Translation
-/// Languages" section lives inside it on macOS 15/26. Surfaced to the UI as
-/// the click target for the "Open Settings" action on missing-pack errors.
-#[tauri::command]
-pub fn open_translation_settings() -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg("x-apple.systempreferences:com.apple.Localization-Settings.extension")
-            .spawn()
-            .map_err(|e| e.to_string())?;
-        return Ok(());
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        Err("Opening translation settings is only supported on macOS".to_string())
-    }
-}
-
 #[tauri::command]
 pub fn set_shortcut_capture_paused(state: State<'_, AppState>, paused: bool) {
     *state.shortcut_capture_paused.lock().unwrap() = paused;

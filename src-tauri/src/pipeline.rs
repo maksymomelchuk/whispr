@@ -5,8 +5,8 @@ use crate::mode::Mode;
 use crate::snippets::expand_snippets;
 use std::time::{Duration, Instant};
 
-/// Carries a user-visible notification produced by the translate or cleanup
-/// stages. `Focus` raises the main window (for errors requiring user action);
+/// Carries a user-visible notification produced by the cleanup stage.
+/// `Focus` raises the main window (for errors requiring user action);
 /// `Flash` paints the overlay red briefly (transient soft warning).
 #[derive(Debug, PartialEq)]
 pub enum Notice {

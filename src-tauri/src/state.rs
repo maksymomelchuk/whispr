@@ -50,8 +50,8 @@ pub struct AppState {
     pub modifiers: Arc<Mutex<ModifierState>>,
     pub ptt_active: Arc<Mutex<bool>>,
     /// Set by the cancel orchestrator when the user presses Escape mid-Session.
-    /// Checked by run_session after STT drains to short-circuit translate /
-    /// cleanup / paste / history / stats. Cleared at start_ptt.
+    /// Checked by run_session after STT drains to short-circuit cleanup /
+    /// paste / history / stats. Cleared at start_ptt.
     pub session_cancelled: Arc<AtomicBool>,
     pub input_device: Arc<Mutex<Option<String>>>,
     /// User preference: pause the Now Playing app while dictating.

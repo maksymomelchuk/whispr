@@ -1080,7 +1080,7 @@ mod tests {
     fn migration_mode_use_dictionary_false_sets_corrections_false() {
         let json = r#"{"modes": [
             {"id":"mode-default-en","name":"D","language":{"kind":"exact","code":"en"},
-             "translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},
+             "ai_cleanup":{"enabled":false,"prompt_override":null},
              "use_dictionary":false,"use_snippets":true}
         ], "default_mode_id": "mode-default-en"}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
@@ -1096,7 +1096,7 @@ mod tests {
     fn migration_mode_use_dictionary_true_leaves_corrections_true() {
         let json = r#"{"modes": [
             {"id":"mode-default-en","name":"D","language":{"kind":"exact","code":"en"},
-             "translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},
+             "ai_cleanup":{"enabled":false,"prompt_override":null},
              "use_dictionary":true,"use_snippets":true}
         ], "default_mode_id": "mode-default-en"}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
@@ -1156,7 +1156,7 @@ mod tests {
             "terms": ["MongoDB"],
             "modes": [
                 {"id":"mode-default-en","name":"D","language":{"kind":"exact","code":"en"},
-                 "translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},
+                 "ai_cleanup":{"enabled":false,"prompt_override":null},
                  "use_terms":false,"use_corrections":true,"use_snippets":true,"term_set_ids":[]}
             ],
             "default_mode_id": "mode-default-en"
@@ -1188,7 +1188,7 @@ mod tests {
             "term_sets": [{"id":"ts-1","name":"My Set","entries":["Rust"]}],
             "modes": [
                 {"id":"mode-default-en","name":"D","language":{"kind":"exact","code":"en"},
-                 "translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},
+                 "ai_cleanup":{"enabled":false,"prompt_override":null},
                  "use_corrections":true,"use_snippets":true,"term_set_ids":["ts-1"]}
             ],
             "default_mode_id": "mode-default-en"
@@ -1245,7 +1245,7 @@ mod tests {
     #[test]
     fn migrate_adds_missing_seeds_to_existing_mode_default_en() {
         let json = r#"{
-            "modes": [{"id":"mode-default-en","name":"My Custom Name","language":{"kind":"exact","code":"en"},"translate":{"kind":"off"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_terms":true,"use_corrections":true,"use_snippets":true}],
+            "modes": [{"id":"mode-default-en","name":"My Custom Name","language":{"kind":"exact","code":"en"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_terms":true,"use_corrections":true,"use_snippets":true}],
             "default_mode_id": "mode-default-en"
         }"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();

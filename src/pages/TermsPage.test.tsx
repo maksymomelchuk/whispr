@@ -32,7 +32,6 @@ const BASE_MODE: Mode = {
   name: "Default",
   icon: null,
   language: { kind: "auto" },
-  translate: { kind: "off" },
   ai_cleanup: { enabled: false, prompt_override: null },
   term_set_ids: [],
   correction_set_ids: [],

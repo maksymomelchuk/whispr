@@ -146,35 +146,6 @@ function langLabel(code: string): string {
   return entry ? `${entry.flag} ${entry.name}` : code.toUpperCase();
 }
 
-const APPLE_TRANSLATE_LANGUAGES: [string, string][] = [
-  ["ar", "Arabic"],
-  ["zh", "Chinese (Simplified)"],
-  ["zh-TW", "Chinese (Traditional)"],
-  ["nl", "Dutch"],
-  ["en", "English"],
-  ["fr", "French"],
-  ["de", "German"],
-  ["id", "Indonesian"],
-  ["it", "Italian"],
-  ["ja", "Japanese"],
-  ["ko", "Korean"],
-  ["pl", "Polish"],
-  ["pt", "Portuguese"],
-  ["ru", "Russian"],
-  ["es", "Spanish"],
-  ["th", "Thai"],
-  ["tr", "Turkish"],
-  ["uk", "Ukrainian"],
-  ["vi", "Vietnamese"],
-];
-
-function translateLanguageName(code: string): string {
-  return (
-    APPLE_TRANSLATE_LANGUAGES.find(([c]) => c === code)?.[1] ??
-    code.toUpperCase()
-  );
-}
-
 function languageSummary(lang: ModeLanguage): string {
   if (lang.kind === "auto") return "Auto-detect";
   if (lang.kind === "exact") return lang.code.toUpperCase();
@@ -188,11 +159,6 @@ function buildLanguage(
   if (langMode === "auto" || codes.length === 0) return { kind: "auto" };
   if (codes.length === 1) return { kind: "exact", code: codes[0] };
   return { kind: "hints", codes };
-}
-
-function translateSummary(mode: Mode): string {
-  if (mode.translate.kind === "off") return "Off";
-  return `→ ${translateLanguageName(mode.translate.target)}`;
 }
 
 function ModeRow({
@@ -247,7 +213,6 @@ function ModeRow({
         </div>
         <span className="text-xs text-muted-foreground">
           {languageSummary(mode.language)}
-          {mode.translate.kind !== "off" && <> · {translateSummary(mode)}</>}
           {bindings.length > 0 && (
             <> · {bindings.map((b) => formatShortcut(b.shortcut)).join(", ")}</>
           )}
@@ -462,12 +427,6 @@ export function ModeEditor({
         ...d.ai_cleanup,
         prompt_override: value || null,
       },
-    }));
-  const setTranslate = (value: string) =>
-    setDraft((d) => ({
-      ...d,
-      translate:
-        value === "off" ? { kind: "off" } : { kind: "apple", target: value },
     }));
   const toggleTermSet = (id: string, checked: boolean) =>
     setDraft((d) => ({
@@ -789,33 +748,6 @@ export function ModeEditor({
           </RadioGroup>
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-[13px]">Translate to</Label>
-          <Select
-            value={
-              draft.translate.kind === "apple" ? draft.translate.target : "off"
-            }
-            onValueChange={setTranslate}
-          >
-            <SelectTrigger size="sm" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="off">Off</SelectItem>
-              {APPLE_TRANSLATE_LANGUAGES.map(([code, name]) => (
-                <SelectItem key={code} value={code}>
-                  {name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {draft.translate.kind === "apple" && (
-            <p className="text-help text-muted-foreground">
-              Engine: Apple Translate (on-device)
-            </p>
-          )}
-        </div>
-
         <div className="flex flex-col gap-2 pt-1">
           <ToggleRow
             id="cleanup"
@@ -942,7 +874,6 @@ export function ModesPage() {
       name: "",
       icon: null,
       language: { kind: "exact", code: "en" },
-      translate: { kind: "off" },
       ai_cleanup: { enabled: false, prompt_override: null },
       term_set_ids: [],
       correction_set_ids: [],

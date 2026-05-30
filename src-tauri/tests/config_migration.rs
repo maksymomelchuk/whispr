@@ -76,7 +76,7 @@ fn legacy_use_dictionary_false_disables_corrections_and_leaves_term_set_ids_empt
             "id":       "mode-default-en",
             "name":     "Default",
             "language": {"kind": "exact", "code": "en"},
-            "translate":{"kind": "off"},
+
             "ai_cleanup":{"enabled": false, "prompt_override": null},
             "use_dictionary": false,
             "use_snippets":   true
@@ -106,7 +106,7 @@ fn legacy_use_dictionary_true_preserves_corrections_flag() {
             "id":       "mode-default-en",
             "name":     "Default",
             "language": {"kind": "exact", "code": "en"},
-            "translate":{"kind": "off"},
+
             "ai_cleanup":{"enabled": false, "prompt_override": null},
             "use_dictionary": true,
             "use_snippets":   true
@@ -186,7 +186,7 @@ fn full_pre_issue_73_migration_preserves_behavior() {
             "id":       "mode-default-en",
             "name":     "Default",
             "language": {"kind": "exact", "code": "en"},
-            "translate":{"kind": "off"},
+
             "ai_cleanup":{"enabled": false, "prompt_override": null},
             "use_terms": true,
             "use_corrections": true,

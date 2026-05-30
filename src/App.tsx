@@ -10,7 +10,7 @@ import { TooltipProvider } from "./components/ui/tooltip";
 import { SettingsContext } from "./context/SettingsContext";
 import { useAccent } from "./hooks/useAccent";
 import { useTheme } from "./hooks/useTheme";
-import { getSettings, openTranslationSettings } from "./lib/api";
+import { getSettings } from "./lib/api";
 import type { Settings } from "./lib/types";
 
 import "./globals.css";
@@ -64,23 +64,7 @@ function App() {
     let unlisten: (() => void) | undefined;
     listen<string>("transcription-error", (e) => {
       const message = e.payload || "Transcription failed";
-      // The message itself is the only signal we have for which error kind
-      // fired; backend wires "System Settings" only into actionable error
-      // strings (missing language pack, etc.).
-      const actionable = message.includes("System Settings");
-      toast.error(message, {
-        duration: actionable ? 12000 : 6000,
-        action: actionable
-          ? {
-              label: "Open Settings",
-              onClick: () => {
-                openTranslationSettings().catch((err) =>
-                  console.error("open_translation_settings failed", err),
-                );
-              },
-            }
-          : undefined,
-      });
+      toast.error(message, { duration: 6000 });
     })
       .then((un) => {
         if (cancelled) un();

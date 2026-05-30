@@ -16,7 +16,6 @@ import {
   getSettings,
   getStats,
   listInputDevices,
-  openTranslationSettings,
   renameTermSet,
   setAnthropicApiKey,
   setAnthropicOauthToken,
@@ -90,7 +89,6 @@ const COMMANDS: Array<{
     cmd: "set_shortcut_capture_paused",
     args: { paused: true },
   },
-  { call: () => openTranslationSettings(), cmd: "open_translation_settings" },
   {
     call: () => createTermSet("My Set"),
     cmd: "create_term_set",
@@ -140,7 +138,7 @@ const COMMANDS: Array<{
         name: "Test",
         icon: null,
         language: { kind: "auto" },
-        translate: { kind: "off" },
+
         ai_cleanup: { enabled: false, prompt_override: null },
         term_set_ids: [],
         correction_set_ids: [],
@@ -154,7 +152,7 @@ const COMMANDS: Array<{
         name: "Test",
         icon: null,
         language: { kind: "auto" },
-        translate: { kind: "off" },
+
         ai_cleanup: { enabled: false, prompt_override: null },
         term_set_ids: [],
         correction_set_ids: [],
@@ -170,7 +168,7 @@ const COMMANDS: Array<{
         name: "Updated",
         icon: null,
         language: { kind: "auto" },
-        translate: { kind: "off" },
+
         ai_cleanup: { enabled: false, prompt_override: null },
         term_set_ids: [],
         correction_set_ids: [],
@@ -184,7 +182,7 @@ const COMMANDS: Array<{
         name: "Updated",
         icon: null,
         language: { kind: "auto" },
-        translate: { kind: "off" },
+
         ai_cleanup: { enabled: false, prompt_override: null },
         term_set_ids: [],
         correction_set_ids: [],

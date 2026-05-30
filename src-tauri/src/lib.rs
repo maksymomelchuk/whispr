@@ -37,10 +37,6 @@ mod tray;
 mod cleanup;
 #[cfg(target_os = "macos")]
 mod cleanup_stats;
-// translation helpers are consumed by macOS-only ptt; allow unused items on
-// non-macOS so the module still ships and its tests run.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-mod translation;
 #[cfg(target_os = "macos")]
 mod deepgram_session;
 #[cfg(target_os = "macos")]
@@ -205,7 +201,6 @@ pub fn run() {
             commands::validate_assemblyai_api_key,
             commands::set_hotkey_bindings,
             commands::set_shortcut_capture_paused,
-            commands::open_translation_settings,
             commands::create_term_set,
             commands::rename_term_set,
             commands::update_term_set_entries,

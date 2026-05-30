@@ -136,10 +136,6 @@ export type ModeLanguage =
   | { kind: "exact"; code: string }
   | { kind: "hints"; codes: string[] };
 
-export type TranslateTarget =
-  | { kind: "off" }
-  | { kind: "apple"; target: string };
-
 export interface ModeCleanup {
   enabled: boolean;
   prompt_override: string | null;
@@ -156,7 +152,6 @@ export interface Mode {
   name: string;
   icon: string | null;
   language: ModeLanguage;
-  translate: TranslateTarget;
   ai_cleanup: ModeCleanup;
   term_set_ids: string[];
   correction_set_ids: string[];

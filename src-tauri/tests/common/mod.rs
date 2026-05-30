@@ -41,9 +41,6 @@ pub struct PipelineHarness {
     mode_id: String,
     cleanup: Option<String>,
     cleanup_error: Option<CleanupStatus>,
-    /// Pre-translated text. When set, this text is used as the base for the
-    /// cleanup stage (simulating what Apple Translate would have produced).
-    translated_text: Option<String>,
     /// Override the active mode entirely (e.g. to test non-default languages).
     custom_mode: Option<Mode>,
 }
@@ -55,7 +52,6 @@ impl PipelineHarness {
             mode_id: SEED_MODE_DEFAULT_EN.to_string(),
             cleanup: None,
             cleanup_error: None,
-            translated_text: None,
             custom_mode: None,
         }
     }
@@ -167,17 +163,8 @@ impl PipelineHarness {
         self.settings.modes.iter_mut().find(|m| m.id == self.mode_id)
     }
 
-    /// Simulate the Apple Translate stage returning `translated_text`. When
-    /// set, this text is the base passed to the cleanup stage (mirroring the
-    /// real pipeline where translate feeds into cleanup). Without this call the
-    /// harness passes `raw_text` directly to cleanup, i.e. translate is a no-op.
-    pub fn with_translated_text(mut self, translated_text: &str) -> Self {
-        self.translated_text = Some(translated_text.to_string());
-        self
-    }
-
     /// Override the active `Mode` used by `run_stages`. Use this to test
-    /// pipeline behaviour under non-default language or translate configurations
+    /// pipeline behaviour under non-default language configurations
     /// without needing a matching entry in `settings.modes`.
     pub fn with_mode(mut self, mode: Mode) -> Self {
         self.custom_mode = Some(mode);
@@ -201,13 +188,9 @@ impl PipelineHarness {
                 .expect("mode not found in settings")
         };
 
-        // Translation (if simulated) feeds into cleanup, mirroring the real
-        // pipeline: raw_text → translate → translated_text → cleanup → replaced_text.
-        let post_translate = self.translated_text.as_deref().unwrap_or(raw_text);
-
         let cleanup_output = match (self.cleanup_error, self.cleanup) {
             (Some(status), _) => CleanupOutput {
-                replaced_text: post_translate.to_string(),
+                replaced_text: raw_text.to_string(),
                 status,
             },
             (None, Some(cleaned)) => CleanupOutput {
@@ -215,7 +198,7 @@ impl PipelineHarness {
                 status: CleanupStatus::Ran,
             },
             (None, None) => CleanupOutput {
-                replaced_text: post_translate.to_string(),
+                replaced_text: raw_text.to_string(),
                 status: CleanupStatus::Disabled,
             },
         };

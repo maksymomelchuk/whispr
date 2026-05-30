@@ -15,7 +15,7 @@ Today, language is duplicated across `DeepgramSettings` and `GroqSettings`. AI c
 
 ## Domain glossary
 
-- **Mode** — a named bundle of recording behavior: language, translate target, cleanup, dictionary/snippets opt-ins. Replaces the implicit "current settings combination." A user can have many; one is the default. Each mode can bind one or more hotkeys.
+- **Mode** — a named bundle of recording behavior: language, cleanup, dictionary/snippets opt-ins. Replaces the implicit "current settings combination." A user can have many; one is the default. Each mode can bind one or more hotkeys.
 - **Engine** — the global transcription provider configuration: which provider (Deepgram or Groq), which model, API key. Engine is _model-agnostic from the Mode's point of view_: Modes carry no provider-specific fields.
 - **Dictionary** — global list of `from → to` substitutions. Used twice: as a prompt hint to the engine (so the engine recognizes the term in the first place) and as a final post-substitution (so manual corrections always win).
 - **Snippets** — global list of `trigger → expansion` substitutions, with placeholders like `{{DATE}}`, `{{TIME}}`, `{{CLIPBOARD}}`. Applied during post-processing.
@@ -35,7 +35,6 @@ struct Mode {
     name: String,
     icon: Option<String>,          // optional icon slug; ignored if absent
     language: ModeLanguage,
-    translate: TranslateTarget,
     ai_cleanup: ModeCleanup,
     use_dictionary: bool,          // default true
     use_snippets:   bool,          // default true
@@ -45,12 +44,6 @@ enum ModeLanguage {
     Auto,                          // no language hint at all
     Exact(String),                 // single ISO code, e.g. "en"
     Hints(Vec<String>),            // 2+ codes; provider auto-detects with the list as UI state
-}
-
-enum TranslateTarget {
-    Off,
-    Apple { target: String },      // ISO code of target language
-    // Llm { target: String },     // reserved for a future slice
 }
 
 struct ModeCleanup {
@@ -111,9 +104,6 @@ provider.transcribe(audio, mode.language, dictionary)
   │                                          │ as Deepgram keyterm[] (URL budget)
   │                                          │ or Groq prompt (char budget)
   ▼
-if mode.translate != Off:    translate(text, mode.translate)
-  │
-  ▼
 if mode.ai_cleanup.enabled:  cleanup(text, prompt_override ?? default_prompt)
   │
   ▼
@@ -130,7 +120,6 @@ paste(text + " ")
 
 The post-processing order is load-bearing. It mirrors TypeWhisper's priority-ordered pipeline (`PostProcessingPipeline.swift`).
 
-- **Translate runs first** (before cleanup). The default cleanup system prompt is English-only (it has English-specific rules: contraction preservation, camelCase identifiers, etc.). Translating Ukrainian → English first lets cleanup operate on its expected input.
 - **Cleanup runs before snippets** so the LLM cannot rewrite a literal `[date]` trigger into "the date" or similar before snippets get a chance to expand it.
 - **Cleanup runs before dictionary** so the user's manual corrections (e.g., `Mongo → MongoDB`) are the final word and survive cleanup's "do not expand brand names" rule. Today's order is the reverse (dictionary first, then cleanup) — slice #31 flips it.
 - **Dictionary runs after snippets** so any text a snippet expanded into also receives dictionary corrections.
@@ -153,7 +142,6 @@ How Mode fields map to each provider's request:
 | `language: Auto`            | omit `language` param                              | omit `language` form field                         |
 | `language: Exact("xx")`     | `language=xx`                                      | `language=xx`                                      |
 | `language: Hints([...])`    | `language=multi` (codes informational)             | omit `language` (Whisper auto-detects)             |
-| `translate`                 | n/a — handled by pipeline                          | n/a — handled by pipeline                          |
 | dictionary terms (filtered) | `keyterm=<from>` per entry; URL budget ~4096 bytes | `prompt=Vocabulary: t1, t2, ...`; char budget ~800 |
 | smart_format / numerals     | hardcoded `smart_format=true&numerals=true`        | not applicable (Whisper handles natively)          |
 | dictation                   | not sent                                           | not applicable                                     |
@@ -169,12 +157,12 @@ const GROQ_PROMPT_BUDGET_CHARS: usize = 800;
 
 These four modes are seeded on first launch and on upgrade (idempotent — match by id constant, not name). User-edited copies are not overwritten; missing seeds are recreated.
 
-| Constant id       | Name            | language      | translate                                                                                                    | ai_cleanup           |
-| ----------------- | --------------- | ------------- | ------------------------------------------------------------------------------------------------------------ | -------------------- |
-| `mode-default-en` | Default English | `Exact("en")` | `Off`                                                                                                        | `{ enabled: false }` |
-| `mode-cleaned-en` | Cleaned English | `Exact("en")` | `Off`                                                                                                        | `{ enabled: true }`  |
-| `mode-ukrainian`  | Ukrainian       | `Exact("uk")` | `Off`                                                                                                        | `{ enabled: false }` |
-| `mode-ua-en`      | UA → EN         | `Exact("uk")` | `Apple { target: "en" }` _(disabled in UI until slice #37 lands; field present, picker reads "coming soon")_ | `{ enabled: true }`  |
+| Constant id       | Name            | language      | ai_cleanup                                                       |
+| ----------------- | --------------- | ------------- | ---------------------------------------------------------------- |
+| `mode-default-en` | Default English | `Exact("en")` | `{ enabled: false }`                                             |
+| `mode-cleaned-en` | Cleaned English | `Exact("en")` | `{ enabled: true }`                                              |
+| `mode-ukrainian`  | Ukrainian       | `Exact("uk")` | `{ enabled: false }`                                             |
+| `mode-ua-en`      | UA → EN         | `Exact("uk")` | `{ enabled: true, prompt_override: "Translate Ukrainian → English..." }` |
 
 `default_mode_id = mode-default-en` after a fresh install. On upgrade, do not override the user's existing default; seed the others alongside whatever default they already have.
 
@@ -205,7 +193,6 @@ A rough guide to which files each slice touches most heavily. Use this to spot m
 | #34 Dictionary as engine hint      | `dictionary.rs`, `deepgram_session.rs`, `groq_session.rs`                                                  |
 | #35 Snippets                       | `snippets.rs` (new), `ptt.rs`, `pages/Snippets*.tsx`, sidebar                                              |
 | #36 Multi-language picker          | `mode.rs` (enum), `deepgram_session.rs`, `groq_session.rs`, mode editor UI                                 |
-| #37 Translation (HITL)             | `translation.rs` (new) + Swift bridge, `ptt.rs`, mode editor UI                                            |
 | #38 Hotkey-per-mode                | `hotkeys.rs`, `config.rs`, `pages/Hotkeys*.tsx`, mode editor UI                                            |
 | #39 Per-mode prompt override       | `cleanup.rs`, `ptt.rs`, mode editor UI                                                                     |
 
@@ -217,7 +204,6 @@ These ideas appeared during design but are intentionally deferred:
 - **Plugin system / multiple engines simultaneously loaded.** One provider is active at a time.
 - **Auto-learned dictionary entries** (TypeWhisper learns from manual edits).
 - **Snippet format strings** (`{{DATE:yyyy-MM-dd}}`). v1 only supports bare placeholders.
-- **Translate via LLM** as an alternative to Apple Translate. Schema reserves `TranslateTarget::Llm { target }` but no implementation yet.
 - **Per-mode provider override.** Provider is global in v1.
 - **Output format / app formatter** (TypeWhisper-style per-app formatting rules).
 

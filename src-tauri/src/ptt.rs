@@ -5,12 +5,11 @@ use crate::deepgram_session::DeepgramSession;
 use crate::groq_session::GroqSession;
 use crate::local_session::LocalSession;
 use crate::history::{self, CleanupStatus, HISTORY_UPDATED_EVENT};
-use crate::mode::TranslateTarget;
-use crate::pipeline::{self, merge_notices, CleanupOutput, Notice};
+use crate::pipeline::{self, CleanupOutput, Notice};
 use crate::recorder::Recorder;
 use crate::state::{AppState, ModifierState};
 use crate::transcription_session::TranscriptionSession;
-use crate::{cleanup, cleanup_stats, config, media, overlay, paste, stats, target_app, translation};
+use crate::{cleanup, cleanup_stats, config, media, overlay, paste, stats, target_app};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use core_foundation::base::TCFType;
@@ -382,7 +381,7 @@ pub fn is_cancel_event(code: &str, is_press: bool, ptt_active: bool) -> bool {
 /// Tear down the recording side of a Session: mark cancelled, drop the active
 /// shortcut, stop the recorder, resume muted media, emit the cancel event.
 /// The downstream short-circuit in run_session is what skips paste / history /
-/// stats / translate / cleanup — this function only handles the immediate
+/// stats / cleanup — this function only handles the immediate
 /// mic-and-overlay teardown that mirrors a normal release.
 fn cancel_session(app: &AppHandle, state: &AppState, recorder: &Recorder) {
     state.session_cancelled.store(true, Ordering::Release);
@@ -467,9 +466,7 @@ async fn run_session(
         .find(|m| m.id == mode_id)
         .unwrap_or_else(|| config::get_default_mode(&settings));
     let mode_cleanup_enabled = active_mode.ai_cleanup.enabled;
-    let mode_translate = active_mode.translate.clone();
     let mode_language = active_mode.language.clone();
-    let mode_source_lang = active_mode.language.as_code().map(str::to_string);
     let mode_prompt_override = active_mode.ai_cleanup.prompt_override.clone();
     let session_terms =
         crate::terms::compose_term_hints(&settings.term_sets, &active_mode.term_set_ids);
@@ -560,20 +557,15 @@ async fn run_session(
         return Ok(());
     }
 
-    let (translated_text, translate_notice) =
-        maybe_translate(app, &raw_text, &mode_translate, mode_source_lang.as_deref()).await;
-
-    let (replaced_text, cleanup_status, cleanup_notice) = maybe_cleanup(
+    let (replaced_text, cleanup_status, notice) = maybe_cleanup(
         app,
         &settings,
         mode_cleanup_enabled,
-        &translated_text,
+        &raw_text,
         speak_duration,
         mode_prompt_override.as_deref(),
     )
     .await;
-
-    let notice = merge_notices(translate_notice, cleanup_notice);
 
     let pipeline::Outcome { pasted_text, mut history_entry, .. } = pipeline::run_stages(
         &raw_text,
@@ -632,53 +624,6 @@ async fn run_session(
     }
 
     Ok(())
-}
-
-async fn maybe_translate(
-    app: &AppHandle,
-    text: &str,
-    target: &TranslateTarget,
-    source_lang: Option<&str>,
-) -> (String, Notice) {
-    let TranslateTarget::Apple { target: target_lang } = target else {
-        return (text.to_string(), Notice::None);
-    };
-
-    let text_owned = text.to_string();
-    let source_owned = source_lang.map(str::to_string);
-    let target_owned = target_lang.clone();
-
-    let result = tokio::task::spawn_blocking(move || {
-        translation::translate(&text_owned, source_owned.as_deref(), &target_owned)
-    })
-    .await;
-
-    match result {
-        Ok(Ok(translated)) => (translated, Notice::None),
-        Ok(Err(e)) => {
-            let _ = app.emit(PTT_ERROR_EVENT, ());
-            // Self-contained Display impls already read naturally — no
-            // "Translation unavailable:" prefix needed (it just duplicates
-            // the "Translation pack missing" / "Apple Translate requires…"
-            // language inside each variant).
-            let message = e.to_string();
-            // Errors the user needs to act on (missing language pack, missing
-            // source language, OS too old) deserve the main window — Flash is
-            // a silent overlay tint that's easy to miss when not focused.
-            let notice = match e {
-                translation::TranslationError::ModelNotInstalled { .. }
-                | translation::TranslationError::SourceRequired
-                | translation::TranslationError::RequiresMacOS26
-                | translation::TranslationError::UnsupportedPair => Notice::Focus(message),
-                _ => Notice::Flash(message),
-            };
-            (text.to_string(), notice)
-        }
-        Err(_) => {
-            let _ = app.emit(PTT_ERROR_EVENT, ());
-            (text.to_string(), Notice::Flash("Translation thread panicked".to_string()))
-        }
-    }
 }
 
 async fn maybe_cleanup(
