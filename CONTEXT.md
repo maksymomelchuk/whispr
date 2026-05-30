@@ -40,9 +40,19 @@ An [[Engine]] that runs Whisper inference on-device via whisper.cpp, rather than
 
 ## Model Catalog
 
-A dedicated Settings section where locally downloadable models are listed with their download state, disk usage, and controls to start/cancel a download or delete a model. The Catalog manages what is on disk; Profiles reference what is already downloaded. Download uses HTTP Range requests so an interrupted transfer resumes from where it left off rather than restarting.
+A dedicated Settings section where locally downloadable models are listed with their download state, disk usage, and controls to start/cancel a download or delete a model. The Catalog manages what is on disk; Profiles reference what is already downloaded. Download uses HTTP Range requests so an interrupted transfer resumes from where it left off rather than restarting. It surfaces as the **Local** section of the Speech models settings page.
 
 Not a Profile setting: the Catalog is global, shared across all Profiles that use the [[Local Engine]].
+
+## AI Provider
+
+The LLM backend used for the post-STT cleanup step (currently Anthropic Claude), distinct from an [[Engine]] / speech model that turns audio into text. An AI Provider never sees audio — it only rewrites already-transcribed text. Cleanup is enabled per-Profile; the AI Provider's credential is configured globally.
+
+Distinction from [[Engine]]: an Engine is a _speech model_ (Deepgram, Groq, AssemblyAI, local Whisper); an AI Provider is a _language model_ used only for cleanup. Both are cloud "providers", which is why the word is ambiguous — see Flagged ambiguities.
+
+## Flagged ambiguities
+
+- "Provider" was overloaded: it meant both an STT [[Engine]] (speech model) and the cleanup LLM. Resolved by splitting the settings surface into **Speech models** (cloud Engines + the local [[Model Catalog]]) and **AI Providers** (the [[AI Provider]] for cleanup). "Speech model" or "Engine" = STT; "AI Provider" = cleanup LLM.
 
 ## Model Idle Timeout
 
