@@ -240,6 +240,59 @@ fn full_pre_issue_73_migration_preserves_behavior() {
     assert_eq!(mode_v["provider_model"]["provider"], "groq", "provider_model must serialize to groq on mode");
 }
 
+// ── UA→EN translation prompt backfill ──────────────────────────────────────
+
+#[test]
+fn old_ua_en_with_no_prompt_override_gets_translation_prompt_on_migration() {
+    // Pre-issue-#90 configs carried translation via Apple Translate; the per-mode
+    // ai_cleanup had enabled=true and prompt_override=null. The `translate` field
+    // is silently dropped during deserialisation, so migration must backfill the
+    // translation prompt to preserve the mode's original intent.
+    let json = r#"{
+        "modes": [{
+            "id": "mode-ua-en",
+            "name": "UA → EN",
+            "language": {"kind": "exact", "code": "uk"},
+            "translate": {"kind": "apple", "target": "en"},
+            "ai_cleanup": {"enabled": true, "prompt_override": null},
+            "use_snippets": true
+        }],
+        "default_mode_id": "mode-ua-en"
+    }"#;
+
+    let s = config::from_json(json).unwrap();
+    let ua_en = s.modes.iter().find(|m| m.id == "mode-ua-en").expect("mode must survive migration");
+
+    assert!(ua_en.ai_cleanup.enabled);
+    assert!(
+        ua_en.ai_cleanup.prompt_override.as_deref().unwrap_or("").contains("Ukrainian"),
+        "migration must set the translation prompt on an old mode-ua-en"
+    );
+}
+
+#[test]
+fn old_ua_en_with_custom_prompt_is_not_overwritten_on_migration() {
+    let json = r#"{
+        "modes": [{
+            "id": "mode-ua-en",
+            "name": "UA → EN",
+            "language": {"kind": "exact", "code": "uk"},
+            "ai_cleanup": {"enabled": true, "prompt_override": "My custom prompt"},
+            "use_snippets": true
+        }],
+        "default_mode_id": "mode-ua-en"
+    }"#;
+
+    let s = config::from_json(json).unwrap();
+    let ua_en = s.modes.iter().find(|m| m.id == "mode-ua-en").expect("mode must survive migration");
+
+    assert_eq!(
+        ua_en.ai_cleanup.prompt_override.as_deref(),
+        Some("My custom prompt"),
+        "user-supplied prompt_override must not be overwritten by migration"
+    );
+}
+
 // ── Current-shape config round-trips without modification ───────────────────
 
 #[test]

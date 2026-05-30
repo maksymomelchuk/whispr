@@ -549,6 +549,21 @@ fn migrate(s: &mut Settings) -> bool {
         None => {}
     }
 
+    // ── UA→EN mode: backfill translation prompt_override ─────────────────
+    // Configs saved before issue #90 carried translation via a dedicated Apple
+    // Translate stage (now removed). Those modes serialised as
+    // `ai_cleanup:{enabled:true, prompt_override:null}`. On upgrade the unknown
+    // `translate` field is silently ignored, leaving the mode using the default
+    // English cleanup rules on Ukrainian text instead of translating. Set the
+    // translation prompt when the slot is still empty so existing users keep
+    // the behaviour they had. A user-supplied prompt_override is left untouched.
+    if let Some(ua_en) = s.modes.iter_mut().find(|m| m.id == SEED_MODE_UA_EN) {
+        if ua_en.ai_cleanup.enabled && ua_en.ai_cleanup.prompt_override.is_none() {
+            ua_en.ai_cleanup.prompt_override = Mode::seed_ua_en().ai_cleanup.prompt_override;
+            changed = true;
+        }
+    }
+
     // ── Legacy replacements → dictionary (now terms + corrections) ───────
     if let Some(legacy) = s.legacy_replacements.take() {
         s.legacy_dictionary = legacy;
