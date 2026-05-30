@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -14,6 +14,16 @@ vi.mock("../lib/api", () => ({
   validateDeepgramApiKey: vi.fn(),
   validateGroqApiKey: vi.fn(),
   validateAssemblyAiApiKey: vi.fn(),
+  getLocalModelStatuses: vi.fn().mockResolvedValue([]),
+  startModelDownload: vi.fn(),
+  cancelModelDownload: vi.fn(),
+  deleteLocalModel: vi.fn(),
+  getLocalModelPath: vi.fn(),
+  setLocalWhisperIdleTimeout: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@tauri-apps/plugin-opener", () => ({
+  revealItemInDir: vi.fn(),
 }));
 
 vi.mock("@/components/ui/dialog", () => ({
@@ -102,5 +112,66 @@ describe("SpeechModelsPage", () => {
   it("renders the Cloud section heading", () => {
     render(<Wrapper />);
     expect(screen.getByText("Cloud")).toBeInTheDocument();
+  });
+});
+
+describe("SpeechModelsPage LOCAL section", () => {
+  it("hides LOCAL section when no local models exist", async () => {
+    const { getLocalModelStatuses } = await import("../lib/api");
+    vi.mocked(getLocalModelStatuses).mockResolvedValue([]);
+    render(<Wrapper />);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText("Local")).not.toBeInTheDocument();
+  });
+
+  it("shows LOCAL section heading when local models exist", async () => {
+    const { getLocalModelStatuses } = await import("../lib/api");
+    vi.mocked(getLocalModelStatuses).mockResolvedValue([
+      { model: "large_v3_turbo", downloaded: true, downloading: false, size_bytes: 1_624_555_275 },
+    ]);
+    render(<Wrapper />);
+    await waitFor(() => expect(screen.getByText("Local")).toBeInTheDocument());
+  });
+
+  it("renders a card for each local model", async () => {
+    const { getLocalModelStatuses } = await import("../lib/api");
+    vi.mocked(getLocalModelStatuses).mockResolvedValue([
+      { model: "large_v3", downloaded: false, downloading: false, size_bytes: 3_115_853_312 },
+      { model: "large_v3_turbo", downloaded: true, downloading: false, size_bytes: 1_624_555_275 },
+    ]);
+    render(<Wrapper />);
+    await waitFor(() => expect(screen.getByText("Large v3")).toBeInTheDocument());
+    expect(screen.getByText("Large v3 Turbo")).toBeInTheDocument();
+  });
+
+  it("shows idle timeout control when local models exist", async () => {
+    const { getLocalModelStatuses } = await import("../lib/api");
+    vi.mocked(getLocalModelStatuses).mockResolvedValue([
+      { model: "large_v3_turbo", downloaded: true, downloading: false, size_bytes: 1_624_555_275 },
+    ]);
+    render(<Wrapper />);
+    await waitFor(() => expect(screen.getByText("Idle timeout")).toBeInTheDocument());
+  });
+
+  it("shows download button for a not-downloaded model", async () => {
+    const { getLocalModelStatuses } = await import("../lib/api");
+    vi.mocked(getLocalModelStatuses).mockResolvedValue([
+      { model: "large_v3", downloaded: false, downloading: false, size_bytes: 3_115_853_312 },
+    ]);
+    render(<Wrapper />);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Download model" })).toBeInTheDocument(),
+    );
+  });
+
+  it("shows Downloaded indicator and action buttons for a downloaded model", async () => {
+    const { getLocalModelStatuses } = await import("../lib/api");
+    vi.mocked(getLocalModelStatuses).mockResolvedValue([
+      { model: "large_v3_turbo", downloaded: true, downloading: false, size_bytes: 1_624_555_275 },
+    ]);
+    render(<Wrapper />);
+    await waitFor(() => expect(screen.getByText("Downloaded")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Show in Finder" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete model" })).toBeInTheDocument();
   });
 });

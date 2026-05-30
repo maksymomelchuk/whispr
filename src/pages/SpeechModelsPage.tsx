@@ -1,7 +1,19 @@
+import { useEffect, useState } from "react";
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import { LocalModelCard } from "../components/LocalModelCard";
 import { ProviderCard } from "../components/ProviderCard";
 import { useSettings } from "../context/SettingsContext";
+import { getLocalModelStatuses, setLocalWhisperIdleTimeout } from "../lib/api";
 import { SPEECH_MODEL_CATALOG } from "../lib/speechModelCatalog";
-import type { Settings } from "../lib/types";
+import type { LocalModelStatus, LocalWhisperIdleTimeout, Settings } from "../lib/types";
 
 const CONFIGURED_KEY: Record<string, keyof Settings> = {
   deepgram: "deepgram_api_key_configured",
@@ -9,8 +21,21 @@ const CONFIGURED_KEY: Record<string, keyof Settings> = {
   assemblyai: "assemblyai_api_key_configured",
 };
 
+const IDLE_TIMEOUT_OPTIONS: { value: LocalWhisperIdleTimeout; label: string }[] = [
+  { value: "five_minutes", label: "5 min" },
+  { value: "fifteen_minutes", label: "15 min" },
+  { value: "thirty_minutes", label: "30 min" },
+  { value: "one_hour", label: "1 hour" },
+  { value: "never", label: "Never" },
+];
+
 export function SpeechModelsPage() {
-  const { settings, setSettings } = useSettings();
+  const { settings, setSettings, setSetting } = useSettings();
+  const [localStatuses, setLocalStatuses] = useState<LocalModelStatus[]>([]);
+
+  useEffect(() => {
+    getLocalModelStatuses().then(setLocalStatuses);
+  }, []);
 
   return (
     <div className="p-6 flex flex-col gap-8">
@@ -32,6 +57,43 @@ export function SpeechModelsPage() {
           ))}
         </div>
       </div>
+
+      {localStatuses.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <h2 className="font-mono text-eyebrow uppercase text-muted-foreground/60 tracking-wide text-xs">
+            Local
+          </h2>
+          <div className="grid grid-cols-2 gap-3">
+            {localStatuses.map((status) => (
+              <LocalModelCard key={status.model} status={status} />
+            ))}
+          </div>
+          <div className="flex items-center justify-between pt-2">
+            <span className="text-sm text-muted-foreground">Idle timeout</span>
+            <Select
+              value={settings.local_whisper_idle_timeout}
+              onValueChange={(value) =>
+                setSetting(
+                  "local_whisper_idle_timeout",
+                  value as LocalWhisperIdleTimeout,
+                  () => setLocalWhisperIdleTimeout(value as LocalWhisperIdleTimeout),
+                )
+              }
+            >
+              <SelectTrigger className="w-28 h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {IDLE_TIMEOUT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
