@@ -32,7 +32,7 @@ One push-to-talk dictation, from PTT-down to paste — or to [[Cancelled Session
 
 ## Cancelled Session
 
-A [[Session]] the user aborted by pressing Escape while still recording. Cancellation tears down the mic and resumes any paused media, but skips every downstream stage — translate, AI cleanup, history append, stats, and paste — so the focused app receives no text and the dictation leaves no trace beyond a brief "Cancelled" flash in the overlay pill. Only valid during the recording phase: once the user releases PTT, the Session is committed and Escape is inert.
+A [[Session]] the user aborted by pressing Escape while still recording. Cancellation tears down the mic and resumes any paused media, but skips every downstream stage — AI cleanup, history append, stats, and paste — so the focused app receives no text and the dictation leaves no trace beyond a brief "Cancelled" flash in the overlay pill. Only valid during the recording phase: once the user releases PTT, the Session is committed and Escape is inert.
 
 ## Local Engine
 
