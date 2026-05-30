@@ -28,5 +28,3 @@ dist-ssr
 # Local planning / scratch notes
 PLAN.md
 
-# Compiled Swift sidecar output (built by src-tauri/build.rs)
-/binaries/
