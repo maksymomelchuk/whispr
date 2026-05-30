@@ -1,0 +1,146 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { useState } from "react";
+import { describe, expect, it, vi } from "vitest";
+
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { SettingsContext } from "../context/SettingsContext";
+import type { Settings } from "../lib/types";
+import { AiProvidersPage } from "./AiProvidersPage";
+
+vi.mock("../lib/api", () => ({
+  setAnthropicApiKey: vi.fn(),
+  setAnthropicOauthToken: vi.fn(),
+  setCleanupAuthMode: vi.fn(),
+  setCleanupThresholds: vi.fn(),
+}));
+
+vi.mock("@/components/ui/dialog", () => ({
+  Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
+    open ? <div>{children}</div> : null,
+  DialogContent: ({ children }: { children: React.ReactNode }) => (
+    <div role="dialog">{children}</div>
+  ),
+  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+  DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+  DialogClose: ({ children, onClick }: { children?: React.ReactNode; onClick?: React.MouseEventHandler<HTMLButtonElement> }) => (
+    <button type="button" onClick={onClick}>
+      {children}
+    </button>
+  ),
+}));
+
+const BASE_SETTINGS: Settings = {
+  deepgram_api_key_configured: false,
+  groq_api_key_configured: false,
+  assemblyai_api_key_configured: false,
+  hotkey_bindings: [],
+  term_sets: [],
+  correction_sets: [],
+  snippets: [],
+  modes: [],
+  default_mode_id: "",
+  ai_cleanup_auth_mode: "api_key",
+  ai_cleanup_key_configured: false,
+  ai_cleanup_oauth_token_configured: false,
+  ai_cleanup_min_words: 9,
+  ai_cleanup_min_duration_ms: 3000,
+  input_device: null,
+  pause_media_on_record: true,
+  history_limit: 5,
+  show_in_dock: false,
+  start_at_login: false,
+  show_live_preview: true,
+  local_whisper_idle_timeout: "fifteen_minutes",
+};
+
+function Wrapper({ settings = BASE_SETTINGS }: { settings?: Settings }) {
+  const [s, setRawSettings] = useState<Settings>(settings);
+  return (
+    <TooltipProvider>
+      <SettingsContext.Provider
+        value={{
+          settings: s,
+          setSettings: (updater) => setRawSettings(updater),
+          setSetting: vi.fn(),
+          themePreference: "system",
+          setThemePreference: vi.fn(),
+          accent: "indigo",
+          setAccent: vi.fn(),
+        }}
+      >
+        <AiProvidersPage />
+      </SettingsContext.Provider>
+    </TooltipProvider>
+  );
+}
+
+describe("AiProvidersPage", () => {
+  it("renders the Anthropic card", () => {
+    render(<Wrapper />);
+    expect(screen.getByText("Anthropic")).toBeInTheDocument();
+  });
+
+  it("shows Setup badge when not configured", () => {
+    render(<Wrapper />);
+    expect(screen.getByText("Setup")).toBeInTheDocument();
+  });
+
+  it("shows Configured badge when API key is configured", () => {
+    render(<Wrapper settings={{ ...BASE_SETTINGS, ai_cleanup_key_configured: true }} />);
+    expect(screen.getByText("Configured")).toBeInTheDocument();
+  });
+
+  it("shows Configured badge when OAuth token is configured in oauth mode", () => {
+    render(
+      <Wrapper
+        settings={{
+          ...BASE_SETTINGS,
+          ai_cleanup_auth_mode: "oauth",
+          ai_cleanup_oauth_token_configured: true,
+        }}
+      />,
+    );
+    expect(screen.getByText("Configured")).toBeInTheDocument();
+  });
+
+  it("shows Setup badge in oauth mode when only API key is configured", () => {
+    render(
+      <Wrapper
+        settings={{
+          ...BASE_SETTINGS,
+          ai_cleanup_auth_mode: "oauth",
+          ai_cleanup_key_configured: true,
+          ai_cleanup_oauth_token_configured: false,
+        }}
+      />,
+    );
+    expect(screen.getByText("Setup")).toBeInTheDocument();
+  });
+
+  it("renders the min words threshold input", () => {
+    render(<Wrapper />);
+    expect(screen.getByLabelText(/min words/i)).toBeInTheDocument();
+  });
+
+  it("renders the min duration threshold input", () => {
+    render(<Wrapper />);
+    expect(screen.getByLabelText(/min duration/i)).toBeInTheDocument();
+  });
+
+  it("exposes the auth-mode toggle in the modal", async () => {
+    const user = userEvent.setup();
+    render(<Wrapper />);
+    const cardButton = screen.getByText("Anthropic").closest("button")!;
+    await user.click(cardButton);
+    expect(screen.getByText("Anthropic API key")).toBeInTheDocument();
+    expect(screen.getByText("Claude Code OAuth")).toBeInTheDocument();
+  });
+
+  it("states that cleanup is enabled per-Profile", () => {
+    render(<Wrapper />);
+    expect(screen.getByText(/per-profile/i)).toBeInTheDocument();
+  });
+});
