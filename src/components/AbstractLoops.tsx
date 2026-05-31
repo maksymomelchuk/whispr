@@ -37,7 +37,11 @@ function rng(seed: number) {
   };
 }
 
-function makeHarmonics(seed: number, count: number, ampScale: number): Harmonic[] {
+function makeHarmonics(
+  seed: number,
+  count: number,
+  ampScale: number,
+): Harmonic[] {
   const r = rng(seed);
   const out: Harmonic[] = [];
   for (let i = 0; i < count; i++) {
@@ -76,7 +80,13 @@ function buildLoops(): LoopSpec[] {
     harmonics: makeHarmonics(23, 3, 0.085),
   });
 
-  const midConfigs: Array<{ tone: Tone; seed: number; baseR: number; phase0: number; spin: number }> = [
+  const midConfigs: Array<{
+    tone: Tone;
+    seed: number;
+    baseR: number;
+    phase0: number;
+    spin: number;
+  }> = [
     { tone: "primary", seed: 37, baseR: 0.66, phase0: 2.8, spin: 0.03 },
     { tone: "primary", seed: 53, baseR: 0.58, phase0: 4.1, spin: -0.04 },
     { tone: "primary", seed: 71, baseR: 0.64, phase0: 5.3, spin: 0.022 },
@@ -95,7 +105,13 @@ function buildLoops(): LoopSpec[] {
     });
   }
 
-  const ambientConfigs: Array<{ tone: Tone; seed: number; baseR: number; phase0: number; spin: number }> = [
+  const ambientConfigs: Array<{
+    tone: Tone;
+    seed: number;
+    baseR: number;
+    phase0: number;
+    spin: number;
+  }> = [
     { tone: "primary", seed: 101, baseR: 0.7, phase0: 3.5, spin: 0.015 },
     { tone: "primary", seed: 113, baseR: 0.55, phase0: 1.2, spin: -0.018 },
     { tone: "warm", seed: 131, baseR: 0.68, phase0: 4.7, spin: 0.02 },
@@ -131,7 +147,10 @@ function pathString(spec: LoopSpec, t: number, scale: number): string {
     const py = Math.sin(theta) * r;
     const x = (px * cosR - py * sinR) * scale + CENTER;
     const y = (px * sinR + py * cosR) * scale + CENTER;
-    d += i === 0 ? `M${x.toFixed(2)},${y.toFixed(2)}` : `L${x.toFixed(2)},${y.toFixed(2)}`;
+    d +=
+      i === 0
+        ? `M${x.toFixed(2)},${y.toFixed(2)}`
+        : `L${x.toFixed(2)},${y.toFixed(2)}`;
   }
   return `${d}Z`;
 }
@@ -159,7 +178,9 @@ export function AbstractLoops({
   }, [active]);
 
   useEffect(() => {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduce = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
     const radius = (VIEW / 2) * 0.92 * scale;
 
     if (reduce) {
@@ -211,7 +232,9 @@ export function AbstractLoops({
   return (
     <svg
       viewBox={`0 0 ${VIEW} ${VIEW}`}
-      preserveAspectRatio={fillMode === "cover" ? "xMidYMid slice" : "xMidYMid meet"}
+      preserveAspectRatio={
+        fillMode === "cover" ? "xMidYMid slice" : "xMidYMid meet"
+      }
       aria-hidden="true"
       className={`abstract-loops ${className ?? ""}`}
       style={{ userSelect: "none", pointerEvents: "none" }}

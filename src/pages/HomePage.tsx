@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { AbstractLoops } from "@/components/AbstractLoops";
 import { SectionHeader } from "@/components/SectionHeader";
 import { Button } from "@/components/ui/button";
+
 import {
   checkPermissions,
   ensurePttStarted,
@@ -21,7 +22,9 @@ function timeGreeting(): string {
 }
 
 export function HomePage() {
-  const [permissions, setPermissions] = useState<PermissionsStatus | null>(null);
+  const [permissions, setPermissions] = useState<PermissionsStatus | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -94,7 +97,10 @@ export function HomePage() {
           <h1 className="text-page-title text-foreground text-balance">
             {timeGreeting()}
           </h1>
-          <p className="text-[13px] text-muted-foreground" style={{ minHeight: "1.45em" }}>
+          <p
+            className="text-[13px] text-muted-foreground"
+            style={{ minHeight: "1.45em" }}
+          >
             {subtitle}
           </p>
         </div>
@@ -128,7 +134,12 @@ interface PermissionRowProps {
   onGrant: () => void;
 }
 
-function PermissionRow({ icon: Icon, label, granted, onGrant }: PermissionRowProps) {
+function PermissionRow({
+  icon: Icon,
+  label,
+  granted,
+  onGrant,
+}: PermissionRowProps) {
   return (
     <li className="flex items-center gap-3 py-2.5 border-t border-border/60 last:border-b">
       <Icon size={15} className="text-muted-foreground shrink-0" />
@@ -140,7 +151,12 @@ function PermissionRow({ icon: Icon, label, granted, onGrant }: PermissionRowPro
           Granted
         </span>
       ) : (
-        <Button variant="ghost" size="sm" className="h-7 text-[12px]" onClick={onGrant}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 text-[12px]"
+          onClick={onGrant}
+        >
           Grant
         </Button>
       )}

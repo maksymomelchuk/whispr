@@ -13,10 +13,7 @@ export interface HotkeyBinding {
   action: HotkeyAction;
 }
 
-export function pttBinding(
-  shortcut: Shortcut,
-  modeId: string,
-): HotkeyBinding {
+export function pttBinding(shortcut: Shortcut, modeId: string): HotkeyBinding {
   return { shortcut, action: { type: "Ptt", mode_id: modeId } };
 }
 
@@ -49,7 +46,11 @@ export interface Snippet {
   expansion: string;
 }
 
-export type TranscriptionProvider = "deepgram" | "groq" | "assembly_ai" | "local";
+export type TranscriptionProvider =
+  | "deepgram"
+  | "groq"
+  | "assembly_ai"
+  | "local";
 
 export type GroqModel = "whisper_large_v3" | "whisper_large_v3_turbo";
 

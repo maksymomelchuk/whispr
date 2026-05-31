@@ -376,7 +376,9 @@ export function ModeEditor({
   const [promptOpen, setPromptOpen] = useState(
     !!mode.ai_cleanup.prompt_override,
   );
-  const [localStatuses, setLocalStatuses] = useState<LocalModelStatus[] | null>(null);
+  const [localStatuses, setLocalStatuses] = useState<LocalModelStatus[] | null>(
+    null,
+  );
 
   // Language UI state — kept separate so chip list survives toggling to Auto.
   const [langMode, setLangMode] = useState<"auto" | "restrict">(
@@ -510,12 +512,18 @@ export function ModeEditor({
     let unlisten: (() => void) | undefined;
 
     const attach = async () => {
-      const fn = await listen<LocalWhisperModel>("model-download-complete", (e) => {
-        const model = e.payload;
-        setLocalStatuses((prev) =>
-          prev?.map((s) => (s.model === model ? { ...s, downloaded: true } : s)) ?? prev,
-        );
-      });
+      const fn = await listen<LocalWhisperModel>(
+        "model-download-complete",
+        (e) => {
+          const model = e.payload;
+          setLocalStatuses(
+            (prev) =>
+              prev?.map((s) =>
+                s.model === model ? { ...s, downloaded: true } : s,
+              ) ?? prev,
+          );
+        },
+      );
       if (cancelled) {
         fn();
         return;
@@ -760,9 +768,7 @@ export function ModeEditor({
             }
             checked={draft.ai_cleanup.enabled}
             onCheckedChange={setCleanup}
-            disabled={
-              !cleanupCredentialConfigured && !draft.ai_cleanup.enabled
-            }
+            disabled={!cleanupCredentialConfigured && !draft.ai_cleanup.enabled}
           />
           {draft.ai_cleanup.enabled && (
             <Collapsible
@@ -919,7 +925,8 @@ export function ModesPage() {
         {settings.modes.map((mode) => {
           const provider = mode.provider_model.provider;
           const missingProviderKey =
-            (provider === "deepgram" && !settings.deepgram_api_key_configured) ||
+            (provider === "deepgram" &&
+              !settings.deepgram_api_key_configured) ||
             (provider === "groq" && !settings.groq_api_key_configured) ||
             (provider === "assembly_ai" &&
               !settings.assemblyai_api_key_configured);

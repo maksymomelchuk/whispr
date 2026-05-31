@@ -68,6 +68,19 @@ jobs:
       - name: Install frontend deps
         run: pnpm install --frozen-lockfile
 
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Typecheck frontend
+        run: pnpm typecheck
+
+      - name: Test frontend
+        run: pnpm vitest run
+
+      - name: Test Rust
+        working-directory: src-tauri
+        run: cargo test
+
       - name: Build
         uses: tauri-apps/tauri-action@v0
         env:

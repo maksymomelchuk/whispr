@@ -111,9 +111,15 @@ const COMMANDS: Array<{
   },
   {
     call: () =>
-      addCorrectionSet({ id: "cs1", name: "My Set", entries: [{ from: "x", to: "y" }] }),
+      addCorrectionSet({
+        id: "cs1",
+        name: "My Set",
+        entries: [{ from: "x", to: "y" }],
+      }),
     cmd: "add_correction_set",
-    args: { set: { id: "cs1", name: "My Set", entries: [{ from: "x", to: "y" }] } },
+    args: {
+      set: { id: "cs1", name: "My Set", entries: [{ from: "x", to: "y" }] },
+    },
   },
   {
     call: () =>

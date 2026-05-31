@@ -2,6 +2,7 @@ import { CheckFatIcon, GearIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 
 import { cn } from "@/lib/utils";
+
 import type { EngineDescriptor } from "../lib/speechModelCatalog";
 import { ProviderSetupDialog } from "./ProviderSetupDialog";
 
@@ -11,7 +12,11 @@ interface Props {
   onConfiguredChange: (configured: boolean) => void;
 }
 
-export function ProviderCard({ descriptor, isConfigured, onConfiguredChange }: Props) {
+export function ProviderCard({
+  descriptor,
+  isConfigured,
+  onConfiguredChange,
+}: Props) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const { logo: Logo } = descriptor;
 

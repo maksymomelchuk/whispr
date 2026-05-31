@@ -69,7 +69,10 @@ export function EntriesEditor({
   async function handleSave() {
     if (editing.kind === "none") return;
     const from = editing.draft.from.trim();
-    if (!from) { setSaveError("Spoken form cannot be empty."); return; }
+    if (!from) {
+      setSaveError("Spoken form cannot be empty.");
+      return;
+    }
     const entry: CorrectionEntry = { from, to: editing.draft.to };
     let next: CorrectionEntry[];
     let flashKey: string;
@@ -114,7 +117,9 @@ export function EntriesEditor({
               <EntryEditorRow
                 key={`edit-${i}`}
                 draft={editing.draft}
-                onChange={(draft) => setEditing({ kind: "edit", index: i, draft })}
+                onChange={(draft) =>
+                  setEditing({ kind: "edit", index: i, draft })
+                }
                 onSave={handleSave}
                 onCancel={cancelEdit}
                 saving={saving}
@@ -181,11 +186,15 @@ function CorrectionRow({
     <RowCard flashing={flashing}>
       <div className="flex flex-1 min-w-0 items-center gap-3">
         <span className="font-mono text-[13px] font-semibold text-foreground truncate max-w-[40%]">
-          {entry.from || <span className="text-muted-foreground/60 italic">(empty)</span>}
+          {entry.from || (
+            <span className="text-muted-foreground/60 italic">(empty)</span>
+          )}
         </span>
         <span className="text-muted-foreground/60 text-help shrink-0">→</span>
         <span className="flex-1 truncate text-xs text-muted-foreground">
-          {entry.to || <span className="italic text-muted-foreground/60">(empty)</span>}
+          {entry.to || (
+            <span className="italic text-muted-foreground/60">(empty)</span>
+          )}
         </span>
       </div>
       <div className="flex items-center gap-0.5 shrink-0 transform-gpu opacity-65 group-hover:opacity-100 transition-opacity">
@@ -232,11 +241,19 @@ function EntryEditorRow({
   error: string | null;
 }) {
   const fromRef = useRef<HTMLInputElement>(null);
-  useEffect(() => { fromRef.current?.focus(); }, []);
+  useEffect(() => {
+    fromRef.current?.focus();
+  }, []);
 
   function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Escape") { e.preventDefault(); onCancel(); }
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); onSave(); }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      onCancel();
+    }
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      onSave();
+    }
   }
 
   return (
@@ -256,7 +273,9 @@ function EntryEditorRow({
           autoComplete="off"
           className="font-mono font-semibold h-8 flex-1 min-w-0"
         />
-        <span className="select-none text-muted-foreground/60 text-[12px]">→</span>
+        <span className="select-none text-muted-foreground/60 text-[12px]">
+          →
+        </span>
         <Input
           value={draft.to}
           onChange={(e) => onChange({ ...draft, to: e.target.value })}
@@ -265,12 +284,26 @@ function EntryEditorRow({
           autoComplete="off"
           className="text-xs h-8 flex-1 min-w-0"
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) { e.preventDefault(); onSave(); }
+            if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) {
+              e.preventDefault();
+              onSave();
+            }
           }}
         />
         <div className="flex items-center gap-1 ml-1">
-          <Button variant="ghost" size="xs" onClick={onCancel} disabled={saving}>Cancel</Button>
-          <Button size="xs" onClick={onSave} disabled={saving || !draft.from.trim()}>
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={onCancel}
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="xs"
+            onClick={onSave}
+            disabled={saving || !draft.from.trim()}
+          >
             {saving ? "Saving…" : "Save"}
           </Button>
         </div>

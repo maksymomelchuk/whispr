@@ -14,7 +14,11 @@ import { SectionCard } from "../components/SectionCard";
 import { useSettings } from "../context/SettingsContext";
 import { getLocalModelStatuses, setLocalWhisperIdleTimeout } from "../lib/api";
 import { SPEECH_MODEL_CATALOG } from "../lib/speechModelCatalog";
-import type { LocalModelStatus, LocalWhisperIdleTimeout, Settings } from "../lib/types";
+import type {
+  LocalModelStatus,
+  LocalWhisperIdleTimeout,
+  Settings,
+} from "../lib/types";
 
 const CONFIGURED_KEY: Record<string, keyof Settings> = {
   deepgram: "deepgram_api_key_configured",
@@ -22,7 +26,10 @@ const CONFIGURED_KEY: Record<string, keyof Settings> = {
   assemblyai: "assemblyai_api_key_configured",
 };
 
-const IDLE_TIMEOUT_OPTIONS: { value: LocalWhisperIdleTimeout; label: string }[] = [
+const IDLE_TIMEOUT_OPTIONS: {
+  value: LocalWhisperIdleTimeout;
+  label: string;
+}[] = [
   { value: "five_minutes", label: "5 min" },
   { value: "fifteen_minutes", label: "15 min" },
   { value: "thirty_minutes", label: "30 min" },
@@ -65,14 +72,19 @@ export function SpeechModelsPage() {
               ))}
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Idle timeout</span>
+              <span className="text-sm text-muted-foreground">
+                Idle timeout
+              </span>
               <Select
                 value={settings.local_whisper_idle_timeout}
                 onValueChange={(value) =>
                   setSetting(
                     "local_whisper_idle_timeout",
                     value as LocalWhisperIdleTimeout,
-                    () => setLocalWhisperIdleTimeout(value as LocalWhisperIdleTimeout),
+                    () =>
+                      setLocalWhisperIdleTimeout(
+                        value as LocalWhisperIdleTimeout,
+                      ),
                   )
                 }
               >
@@ -81,7 +93,11 @@ export function SpeechModelsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {IDLE_TIMEOUT_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                    <SelectItem
+                      key={opt.value}
+                      value={opt.value}
+                      className="text-xs"
+                    >
                       {opt.label}
                     </SelectItem>
                   ))}

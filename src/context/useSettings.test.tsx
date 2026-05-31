@@ -32,12 +32,9 @@ const MOCK_SETTINGS: Settings = {
 function TestWrapper({ children }: { children: React.ReactNode }) {
   const [settings, setRawSettings] = useState<Settings>(MOCK_SETTINGS);
 
-  const setSettings = useCallback(
-    (updater: (prev: Settings) => Settings) => {
-      setRawSettings(updater);
-    },
-    [],
-  );
+  const setSettings = useCallback((updater: (prev: Settings) => Settings) => {
+    setRawSettings(updater);
+  }, []);
 
   const setSetting = useCallback(
     async <K extends keyof Settings>(

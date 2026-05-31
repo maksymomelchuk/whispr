@@ -1,10 +1,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { CheckFatIcon, GearIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
-
-import { CheckFatIcon, GearIcon } from "@phosphor-icons/react";
 
 import { AnthropicLogo } from "@/assets/AnthropicLogo";
 import {
@@ -18,13 +17,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
+
 import { ProviderSetupDialog } from "../components/ProviderSetupDialog";
 import { SectionCard } from "../components/SectionCard";
 import { useSettings } from "../context/SettingsContext";
 import {
   setAnthropicApiKey as persistApiKey,
-  setAnthropicOauthToken as persistOauthToken,
   setCleanupAuthMode as persistAuthMode,
+  setAnthropicOauthToken as persistOauthToken,
   setCleanupThresholds as persistThresholds,
 } from "../lib/api";
 import type { EngineDescriptor } from "../lib/speechModelCatalog";
@@ -90,7 +90,9 @@ export function AiProvidersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const descriptor =
-    authMode === "api_key" ? ANTHROPIC_API_KEY_DESCRIPTOR : ANTHROPIC_OAUTH_DESCRIPTOR;
+    authMode === "api_key"
+      ? ANTHROPIC_API_KEY_DESCRIPTOR
+      : ANTHROPIC_OAUTH_DESCRIPTOR;
   const isConfigured = descriptor.selectConfigured(settings);
 
   const handleAuthModeChange = async (val: string) => {
@@ -100,13 +102,16 @@ export function AiProvidersPage() {
       "ai_cleanup_auth_mode",
       val,
       () => persistAuthMode(val),
-      (e) => toast.error("Couldn't change auth mode", { description: String(e) }),
+      (e) =>
+        toast.error("Couldn't change auth mode", { description: String(e) }),
     );
   };
 
   const handleConfiguredChange = (configured: boolean) => {
     const key =
-      authMode === "api_key" ? "ai_cleanup_key_configured" : "ai_cleanup_oauth_token_configured";
+      authMode === "api_key"
+        ? "ai_cleanup_key_configured"
+        : "ai_cleanup_oauth_token_configured";
     setSettings((s) => ({ ...s, [key]: configured }));
   };
 
@@ -194,7 +199,9 @@ export function AiProvidersPage() {
         onOpenChange={setDialogOpen}
       >
         <div className="flex flex-col gap-[6px]">
-          <span className="text-xs font-medium text-muted-foreground">Authentication</span>
+          <span className="text-xs font-medium text-muted-foreground">
+            Authentication
+          </span>
           <ToggleGroup
             type="single"
             variant="outline"
@@ -222,9 +229,17 @@ export function AiProvidersPage() {
                   name="minWords"
                   render={({ field }) => (
                     <FormItem className="flex-1">
-                      <FormLabel className="text-muted-foreground/70">Min words</FormLabel>
+                      <FormLabel className="text-muted-foreground/70">
+                        Min words
+                      </FormLabel>
                       <FormControl>
-                        <Input {...field} type="number" min={0} step={1} inputMode="numeric" />
+                        <Input
+                          {...field}
+                          type="number"
+                          min={0}
+                          step={1}
+                          inputMode="numeric"
+                        />
                       </FormControl>
                       <FormMessage className="mt-1.5 text-help" />
                     </FormItem>
@@ -235,9 +250,17 @@ export function AiProvidersPage() {
                   name="minDurationSec"
                   render={({ field }) => (
                     <FormItem className="flex-1">
-                      <FormLabel className="text-muted-foreground/70">Min duration (s)</FormLabel>
+                      <FormLabel className="text-muted-foreground/70">
+                        Min duration (s)
+                      </FormLabel>
                       <FormControl>
-                        <Input {...field} type="number" min={0} step={0.5} inputMode="decimal" />
+                        <Input
+                          {...field}
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          inputMode="decimal"
+                        />
                       </FormControl>
                       <FormMessage className="mt-1.5 text-help" />
                     </FormItem>
@@ -247,8 +270,9 @@ export function AiProvidersPage() {
             </form>
           </Form>
           <p className="text-xs text-muted-foreground">
-            Cleanup runs only when both thresholds are met and is enabled per-Profile in the Profiles
-            page. There is no global toggle — enable cleanup per-Profile under Profiles.
+            Cleanup runs only when both thresholds are met and is enabled
+            per-Profile in the Profiles page. There is no global toggle — enable
+            cleanup per-Profile under Profiles.
           </p>
         </div>
       </SectionCard>

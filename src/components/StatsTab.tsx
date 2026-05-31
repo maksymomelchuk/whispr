@@ -1,16 +1,16 @@
 import { ChartBarIcon } from "@phosphor-icons/react";
 import { listen } from "@tauri-apps/api/event";
-import { useRef, useMemo, useState, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import type { ChartConfig } from "@/components/ui/chart";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
@@ -90,7 +90,6 @@ function dateCutoff(period: Period): string | null {
   return localDateISO(d);
 }
 
-
 function aggregateRows(rows: StatsRow[], period: Period): Aggregate {
   const cutoff = dateCutoff(period);
   const agg: Aggregate = { words: 0, dictations: 0, seconds: 0 };
@@ -146,7 +145,10 @@ function formatXTick(dateStr: string, period: Period): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function xTickInterval(dataLength: number, period: Period): number | "preserveStartEnd" {
+function xTickInterval(
+  dataLength: number,
+  period: Period,
+): number | "preserveStartEnd" {
   if (period === "week") return 0;
   if (period === "month") return 4;
   if (dataLength <= 60) return 6;
@@ -197,9 +199,20 @@ export function StatsTab() {
 
   const cleanupTokens: CleanupTokens | null = useMemo(() => {
     if (!cleanup) return null;
-    if (period === "week") return { input: cleanup.week.input_tokens, output: cleanup.week.output_tokens };
-    if (period === "month") return { input: cleanup.month.input_tokens, output: cleanup.month.output_tokens };
-    return { input: cleanup.overall.input_tokens, output: cleanup.overall.output_tokens };
+    if (period === "week")
+      return {
+        input: cleanup.week.input_tokens,
+        output: cleanup.week.output_tokens,
+      };
+    if (period === "month")
+      return {
+        input: cleanup.month.input_tokens,
+        output: cleanup.month.output_tokens,
+      };
+    return {
+      input: cleanup.overall.input_tokens,
+      output: cleanup.overall.output_tokens,
+    };
   }, [cleanup, period]);
 
   const { confirming: confirmingClear, trigger: handleClear } =
@@ -246,7 +259,9 @@ export function StatsTab() {
   }, []);
 
   if (loadState === "loading") {
-    return <div className="py-10 text-center text-muted-foreground">Loading…</div>;
+    return (
+      <div className="py-10 text-center text-muted-foreground">Loading…</div>
+    );
   }
 
   if (loadState === "error") {
@@ -294,7 +309,9 @@ export function StatsTab() {
           />
 
           <div>
-            <p className="mb-3 text-[13px] font-semibold text-foreground">Activity</p>
+            <p className="mb-3 text-[13px] font-semibold text-foreground">
+              Activity
+            </p>
             <ActivityChart data={chartData} period={period} />
           </div>
         </>
@@ -311,7 +328,9 @@ export function StatsTab() {
         <>
           <SectionHeader
             title="AI Cleanup"
-            badge={<InfoTip text="Anthropic Claude Haiku 4.5 token usage and estimated cost." />}
+            badge={
+              <InfoTip text="Anthropic Claude Haiku 4.5 token usage and estimated cost." />
+            }
           />
           {cleanupTokens && <CleanupRow tokens={cleanupTokens} />}
         </>
@@ -320,7 +339,13 @@ export function StatsTab() {
   );
 }
 
-function PeriodToggle({ value, onChange }: { value: Period; onChange: (p: Period) => void }) {
+function PeriodToggle({
+  value,
+  onChange,
+}: {
+  value: Period;
+  onChange: (p: Period) => void;
+}) {
   return (
     <div className="flex overflow-hidden rounded-md border border-border bg-card">
       {PERIOD_SPECS.map((spec) => (
@@ -369,7 +394,9 @@ function StatSummary({ words, timeSaved, wpm, dictations }: StatSummaryProps) {
 
       <div className="ml-auto flex items-center gap-4 text-[12px] text-muted-foreground">
         <span>
-          <span className="font-medium tabular-nums text-foreground">{wpm}</span>{" "}
+          <span className="font-medium tabular-nums text-foreground">
+            {wpm}
+          </span>{" "}
           WPM avg
         </span>
         <span>
@@ -383,12 +410,22 @@ function StatSummary({ words, timeSaved, wpm, dictations }: StatSummaryProps) {
   );
 }
 
-function ActivityChart({ data, period }: { data: ChartPoint[]; period: Period }) {
+function ActivityChart({
+  data,
+  period,
+}: {
+  data: ChartPoint[];
+  period: Period;
+}) {
   const interval = xTickInterval(data.length, period);
   return (
     <ChartContainer config={chartConfig} className="h-[180px] w-full">
       <BarChart data={data} barCategoryGap="30%">
-        <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border" />
+        <CartesianGrid
+          vertical={false}
+          strokeDasharray="3 3"
+          className="stroke-border"
+        />
         <XAxis
           dataKey="date"
           tickLine={false}
@@ -435,7 +472,9 @@ function AppsUsed({ apps }: { apps: AppEntry[] }) {
       if (fetchedRef.current.has(bundleId)) continue;
       fetchedRef.current.add(bundleId);
       getAppIcon(bundleId)
-        .then((url) => setIcons((prev) => ({ ...prev, [bundleId]: url ?? null })))
+        .then((url) =>
+          setIcons((prev) => ({ ...prev, [bundleId]: url ?? null })),
+        )
         .catch(() => setIcons((prev) => ({ ...prev, [bundleId]: null })));
     }
   }, [apps]);
@@ -443,11 +482,7 @@ function AppsUsed({ apps }: { apps: AppEntry[] }) {
   return (
     <ul className="m-0 flex list-none flex-wrap items-center gap-2 p-0">
       {apps.map((app) => (
-        <AppBadge
-          key={app.bundleId}
-          app={app}
-          icon={icons[app.bundleId]}
-        />
+        <AppBadge key={app.bundleId} app={app} icon={icons[app.bundleId]} />
       ))}
     </ul>
   );
@@ -476,7 +511,9 @@ function AppBadge({
         </TooltipTrigger>
         <TooltipContent>
           {app.name}
-          <span aria-hidden="true" className="mx-1.5 opacity-50">·</span>
+          <span aria-hidden="true" className="mx-1.5 opacity-50">
+            ·
+          </span>
           <span className="tabular-nums opacity-75">
             {formatCount(app.count)} {noun}
           </span>
@@ -486,7 +523,13 @@ function AppBadge({
   );
 }
 
-function AppIcon({ name, src }: { name: string; src: string | null | undefined }) {
+function AppIcon({
+  name,
+  src,
+}: {
+  name: string;
+  src: string | null | undefined;
+}) {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -526,15 +569,26 @@ function CleanupRow({ tokens }: { tokens: CleanupTokens }) {
   return (
     <div className="flex items-baseline justify-between gap-3 overflow-hidden rounded-lg border border-border bg-card px-4 py-3.5">
       <span className="flex items-baseline gap-1.5 text-xs tabular-nums text-muted-foreground">
-        <span className="whitespace-nowrap">{formatCount(tokens.input)} input</span>
-        <span aria-hidden="true" className="select-none text-muted-foreground/70">·</span>
-        <span className="whitespace-nowrap">{formatCount(tokens.output)} output</span>
+        <span className="whitespace-nowrap">
+          {formatCount(tokens.input)} input
+        </span>
+        <span
+          aria-hidden="true"
+          className="select-none text-muted-foreground/70"
+        >
+          ·
+        </span>
+        <span className="whitespace-nowrap">
+          {formatCount(tokens.output)} output
+        </span>
       </span>
       <span className="inline-flex shrink-0 items-baseline gap-1 tabular-nums">
         <span className="text-lg font-semibold leading-none text-foreground">
           {formatCost(cost)}
         </span>
-        <span className="text-eyebrow uppercase text-muted-foreground/70">est.</span>
+        <span className="text-eyebrow uppercase text-muted-foreground/70">
+          est.
+        </span>
       </span>
     </div>
   );

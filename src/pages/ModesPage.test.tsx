@@ -168,7 +168,9 @@ describe("ModeEditor – autosave", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Create profile" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Create profile" }),
+    ).toBeDisabled();
 
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 
@@ -186,7 +188,9 @@ describe("ModeEditor – autosave", () => {
     expect(
       screen.getByRole("button", { name: "Create profile" }),
     ).not.toBeDisabled();
-    await userEvent.click(screen.getByRole("button", { name: "Create profile" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Create profile" }),
+    );
 
     await waitFor(() =>
       expect(vi.mocked(mockAddMode)).toHaveBeenCalledTimes(1),
@@ -348,9 +352,7 @@ describe("ModeEditor – correction sets", () => {
 
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Remove Punctuation" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Remove Punctuation" }));
 
     await act(async () => {
       vi.advanceTimersByTime(450);
@@ -375,8 +377,18 @@ describe("ModeEditor – local model picker", () => {
 
   it("shows download hint when some local models are not downloaded", async () => {
     vi.mocked(mockGetLocalModelStatuses).mockResolvedValue([
-      { model: "large_v3_turbo", downloaded: false, downloading: false, size_bytes: 0 },
-      { model: "large_v3", downloaded: false, downloading: false, size_bytes: 0 },
+      {
+        model: "large_v3_turbo",
+        downloaded: false,
+        downloading: false,
+        size_bytes: 0,
+      },
+      {
+        model: "large_v3",
+        downloaded: false,
+        downloading: false,
+        size_bytes: 0,
+      },
     ]);
     render(<EditorWrapper mode={LOCAL_MODE} />);
     await waitFor(() =>
@@ -386,8 +398,18 @@ describe("ModeEditor – local model picker", () => {
 
   it("does not show download hint when all local models are downloaded", async () => {
     vi.mocked(mockGetLocalModelStatuses).mockResolvedValue([
-      { model: "large_v3_turbo", downloaded: true, downloading: false, size_bytes: 0 },
-      { model: "large_v3", downloaded: true, downloading: false, size_bytes: 0 },
+      {
+        model: "large_v3_turbo",
+        downloaded: true,
+        downloading: false,
+        size_bytes: 0,
+      },
+      {
+        model: "large_v3",
+        downloaded: true,
+        downloading: false,
+        size_bytes: 0,
+      },
     ]);
     render(<EditorWrapper mode={LOCAL_MODE} />);
     await waitFor(() =>

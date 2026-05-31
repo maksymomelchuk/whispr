@@ -4,6 +4,7 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
+
 import { SettingsContext } from "../context/SettingsContext";
 import type { Settings } from "../lib/types";
 import { AiProvidersPage } from "./AiProvidersPage";
@@ -21,11 +22,25 @@ vi.mock("@/components/ui/dialog", () => ({
   DialogContent: ({ children }: { children: React.ReactNode }) => (
     <div role="dialog">{children}</div>
   ),
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
-  DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
-  DialogClose: ({ children, onClick }: { children?: React.ReactNode; onClick?: React.MouseEventHandler<HTMLButtonElement> }) => (
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2>{children}</h2>
+  ),
+  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <p>{children}</p>
+  ),
+  DialogClose: ({
+    children,
+    onClick,
+  }: {
+    children?: React.ReactNode;
+    onClick?: React.MouseEventHandler<HTMLButtonElement>;
+  }) => (
     <button type="button" onClick={onClick}>
       {children}
     </button>
@@ -89,7 +104,11 @@ describe("AiProvidersPage", () => {
   });
 
   it("marks the provider as configured when API key is configured", () => {
-    render(<Wrapper settings={{ ...BASE_SETTINGS, ai_cleanup_key_configured: true }} />);
+    render(
+      <Wrapper
+        settings={{ ...BASE_SETTINGS, ai_cleanup_key_configured: true }}
+      />,
+    );
     expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
   });
 

@@ -97,13 +97,17 @@ afterEach(() => {
 describe("CorrectionsPage – set creation", () => {
   it("empty state shows create action", () => {
     render(<Wrapper />);
-    expect(screen.getByRole("button", { name: /new correction set/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /new correction set/i }),
+    ).toBeInTheDocument();
   });
 
   it("create: saves set and expands it", async () => {
     render(<Wrapper />);
 
-    await userEvent.click(screen.getByRole("button", { name: /new correction set/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /new correction set/i }),
+    );
     const input = screen.getByPlaceholderText("Set name");
     await userEvent.type(input, "My Rules");
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
@@ -118,7 +122,9 @@ describe("CorrectionsPage – set creation", () => {
 
   it("create: cancel clears the inline form", async () => {
     render(<Wrapper />);
-    await userEvent.click(screen.getByRole("button", { name: /new correction set/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /new correction set/i }),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(screen.queryByPlaceholderText("Set name")).not.toBeInTheDocument();

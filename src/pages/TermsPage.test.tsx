@@ -105,11 +105,18 @@ describe("TermsPage – empty state", () => {
 
 describe("TermsPage – create", () => {
   it("creates a term set and shows it in the list", async () => {
-    const created: NamedTermSet = { id: "ts-new", name: "Medical", entries: [] };
+    const created: NamedTermSet = {
+      id: "ts-new",
+      name: "Medical",
+      entries: [],
+    };
     vi.mocked(mockCreateTermSet).mockResolvedValue(created);
 
     render(<Wrapper />);
-    await userEvent.type(screen.getByPlaceholderText("New set name"), "Medical");
+    await userEvent.type(
+      screen.getByPlaceholderText("New set name"),
+      "Medical",
+    );
     await userEvent.click(screen.getByRole("button", { name: /create set/i }));
 
     await waitFor(() =>
@@ -167,9 +174,7 @@ describe("TermsPage – delete", () => {
       }),
     );
 
-    await waitFor(() =>
-      expect(mockDeleteTermSet).toHaveBeenCalledWith("ts-1"),
-    );
+    await waitFor(() => expect(mockDeleteTermSet).toHaveBeenCalledWith("ts-1"));
     expect(screen.queryByText("Old Set")).not.toBeInTheDocument();
   });
 
@@ -215,9 +220,7 @@ describe("TermsPage – expand and edit entries", () => {
 
     await userEvent.click(screen.getByText("My Set"));
 
-    expect(
-      screen.getByPlaceholderText(/type a term/i),
-    ).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/type a term/i)).toBeInTheDocument();
   });
 
   it("saves entries when a term is committed", async () => {
@@ -231,7 +234,9 @@ describe("TermsPage – expand and edit entries", () => {
     );
 
     await waitFor(() =>
-      expect(mockUpdateTermSetEntries).toHaveBeenCalledWith("ts-1", ["MongoDB"]),
+      expect(mockUpdateTermSetEntries).toHaveBeenCalledWith("ts-1", [
+        "MongoDB",
+      ]),
     );
   });
 });

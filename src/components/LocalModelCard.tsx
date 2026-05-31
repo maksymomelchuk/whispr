@@ -1,11 +1,11 @@
-import { listen } from "@tauri-apps/api/event";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   DownloadSimpleIcon,
   FolderOpenIcon,
   TrashIcon,
   XIcon,
 } from "@phosphor-icons/react";
+import { listen } from "@tauri-apps/api/event";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useEffect, useReducer, useState } from "react";
 import { toast } from "sonner";
 
@@ -52,7 +52,8 @@ const MODEL_LOGOS: Record<LocalWhisperModel, typeof OpenAiLogo> = {
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
+  if (bytes < 1024 * 1024 * 1024)
+    return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
@@ -64,7 +65,12 @@ export function LocalModelCard({ status }: Props) {
   const [downloadState, dispatch] = useReducer(
     localModelDownloadReducer,
     status.downloading
-      ? { kind: "downloading", percentage: 0, bytesDownloaded: 0, totalBytes: status.size_bytes }
+      ? {
+          kind: "downloading",
+          percentage: 0,
+          bytesDownloaded: 0,
+          totalBytes: status.size_bytes,
+        }
       : { kind: "idle" },
   );
   const [downloaded, setDownloaded] = useState(status.downloaded);
@@ -77,23 +83,37 @@ export function LocalModelCard({ status }: Props) {
     const unlisteners: Array<() => void> = [];
 
     const attach = async () => {
-      const unProgress = await listen<ModelDownloadProgress>("model-download-progress", (e) => {
-        if (e.payload.model !== model) return;
-        const { bytes_downloaded, total_bytes, percentage } = e.payload;
-        dispatch({ type: "progress", bytesDownloaded: bytes_downloaded, totalBytes: total_bytes, percentage });
-      });
+      const unProgress = await listen<ModelDownloadProgress>(
+        "model-download-progress",
+        (e) => {
+          if (e.payload.model !== model) return;
+          const { bytes_downloaded, total_bytes, percentage } = e.payload;
+          dispatch({
+            type: "progress",
+            bytesDownloaded: bytes_downloaded,
+            totalBytes: total_bytes,
+            percentage,
+          });
+        },
+      );
 
-      const unComplete = await listen<LocalWhisperModel>("model-download-complete", (e) => {
-        if (e.payload !== model) return;
-        dispatch({ type: "complete" });
-        setDownloaded(true);
-        toast.success(`${MODEL_LABELS[model]} downloaded`);
-      });
+      const unComplete = await listen<LocalWhisperModel>(
+        "model-download-complete",
+        (e) => {
+          if (e.payload !== model) return;
+          dispatch({ type: "complete" });
+          setDownloaded(true);
+          toast.success(`${MODEL_LABELS[model]} downloaded`);
+        },
+      );
 
-      const unError = await listen<ModelDownloadError>("model-download-error", (e) => {
-        if (e.payload.model !== model) return;
-        dispatch({ type: "error", message: e.payload.message });
-      });
+      const unError = await listen<ModelDownloadError>(
+        "model-download-error",
+        (e) => {
+          if (e.payload.model !== model) return;
+          dispatch({ type: "error", message: e.payload.message });
+        },
+      );
 
       if (cancelled) {
         unProgress();
@@ -155,8 +175,12 @@ export function LocalModelCard({ status }: Props) {
       <div className="flex items-center gap-3">
         <ModelLogo className="h-8 w-8 shrink-0 rounded-md" />
         <div className="flex flex-1 flex-col gap-0.5 min-w-0">
-          <span className="text-sm font-medium leading-tight">{MODEL_LABELS[model]}</span>
-          <span className="text-xs text-muted-foreground">{MODEL_SIZE_LABELS[model]}</span>
+          <span className="text-sm font-medium leading-tight">
+            {MODEL_LABELS[model]}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {MODEL_SIZE_LABELS[model]}
+          </span>
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
@@ -232,7 +256,8 @@ export function LocalModelCard({ status }: Props) {
           </div>
           <span className="text-[11px] text-muted-foreground">
             {formatBytes(downloadState.bytesDownloaded)} /{" "}
-            {formatBytes(downloadState.totalBytes)} ({downloadState.percentage}%)
+            {formatBytes(downloadState.totalBytes)} ({downloadState.percentage}
+            %)
           </span>
         </div>
       )}

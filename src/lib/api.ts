@@ -138,8 +138,7 @@ export const openMicrophoneSettings = () =>
   invoke<void>("open_microphone_settings");
 export const openAccessibilitySettings = () =>
   invoke<void>("open_accessibility_settings");
-export const ensurePttStarted = () =>
-  invoke<void>("ensure_ptt_started");
+export const ensurePttStarted = () => invoke<void>("ensure_ptt_started");
 
 export const getLocalModelStatuses = () =>
   invoke<LocalModelStatus[]>("get_local_model_statuses");

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { Settings } from "./types";
 import { SPEECH_MODEL_CATALOG } from "./speechModelCatalog";
+import type { Settings } from "./types";
 
 const BASE_SETTINGS: Settings = {
   deepgram_api_key_configured: false,
@@ -52,7 +52,10 @@ describe("speechModelCatalog", () => {
   it("deepgram selector returns true when configured", () => {
     const deepgram = SPEECH_MODEL_CATALOG.find((d) => d.id === "deepgram")!;
     expect(
-      deepgram.selectConfigured({ ...BASE_SETTINGS, deepgram_api_key_configured: true }),
+      deepgram.selectConfigured({
+        ...BASE_SETTINGS,
+        deepgram_api_key_configured: true,
+      }),
     ).toBe(true);
   });
 
@@ -64,7 +67,10 @@ describe("speechModelCatalog", () => {
   it("groq selector returns true when configured", () => {
     const groq = SPEECH_MODEL_CATALOG.find((d) => d.id === "groq")!;
     expect(
-      groq.selectConfigured({ ...BASE_SETTINGS, groq_api_key_configured: true }),
+      groq.selectConfigured({
+        ...BASE_SETTINGS,
+        groq_api_key_configured: true,
+      }),
     ).toBe(true);
   });
 
@@ -76,7 +82,10 @@ describe("speechModelCatalog", () => {
   it("assemblyai selector returns true when configured", () => {
     const assemblyai = SPEECH_MODEL_CATALOG.find((d) => d.id === "assemblyai")!;
     expect(
-      assemblyai.selectConfigured({ ...BASE_SETTINGS, assemblyai_api_key_configured: true }),
+      assemblyai.selectConfigured({
+        ...BASE_SETTINGS,
+        assemblyai_api_key_configured: true,
+      }),
     ).toBe(true);
   });
 });

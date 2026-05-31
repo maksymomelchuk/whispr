@@ -3,6 +3,7 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
+
 import { SettingsContext } from "../context/SettingsContext";
 import type { Settings } from "../lib/types";
 import { SpeechModelsPage } from "./SpeechModelsPage";
@@ -32,10 +33,18 @@ vi.mock("@/components/ui/dialog", () => ({
   DialogContent: ({ children }: { children: React.ReactNode }) => (
     <div role="dialog">{children}</div>
   ),
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
-  DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2>{children}</h2>
+  ),
+  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <p>{children}</p>
+  ),
   DialogClose: ({ children, onClick, ...props }: any) => (
     <button type="button" onClick={onClick} {...props}>
       {children}
@@ -103,7 +112,9 @@ describe("SpeechModelsPage", () => {
 
   it("marks an engine as configured when it has a key", () => {
     render(
-      <Wrapper settings={{ ...BASE_SETTINGS, deepgram_api_key_configured: true }} />,
+      <Wrapper
+        settings={{ ...BASE_SETTINGS, deepgram_api_key_configured: true }}
+      />,
     );
     expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
   });
@@ -126,7 +137,12 @@ describe("SpeechModelsPage LOCAL section", () => {
   it("shows LOCAL section heading when local models exist", async () => {
     const { getLocalModelStatuses } = await import("../lib/api");
     vi.mocked(getLocalModelStatuses).mockResolvedValue([
-      { model: "large_v3_turbo", downloaded: true, downloading: false, size_bytes: 1_624_555_275 },
+      {
+        model: "large_v3_turbo",
+        downloaded: true,
+        downloading: false,
+        size_bytes: 1_624_555_275,
+      },
     ]);
     render(<Wrapper />);
     await waitFor(() => expect(screen.getByText("Local")).toBeInTheDocument());
@@ -135,43 +151,78 @@ describe("SpeechModelsPage LOCAL section", () => {
   it("renders a card for each local model", async () => {
     const { getLocalModelStatuses } = await import("../lib/api");
     vi.mocked(getLocalModelStatuses).mockResolvedValue([
-      { model: "large_v3", downloaded: false, downloading: false, size_bytes: 3_115_853_312 },
-      { model: "large_v3_turbo", downloaded: true, downloading: false, size_bytes: 1_624_555_275 },
+      {
+        model: "large_v3",
+        downloaded: false,
+        downloading: false,
+        size_bytes: 3_115_853_312,
+      },
+      {
+        model: "large_v3_turbo",
+        downloaded: true,
+        downloading: false,
+        size_bytes: 1_624_555_275,
+      },
     ]);
     render(<Wrapper />);
-    await waitFor(() => expect(screen.getByText("Large v3")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Large v3")).toBeInTheDocument(),
+    );
     expect(screen.getByText("Large v3 Turbo")).toBeInTheDocument();
   });
 
   it("shows idle timeout control when local models exist", async () => {
     const { getLocalModelStatuses } = await import("../lib/api");
     vi.mocked(getLocalModelStatuses).mockResolvedValue([
-      { model: "large_v3_turbo", downloaded: true, downloading: false, size_bytes: 1_624_555_275 },
+      {
+        model: "large_v3_turbo",
+        downloaded: true,
+        downloading: false,
+        size_bytes: 1_624_555_275,
+      },
     ]);
     render(<Wrapper />);
-    await waitFor(() => expect(screen.getByText("Idle timeout")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Idle timeout")).toBeInTheDocument(),
+    );
   });
 
   it("shows download button for a not-downloaded model", async () => {
     const { getLocalModelStatuses } = await import("../lib/api");
     vi.mocked(getLocalModelStatuses).mockResolvedValue([
-      { model: "large_v3", downloaded: false, downloading: false, size_bytes: 3_115_853_312 },
+      {
+        model: "large_v3",
+        downloaded: false,
+        downloading: false,
+        size_bytes: 3_115_853_312,
+      },
     ]);
     render(<Wrapper />);
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Download model" })).toBeInTheDocument(),
+      expect(
+        screen.getByRole("button", { name: "Download model" }),
+      ).toBeInTheDocument(),
     );
   });
 
   it("shows action buttons for a downloaded model", async () => {
     const { getLocalModelStatuses } = await import("../lib/api");
     vi.mocked(getLocalModelStatuses).mockResolvedValue([
-      { model: "large_v3_turbo", downloaded: true, downloading: false, size_bytes: 1_624_555_275 },
+      {
+        model: "large_v3_turbo",
+        downloaded: true,
+        downloading: false,
+        size_bytes: 1_624_555_275,
+      },
     ]);
     render(<Wrapper />);
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Show in Finder" })).toBeInTheDocument(),
+      expect(
+        screen.getByRole("button", { name: "Show in Finder" }),
+      ).toBeInTheDocument(),
     );
-    expect(screen.getByRole("button", { name: "Delete model" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Delete model" }),
+    ).toBeInTheDocument();
   });
 });

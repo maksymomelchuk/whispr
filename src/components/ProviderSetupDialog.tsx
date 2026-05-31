@@ -1,6 +1,7 @@
 import { ArrowSquareOutIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -10,8 +11,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
 import type { EngineDescriptor } from "../lib/speechModelCatalog";
 
 const MASKED_PLACEHOLDER = "••••••••••••";
@@ -116,7 +117,9 @@ export function ProviderSetupDialog({
             <Input
               id="provider-api-key"
               type="password"
-              placeholder={isConfigured ? MASKED_PLACEHOLDER : descriptor.keyPlaceholder}
+              placeholder={
+                isConfigured ? MASKED_PLACEHOLDER : descriptor.keyPlaceholder
+              }
               value={keyValue}
               onChange={(e) => {
                 setKeyValue(e.target.value);
@@ -149,7 +152,12 @@ export function ProviderSetupDialog({
         <DialogFooter className="flex items-center justify-between sm:justify-between gap-2">
           <div className="flex gap-2">
             <DialogClose asChild>
-              <Button type="button" variant="outline" size="sm" disabled={saving}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={saving}
+              >
                 Cancel
               </Button>
             </DialogClose>

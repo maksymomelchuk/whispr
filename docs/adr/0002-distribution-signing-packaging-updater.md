@@ -58,11 +58,11 @@ Both formats are produced by `tauri-action` without extra configuration when
   `latest.json` via `tauri-action` with `includeUpdaterJson: true`. The action merges
   entries so the final file covers all three platforms.
 
-| Platform | Updater artifact | Format |
-|---|---|---|
-| macOS | `.app.tar.gz` | Tauri default |
-| Windows | NSIS `.zip` | Tauri default |
-| Linux | `.AppImage.tar.gz` | Tauri default |
+| Platform | Updater artifact   | Format        |
+| -------- | ------------------ | ------------- |
+| macOS    | `.app.tar.gz`      | Tauri default |
+| Windows  | NSIS `.zip`        | Tauri default |
+| Linux    | `.AppImage.tar.gz` | Tauri default |
 
 Updater artifacts are signed with the existing `TAURI_SIGNING_PRIVATE_KEY` secret (Tauri's
 own minisign scheme, not OS code-signing) on all three platforms.

@@ -51,7 +51,10 @@ export function TermsPage() {
     setCreating(true);
     try {
       const created = await createTermSet(name);
-      setSettings((s) => ({ ...s, term_sets: [...(s.term_sets ?? []), created] }));
+      setSettings((s) => ({
+        ...s,
+        term_sets: [...(s.term_sets ?? []), created],
+      }));
       setNewName("");
       setExpandedId(created.id);
     } catch (e) {
@@ -170,7 +173,9 @@ export function TermsPage() {
               onRenameDraftChange={setRenameDraft}
               onCommitRename={() => commitRename(set.id)}
               onDelete={() => openDeleteDialog(set)}
-              onEntriesChange={(entries) => handleEntriesChange(set.id, entries)}
+              onEntriesChange={(entries) =>
+                handleEntriesChange(set.id, entries)
+              }
             />
           ))
         )}
@@ -222,7 +227,11 @@ function TermSetRow({
     <div className="flex flex-col gap-0 group/row">
       <RowCard
         interactive={!renaming}
-        className={expanded ? "rounded-b-none border-b-0 group-hover/row:border-ring/55" : ""}
+        className={
+          expanded
+            ? "rounded-b-none border-b-0 group-hover/row:border-ring/55"
+            : ""
+        }
         onClick={renaming ? undefined : onToggleExpand}
       >
         <div className="flex flex-1 min-w-0 items-center gap-2">
@@ -315,11 +324,7 @@ function NewSetRow({
         placeholder="New set name"
         className="max-w-xs h-8 text-sm"
       />
-      <Button
-        size="sm"
-        onClick={onSubmit}
-        disabled={creating || !value.trim()}
-      >
+      <Button size="sm" onClick={onSubmit} disabled={creating || !value.trim()}>
         {creating ? "Creating…" : "Create set"}
       </Button>
     </div>
@@ -350,7 +355,10 @@ function DeleteConfirmDialog({
                 ? `the profile "${affectedModeNames[0]}"`
                 : `${affectedModeNames.length} profiles: ${affectedModeNames.join(", ")}`}
               . Deleting it will unlink it from{" "}
-              {affectedModeNames.length === 1 ? "that profile" : "those profiles"}.
+              {affectedModeNames.length === 1
+                ? "that profile"
+                : "those profiles"}
+              .
             </DialogDescription>
           )}
         </DialogHeader>
