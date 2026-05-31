@@ -22,7 +22,7 @@ jobs:
           - os: windows-latest
             args: --config tauri.ci.conf.json
             rust-targets: ""
-          - os: ubuntu-22.04
+          - os: ubuntu-24.04
             args: --config tauri.ci.conf.json
             rust-targets: ""
 
@@ -62,10 +62,6 @@ jobs:
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
         run: |
-          wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc \
-            | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc > /dev/null
-          echo "deb https://packages.lunarg.com/vulkan jammy main" \
-            | sudo tee /etc/apt/sources.list.d/lunarg-vulkan.list
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
@@ -75,7 +71,8 @@ jobs:
             patchelf \
             libasound2-dev \
             libxdo-dev \
-            vulkan-sdk
+            libvulkan-dev \
+            glslc
 
       - name: Install frontend deps
         run: pnpm install --frozen-lockfile
