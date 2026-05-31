@@ -17,13 +17,13 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            args: --target universal-apple-darwin
+            args: --target universal-apple-darwin --bundles none
             rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
           - os: windows-latest
-            args: ""
+            args: --bundles none
             rust-targets: ""
           - os: ubuntu-22.04
-            args: ""
+            args: --bundles none
             rust-targets: ""
 
     runs-on: ${{ matrix.os }}
@@ -31,6 +31,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set macOS deployment target
+        if: runner.os == 'macOS'
+        run: echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> "$GITHUB_ENV"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -65,7 +69,8 @@ jobs:
             patchelf \
             libasound2-dev \
             libvulkan-dev \
-            glslang-tools
+            glslang-tools \
+            glslc
 
       - name: Install frontend deps
         run: pnpm install --frozen-lockfile
