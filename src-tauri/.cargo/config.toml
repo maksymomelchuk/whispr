@@ -1,0 +1,5 @@
+[env]
+# std::filesystem APIs (used by ggml) require macOS 10.15+.
+# Without this, Apple's SDK marks them as unavailable and the build fails.
+MACOSX_DEPLOYMENT_TARGET = "10.15"
+CMAKE_OSX_DEPLOYMENT_TARGET = "10.15"
