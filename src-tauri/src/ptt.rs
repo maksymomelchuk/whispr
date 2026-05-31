@@ -1,4 +1,13 @@
 use crate::config::{HotkeyAction, HotkeyBinding, Shortcut};
+use crate::hotkey::{
+    advance_tap_state, coex_advance_down, coex_timer_should_fire, is_cancel_event,
+    key_has_both_kinds, shortcut_is_relevant, shortcut_matches, tap_state_key, CoexDown, Dispatch,
+    TapEvent, TapState, DOUBLE_TAP_THRESHOLD,
+};
+use crate::keysym::{
+    keycode_to_code, KC_ALT_LEFT, KC_ALT_RIGHT, KC_CONTROL_LEFT, KC_CONTROL_RIGHT, KC_META_LEFT,
+    KC_META_RIGHT, KC_SHIFT_LEFT, KC_SHIFT_RIGHT,
+};
 use crate::provider::{self, LocalWhisperModel, ProviderModel, TranscriptionProvider};
 use crate::assemblyai_session::AssemblyAiSession;
 use crate::deepgram_session::DeepgramSession;
@@ -32,113 +41,7 @@ const PTT_CANCELLED_EVENT: &str = "ptt-cancelled";
 
 const ERROR_FLASH: Duration = Duration::from_millis(800);
 const CANCEL_FLASH: Duration = Duration::from_millis(800);
-const DOUBLE_TAP_THRESHOLD: Duration = Duration::from_millis(400);
 const MIN_SPEAK_DURATION: Duration = Duration::from_millis(300);
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum TapEvent {
-    Down,
-    Up,
-    OtherKey,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Dispatch {
-    StartPtt,
-    StopPtt,
-    Nothing,
-}
-
-#[derive(Default)]
-pub struct TapState {
-    pub tap_count: u8,
-    pub last_tap_up_time: Option<Instant>,
-    /// Bumped on every state-mutating event. Pending coexistence timers capture
-    /// the post-event value at schedule time and abort on wake if it no longer
-    /// matches — wrapping is fine, u64 collisions are not realistic.
-    pub generation: u64,
-}
-
-pub fn advance_tap_state(state: &mut TapState, event: TapEvent, now: Instant) -> Dispatch {
-    let dispatch = match event {
-        TapEvent::Down => {
-            if state.tap_count == 1 {
-                if let Some(t) = state.last_tap_up_time {
-                    if now.duration_since(t) < DOUBLE_TAP_THRESHOLD {
-                        state.tap_count = 2;
-                        state.generation = state.generation.wrapping_add(1);
-                        return Dispatch::StartPtt;
-                    }
-                }
-            }
-            state.tap_count = 1;
-            state.last_tap_up_time = None;
-            Dispatch::Nothing
-        }
-        TapEvent::Up => {
-            if state.tap_count == 2 {
-                state.tap_count = 0;
-                state.last_tap_up_time = None;
-                state.generation = state.generation.wrapping_add(1);
-                return Dispatch::StopPtt;
-            }
-            if state.tap_count == 1 {
-                state.last_tap_up_time = Some(now);
-            }
-            Dispatch::Nothing
-        }
-        TapEvent::OtherKey => {
-            if state.tap_count == 1 {
-                state.tap_count = 0;
-                state.last_tap_up_time = None;
-            }
-            Dispatch::Nothing
-        }
-    };
-    state.generation = state.generation.wrapping_add(1);
-    dispatch
-}
-
-/// Outcome of a key-down on a key that has both a single-press and a double-tap
-/// binding. State is mutated; the timer-arming variant carries the generation
-/// the caller must capture so the timer can detect later events that invalidate it.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum CoexDown {
-    FireDoubleTap,
-    ScheduleSinglePress { captured_generation: u64 },
-}
-
-pub fn coex_advance_down(state: &mut TapState, now: Instant) -> CoexDown {
-    match advance_tap_state(state, TapEvent::Down, now) {
-        Dispatch::StartPtt => CoexDown::FireDoubleTap,
-        _ => CoexDown::ScheduleSinglePress {
-            captured_generation: state.generation,
-        },
-    }
-}
-
-pub fn coex_timer_should_fire(state: &TapState, captured: u64) -> bool {
-    state.generation == captured
-        && state.tap_count == 1
-        && state.last_tap_up_time.is_none()
-}
-
-/// True iff `bindings` contains both a single-press and a double-tap binding
-/// for the same `(key, modifiers)` as `shortcut`.
-pub fn key_has_both_kinds(bindings: &[HotkeyBinding], shortcut: &Shortcut) -> bool {
-    let mut has_single = false;
-    let mut has_double = false;
-    for b in bindings {
-        if b.shortcut.key == shortcut.key && b.shortcut.modifiers == shortcut.modifiers {
-            if b.shortcut.is_double_tap {
-                has_double = true;
-            } else {
-                has_single = true;
-            }
-        }
-    }
-    has_single && has_double
-}
 
 /// No window focus — caller still owns the target app's focus for paste.
 fn notify_silent(app: &AppHandle, message: impl Into<String>) {
@@ -188,10 +91,10 @@ struct ModKeyState {
 /// The CGEventFlags family bit that a given modifier keycode belongs to.
 fn modifier_family(keycode: u16) -> Option<CGEventFlags> {
     Some(match keycode {
-        0x3A | 0x3D => CGEventFlags::CGEventFlagAlternate,
-        0x37 | 0x36 => CGEventFlags::CGEventFlagCommand,
-        0x3B | 0x3E => CGEventFlags::CGEventFlagControl,
-        0x38 | 0x3C => CGEventFlags::CGEventFlagShift,
+        KC_ALT_LEFT | KC_ALT_RIGHT => CGEventFlags::CGEventFlagAlternate,
+        KC_META_LEFT | KC_META_RIGHT => CGEventFlags::CGEventFlagCommand,
+        KC_CONTROL_LEFT | KC_CONTROL_RIGHT => CGEventFlags::CGEventFlagControl,
+        KC_SHIFT_LEFT | KC_SHIFT_RIGHT => CGEventFlags::CGEventFlagShift,
         _ => return None,
     })
 }
@@ -199,19 +102,19 @@ fn modifier_family(keycode: u16) -> Option<CGEventFlags> {
 /// Clear both sides of the modifier family a given keycode belongs to.
 fn clear_family(state: &mut ModKeyState, keycode: u16) {
     match keycode {
-        0x3A | 0x3D => {
+        KC_ALT_LEFT | KC_ALT_RIGHT => {
             state.l_alt = false;
             state.r_alt = false;
         }
-        0x37 | 0x36 => {
+        KC_META_LEFT | KC_META_RIGHT => {
             state.l_meta = false;
             state.r_meta = false;
         }
-        0x3B | 0x3E => {
+        KC_CONTROL_LEFT | KC_CONTROL_RIGHT => {
             state.l_control = false;
             state.r_control = false;
         }
-        0x38 | 0x3C => {
+        KC_SHIFT_LEFT | KC_SHIFT_RIGHT => {
             state.l_shift = false;
             state.r_shift = false;
         }
@@ -221,14 +124,14 @@ fn clear_family(state: &mut ModKeyState, keycode: u16) {
 
 fn side_mut(state: &mut ModKeyState, keycode: u16) -> Option<&mut bool> {
     Some(match keycode {
-        0x3A => &mut state.l_alt,
-        0x3D => &mut state.r_alt,
-        0x37 => &mut state.l_meta,
-        0x36 => &mut state.r_meta,
-        0x3B => &mut state.l_control,
-        0x3E => &mut state.r_control,
-        0x38 => &mut state.l_shift,
-        0x3C => &mut state.r_shift,
+        KC_ALT_LEFT => &mut state.l_alt,
+        KC_ALT_RIGHT => &mut state.r_alt,
+        KC_META_LEFT => &mut state.l_meta,
+        KC_META_RIGHT => &mut state.r_meta,
+        KC_CONTROL_LEFT => &mut state.l_control,
+        KC_CONTROL_RIGHT => &mut state.r_control,
+        KC_SHIFT_LEFT => &mut state.l_shift,
+        KC_SHIFT_RIGHT => &mut state.r_shift,
         _ => return None,
     })
 }
@@ -242,141 +145,6 @@ fn modifier_state_from_flags(flags: CGEventFlags) -> ModifierState {
     }
 }
 
-/// Map macOS virtual keycodes (from <Carbon/HIToolbox/Events.h>) to the
-/// KeyboardEvent.code strings the frontend uses.
-fn macos_keycode_to_code(kc: u16) -> Option<&'static str> {
-    Some(match kc {
-        0x00 => "KeyA",
-        0x0B => "KeyB",
-        0x08 => "KeyC",
-        0x02 => "KeyD",
-        0x0E => "KeyE",
-        0x03 => "KeyF",
-        0x05 => "KeyG",
-        0x04 => "KeyH",
-        0x22 => "KeyI",
-        0x26 => "KeyJ",
-        0x28 => "KeyK",
-        0x25 => "KeyL",
-        0x2E => "KeyM",
-        0x2D => "KeyN",
-        0x1F => "KeyO",
-        0x23 => "KeyP",
-        0x0C => "KeyQ",
-        0x0F => "KeyR",
-        0x01 => "KeyS",
-        0x11 => "KeyT",
-        0x20 => "KeyU",
-        0x09 => "KeyV",
-        0x0D => "KeyW",
-        0x07 => "KeyX",
-        0x10 => "KeyY",
-        0x06 => "KeyZ",
-        0x1D => "Digit0",
-        0x12 => "Digit1",
-        0x13 => "Digit2",
-        0x14 => "Digit3",
-        0x15 => "Digit4",
-        0x17 => "Digit5",
-        0x16 => "Digit6",
-        0x1A => "Digit7",
-        0x1C => "Digit8",
-        0x19 => "Digit9",
-        0x31 => "Space",
-        0x24 => "Enter",
-        0x30 => "Tab",
-        0x35 => "Escape",
-        0x33 => "Backspace",
-        0x7E => "ArrowUp",
-        0x7D => "ArrowDown",
-        0x7B => "ArrowLeft",
-        0x7C => "ArrowRight",
-        // Punctuation
-        0x2C => "Slash",
-        0x2B => "Comma",
-        0x2F => "Period",
-        0x29 => "Semicolon",
-        0x27 => "Quote",
-        0x32 => "Backquote",
-        0x2A => "Backslash",
-        0x1B => "Minus",
-        0x18 => "Equal",
-        0x21 => "BracketLeft",
-        0x1E => "BracketRight",
-        // Modifiers (also produce FlagsChanged)
-        0x3A => "AltLeft",
-        0x3D => "AltRight",
-        0x37 => "MetaLeft",
-        0x36 => "MetaRight",
-        0x3B => "ControlLeft",
-        0x3E => "ControlRight",
-        0x38 => "ShiftLeft",
-        0x3C => "ShiftRight",
-        // Function keys
-        0x7A => "F1",
-        0x78 => "F2",
-        0x63 => "F3",
-        0x76 => "F4",
-        0x60 => "F5",
-        0x61 => "F6",
-        0x62 => "F7",
-        0x64 => "F8",
-        0x65 => "F9",
-        0x6D => "F10",
-        0x67 => "F11",
-        0x6F => "F12",
-        _ => return None,
-    })
-}
-
-/// True if `code` is the shortcut's key or one of its required modifiers.
-/// Used to decide whether an event is worth processing for PTT.
-fn shortcut_is_relevant(code: &str, shortcut: &Shortcut) -> bool {
-    if code == shortcut.key {
-        return true;
-    }
-    shortcut.modifiers.iter().any(|m| match m.as_str() {
-        "Meta" => matches!(code, "MetaLeft" | "MetaRight"),
-        "Control" => matches!(code, "ControlLeft" | "ControlRight"),
-        "Alt" => matches!(code, "AltLeft" | "AltRight"),
-        "Shift" => matches!(code, "ShiftLeft" | "ShiftRight"),
-        _ => false,
-    })
-}
-
-/// True if this event triggers `shortcut`: same key, and required modifiers
-/// held. Modifier-only shortcuts (key is itself a modifier) skip the modifier
-/// check because the FlagsChanged that fires the key also mutates the bitmask.
-fn shortcut_matches(code: &str, shortcut: &Shortcut, mods: ModifierState) -> bool {
-    code == shortcut.key
-        && (is_modifier_code(&shortcut.key) || mods.matches(&shortcut.modifiers))
-}
-
-/// Identity for the per-binding double-tap state map.
-fn tap_state_key(shortcut: &Shortcut) -> (String, Vec<String>) {
-    (shortcut.key.clone(), shortcut.modifiers.clone())
-}
-
-fn is_modifier_code(code: &str) -> bool {
-    matches!(
-        code,
-        "AltLeft"
-            | "AltRight"
-            | "MetaLeft"
-            | "MetaRight"
-            | "ControlLeft"
-            | "ControlRight"
-            | "ShiftLeft"
-            | "ShiftRight"
-    )
-}
-
-/// True iff this event should cancel the in-flight Session. Escape press while
-/// recording — modifiers intentionally ignored so held-modifier PTT shortcuts
-/// (e.g. hold Right-Alt) still allow cancellation without releasing PTT first.
-pub fn is_cancel_event(code: &str, is_press: bool, ptt_active: bool) -> bool {
-    code == "Escape" && is_press && ptt_active
-}
 
 /// Tear down the recording side of a Session: mark cancelled, drop the active
 /// shortcut, stop the recorder, resume muted media, emit the cancel event.
@@ -836,7 +604,7 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                 let keycode =
                     event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE) as u16;
 
-                let Some(code) = macos_keycode_to_code(keycode) else {
+                let Some(code) = keycode_to_code(keycode) else {
                     return None;
                 };
 
@@ -1095,336 +863,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn double_tap_within_window_starts_on_second_down_stops_on_second_up() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-
-        // First down: tap_count → 1, no start
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Down, base), Dispatch::Nothing);
-        assert_eq!(state.tap_count, 1);
-
-        // First up: record timestamp
-        let t1 = base + Duration::from_millis(50);
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Up, t1), Dispatch::Nothing);
-        assert!(state.last_tap_up_time.is_some());
-
-        // Second down within 400ms: start PTT
-        let t2 = base + Duration::from_millis(150);
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Down, t2), Dispatch::StartPtt);
-        assert_eq!(state.tap_count, 2);
-
-        // Second up: stop PTT, reset
-        let t3 = base + Duration::from_millis(300);
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Up, t3), Dispatch::StopPtt);
-        assert_eq!(state.tap_count, 0);
-        assert!(state.last_tap_up_time.is_none());
-    }
-
-    #[test]
-    fn double_tap_expired_window_second_down_treated_as_new_first_tap() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Down, base), Dispatch::Nothing);
-        let t1 = base + Duration::from_millis(50);
-        advance_tap_state(&mut state, TapEvent::Up, t1);
-
-        // Second down after threshold: resets to tap_count=1, no start
-        let t2 = base + Duration::from_millis(500);
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Down, t2), Dispatch::Nothing);
-        assert_eq!(state.tap_count, 1);
-        assert!(state.last_tap_up_time.is_none());
-    }
-
-    #[test]
-    fn other_key_between_taps_resets_state() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-
-        advance_tap_state(&mut state, TapEvent::Down, base);
-        let t1 = base + Duration::from_millis(50);
-        advance_tap_state(&mut state, TapEvent::Up, t1);
-        assert_eq!(state.tap_count, 1);
-
-        // Unrelated key press cancels the pending double-tap
-        let t2 = base + Duration::from_millis(100);
-        assert_eq!(advance_tap_state(&mut state, TapEvent::OtherKey, t2), Dispatch::Nothing);
-        assert_eq!(state.tap_count, 0);
-        assert!(state.last_tap_up_time.is_none());
-
-        // Subsequent down within what would have been the window: no start
-        let t3 = base + Duration::from_millis(150);
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Down, t3), Dispatch::Nothing);
-        assert_eq!(state.tap_count, 1);
-    }
-
-    #[test]
-    fn fresh_state_up_event_is_noop() {
-        let mut state = TapState::default();
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Up, Instant::now()), Dispatch::Nothing);
-        assert_eq!(state.tap_count, 0);
-        assert!(state.last_tap_up_time.is_none());
-    }
-
-    fn sp_binding(key: &str) -> HotkeyBinding {
-        HotkeyBinding::ptt(
-            Shortcut {
-                key: key.to_string(),
-                modifiers: vec![],
-                is_double_tap: false,
-            },
-            "mode-a".to_string(),
-        )
-    }
-
-    fn dt_binding(key: &str) -> HotkeyBinding {
-        HotkeyBinding::ptt(
-            Shortcut {
-                key: key.to_string(),
-                modifiers: vec![],
-                is_double_tap: true,
-            },
-            "mode-b".to_string(),
-        )
-    }
-
-    #[test]
-    fn key_has_both_kinds_detects_coexistence_pair() {
-        let bindings = vec![sp_binding("AltRight"), dt_binding("AltRight")];
-        assert!(key_has_both_kinds(&bindings, &bindings[0].shortcut));
-        assert!(key_has_both_kinds(&bindings, &bindings[1].shortcut));
-    }
-
-    #[test]
-    fn key_has_both_kinds_false_for_single_press_only() {
-        let bindings = vec![sp_binding("AltRight")];
-        assert!(!key_has_both_kinds(&bindings, &bindings[0].shortcut));
-    }
-
-    #[test]
-    fn key_has_both_kinds_false_for_double_tap_only() {
-        let bindings = vec![dt_binding("AltRight")];
-        assert!(!key_has_both_kinds(&bindings, &bindings[0].shortcut));
-    }
-
-    #[test]
-    fn key_has_both_kinds_distinguishes_by_modifiers() {
-        let with_shift = HotkeyBinding::ptt(
-            Shortcut {
-                key: "AltRight".to_string(),
-                modifiers: vec!["Shift".to_string()],
-                is_double_tap: true,
-            },
-            "mode-x".to_string(),
-        );
-        let bindings = vec![sp_binding("AltRight"), with_shift];
-        assert!(!key_has_both_kinds(&bindings, &bindings[0].shortcut));
-        assert!(!key_has_both_kinds(&bindings, &bindings[1].shortcut));
-    }
-
-    #[test]
-    fn advance_tap_state_bumps_generation_on_every_event() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-        let g0 = state.generation;
-
-        advance_tap_state(&mut state, TapEvent::Down, base);
-        let g1 = state.generation;
-        assert_ne!(g0, g1, "Down must bump generation");
-
-        advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(50));
-        let g2 = state.generation;
-        assert_ne!(g1, g2, "Up must bump generation");
-
-        advance_tap_state(&mut state, TapEvent::OtherKey, base + Duration::from_millis(100));
-        let g3 = state.generation;
-        assert_ne!(g2, g3, "OtherKey must bump generation");
-    }
-
-    // ── Coexistence edge-case 1: tap-and-hold past 400 ms → Mode A fires ────
-    #[test]
-    fn coex_tap_and_hold_fires_single_press_at_threshold() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-
-        let outcome = coex_advance_down(&mut state, base);
-        let CoexDown::ScheduleSinglePress { captured_generation } = outcome else {
-            panic!("first down should schedule single-press timer");
-        };
-        assert!(coex_timer_should_fire(&state, captured_generation));
-    }
-
-    // ── Edge-case 2: tap-tap-and-hold → Mode B on 2nd down ───────────────────
-    #[test]
-    fn coex_tap_tap_and_hold_fires_double_tap_on_second_down() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-
-        let CoexDown::ScheduleSinglePress { captured_generation: g1 } =
-            coex_advance_down(&mut state, base)
-        else {
-            panic!();
-        };
-
-        // First up records last_tap_up_time and invalidates the SP timer.
-        advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(50));
-        assert!(!coex_timer_should_fire(&state, g1));
-
-        // Second down within window fires the double-tap immediately.
-        let outcome = coex_advance_down(&mut state, base + Duration::from_millis(150));
-        assert_eq!(outcome, CoexDown::FireDoubleTap);
-
-        let stop = advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(300));
-        assert_eq!(stop, Dispatch::StopPtt);
-    }
-
-    // ── Edge-case 3: tap-and-release within 400 ms, then silence ─────────────
-    #[test]
-    fn coex_tap_release_within_window_then_silence_fires_nothing() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-
-        let CoexDown::ScheduleSinglePress { captured_generation } =
-            coex_advance_down(&mut state, base)
-        else {
-            panic!();
-        };
-        advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(100));
-        assert!(!coex_timer_should_fire(&state, captured_generation));
-    }
-
-    // ── Edge-case 4: tap, release, 1 s pause, another tap-and-release ───────
-    #[test]
-    fn coex_two_separated_taps_with_gap_over_window_fire_nothing() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-
-        let CoexDown::ScheduleSinglePress { captured_generation: g1 } =
-            coex_advance_down(&mut state, base)
-        else {
-            panic!();
-        };
-        advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(100));
-        assert!(!coex_timer_should_fire(&state, g1));
-
-        let outcome2 = coex_advance_down(&mut state, base + Duration::from_millis(1100));
-        let CoexDown::ScheduleSinglePress { captured_generation: g2 } = outcome2 else {
-            panic!("gap > window should schedule a fresh SP timer, not fire DT");
-        };
-        advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(1200));
-        assert!(!coex_timer_should_fire(&state, g2));
-    }
-
-    // ── Edge-case 5: rapid triple tap (2nd fires Mode B; 3rd ignored) ───────
-    #[test]
-    fn coex_rapid_triple_tap_fires_double_tap_then_resets() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-
-        let _ = coex_advance_down(&mut state, base);
-        advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(50));
-        assert_eq!(
-            coex_advance_down(&mut state, base + Duration::from_millis(150)),
-            CoexDown::FireDoubleTap,
-        );
-        assert_eq!(
-            advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(250)),
-            Dispatch::StopPtt,
-        );
-
-        // A 3rd down after dt completes is a fresh first tap, NOT another
-        // double-tap (state was reset on StopPtt).
-        let outcome3 = coex_advance_down(&mut state, base + Duration::from_millis(350));
-        assert!(matches!(outcome3, CoexDown::ScheduleSinglePress { .. }));
-    }
-
-    // ── Edge-case 6: hold 600 ms past threshold, then release → standard stop
-    #[test]
-    fn coex_hold_past_threshold_keeps_timer_eligible_until_event_arrives() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-
-        let CoexDown::ScheduleSinglePress { captured_generation } =
-            coex_advance_down(&mut state, base)
-        else {
-            panic!();
-        };
-        assert!(coex_timer_should_fire(&state, captured_generation));
-
-        // A subsequent fresh first-tap correctly transitions through the
-        // state machine even though tap_count was still 1 from the prior
-        // press (sp fired without resetting it — that's intentional).
-        let outcome2 = coex_advance_down(&mut state, base + Duration::from_millis(800));
-        assert!(matches!(outcome2, CoexDown::ScheduleSinglePress { .. }));
-        assert_eq!(state.tap_count, 1);
-    }
-
-    // ── Edge-case 9: only sp binding → key_has_both_kinds is false ──────────
-    #[test]
-    fn coex_helper_says_no_for_single_press_only_key() {
-        let bindings = vec![sp_binding("AltRight")];
-        let other = Shortcut {
-            key: "AltRight".to_string(),
-            modifiers: vec![],
-            is_double_tap: false,
-        };
-        assert!(!key_has_both_kinds(&bindings, &other));
-    }
-
-    // ── Edge-case 10: only dt binding → key_has_both_kinds is false ─────────
-    #[test]
-    fn coex_helper_says_no_for_double_tap_only_key() {
-        let bindings = vec![dt_binding("AltRight")];
-        let other = Shortcut {
-            key: "AltRight".to_string(),
-            modifiers: vec![],
-            is_double_tap: true,
-        };
-        assert!(!key_has_both_kinds(&bindings, &other));
-    }
-
-    // ── Timer cancellation: stale generation never fires ────────────────────
-    #[test]
-    fn coex_timer_with_stale_generation_does_not_fire() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-        let CoexDown::ScheduleSinglePress { captured_generation } =
-            coex_advance_down(&mut state, base)
-        else {
-            panic!();
-        };
-
-        advance_tap_state(&mut state, TapEvent::OtherKey, base + Duration::from_millis(10));
-        assert!(!coex_timer_should_fire(&state, captured_generation));
-    }
-
-    #[test]
-    fn cancel_predicate_fires_on_escape_press_during_active_session() {
-        assert!(is_cancel_event("Escape", true, true));
-    }
-
-    #[test]
-    fn cancel_predicate_inert_when_no_session_active() {
-        assert!(!is_cancel_event("Escape", true, false));
-    }
-
-    #[test]
-    fn cancel_predicate_ignores_escape_release() {
-        assert!(!is_cancel_event("Escape", false, true));
-    }
-
-    #[test]
-    fn cancel_predicate_ignores_non_escape_keys() {
-        assert!(!is_cancel_event("Space", true, true));
-        assert!(!is_cancel_event("KeyA", true, true));
-    }
-
-    #[test]
-    fn cancel_predicate_ignores_escape_release_when_idle() {
-        assert!(!is_cancel_event("Escape", false, false));
-    }
-
-    #[test]
     fn local_readiness_fails_when_model_file_absent() {
         let dir = tempfile::tempdir().unwrap();
         let result = local_model_readiness(dir.path(), LocalWhisperModel::LargeV3);
@@ -1450,9 +888,7 @@ mod tests {
         let path_v3 = crate::provider::local_model_path(dir.path(), LocalWhisperModel::LargeV3);
         fs::create_dir_all(path_v3.parent().unwrap()).unwrap();
         fs::write(&path_v3, b"stub").unwrap();
-        // LargeV3 present → ok
         assert!(local_model_readiness(dir.path(), LocalWhisperModel::LargeV3).is_ok());
-        // LargeV3Turbo still absent → err
         assert!(local_model_readiness(dir.path(), LocalWhisperModel::LargeV3Turbo).is_err());
     }
 }

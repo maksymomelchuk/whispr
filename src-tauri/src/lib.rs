@@ -3,6 +3,8 @@ mod commands;
 pub mod config;
 pub mod download;
 pub mod history;
+pub mod hotkey;
+pub mod keysym;
 pub mod mode;
 pub mod provider;
 pub mod pipeline;
