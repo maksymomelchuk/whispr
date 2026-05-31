@@ -132,7 +132,6 @@ pub fn shortcut_matches(code: &str, shortcut: &Shortcut, mods: ModifierState) ->
         && (is_modifier_code(&shortcut.key) || mods.matches(&shortcut.modifiers))
 }
 
-/// Identity for the per-binding double-tap state map.
 pub fn tap_state_key(shortcut: &Shortcut) -> (String, Vec<String>) {
     (shortcut.key.clone(), shortcut.modifiers.clone())
 }
