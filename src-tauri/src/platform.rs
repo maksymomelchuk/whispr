@@ -1,28 +1,8 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Os {
-    MacOs,
-    Windows,
-    Linux,
-    Other,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LinuxDisplayServer {
     X11,
     Wayland,
     Unknown,
-}
-
-pub fn current_os() -> Os {
-    if cfg!(target_os = "macos") {
-        Os::MacOs
-    } else if cfg!(target_os = "windows") {
-        Os::Windows
-    } else if cfg!(target_os = "linux") {
-        Os::Linux
-    } else {
-        Os::Other
-    }
 }
 
 pub fn linux_display_server() -> LinuxDisplayServer {
@@ -54,17 +34,6 @@ fn detect_linux_display_server(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn current_os_matches_compile_target() {
-        let os = current_os();
-        #[cfg(target_os = "macos")]
-        assert_eq!(os, Os::MacOs);
-        #[cfg(target_os = "windows")]
-        assert_eq!(os, Os::Windows);
-        #[cfg(target_os = "linux")]
-        assert_eq!(os, Os::Linux);
-    }
 
     #[test]
     fn xdg_wayland_detected() {

@@ -18,6 +18,7 @@ mod snippets;
 mod state;
 mod stats;
 mod tray;
+#[cfg(target_os = "linux")]
 pub(crate) mod platform;
 
 // cleanup_stats is pure Rust (file I/O + token counters, no OS APIs) and

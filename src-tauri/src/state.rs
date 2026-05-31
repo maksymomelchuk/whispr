@@ -34,7 +34,7 @@ impl ModifierState {
 
 pub enum LocalEngine {
     Whisper(transcribe_rs::whisper_cpp::WhisperEngine),
-    Parakeet(transcribe_rs::parakeet_onnx::ParakeetEngine),
+    Parakeet(transcribe_rs::onnx::parakeet::ParakeetModel),
 }
 
 pub struct LoadedModel {

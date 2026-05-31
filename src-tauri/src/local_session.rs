@@ -11,8 +11,10 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc::UnboundedReceiver;
-use transcribe_rs::parakeet_onnx::ParakeetEngine;
+use transcribe_rs::onnx::parakeet::ParakeetModel;
+use transcribe_rs::onnx::Quantization;
 use transcribe_rs::whisper_cpp::{WhisperEngine, WhisperInferenceParams};
+use transcribe_rs::{SpeechModel, TranscribeOptions};
 
 const LEVEL_THROTTLE: Duration = Duration::from_millis(33);
 // Exponential smoothing coefficients for audio level: faster rise (0.6) to catch
@@ -86,13 +88,8 @@ fn load_engine(model: LocalWhisperModel, model_path: &Path) -> Result<LocalEngin
     match model {
         LocalWhisperModel::Parakeet => {
             let models_dir = model_path.parent().ok_or("Cannot resolve models directory")?;
-            let engine = ParakeetEngine::load(
-                models_dir.join("parakeet-encoder.onnx"),
-                models_dir.join("parakeet-decoder.onnx"),
-                models_dir.join("parakeet-joiner.onnx"),
-                models_dir.join("parakeet-vocab.json"),
-            )
-            .map_err(|e| format!("Failed to load Parakeet model: {e}"))?;
+            let engine = ParakeetModel::load(models_dir, &Quantization::default())
+                .map_err(|e| format!("Failed to load Parakeet model: {e}"))?;
             Ok(LocalEngine::Parakeet(engine))
         }
         _ => {
@@ -124,7 +121,7 @@ fn run_local_cached(
     // `loaded.engine` borrows from `guard`; the guard must remain live for the
     // duration of inference. PTT sessions are serialized by the ptt_active flag,
     // so holding the mutex here does not cause contention.
-    let text = match &loaded.engine {
+    let text = match &mut loaded.engine {
         LocalEngine::Whisper(engine) => {
             let params = WhisperInferenceParams {
                 language: language.map(str::to_string),
@@ -138,7 +135,7 @@ fn run_local_cached(
         }
         LocalEngine::Parakeet(engine) => {
             engine
-                .transcribe(audio)
+                .transcribe(audio, &TranscribeOptions::default())
                 .map_err(|e| format!("Parakeet inference failed: {e}"))?
                 .text
         }
