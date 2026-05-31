@@ -3,8 +3,8 @@ mod commands;
 pub mod config;
 pub mod download;
 pub mod history;
-pub mod hotkey;
-pub mod keysym;
+pub(crate) mod hotkey;
+pub(crate) mod keysym;
 pub mod mode;
 pub mod provider;
 pub mod pipeline;
@@ -18,7 +18,7 @@ mod snippets;
 mod state;
 mod stats;
 mod tray;
-pub mod platform;
+pub(crate) mod platform;
 
 // cleanup_stats is pure Rust (file I/O + token counters, no OS APIs) and
 // is therefore compiled on all platforms.
@@ -29,8 +29,8 @@ mod cleanup_stats;
 mod deepgram_session;
 mod assemblyai_session;
 mod groq_session;
-pub mod transcription_session;
-pub mod recorder;
+pub(crate) mod transcription_session;
+pub(crate) mod recorder;
 
 // cleanup is cross-platform HTTP (reqwest + serde_json, no OS APIs).
 mod cleanup;
