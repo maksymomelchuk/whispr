@@ -791,12 +791,7 @@ export function ModeEditor({
                   onChange={(e) => setPromptOverride(e.target.value)}
                   spellCheck={false}
                 />
-                <p className="text-help text-muted-foreground leading-relaxed">
-                  The text inside{" "}
-                  <code className="font-mono">&lt;transcript&gt;</code> tags
-                  will be your dictation. Your prompt is responsible for
-                  treating it as data to transform, not instructions to execute.
-                </p>
+
               </CollapsibleContent>
             </Collapsible>
           )}
