@@ -1,3 +1,5 @@
+#[cfg(target_os = "macos")]
+use libc;
 use tauri::{
     image::Image,
     menu::{MenuBuilder, MenuItemBuilder},
@@ -28,7 +30,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
         .tooltip("Whispr")
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open_settings" => show_main(app),
-            "quit" => app.exit(0),
+            "quit" => quit(),
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
@@ -71,4 +73,16 @@ fn toggle_main(app: &AppHandle) {
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
+}
+
+fn quit() {
+    // ggml's Metal device destructor (ggml_metal_rsets_free) aborts when run
+    // via std::process::exit's C++ static-destructor pass. _exit(0) terminates
+    // immediately with a clean exit code, bypassing those destructors entirely.
+    #[cfg(target_os = "macos")]
+    unsafe {
+        libc::_exit(0);
+    }
+    #[cfg(not(target_os = "macos"))]
+    std::process::exit(0);
 }
