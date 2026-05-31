@@ -27,8 +27,9 @@ use crate::keysym::{
 };
 #[cfg(target_os = "macos")]
 use crate::local_session::LocalSession;
+use crate::paste;
 #[cfg(target_os = "macos")]
-use crate::{media, overlay, paste, target_app};
+use crate::{media, overlay, target_app};
 #[cfg(target_os = "macos")]
 use core_foundation::base::TCFType;
 #[cfg(target_os = "macos")]
@@ -437,10 +438,7 @@ async fn run_session(
 
     // paste_handle must complete before any notify_error: set_focus()
     // during the modifier-release wait would steal focus mid-paste.
-    #[cfg(target_os = "macos")]
     let paste_handle = paste::paste_text(pasted_text);
-    #[cfg(not(target_os = "macos"))]
-    let _ = pasted_text;
 
     let words = history_entry.final_text.split_whitespace().count() as u64;
     let seconds = speak_duration.as_secs() as u32;
@@ -453,7 +451,6 @@ async fn run_session(
         Err(e) => eprintln!("[pipeline] history append failed: {e}"),
     }
 
-    #[cfg(target_os = "macos")]
     if let Err(e) = paste_handle.await {
         eprintln!("[pipeline] paste worker failed: {e}");
         notify_error(app, format!("Paste failed: {e}"));
@@ -593,9 +590,6 @@ fn start_ptt(
     maybe_pause_media(state);
 }
 
-/// Fire-and-forget paste of the latest history entry on macOS. No-op on
-/// non-macOS where paste is not yet implemented.
-#[cfg(target_os = "macos")]
 fn fire_paste_latest(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -609,9 +603,6 @@ fn fire_paste_latest(app: &AppHandle) {
         paste::paste_text(text);
     });
 }
-
-#[cfg(not(target_os = "macos"))]
-fn fire_paste_latest(_app: &AppHandle) {}
 
 /// Dispatches a matched binding on KeyDown. PTT bindings flip into recording
 /// state and wait for the matching KeyUp; PasteLatest bindings fire-and-forget
