@@ -66,6 +66,6 @@ transcribe-rs = { version = "0.3", features = ["whisper-metal", "parakeet-coreml
 [target.'cfg(target_os = "windows")'.dependencies]
 transcribe-rs = { version = "0.3", features = ["parakeet-directml"] }
 
-[target.'cfg(not(target_os = "macos"))'.dependencies]
+[target.'cfg(target_os = "linux")'.dependencies]
 transcribe-rs = { version = "0.3", features = ["whisper-vulkan"] }
 

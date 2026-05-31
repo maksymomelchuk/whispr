@@ -91,6 +91,14 @@ pub fn total_size_bytes(spec: &ModelSpec) -> u64 {
     spec.files.iter().map(|f| f.size_bytes).sum()
 }
 
+pub fn is_placeholder_hash(hash: &str) -> bool {
+    hash.len() == 64 && hash.bytes().all(|b| b == b'0')
+}
+
+pub fn all_files_present(spec: &ModelSpec, models_dir: &Path) -> bool {
+    spec.files.iter().all(|f| models_dir.join(&f.filename).exists())
+}
+
 pub fn files_to_delete(spec: &ModelSpec, models_dir: &Path) -> Vec<PathBuf> {
     let mut paths = Vec::new();
     for f in &spec.files {
@@ -209,6 +217,47 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let spec = two_file_spec();
         assert!(files_to_delete(&spec, dir.path()).is_empty());
+    }
+
+    #[test]
+    fn is_placeholder_hash_true_for_64_zeros() {
+        assert!(is_placeholder_hash(
+            "0000000000000000000000000000000000000000000000000000000000000000"
+        ));
+    }
+
+    #[test]
+    fn is_placeholder_hash_false_for_real_hash() {
+        assert!(!is_placeholder_hash(
+            "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2"
+        ));
+    }
+
+    #[test]
+    fn is_placeholder_hash_false_for_empty_string() {
+        assert!(!is_placeholder_hash(""));
+    }
+
+    #[test]
+    fn all_files_present_true_when_all_exist() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("encoder.onnx"), b"data").unwrap();
+        std::fs::write(dir.path().join("decoder.onnx"), b"data").unwrap();
+        assert!(all_files_present(&two_file_spec(), dir.path()));
+    }
+
+    #[test]
+    fn all_files_present_false_when_any_missing() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("encoder.onnx"), b"data").unwrap();
+        // decoder.onnx intentionally absent
+        assert!(!all_files_present(&two_file_spec(), dir.path()));
+    }
+
+    #[test]
+    fn all_files_present_false_when_none_exist() {
+        let dir = tempfile::TempDir::new().unwrap();
+        assert!(!all_files_present(&two_file_spec(), dir.path()));
     }
 
 }

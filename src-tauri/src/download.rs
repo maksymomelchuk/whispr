@@ -172,6 +172,12 @@ pub async fn download_model(
     let catalog = model_catalog::catalog_for(model);
 
     for model_file in &catalog.files {
+        if model_catalog::is_placeholder_hash(&model_file.sha256) {
+            return Err(format!(
+                "Model file '{}' has no verified SHA256 hash — this model is not yet available for download.",
+                model_file.filename
+            ));
+        }
         let spec = DownloadSpec {
             models_dir: models_dir.clone(),
             filename: model_file.filename.clone(),

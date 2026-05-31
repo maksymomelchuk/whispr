@@ -494,13 +494,14 @@ pub fn get_local_model_statuses(
         Err(_) => return vec![],
     };
     let flags = state.download_cancel_flags.lock().unwrap();
+    let models_dir = data_dir.join("models");
     [LocalWhisperModel::LargeV3, LocalWhisperModel::LargeV3Turbo, LocalWhisperModel::Parakeet]
         .iter()
         .map(|&model| {
-            let path = local_model_path(&data_dir, model);
+            let catalog = model_catalog::catalog_for(model);
             LocalModelStatus {
                 model,
-                downloaded: path.exists(),
+                downloaded: model_catalog::all_files_present(&catalog, &models_dir),
                 downloading: flags.contains_key(&model),
                 size_bytes: download::model_size_bytes(model),
             }

@@ -4,7 +4,7 @@ use crate::hotkey::{
     key_has_both_kinds, shortcut_is_relevant, shortcut_matches, tap_state_key, CoexDown, Dispatch,
     TapEvent, TapState, DOUBLE_TAP_THRESHOLD,
 };
-use crate::provider::{self, LocalWhisperModel, ProviderModel, TranscriptionProvider};
+use crate::provider::{LocalWhisperModel, ProviderModel, TranscriptionProvider};
 use crate::assemblyai_session::AssemblyAiSession;
 use crate::deepgram_session::DeepgramSession;
 use crate::groq_session::GroqSession;
@@ -13,7 +13,7 @@ use crate::pipeline::{self, CleanupOutput, Notice};
 use crate::recorder::Recorder;
 use crate::state::{AppState, ModifierState};
 use crate::transcription_session::TranscriptionSession;
-use crate::{cleanup, cleanup_stats, config, stats};
+use crate::{cleanup, cleanup_stats, config, model_catalog, stats};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use std::sync::{Arc, Mutex};
@@ -244,8 +244,9 @@ fn maybe_resume_media(state: &AppState) {
 }
 
 fn local_model_readiness(data_dir: &std::path::Path, model: LocalWhisperModel) -> Result<(), String> {
-    let path = provider::local_model_path(data_dir, model);
-    if path.exists() {
+    let catalog = model_catalog::catalog_for(model);
+    let models_dir = data_dir.join("models");
+    if model_catalog::all_files_present(&catalog, &models_dir) {
         Ok(())
     } else {
         Err("Local model not downloaded. Go to Settings → Local Models to download it.".to_string())
@@ -1190,5 +1191,23 @@ mod tests {
         fs::write(&path_v3, b"stub").unwrap();
         assert!(local_model_readiness(dir.path(), LocalWhisperModel::LargeV3).is_ok());
         assert!(local_model_readiness(dir.path(), LocalWhisperModel::LargeV3Turbo).is_err());
+    }
+
+    #[test]
+    fn local_readiness_parakeet_requires_all_four_files() {
+        use std::fs;
+        let dir = tempfile::tempdir().unwrap();
+        let models_dir = dir.path().join("models");
+        fs::create_dir_all(&models_dir).unwrap();
+
+        // Only encoder present — should still fail.
+        fs::write(models_dir.join("parakeet-encoder.onnx"), b"stub").unwrap();
+        assert!(local_model_readiness(dir.path(), LocalWhisperModel::Parakeet).is_err());
+
+        // Add remaining files — should now pass.
+        fs::write(models_dir.join("parakeet-decoder.onnx"), b"stub").unwrap();
+        fs::write(models_dir.join("parakeet-joiner.onnx"), b"stub").unwrap();
+        fs::write(models_dir.join("parakeet-vocab.json"), b"stub").unwrap();
+        assert!(local_model_readiness(dir.path(), LocalWhisperModel::Parakeet).is_ok());
     }
 }
