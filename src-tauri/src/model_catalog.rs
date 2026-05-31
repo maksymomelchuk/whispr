@@ -20,9 +20,12 @@ const PARAKEET_DECODER_SHA256: &str =
     "a449f49acd68979d418651dd2dcb737cc0f1bf0225e009e29ee326354edbf7d3";
 const PARAKEET_VOCAB_SHA256: &str =
     "ec182b70dd42113aff6c5372c75cac58c952443eb22322f57bbd7f53977d497d";
+const PARAKEET_PREPROCESSOR_SHA256: &str =
+    "a9fde1486ebfcc08f328d75ad4610c67835fea58c73ba57e3209a6f6cf019e9f";
 const PARAKEET_ENCODER_SIZE_BYTES: u64 = 652_184_014;
 const PARAKEET_DECODER_SIZE_BYTES: u64 = 8_998_286;
 const PARAKEET_VOCAB_SIZE_BYTES: u64 = 9_384;
+const PARAKEET_PREPROCESSOR_SIZE_BYTES: u64 = 139_764;
 
 pub struct ModelFile {
     pub filename: String,
@@ -72,6 +75,12 @@ pub fn catalog_for(model: LocalWhisperModel) -> ModelSpec {
                     url: format!("{PARAKEET_BASE_URL}/vocab.txt"),
                     sha256: PARAKEET_VOCAB_SHA256.to_string(),
                     size_bytes: PARAKEET_VOCAB_SIZE_BYTES,
+                },
+                ModelFile {
+                    filename: "nemo128.onnx".to_string(),
+                    url: format!("{PARAKEET_BASE_URL}/nemo128.onnx"),
+                    sha256: PARAKEET_PREPROCESSOR_SHA256.to_string(),
+                    size_bytes: PARAKEET_PREPROCESSOR_SIZE_BYTES,
                 },
             ],
         },
@@ -145,25 +154,28 @@ mod tests {
     }
 
     #[test]
-    fn parakeet_spec_is_three_files() {
+    fn parakeet_spec_is_four_files() {
         let spec = catalog_for(LocalWhisperModel::Parakeet);
-        assert_eq!(spec.files.len(), 3);
+        assert_eq!(spec.files.len(), 4);
         let names: Vec<&str> = spec.files.iter().map(|f| f.filename.as_str()).collect();
         assert!(names.contains(&"encoder-model.int8.onnx"));
         assert!(names.contains(&"decoder_joint-model.int8.onnx"));
         assert!(names.contains(&"vocab.txt"));
+        assert!(names.contains(&"nemo128.onnx"));
     }
 
     #[test]
-    fn parakeet_total_size_bytes_sums_all_three_files() {
+    fn parakeet_total_size_bytes_sums_all_four_files() {
         let spec = catalog_for(LocalWhisperModel::Parakeet);
-        let expected =
-            PARAKEET_ENCODER_SIZE_BYTES + PARAKEET_DECODER_SIZE_BYTES + PARAKEET_VOCAB_SIZE_BYTES;
+        let expected = PARAKEET_ENCODER_SIZE_BYTES
+            + PARAKEET_DECODER_SIZE_BYTES
+            + PARAKEET_VOCAB_SIZE_BYTES
+            + PARAKEET_PREPROCESSOR_SIZE_BYTES;
         assert_eq!(total_size_bytes(&spec), expected);
     }
 
     #[test]
-    fn parakeet_files_to_delete_covers_all_three_files_and_parts() {
+    fn parakeet_files_to_delete_covers_all_four_files_and_parts() {
         let dir = tempfile::TempDir::new().unwrap();
         std::fs::write(dir.path().join("encoder-model.int8.onnx"), b"enc").unwrap();
         std::fs::write(

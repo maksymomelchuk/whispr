@@ -1198,6 +1198,7 @@ mod tests {
         // Add remaining files — should now pass.
         fs::write(models_dir.join("decoder_joint-model.int8.onnx"), b"stub").unwrap();
         fs::write(models_dir.join("vocab.txt"), b"stub").unwrap();
+        fs::write(models_dir.join("nemo128.onnx"), b"stub").unwrap();
         assert!(local_model_readiness(dir.path(), LocalWhisperModel::Parakeet).is_ok());
     }
 }
