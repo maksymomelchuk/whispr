@@ -40,15 +40,13 @@ mod cleanup;
 pub mod model_catalog;
 mod local_session;
 
-// macOS-only: OS API wrappers (CGEventPost, NSWorkspace, etc.).
-#[cfg(target_os = "macos")]
+// media, overlay, and target_app expose platform-neutral public APIs and
+// select their OS implementation internally via cfg.
 mod media;
-#[cfg(target_os = "macos")]
 mod overlay;
+mod target_app;
 #[cfg(target_os = "macos")]
 mod paste;
-#[cfg(target_os = "macos")]
-mod target_app;
 
 // ptt compiles on all platforms; the event source is selected internally via
 // cfg: CGEventTap on macOS, rdev on Windows/Linux.
@@ -159,7 +157,6 @@ pub fn run() {
                 }
             }
 
-            #[cfg(target_os = "macos")]
             if let Err(e) = overlay::create(&app.handle()) {
                 eprintln!("Failed to create overlay window: {e}");
             }

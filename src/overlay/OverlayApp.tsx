@@ -8,7 +8,7 @@ type Mode = "recording" | "thinking" | "error" | "cancelled";
 type TargetApp = {
   bundleId: string;
   name: string;
-  iconDataUrl: string;
+  iconDataUrl?: string;
 };
 
 const SPINNER_TICKS = 12;
@@ -229,7 +229,7 @@ export function OverlayApp() {
         <div className="overlay-pill-footer">
           <div className="overlay-pill-leading">
             <div className="overlay-target-icon-slot">
-              {target && (
+              {target?.iconDataUrl && (
                 <img
                   key={target.bundleId}
                   className="overlay-target-icon"
