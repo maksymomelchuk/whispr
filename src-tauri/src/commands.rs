@@ -6,6 +6,7 @@ use crate::config::{
 use crate::download::{self, LocalModelStatus, MODEL_DOWNLOAD_COMPLETE_EVENT, MODEL_DOWNLOAD_ERROR_EVENT};
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::mode::{Mode, ModeId, SetId};
+use crate::model_catalog;
 use crate::permissions;
 use crate::provider::{local_model_path, GroqModel, LocalWhisperModel};
 use crate::state::AppState;
@@ -570,8 +571,9 @@ pub fn cancel_model_download(
 #[tauri::command]
 pub fn delete_local_model(app: AppHandle, model: LocalWhisperModel) -> Result<(), String> {
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    let path = local_model_path(&data_dir, model);
-    if path.exists() {
+    let models_dir = data_dir.join("models");
+    let spec = model_catalog::catalog_for(model);
+    for path in model_catalog::files_to_delete(&spec, &models_dir) {
         std::fs::remove_file(&path).map_err(|e| e.to_string())?;
     }
     Ok(())
