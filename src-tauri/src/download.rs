@@ -66,7 +66,6 @@ fn hex_encode(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
-/// Groups the parameters for a file download. Passed to `download_to_dir`.
 pub struct DownloadSpec {
     pub models_dir: PathBuf,
     pub filename: String,
@@ -75,8 +74,6 @@ pub struct DownloadSpec {
     pub cancel_flag: Arc<AtomicBool>,
 }
 
-/// Hashes the bytes already written to a `.part` file so a resumed download
-/// can continue updating a single hasher over the full file contents.
 fn hash_partial_file(path: &Path) -> Result<Sha256, String> {
     let mut hasher = Sha256::new();
     let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
