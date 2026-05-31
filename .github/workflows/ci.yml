@@ -75,7 +75,7 @@ jobs:
           echo "deb https://packages.lunarg.com/vulkan jammy main" \
             | sudo tee /etc/apt/sources.list.d/lunarg-vulkan.list
           sudo apt-get update -qq
-          sudo apt-get install -y glslc
+          sudo apt-get install -y shaderc
 
       - name: Install frontend deps
         run: pnpm install --frozen-lockfile
