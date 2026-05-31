@@ -49,10 +49,22 @@ impl ModeLanguage {
     }
 }
 
+fn default_cleanup_provider() -> String {
+    "anthropic".to_string()
+}
+
+fn default_cleanup_model() -> String {
+    "claude-haiku-4-5".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModeCleanup {
     pub enabled: bool,
     pub prompt_override: Option<String>,
+    #[serde(default = "default_cleanup_provider")]
+    pub provider: String,
+    #[serde(default = "default_cleanup_model")]
+    pub model: String,
 }
 
 impl Default for ModeCleanup {
@@ -60,6 +72,8 @@ impl Default for ModeCleanup {
         ModeCleanup {
             enabled: false,
             prompt_override: None,
+            provider: default_cleanup_provider(),
+            model: default_cleanup_model(),
         }
     }
 }
@@ -106,7 +120,7 @@ impl Mode {
             language: ModeLanguage::exact("en"),
             ai_cleanup: ModeCleanup {
                 enabled: cleanup_enabled,
-                prompt_override: None,
+                ..ModeCleanup::default()
             },
             legacy_use_dictionary: None,
             use_terms: true,
@@ -126,7 +140,7 @@ impl Mode {
             language: ModeLanguage::exact("en"),
             ai_cleanup: ModeCleanup {
                 enabled: true,
-                prompt_override: None,
+                ..ModeCleanup::default()
             },
             legacy_use_dictionary: None,
             use_terms: true,
@@ -146,7 +160,7 @@ impl Mode {
             language: ModeLanguage::exact("uk"),
             ai_cleanup: ModeCleanup {
                 enabled: false,
-                prompt_override: None,
+                ..ModeCleanup::default()
             },
             legacy_use_dictionary: None,
             use_terms: true,
@@ -171,6 +185,7 @@ impl Mode {
                      Output only the translated text, nothing else."
                         .to_string(),
                 ),
+                ..ModeCleanup::default()
             },
             legacy_use_dictionary: None,
             use_terms: true,
@@ -347,6 +362,35 @@ mod tests {
             prompt_override: None,
         };
         assert!(c.prompt_override.is_none());
+    }
+
+    #[test]
+    fn mode_cleanup_defaults_to_anthropic_and_haiku() {
+        let c = ModeCleanup::default();
+        assert_eq!(c.provider, "anthropic");
+        assert_eq!(c.model, "claude-haiku-4-5");
+    }
+
+    #[test]
+    fn mode_cleanup_missing_provider_and_model_deserialize_with_defaults() {
+        let json = r#"{"enabled":false,"prompt_override":null}"#;
+        let c: ModeCleanup = serde_json::from_str(json).unwrap();
+        assert_eq!(c.provider, "anthropic");
+        assert_eq!(c.model, "claude-haiku-4-5");
+    }
+
+    #[test]
+    fn mode_cleanup_provider_and_model_round_trip() {
+        let c = ModeCleanup {
+            enabled: true,
+            prompt_override: None,
+            provider: "openai".to_string(),
+            model: "gpt-4o-mini".to_string(),
+        };
+        let json = serde_json::to_string(&c).unwrap();
+        let decoded: ModeCleanup = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.provider, "openai");
+        assert_eq!(decoded.model, "gpt-4o-mini");
     }
 
     #[test]

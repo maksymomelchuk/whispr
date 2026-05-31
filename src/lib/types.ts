@@ -128,6 +128,8 @@ export type HistoryLimit = number | null;
 
 export type CleanupAuthMode = "api_key" | "oauth";
 
+export type AiProviderId = "anthropic" | "openai";
+
 export type ApiKeyValidation =
   | { kind: "valid" }
   | { kind: "invalid" }
@@ -143,6 +145,8 @@ export type ModeLanguage =
 export interface ModeCleanup {
   enabled: boolean;
   prompt_override: string | null;
+  provider: AiProviderId;
+  model: string;
 }
 
 export interface NamedTermSet {
@@ -178,6 +182,8 @@ export interface Settings {
   ai_cleanup_auth_mode: CleanupAuthMode;
   ai_cleanup_key_configured: boolean;
   ai_cleanup_oauth_token_configured: boolean;
+  /** Provider IDs that have a saved API key. */
+  configured_providers: AiProviderId[];
   ai_cleanup_min_words: number;
   ai_cleanup_min_duration_ms: number;
   input_device: string | null;

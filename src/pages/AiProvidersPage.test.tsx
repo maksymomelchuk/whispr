@@ -14,6 +14,7 @@ vi.mock("../lib/api", () => ({
   setAnthropicOauthToken: vi.fn(),
   setCleanupAuthMode: vi.fn(),
   setCleanupThresholds: vi.fn(),
+  setProviderKey: vi.fn(),
 }));
 
 vi.mock("@/components/ui/dialog", () => ({
@@ -60,6 +61,7 @@ const BASE_SETTINGS: Settings = {
   ai_cleanup_auth_mode: "api_key",
   ai_cleanup_key_configured: false,
   ai_cleanup_oauth_token_configured: false,
+  configured_providers: [],
   ai_cleanup_min_words: 9,
   ai_cleanup_min_duration_ms: 3000,
   input_device: null,
@@ -100,7 +102,7 @@ describe("AiProvidersPage", () => {
 
   it("marks the provider as needing setup when not configured", () => {
     render(<Wrapper />);
-    expect(screen.getByRole("img", { name: "Set up" })).toBeInTheDocument();
+    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(2);
   });
 
   it("marks the provider as configured when API key is configured", () => {
@@ -136,7 +138,7 @@ describe("AiProvidersPage", () => {
         }}
       />,
     );
-    expect(screen.getByRole("img", { name: "Set up" })).toBeInTheDocument();
+    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(2);
   });
 
   it("renders the min words threshold input", () => {

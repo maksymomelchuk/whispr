@@ -27,6 +27,7 @@ const MOCK_SETTINGS: Settings = {
   start_at_login: false,
   show_live_preview: true,
   local_whisper_idle_timeout: "fifteen_minutes",
+  configured_providers: [],
 };
 
 function TestWrapper({ children }: { children: React.ReactNode }) {

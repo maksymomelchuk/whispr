@@ -49,7 +49,7 @@ const MODE: Mode = {
   name: "Original",
   icon: null,
   language: { kind: "auto" },
-  ai_cleanup: { enabled: false, prompt_override: null },
+  ai_cleanup: { enabled: false, prompt_override: null, provider: "anthropic", model: "claude-haiku-4-5" },
   term_set_ids: [],
   correction_set_ids: [],
   use_snippets: true,
@@ -69,12 +69,14 @@ function EditorWrapper({
 }) {
   return (
     <MemoryRouter>
-      <ModeEditor
-        mode={mode}
-        isNew={isNew}
-        onClose={onClose}
-        onPersist={onPersist}
-      />
+      <TooltipProvider>
+        <ModeEditor
+          mode={mode}
+          isNew={isNew}
+          onClose={onClose}
+          onPersist={onPersist}
+        />
+      </TooltipProvider>
     </MemoryRouter>
   );
 }
@@ -212,6 +214,7 @@ const BASE_SETTINGS: Settings = {
   ai_cleanup_auth_mode: "api_key",
   ai_cleanup_key_configured: false,
   ai_cleanup_oauth_token_configured: false,
+  configured_providers: [],
   ai_cleanup_min_words: 9,
   ai_cleanup_min_duration_ms: 3000,
   input_device: null,
@@ -310,13 +313,15 @@ describe("ModeEditor – correction sets", () => {
 
   it("renders a chip for each selected correction set", () => {
     render(
-      <ModeEditor
-        mode={{ ...MODE, correction_set_ids: ["cs-1"] }}
-        isNew={false}
-        onClose={vi.fn()}
-        onPersist={vi.fn()}
-        correctionSets={SETS}
-      />,
+      <TooltipProvider>
+        <ModeEditor
+          mode={{ ...MODE, correction_set_ids: ["cs-1"] }}
+          isNew={false}
+          onClose={vi.fn()}
+          onPersist={vi.fn()}
+          correctionSets={SETS}
+        />
+      </TooltipProvider>,
     );
     expect(
       screen.getByRole("button", { name: "Remove Punctuation" }),
@@ -328,26 +333,30 @@ describe("ModeEditor – correction sets", () => {
 
   it("shows the add picker when not every set is selected", () => {
     render(
-      <ModeEditor
-        mode={{ ...MODE, correction_set_ids: ["cs-1"] }}
-        isNew={false}
-        onClose={vi.fn()}
-        onPersist={vi.fn()}
-        correctionSets={SETS}
-      />,
+      <TooltipProvider>
+        <ModeEditor
+          mode={{ ...MODE, correction_set_ids: ["cs-1"] }}
+          isNew={false}
+          onClose={vi.fn()}
+          onPersist={vi.fn()}
+          correctionSets={SETS}
+        />
+      </TooltipProvider>,
     );
     expect(screen.getByText("+ Add correction set")).toBeInTheDocument();
   });
 
   it("removing a chip autosaves without that set in correction_set_ids", async () => {
     render(
-      <ModeEditor
-        mode={{ ...MODE, correction_set_ids: ["cs-1"] }}
-        isNew={false}
-        onClose={vi.fn()}
-        onPersist={vi.fn()}
-        correctionSets={SETS}
-      />,
+      <TooltipProvider>
+        <ModeEditor
+          mode={{ ...MODE, correction_set_ids: ["cs-1"] }}
+          isNew={false}
+          onClose={vi.fn()}
+          onPersist={vi.fn()}
+          correctionSets={SETS}
+        />
+      </TooltipProvider>,
     );
 
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type {
+  AiProviderId,
   ApiKeyValidation,
   CleanupAuthMode,
   CleanupStats,
@@ -87,6 +88,12 @@ export const setAnthropicApiKey = (apiKey: string) =>
 
 export const setAnthropicOauthToken = (token: string) =>
   invoke<void>("set_anthropic_oauth_token", { token });
+
+export const setProviderKey = (providerId: AiProviderId, apiKey: string) =>
+  invoke<void>("set_provider_key", { providerId, apiKey });
+
+export const clearProviderKey = (providerId: AiProviderId) =>
+  invoke<void>("clear_provider_key", { providerId });
 
 export const setCleanupAuthMode = (mode: CleanupAuthMode) =>
   invoke<void>("set_cleanup_auth_mode", { mode });

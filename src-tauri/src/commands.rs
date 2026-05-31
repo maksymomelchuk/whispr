@@ -33,6 +33,8 @@ pub struct SettingsView {
     pub ai_cleanup_auth_mode: CleanupAuthMode,
     pub ai_cleanup_key_configured: bool,
     pub ai_cleanup_oauth_token_configured: bool,
+    /// Provider IDs that have a non-empty API key in `provider_keys`.
+    pub configured_providers: Vec<String>,
     pub ai_cleanup_min_words: usize,
     pub ai_cleanup_min_duration_ms: u64,
     pub input_device: Option<String>,
@@ -51,6 +53,18 @@ impl From<Settings> for SettingsView {
             .as_deref()
             .or(s.api_key.as_deref())
             .is_some_and(|k| !k.is_empty());
+        let anthropic_key_configured = s
+            .ai_cleanup
+            .provider_keys
+            .get("anthropic")
+            .is_some_and(|k| !k.is_empty());
+        let configured_providers: Vec<String> = s
+            .ai_cleanup
+            .provider_keys
+            .iter()
+            .filter(|(_, v)| !v.is_empty())
+            .map(|(k, _)| k.clone())
+            .collect();
         SettingsView {
             deepgram_api_key_configured,
             groq_api_key_configured: s.groq_api_key.as_deref().is_some_and(|k| !k.is_empty()),
@@ -65,16 +79,13 @@ impl From<Settings> for SettingsView {
             modes: s.modes,
             default_mode_id: s.default_mode_id,
             ai_cleanup_auth_mode: s.ai_cleanup.auth_mode,
-            ai_cleanup_key_configured: s
-                .ai_cleanup
-                .anthropic_api_key
-                .as_deref()
-                .is_some_and(|k| !k.is_empty()),
+            ai_cleanup_key_configured: anthropic_key_configured,
             ai_cleanup_oauth_token_configured: s
                 .ai_cleanup
                 .anthropic_oauth_token
                 .as_deref()
                 .is_some_and(|t| !t.is_empty()),
+            configured_providers,
             ai_cleanup_min_words: s.ai_cleanup.min_words,
             ai_cleanup_min_duration_ms: s.ai_cleanup.min_duration_ms,
             input_device: s.input_device,
@@ -299,7 +310,14 @@ pub fn set_default_mode(app: AppHandle, id: ModeId) -> Result<(), String> {
 #[tauri::command]
 pub fn set_anthropic_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
     config::update(&app, |s| {
-        s.ai_cleanup.anthropic_api_key = config::non_empty(api_key)
+        match config::non_empty(api_key) {
+            Some(k) => {
+                s.ai_cleanup.provider_keys.insert("anthropic".to_string(), k);
+            }
+            None => {
+                s.ai_cleanup.provider_keys.remove("anthropic");
+            }
+        }
     })
 }
 
@@ -307,6 +325,27 @@ pub fn set_anthropic_api_key(app: AppHandle, api_key: String) -> Result<(), Stri
 pub fn set_anthropic_oauth_token(app: AppHandle, token: String) -> Result<(), String> {
     config::update(&app, |s| {
         s.ai_cleanup.anthropic_oauth_token = config::non_empty(token)
+    })
+}
+
+#[tauri::command]
+pub fn set_provider_key(app: AppHandle, provider_id: String, api_key: String) -> Result<(), String> {
+    config::update(&app, |s| {
+        match config::non_empty(api_key) {
+            Some(k) => {
+                s.ai_cleanup.provider_keys.insert(provider_id, k);
+            }
+            None => {
+                s.ai_cleanup.provider_keys.remove(&provider_id);
+            }
+        }
+    })
+}
+
+#[tauri::command]
+pub fn clear_provider_key(app: AppHandle, provider_id: String) -> Result<(), String> {
+    config::update(&app, |s| {
+        s.ai_cleanup.provider_keys.remove(&provider_id);
     })
 }
 

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import * as z from "zod";
 
 import { AnthropicLogo } from "@/assets/AnthropicLogo";
+import { OpenAiLogo } from "@/assets/OpenAiLogo";
 import {
   Form,
   FormControl,
@@ -26,6 +27,7 @@ import {
   setCleanupAuthMode as persistAuthMode,
   setAnthropicOauthToken as persistOauthToken,
   setCleanupThresholds as persistThresholds,
+  setProviderKey,
 } from "../lib/api";
 import type { EngineDescriptor } from "../lib/speechModelCatalog";
 import type { Settings } from "../lib/types";
@@ -40,7 +42,6 @@ const ANTHROPIC_API_KEY_DESCRIPTOR: EngineDescriptor = {
   helpUrl: "https://console.anthropic.com/settings/keys",
   selectConfigured: (s: Settings) => s.ai_cleanup_key_configured,
   persist: persistApiKey,
-  // No client-side validation endpoint for Anthropic keys; auth failures surface at cleanup time.
   validate: async () => ({ kind: "valid" as const }),
 };
 
@@ -54,7 +55,19 @@ const ANTHROPIC_OAUTH_DESCRIPTOR: EngineDescriptor = {
   helpUrl: "https://claude.ai/",
   selectConfigured: (s: Settings) => s.ai_cleanup_oauth_token_configured,
   persist: persistOauthToken,
-  // No client-side validation endpoint for Anthropic keys; auth failures surface at cleanup time.
+  validate: async () => ({ kind: "valid" as const }),
+};
+
+const OPENAI_DESCRIPTOR: EngineDescriptor = {
+  id: "openai",
+  name: "OpenAI",
+  logo: OpenAiLogo,
+  description: "GPT models for AI-powered transcription cleanup.",
+  metadata: { languages: "100+ languages", streaming: "—", diarization: "—" },
+  keyPlaceholder: "sk-…",
+  helpUrl: "https://platform.openai.com/api-keys",
+  selectConfigured: (s: Settings) => s.configured_providers.includes("openai"),
+  persist: (key: string) => setProviderKey("openai", key),
   validate: async () => ({ kind: "valid" as const }),
 };
 
@@ -80,6 +93,49 @@ function formatSeconds(ms: number): string {
   return Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(2);
 }
 
+function ProviderCard({
+  descriptor,
+  settings,
+  onCardClick,
+}: {
+  descriptor: EngineDescriptor;
+  settings: Settings;
+  onCardClick: () => void;
+}) {
+  const isConfigured = descriptor.selectConfigured(settings);
+  return (
+    <button
+      type="button"
+      onClick={onCardClick}
+      className={cn(
+        "flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3",
+        "text-left transition-colors hover:bg-accent/40 cursor-pointer w-full",
+      )}
+    >
+      <descriptor.logo className="h-8 w-8 shrink-0 rounded-md" />
+      <span className="flex-1 min-w-0 truncate text-sm font-medium leading-tight">
+        {descriptor.name}
+      </span>
+      {isConfigured ? (
+        <CheckFatIcon
+          size={16}
+          weight="fill"
+          role="img"
+          aria-label="Configured"
+          className="shrink-0 text-green-600 dark:text-green-500"
+        />
+      ) : (
+        <GearIcon
+          size={16}
+          role="img"
+          aria-label="Set up"
+          className="shrink-0 text-muted-foreground/50"
+        />
+      )}
+    </button>
+  );
+}
+
 export function AiProvidersPage() {
   const { settings, setSettings, setSetting } = useSettings();
   const {
@@ -87,13 +143,15 @@ export function AiProvidersPage() {
     ai_cleanup_min_words: minWords,
     ai_cleanup_min_duration_ms: minDurationMs,
   } = settings;
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [anthropicDialogOpen, setAnthropicDialogOpen] = useState(false);
+  const [openaiDialogOpen, setOpenaiDialogOpen] = useState(false);
 
-  const descriptor =
+  const anthropicDescriptor =
     authMode === "api_key"
       ? ANTHROPIC_API_KEY_DESCRIPTOR
       : ANTHROPIC_OAUTH_DESCRIPTOR;
-  const isConfigured = descriptor.selectConfigured(settings);
+  const isAnthropicConfigured = anthropicDescriptor.selectConfigured(settings);
+  const isOpenAiConfigured = OPENAI_DESCRIPTOR.selectConfigured(settings);
 
   const handleAuthModeChange = async (val: string) => {
     if (!val || val === authMode) return;
@@ -107,12 +165,21 @@ export function AiProvidersPage() {
     );
   };
 
-  const handleConfiguredChange = (configured: boolean) => {
+  const handleAnthropicConfiguredChange = (configured: boolean) => {
     const key =
       authMode === "api_key"
         ? "ai_cleanup_key_configured"
         : "ai_cleanup_oauth_token_configured";
     setSettings((s) => ({ ...s, [key]: configured }));
+  };
+
+  const handleOpenAiConfiguredChange = (configured: boolean) => {
+    setSettings((s) => ({
+      ...s,
+      configured_providers: configured
+        ? [...s.configured_providers.filter((p) => p !== "openai"), "openai"]
+        : s.configured_providers.filter((p) => p !== "openai"),
+    }));
   };
 
   const thresholdsForm = useForm<ThresholdsValues>({
@@ -159,44 +226,25 @@ export function AiProvidersPage() {
     <div className="p-6 flex flex-col gap-8">
       <SectionCard title="Provider">
         <div className="grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={() => setDialogOpen(true)}
-            className={cn(
-              "flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3",
-              "text-left transition-colors hover:bg-accent/40 cursor-pointer w-full",
-            )}
-          >
-            <AnthropicLogo className="h-8 w-8 shrink-0 rounded-md" />
-            <span className="flex-1 min-w-0 truncate text-sm font-medium leading-tight">
-              Anthropic
-            </span>
-            {isConfigured ? (
-              <CheckFatIcon
-                size={16}
-                weight="fill"
-                role="img"
-                aria-label="Configured"
-                className="shrink-0 text-green-600 dark:text-green-500"
-              />
-            ) : (
-              <GearIcon
-                size={16}
-                role="img"
-                aria-label="Set up"
-                className="shrink-0 text-muted-foreground/50"
-              />
-            )}
-          </button>
+          <ProviderCard
+            descriptor={anthropicDescriptor}
+            settings={settings}
+            onCardClick={() => setAnthropicDialogOpen(true)}
+          />
+          <ProviderCard
+            descriptor={OPENAI_DESCRIPTOR}
+            settings={settings}
+            onCardClick={() => setOpenaiDialogOpen(true)}
+          />
         </div>
       </SectionCard>
 
       <ProviderSetupDialog
-        descriptor={descriptor}
-        isConfigured={isConfigured}
-        onConfiguredChange={handleConfiguredChange}
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        descriptor={anthropicDescriptor}
+        isConfigured={isAnthropicConfigured}
+        onConfiguredChange={handleAnthropicConfiguredChange}
+        open={anthropicDialogOpen}
+        onOpenChange={setAnthropicDialogOpen}
       >
         <div className="flex flex-col gap-[6px]">
           <span className="text-xs font-medium text-muted-foreground">
@@ -218,6 +266,14 @@ export function AiProvidersPage() {
           </ToggleGroup>
         </div>
       </ProviderSetupDialog>
+
+      <ProviderSetupDialog
+        descriptor={OPENAI_DESCRIPTOR}
+        isConfigured={isOpenAiConfigured}
+        onConfiguredChange={handleOpenAiConfiguredChange}
+        open={openaiDialogOpen}
+        onOpenChange={setOpenaiDialogOpen}
+      />
 
       <SectionCard title="Cleanup Thresholds">
         <div className="flex flex-col gap-3">

@@ -58,6 +58,7 @@ import {
   updateMode,
 } from "../lib/api";
 import type {
+  AiProviderId,
   AssemblyAiModel,
   GroqModel,
   HotkeyBinding,
@@ -141,6 +142,19 @@ const LANGUAGES: { code: string; name: string; flag: string }[] = [
   { code: "id", name: "Indonesian", flag: "🇮🇩" },
   { code: "he", name: "Hebrew", flag: "🇮🇱" },
 ];
+
+const CLEANUP_PROVIDER_OPTIONS: { value: AiProviderId; label: string }[] = [
+  { value: "anthropic", label: "Anthropic" },
+  { value: "openai", label: "OpenAI" },
+];
+
+const CLEANUP_MODEL_OPTIONS: Record<AiProviderId, { value: string; label: string }[]> = {
+  anthropic: [{ value: "claude-haiku-4-5", label: "Claude Haiku 4.5" }],
+  openai: [
+    { value: "gpt-4o-mini", label: "GPT-4o mini" },
+    { value: "gpt-4o", label: "GPT-4o" },
+  ],
+};
 
 function langLabel(code: string): string {
   const entry = LANGUAGES.find((l) => l.code === code);
@@ -361,7 +375,7 @@ export function ModeEditor({
   onPersist,
   availableTermSets = [],
   correctionSets = [],
-  cleanupCredentialConfigured = true,
+  configuredProviders,
 }: {
   mode: Mode;
   isNew: boolean;
@@ -369,7 +383,7 @@ export function ModeEditor({
   onPersist: (mode: Mode, wasNew: boolean) => void;
   availableTermSets?: NamedTermSet[];
   correctionSets?: NamedCorrectionSet[];
-  cleanupCredentialConfigured?: boolean;
+  configuredProviders?: AiProviderId[];
 }) {
   const [draft, setDraft] = useState<Mode>(mode);
   const [creating, setCreating] = useState(false);
@@ -447,6 +461,20 @@ export function ModeEditor({
         ? [...d.correction_set_ids, setId]
         : d.correction_set_ids.filter((id) => id !== setId),
     }));
+
+  const setCleanupProvider = (provider: AiProviderId) => {
+    const defaultModel = CLEANUP_MODEL_OPTIONS[provider][0].value;
+    setDraft((d) => ({
+      ...d,
+      ai_cleanup: { ...d.ai_cleanup, provider, model: defaultModel },
+    }));
+  };
+
+  const setCleanupModel = (model: string) =>
+    setDraft((d) => ({ ...d, ai_cleanup: { ...d.ai_cleanup, model } }));
+
+  const cleanupProvider = draft.ai_cleanup.provider;
+  const cleanupProviderConfigured = (configuredProviders ?? []).includes(cleanupProvider);
 
   const normalized = useMemo<Mode>(
     () => ({
@@ -762,38 +790,83 @@ export function ModeEditor({
             id="cleanup"
             label="AI cleanup"
             info={
-              !cleanupCredentialConfigured && !draft.ai_cleanup.enabled
-                ? "Set Anthropic credentials in AI Providers to enable cleanup."
+              !cleanupProviderConfigured && !draft.ai_cleanup.enabled
+                ? "Set up a provider in AI Providers to enable cleanup."
                 : undefined
             }
             checked={draft.ai_cleanup.enabled}
             onCheckedChange={setCleanup}
-            disabled={!cleanupCredentialConfigured && !draft.ai_cleanup.enabled}
+            disabled={!cleanupProviderConfigured && !draft.ai_cleanup.enabled}
           />
           {draft.ai_cleanup.enabled && (
-            <Collapsible
-              open={promptOpen}
-              onOpenChange={setPromptOpen}
-              className="flex flex-col gap-2"
-            >
-              <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-fit">
-                <CaretRightIcon
-                  size={10}
-                  className={`transition-transform ${promptOpen ? "rotate-90" : ""}`}
-                />
-                Custom prompt
-              </CollapsibleTrigger>
-              <CollapsibleContent className="flex flex-col gap-2">
-                <Textarea
-                  className="resize-none min-h-[80px] leading-[1.5]"
-                  placeholder="Leave empty to use the default cleanup prompt."
-                  value={draft.ai_cleanup.prompt_override ?? ""}
-                  onChange={(e) => setPromptOverride(e.target.value)}
-                  spellCheck={false}
-                />
-
-              </CollapsibleContent>
-            </Collapsible>
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs text-muted-foreground/70">
+                    Provider
+                  </span>
+                  <Select
+                    value={draft.ai_cleanup.provider}
+                    onValueChange={(v) => setCleanupProvider(v as AiProviderId)}
+                  >
+                    <SelectTrigger size="sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CLEANUP_PROVIDER_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                          {!(configuredProviders ?? []).includes(opt.value) &&
+                            " (needs setup)"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs text-muted-foreground/70">
+                    Model
+                  </span>
+                  <Select
+                    value={draft.ai_cleanup.model}
+                    onValueChange={setCleanupModel}
+                  >
+                    <SelectTrigger size="sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CLEANUP_MODEL_OPTIONS[cleanupProvider].map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <Collapsible
+                open={promptOpen}
+                onOpenChange={setPromptOpen}
+                className="flex flex-col gap-2"
+              >
+                <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-fit">
+                  <CaretRightIcon
+                    size={10}
+                    className={`transition-transform ${promptOpen ? "rotate-90" : ""}`}
+                  />
+                  Custom prompt
+                </CollapsibleTrigger>
+                <CollapsibleContent className="flex flex-col gap-2">
+                  <Textarea
+                    className="resize-none min-h-[80px] leading-[1.5]"
+                    placeholder="Leave empty to use the default cleanup prompt."
+                    value={draft.ai_cleanup.prompt_override ?? ""}
+                    onChange={(e) => setPromptOverride(e.target.value)}
+                    spellCheck={false}
+                  />
+                </CollapsibleContent>
+              </Collapsible>
+            </>
           )}
           <div className="flex items-center gap-3 mt-3 mb-1">
             <span className="text-eyebrow uppercase text-muted-foreground/70">
@@ -876,7 +949,7 @@ export function ModesPage() {
       name: "",
       icon: null,
       language: { kind: "exact", code: "en" },
-      ai_cleanup: { enabled: false, prompt_override: null },
+      ai_cleanup: { enabled: false, prompt_override: null, provider: "anthropic", model: "claude-haiku-4-5" },
       term_set_ids: [],
       correction_set_ids: [],
       use_snippets: true,
@@ -972,11 +1045,18 @@ export function ModesPage() {
               onPersist={handlePersist}
               availableTermSets={settings.term_sets ?? []}
               correctionSets={settings.correction_sets ?? []}
-              cleanupCredentialConfigured={
-                settings.ai_cleanup_auth_mode === "api_key"
-                  ? settings.ai_cleanup_key_configured
-                  : settings.ai_cleanup_oauth_token_configured
-              }
+              configuredProviders={(() => {
+                const anthropicConfigured =
+                  settings.ai_cleanup_key_configured ||
+                  settings.ai_cleanup_oauth_token_configured;
+                return [
+                  ...settings.configured_providers,
+                  ...(anthropicConfigured &&
+                  !settings.configured_providers.includes("anthropic")
+                    ? (["anthropic"] as AiProviderId[])
+                    : []),
+                ];
+              })()}
             />
           )}
         </SheetContent>

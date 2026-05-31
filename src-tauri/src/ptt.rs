@@ -299,6 +299,8 @@ async fn run_session(
     let mode_cleanup_enabled = active_mode.ai_cleanup.enabled;
     let mode_language = active_mode.language.clone();
     let mode_prompt_override = active_mode.ai_cleanup.prompt_override.clone();
+    let cleanup_provider = active_mode.ai_cleanup.provider.clone();
+    let cleanup_model = active_mode.ai_cleanup.model.clone();
     let session_terms =
         crate::terms::compose_term_hints(&settings.term_sets, &active_mode.term_set_ids);
 
@@ -404,6 +406,8 @@ async fn run_session(
         &raw_text,
         speak_duration,
         mode_prompt_override.as_deref(),
+        &cleanup_provider,
+        &cleanup_model,
     )
     .await;
 
@@ -476,42 +480,14 @@ async fn maybe_cleanup(
     transcript: &str,
     speak_duration: Duration,
     prompt_override: Option<&str>,
+    cleanup_provider: &str,
+    cleanup_model: &str,
 ) -> (String, CleanupStatus, Notice) {
     let cleanup_settings = &settings.ai_cleanup;
 
     if !mode_cleanup_enabled {
         return (transcript.to_string(), CleanupStatus::Disabled, Notice::None);
     }
-
-    let credential = match cleanup_settings.auth_mode {
-        config::CleanupAuthMode::ApiKey => match cleanup_settings.anthropic_api_key.as_deref() {
-            Some(k) if !k.is_empty() => cleanup::Credential::ApiKey(k),
-            _ => {
-                return (
-                    transcript.to_string(),
-                    CleanupStatus::NoCredential,
-                    Notice::Focus(
-                        "AI cleanup is enabled but Anthropic API key is not set.".to_string(),
-                    ),
-                );
-            }
-        },
-        config::CleanupAuthMode::Oauth => {
-            match cleanup_settings.anthropic_oauth_token.as_deref() {
-                Some(t) if !t.is_empty() => cleanup::Credential::OauthToken(t),
-                _ => {
-                    return (
-                        transcript.to_string(),
-                        CleanupStatus::NoCredential,
-                        Notice::Focus(
-                            "AI cleanup is set to OAuth but no Claude Code token is configured."
-                                .to_string(),
-                        ),
-                    );
-                }
-            }
-        }
-    };
 
     let words = transcript.split_whitespace().count();
     if words < cleanup_settings.min_words {
@@ -531,9 +507,63 @@ async fn maybe_cleanup(
     }
 
     let _ = app.emit(PTT_THINKING_EVENT, ());
-
     let prompt = cleanup::effective_prompt(prompt_override);
-    match cleanup::run(transcript, credential, &prompt).await {
+
+    let result = if cleanup_provider == "openai" {
+        let api_key = match cleanup_settings
+            .provider_keys
+            .get("openai")
+            .filter(|k| !k.is_empty())
+        {
+            Some(k) => k.clone(),
+            None => {
+                return (
+                    transcript.to_string(),
+                    CleanupStatus::NoCredential,
+                    Notice::Focus(
+                        "AI cleanup is enabled but OpenAI API key is not set.".to_string(),
+                    ),
+                );
+            }
+        };
+        cleanup::run_openai(transcript, &api_key, cleanup_model, &prompt).await
+    } else {
+        let credential = match cleanup_settings.auth_mode {
+            config::CleanupAuthMode::ApiKey => {
+                match cleanup_settings.provider_keys.get("anthropic").filter(|k| !k.is_empty()) {
+                    Some(k) => cleanup::Credential::ApiKey(k),
+                    None => {
+                        return (
+                            transcript.to_string(),
+                            CleanupStatus::NoCredential,
+                            Notice::Focus(
+                                "AI cleanup is enabled but Anthropic API key is not set."
+                                    .to_string(),
+                            ),
+                        );
+                    }
+                }
+            }
+            config::CleanupAuthMode::Oauth => {
+                match cleanup_settings.anthropic_oauth_token.as_deref() {
+                    Some(t) if !t.is_empty() => cleanup::Credential::OauthToken(t),
+                    _ => {
+                        return (
+                            transcript.to_string(),
+                            CleanupStatus::NoCredential,
+                            Notice::Focus(
+                                "AI cleanup is set to OAuth but no Claude Code token is configured."
+                                    .to_string(),
+                            ),
+                        );
+                    }
+                }
+            }
+        };
+        cleanup::run(transcript, credential, cleanup_model, &prompt).await
+    };
+
+    match result {
         Ok((cleaned, usage)) => {
             cleanup_stats::record(app, usage.input_tokens, usage.output_tokens);
             (cleaned, CleanupStatus::Ran, Notice::None)
