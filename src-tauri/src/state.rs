@@ -1,14 +1,15 @@
 use crate::config::{HotkeyBinding, Shortcut};
 use crate::provider::LocalWhisperModel;
-use crate::target_app::FrontmostApp;
+use crate::recorder::Recorder;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
+#[cfg(target_os = "macos")]
 use tokio::sync::oneshot;
 #[cfg(target_os = "macos")]
-use std::time::Instant;
+use crate::target_app::FrontmostApp;
 #[cfg(target_os = "macos")]
-use crate::recorder::Recorder;
+use std::time::Instant;
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct ModifierState {
@@ -65,12 +66,12 @@ pub struct AppState {
     pub download_cancel_flags: Arc<Mutex<HashMap<LocalWhisperModel, Arc<AtomicBool>>>>,
     /// Receives the frontmost app captured at PTT press so the session task
     /// can record it in the history entry without a second osascript call.
+    #[cfg(target_os = "macos")]
     pub pending_app_rx: Arc<Mutex<Option<oneshot::Receiver<Option<FrontmostApp>>>>>,
     /// True while the CGEventTap thread is alive. Used to detect when
     /// Accessibility permission was granted after startup so we can restart
     /// the tap without a full app relaunch.
     pub ptt_running: Arc<AtomicBool>,
-    #[cfg(target_os = "macos")]
     pub recorder: Arc<Mutex<Option<Recorder>>>,
     #[cfg(target_os = "macos")]
     pub model_cache: Arc<Mutex<HashMap<LocalWhisperModel, LoadedModel>>>,

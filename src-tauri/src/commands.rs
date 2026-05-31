@@ -373,14 +373,7 @@ pub fn set_show_in_dock(app: AppHandle, enabled: bool) -> Result<(), String> {
 
 #[tauri::command]
 pub fn list_input_devices() -> Vec<String> {
-    #[cfg(target_os = "macos")]
-    {
-        crate::recorder::Recorder::list_input_devices()
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        Vec::new()
-    }
+    crate::recorder::Recorder::list_input_devices()
 }
 
 #[tauri::command]
@@ -428,10 +421,16 @@ pub fn clear_stats(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn get_app_icon(bundle_id: String) -> Option<String> {
-    tauri::async_runtime::spawn_blocking(move || crate::target_app::resolve_icon(&bundle_id))
+    #[cfg(target_os = "macos")]
+    return tauri::async_runtime::spawn_blocking(move || crate::target_app::resolve_icon(&bundle_id))
         .await
         .ok()
-        .flatten()
+        .flatten();
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = bundle_id;
+        None
+    }
 }
 
 #[tauri::command]

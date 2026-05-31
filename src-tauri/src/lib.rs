@@ -6,51 +6,37 @@ pub mod history;
 pub mod mode;
 pub mod provider;
 pub mod pipeline;
-// corrections helpers are consumed by pipeline (cross-platform) and by
-// macOS-only session modules; allow unused items on non-macOS so the
-// module still ships and its tests run.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod corrections;
-// terms helpers are consumed by macOS-only session modules; allow
-// unused items on non-macOS so the module still ships and its tests run.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod terms;
-// groq_audio is only used by groq_session (macOS-gated); allow unused
-// items on non-macOS builds so the module still ships and its tests
-// run, but the binary doesn't warn about dead code.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod groq_audio;
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod groq_session_state;
 mod groq_stabilizer;
 mod permissions;
-// snippets helpers are consumed by pipeline (cross-platform) and by
-// macOS-only ptt; allow unused items on non-macOS so the module still
-// ships and its tests run.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod snippets;
 mod state;
 mod stats;
 mod tray;
+pub mod platform;
 
+// cleanup_stats is pure Rust (file I/O + token counters, no OS APIs) and
+// is therefore compiled on all platforms.
+mod cleanup_stats;
+
+// Session modules depend only on tokio-tungstenite, reqwest, and cpal —
+// all cross-platform. Un-gated so cloud transcription compiles everywhere.
+mod deepgram_session;
+mod assemblyai_session;
+mod groq_session;
+pub mod transcription_session;
+pub mod recorder;
+
+// macOS-only: local whisper inference (whisper-rs + Metal).
 #[cfg(target_os = "macos")]
 mod cleanup;
 #[cfg(target_os = "macos")]
-mod cleanup_stats;
-#[cfg(target_os = "macos")]
-mod deepgram_session;
-#[cfg(target_os = "macos")]
-mod assemblyai_session;
-#[cfg(target_os = "macos")]
-mod groq_session;
-#[cfg(target_os = "macos")]
 mod local_session;
-#[cfg(target_os = "macos")]
-pub mod transcription_session;
 
-// Modules that wrap macOS-only APIs (CGEventTap, CGEventPost, CoreAudio via
-// cpal, transparent overlay windows via macOSPrivateApi). Cross-platform
-// ports live behind the same module names inside the cfg gates below.
+// macOS-only: OS API wrappers (CGEventTap, CGEventPost, NSWorkspace, etc.).
 #[cfg(target_os = "macos")]
 mod media;
 #[cfg(target_os = "macos")]
@@ -59,8 +45,6 @@ mod overlay;
 mod paste;
 #[cfg(target_os = "macos")]
 mod ptt;
-#[cfg(target_os = "macos")]
-pub mod recorder;
 #[cfg(target_os = "macos")]
 mod target_app;
 
@@ -139,19 +123,28 @@ pub fn run() {
             *app_state.pause_media_on_record.lock().unwrap() =
                 settings.pause_media_on_record;
 
-            #[cfg(target_os = "macos")]
+            // Spawn the audio capture thread on all platforms — cpal is
+            // cross-platform and cloud engine sessions need it on Windows/Linux.
             {
                 let recorder = recorder::Recorder::spawn();
                 *app_state.recorder.lock().unwrap() = Some(recorder.clone());
-                // CGEventTapCreate without Accessibility returns a tap that
-                // only sees own-process events; that crippled state sticks
-                // until relaunch. Defer creation until permission lands.
-                if permissions::check_accessibility_permission() {
-                    app_state
-                        .ptt_running
-                        .store(true, std::sync::atomic::Ordering::Release);
-                    ptt::start(app.handle().clone(), app_state.clone(), recorder);
+
+                #[cfg(target_os = "macos")]
+                {
+                    // CGEventTapCreate without Accessibility returns a tap that
+                    // only sees own-process events; that crippled state sticks
+                    // until relaunch. Defer creation until permission lands.
+                    if permissions::check_accessibility_permission() {
+                        app_state
+                            .ptt_running
+                            .store(true, std::sync::atomic::Ordering::Release);
+                        ptt::start(app.handle().clone(), app_state.clone(), recorder);
+                    }
                 }
+            }
+
+            #[cfg(target_os = "macos")]
+            {
                 if let Err(e) = overlay::create(&app.handle()) {
                     eprintln!("Failed to create overlay window: {e}");
                 }
@@ -183,8 +176,8 @@ pub fn run() {
             #[cfg(not(target_os = "macos"))]
             {
                 eprintln!(
-                    "[whispr] push-to-talk / audio capture / paste are not yet implemented \
-                     on this platform; UI will run but dictation is disabled."
+                    "[whispr] push-to-talk / paste are not yet implemented \
+                     on this platform; cloud transcription and settings UI are available."
                 );
             }
 
