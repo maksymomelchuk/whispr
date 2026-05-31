@@ -45,7 +45,9 @@ mod local_session;
 mod media;
 mod overlay;
 mod target_app;
-#[cfg(target_os = "macos")]
+// paste exposes a platform-neutral public API; per-OS injection is selected
+// internally via cfg: CGEvent on macOS, enigo on Windows, native tools or
+// enigo fallback on Linux.
 mod paste;
 
 // ptt compiles on all platforms; the event source is selected internally via
