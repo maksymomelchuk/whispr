@@ -2,20 +2,30 @@ export function AssemblyAiLogo({ className }: { className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 32 32"
-      fill="none"
+      viewBox="0 0 24 24"
       className={className}
       aria-hidden="true"
     >
-      <rect width="32" height="32" rx="6" fill="#3B1F8C" />
-      <path
-        d="M16 7L23 23H9L16 7Z"
-        stroke="white"
-        strokeWidth="2"
-        strokeLinejoin="round"
+      <rect width="24" height="24" rx="4.5" fill="#FFFFFF" />
+      <rect
+        x="0.5"
+        y="0.5"
+        width="23"
+        height="23"
+        rx="4"
         fill="none"
+        stroke="#E2E8F0"
       />
-      <line x1="11.5" y1="18" x2="20.5" y2="18" stroke="white" strokeWidth="2" strokeLinecap="round" />
+      <g transform="translate(4.5 4.5) scale(0.625)">
+        <path
+          fill="#2545D3"
+          d="M10.595 1.5a3.695 3.695 0 00-3.444 2.355L0 22.26h5.432l5.629-14.486h.002a.96.96 0 011.782 0h.75V4.835h-1.393L13.498 1.5h-2.902z"
+        />
+        <path
+          fill="#566DE8"
+          d="M7.151 3.855a3.695 3.695 0 013.26-2.35l-.002-.005H13.405c1.524 0 2.893.936 3.444 2.355L24 22.26h-5.525L11.54 4.413a2.528 2.528 0 00-4.609.006l.22-.564z"
+        />
+      </g>
     </svg>
   );
 }

@@ -152,7 +152,6 @@ export function LocalModelCard({ status }: Props) {
         <div className="flex items-center gap-1 shrink-0">
           {downloaded ? (
             <>
-              <span className="text-xs text-muted-foreground mr-1">Downloaded</span>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button

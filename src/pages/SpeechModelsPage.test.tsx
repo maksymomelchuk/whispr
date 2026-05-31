@@ -96,17 +96,16 @@ describe("SpeechModelsPage", () => {
     expect(screen.getByText("AssemblyAI")).toBeInTheDocument();
   });
 
-  it("shows Setup badge when no engines are configured", () => {
+  it("marks every engine as needing setup when none are configured", () => {
     render(<Wrapper />);
-    const setupBadges = screen.getAllByText("Setup");
-    expect(setupBadges).toHaveLength(3);
+    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(3);
   });
 
-  it("shows Configured badge when an engine is configured", () => {
+  it("marks an engine as configured when it has a key", () => {
     render(
       <Wrapper settings={{ ...BASE_SETTINGS, deepgram_api_key_configured: true }} />,
     );
-    expect(screen.getByText("Configured")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
   });
 
   it("renders the Cloud section heading", () => {
@@ -164,14 +163,15 @@ describe("SpeechModelsPage LOCAL section", () => {
     );
   });
 
-  it("shows Downloaded indicator and action buttons for a downloaded model", async () => {
+  it("shows action buttons for a downloaded model", async () => {
     const { getLocalModelStatuses } = await import("../lib/api");
     vi.mocked(getLocalModelStatuses).mockResolvedValue([
       { model: "large_v3_turbo", downloaded: true, downloading: false, size_bytes: 1_624_555_275 },
     ]);
     render(<Wrapper />);
-    await waitFor(() => expect(screen.getByText("Downloaded")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Show in Finder" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Show in Finder" })).toBeInTheDocument(),
+    );
     expect(screen.getByRole("button", { name: "Delete model" })).toBeInTheDocument();
   });
 });

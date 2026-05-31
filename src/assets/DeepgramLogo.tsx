@@ -2,25 +2,14 @@ export function DeepgramLogo({ className }: { className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 32 32"
-      fill="none"
+      viewBox="0 0 24 24"
       className={className}
       aria-hidden="true"
     >
-      <rect width="32" height="32" rx="6" fill="#101827" />
-      <path
-        d="M7 16c0-4.97 4.03-9 9-9s9 4.03 9 9-4.03 9-9 9"
-        stroke="#13EF93"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M7 16c0-2.76 2.24-5 5-5s5 2.24 5 5-2.24 5-5 5"
-        stroke="#13EF93"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-      <circle cx="12" cy="16" r="2" fill="#13EF93" />
+      <rect width="24" height="24" rx="4.5" fill="#000000" />
+      <g transform="translate(4 4) scale(0.6667)" fill="#FFFFFF">
+        <path d="M11.203 24H1.517a.364.364 0 0 1-.258-.62l6.239-6.275a.366.366 0 0 1 .259-.108h3.52c2.723 0 5.025-2.127 5.107-4.845a5.004 5.004 0 0 0-4.999-5.148H7.613v4.646c0 .2-.164.364-.365.364H.968a.365.365 0 0 1-.363-.364V.364C.605.164.768 0 .969 0h10.416c6.684 0 12.111 5.485 12.01 12.187C23.293 18.77 17.794 24 11.202 24z" />
+      </g>
     </svg>
   );
 }

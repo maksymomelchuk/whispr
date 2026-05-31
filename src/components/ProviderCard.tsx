@@ -1,6 +1,6 @@
+import { CheckFatIcon, GearIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { EngineDescriptor } from "../lib/speechModelCatalog";
 import { ProviderSetupDialog } from "./ProviderSetupDialog";
@@ -26,12 +26,25 @@ export function ProviderCard({ descriptor, isConfigured, onConfiguredChange }: P
         )}
       >
         <Logo className="h-8 w-8 shrink-0 rounded-md" />
-        <div className="flex flex-1 flex-col gap-0.5 min-w-0">
-          <span className="text-sm font-medium leading-tight">{descriptor.name}</span>
-          <Badge variant={isConfigured ? "accent" : "neutral"} className="w-fit">
-            {isConfigured ? "Configured" : "Setup"}
-          </Badge>
-        </div>
+        <span className="flex-1 min-w-0 truncate text-sm font-medium leading-tight">
+          {descriptor.name}
+        </span>
+        {isConfigured ? (
+          <CheckFatIcon
+            size={16}
+            weight="fill"
+            role="img"
+            aria-label="Configured"
+            className="shrink-0 text-green-600 dark:text-green-500"
+          />
+        ) : (
+          <GearIcon
+            size={16}
+            role="img"
+            aria-label="Set up"
+            className="shrink-0 text-muted-foreground/50"
+          />
+        )}
       </button>
 
       <ProviderSetupDialog

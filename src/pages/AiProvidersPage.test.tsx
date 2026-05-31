@@ -83,17 +83,17 @@ describe("AiProvidersPage", () => {
     expect(screen.getByText("Anthropic")).toBeInTheDocument();
   });
 
-  it("shows Setup badge when not configured", () => {
+  it("marks the provider as needing setup when not configured", () => {
     render(<Wrapper />);
-    expect(screen.getByText("Setup")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Set up" })).toBeInTheDocument();
   });
 
-  it("shows Configured badge when API key is configured", () => {
+  it("marks the provider as configured when API key is configured", () => {
     render(<Wrapper settings={{ ...BASE_SETTINGS, ai_cleanup_key_configured: true }} />);
-    expect(screen.getByText("Configured")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
   });
 
-  it("shows Configured badge when OAuth token is configured in oauth mode", () => {
+  it("marks the provider as configured when OAuth token is configured in oauth mode", () => {
     render(
       <Wrapper
         settings={{
@@ -103,10 +103,10 @@ describe("AiProvidersPage", () => {
         }}
       />,
     );
-    expect(screen.getByText("Configured")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
   });
 
-  it("shows Setup badge in oauth mode when only API key is configured", () => {
+  it("marks the provider as needing setup in oauth mode when only API key is configured", () => {
     render(
       <Wrapper
         settings={{
@@ -117,7 +117,7 @@ describe("AiProvidersPage", () => {
         }}
       />,
     );
-    expect(screen.getByText("Setup")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Set up" })).toBeInTheDocument();
   });
 
   it("renders the min words threshold input", () => {

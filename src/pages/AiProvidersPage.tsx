@@ -4,8 +4,9 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
 
+import { CheckFatIcon, GearIcon } from "@phosphor-icons/react";
+
 import { AnthropicLogo } from "@/assets/AnthropicLogo";
-import { Badge } from "@/components/ui/badge";
 import {
   Form,
   FormControl,
@@ -18,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { ProviderSetupDialog } from "../components/ProviderSetupDialog";
+import { SectionCard } from "../components/SectionCard";
 import { useSettings } from "../context/SettingsContext";
 import {
   setAnthropicApiKey as persistApiKey,
@@ -150,24 +152,39 @@ export function AiProvidersPage() {
 
   return (
     <div className="p-6 flex flex-col gap-8">
-      <div className="grid grid-cols-2 gap-3">
-        <button
-          type="button"
-          onClick={() => setDialogOpen(true)}
-          className={cn(
-            "flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3",
-            "text-left transition-colors hover:bg-accent/40 cursor-pointer w-full",
-          )}
-        >
-          <AnthropicLogo className="h-8 w-8 shrink-0 rounded-md" />
-          <div className="flex flex-1 flex-col gap-0.5 min-w-0">
-            <span className="text-sm font-medium leading-tight">Anthropic</span>
-            <Badge variant={isConfigured ? "accent" : "neutral"} className="w-fit">
-              {isConfigured ? "Configured" : "Setup"}
-            </Badge>
-          </div>
-        </button>
-      </div>
+      <SectionCard title="Provider">
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => setDialogOpen(true)}
+            className={cn(
+              "flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3",
+              "text-left transition-colors hover:bg-accent/40 cursor-pointer w-full",
+            )}
+          >
+            <AnthropicLogo className="h-8 w-8 shrink-0 rounded-md" />
+            <span className="flex-1 min-w-0 truncate text-sm font-medium leading-tight">
+              Anthropic
+            </span>
+            {isConfigured ? (
+              <CheckFatIcon
+                size={16}
+                weight="fill"
+                role="img"
+                aria-label="Configured"
+                className="shrink-0 text-green-600 dark:text-green-500"
+              />
+            ) : (
+              <GearIcon
+                size={16}
+                role="img"
+                aria-label="Set up"
+                className="shrink-0 text-muted-foreground/50"
+              />
+            )}
+          </button>
+        </div>
+      </SectionCard>
 
       <ProviderSetupDialog
         descriptor={descriptor}
@@ -195,47 +212,46 @@ export function AiProvidersPage() {
         </div>
       </ProviderSetupDialog>
 
-      <div className="flex flex-col gap-3">
-        <h2 className="font-mono text-eyebrow uppercase text-muted-foreground/60 tracking-wide text-xs">
-          Cleanup Thresholds
-        </h2>
-        <Form {...thresholdsForm}>
-          <form onSubmit={(e) => e.preventDefault()}>
-            <div className="flex items-end gap-2">
-              <FormField
-                control={thresholdsForm.control}
-                name="minWords"
-                render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel className="text-muted-foreground/70">Min words</FormLabel>
-                    <FormControl>
-                      <Input {...field} type="number" min={0} step={1} inputMode="numeric" />
-                    </FormControl>
-                    <FormMessage className="mt-1.5 text-help" />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={thresholdsForm.control}
-                name="minDurationSec"
-                render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel className="text-muted-foreground/70">Min duration (s)</FormLabel>
-                    <FormControl>
-                      <Input {...field} type="number" min={0} step={0.5} inputMode="decimal" />
-                    </FormControl>
-                    <FormMessage className="mt-1.5 text-help" />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </form>
-        </Form>
-        <p className="text-xs text-muted-foreground">
-          Cleanup runs only when both thresholds are met and is enabled per-Profile in the Profiles
-          page. There is no global toggle — enable cleanup per-Profile under Profiles.
-        </p>
-      </div>
+      <SectionCard title="Cleanup Thresholds">
+        <div className="flex flex-col gap-3">
+          <Form {...thresholdsForm}>
+            <form onSubmit={(e) => e.preventDefault()}>
+              <div className="flex items-end gap-2">
+                <FormField
+                  control={thresholdsForm.control}
+                  name="minWords"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormLabel className="text-muted-foreground/70">Min words</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" min={0} step={1} inputMode="numeric" />
+                      </FormControl>
+                      <FormMessage className="mt-1.5 text-help" />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={thresholdsForm.control}
+                  name="minDurationSec"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormLabel className="text-muted-foreground/70">Min duration (s)</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" min={0} step={0.5} inputMode="decimal" />
+                      </FormControl>
+                      <FormMessage className="mt-1.5 text-help" />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </form>
+          </Form>
+          <p className="text-xs text-muted-foreground">
+            Cleanup runs only when both thresholds are met and is enabled per-Profile in the Profiles
+            page. There is no global toggle — enable cleanup per-Profile under Profiles.
+          </p>
+        </div>
+      </SectionCard>
     </div>
   );
 }
