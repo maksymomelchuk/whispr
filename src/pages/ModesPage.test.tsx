@@ -62,12 +62,14 @@ function EditorWrapper({
   onClose = vi.fn(),
   onPersist = vi.fn(),
   configuredProviders,
+  customProviderModel,
 }: {
   mode?: Mode;
   isNew?: boolean;
   onClose?: () => void;
   onPersist?: (m: Mode, wasNew: boolean) => void;
   configuredProviders?: import("@/lib/types").AiProviderId[];
+  customProviderModel?: string;
 }) {
   return (
     <MemoryRouter>
@@ -78,6 +80,7 @@ function EditorWrapper({
           onClose={onClose}
           onPersist={onPersist}
           configuredProviders={configuredProviders}
+          customProviderModel={customProviderModel}
         />
       </TooltipProvider>
     </MemoryRouter>
@@ -218,6 +221,9 @@ const BASE_SETTINGS: Settings = {
   ai_cleanup_key_configured: false,
   ai_cleanup_oauth_token_configured: false,
   configured_providers: [],
+  custom_provider_configured: false,
+  custom_provider_base_url: null,
+  custom_provider_model: "",
   ai_cleanup_min_words: 9,
   ai_cleanup_min_duration_ms: 3000,
   input_device: null,
@@ -554,5 +560,65 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
     };
     render(<EditorWrapper mode={openrouterMode} configuredProviders={["openrouter"]} />);
     expect(screen.getByText("Claude Haiku 4.5")).toBeInTheDocument();
+  });
+
+  it("shows global model text for Custom provider instead of a model dropdown", () => {
+    const customMode: Mode = {
+      ...MODE,
+      ai_cleanup: {
+        enabled: true,
+        prompt_override: null,
+        provider: "custom",
+        model: "",
+      },
+    };
+    render(
+      <EditorWrapper
+        mode={customMode}
+        configuredProviders={["custom"]}
+        customProviderModel="llama3.2"
+      />,
+    );
+    expect(screen.getByText("llama3.2")).toBeInTheDocument();
+  });
+
+  it("shows blank model hint when Custom provider has no model configured", () => {
+    const customMode: Mode = {
+      ...MODE,
+      ai_cleanup: {
+        enabled: true,
+        prompt_override: null,
+        provider: "custom",
+        model: "",
+      },
+    };
+    render(
+      <EditorWrapper
+        mode={customMode}
+        configuredProviders={["custom"]}
+        customProviderModel=""
+      />,
+    );
+    expect(screen.getByText("(blank — single-model server)")).toBeInTheDocument();
+  });
+
+  it("shows Custom as selected cleanup provider label when provider is custom", () => {
+    const customMode: Mode = {
+      ...MODE,
+      ai_cleanup: {
+        enabled: true,
+        prompt_override: null,
+        provider: "custom",
+        model: "",
+      },
+    };
+    render(
+      <EditorWrapper
+        mode={customMode}
+        configuredProviders={["custom"]}
+        customProviderModel="llama3.2"
+      />,
+    );
+    expect(screen.getByText("Custom")).toBeInTheDocument();
   });
 });

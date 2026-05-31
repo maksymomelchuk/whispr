@@ -95,6 +95,15 @@ export const setProviderKey = (providerId: AiProviderId, apiKey: string) =>
 export const clearProviderKey = (providerId: AiProviderId) =>
   invoke<void>("clear_provider_key", { providerId });
 
+export const setCustomProvider = (
+  baseUrl: string,
+  model: string,
+  apiKey: string,
+) => invoke<void>("set_custom_provider", { baseUrl, model, apiKey });
+
+export const clearCustomProvider = () =>
+  invoke<void>("clear_custom_provider");
+
 export const setCleanupAuthMode = (mode: CleanupAuthMode) =>
   invoke<void>("set_cleanup_auth_mode", { mode });
 

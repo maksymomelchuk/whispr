@@ -135,7 +135,8 @@ export type AiProviderId =
   | "groq"
   | "deepseek"
   | "cerebras"
-  | "openrouter";
+  | "openrouter"
+  | "custom";
 
 export type ApiKeyValidation =
   | { kind: "valid" }
@@ -191,6 +192,9 @@ export interface Settings {
   ai_cleanup_oauth_token_configured: boolean;
   /** Provider IDs that have a saved API key. */
   configured_providers: AiProviderId[];
+  custom_provider_configured: boolean;
+  custom_provider_base_url: string | null;
+  custom_provider_model: string;
   ai_cleanup_min_words: number;
   ai_cleanup_min_duration_ms: number;
   input_device: string | null;

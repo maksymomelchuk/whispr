@@ -62,6 +62,9 @@ const BASE_SETTINGS: Settings = {
   ai_cleanup_key_configured: false,
   ai_cleanup_oauth_token_configured: false,
   configured_providers: [],
+  custom_provider_configured: false,
+  custom_provider_base_url: null,
+  custom_provider_model: "",
   ai_cleanup_min_words: 9,
   ai_cleanup_min_duration_ms: 3000,
   input_device: null,
@@ -102,7 +105,7 @@ describe("AiProvidersPage", () => {
 
   it("marks all providers as needing setup when none are configured", () => {
     render(<Wrapper />);
-    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(7);
+    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(8);
   });
 
   it("marks the provider as configured when API key is configured", () => {
@@ -138,7 +141,7 @@ describe("AiProvidersPage", () => {
         }}
       />,
     );
-    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(7);
+    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(8);
   });
 
   it("renders the min words threshold input", () => {
@@ -177,7 +180,7 @@ describe("AiProvidersPage – OpenAI card", () => {
       <Wrapper settings={{ ...BASE_SETTINGS, configured_providers: ["openai"] }} />,
     );
     expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
-    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(6);
+    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(7);
   });
 
   it("marks both Anthropic and OpenAI as configured when both are configured", () => {
@@ -191,6 +194,34 @@ describe("AiProvidersPage – OpenAI card", () => {
       />,
     );
     expect(screen.getAllByRole("img", { name: "Configured" })).toHaveLength(2);
+  });
+});
+
+describe("AiProvidersPage – Custom provider card", () => {
+  it("renders the Custom card", () => {
+    render(<Wrapper />);
+    expect(screen.getByText("Custom")).toBeInTheDocument();
+  });
+
+  it("marks Custom as needing setup when custom_provider_configured is false", () => {
+    render(<Wrapper settings={{ ...BASE_SETTINGS, custom_provider_configured: false }} />);
+    const cards = screen.getAllByRole("img", { name: "Set up" });
+    expect(cards.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("marks Custom as configured when custom_provider_configured is true", () => {
+    render(
+      <Wrapper
+        settings={{
+          ...BASE_SETTINGS,
+          custom_provider_configured: true,
+          custom_provider_base_url: "http://localhost:11434/v1",
+          custom_provider_model: "llama3.2",
+        }}
+      />,
+    );
+    expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
+    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(7);
   });
 });
 
@@ -225,7 +256,7 @@ describe("AiProvidersPage – new provider cards", () => {
       <Wrapper settings={{ ...BASE_SETTINGS, configured_providers: ["google"] }} />,
     );
     expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
-    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(6);
+    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(7);
   });
 
   it("marks DeepSeek as configured when it appears in configured_providers", () => {

@@ -151,9 +151,13 @@ const CLEANUP_PROVIDER_OPTIONS: { value: AiProviderId; label: string }[] = [
   { value: "deepseek", label: "DeepSeek" },
   { value: "cerebras", label: "Cerebras" },
   { value: "openrouter", label: "OpenRouter" },
+  { value: "custom", label: "Custom" },
 ];
 
-const CLEANUP_MODEL_OPTIONS: Record<AiProviderId, { value: string; label: string }[]> = {
+const CLEANUP_MODEL_OPTIONS: Record<
+  Exclude<AiProviderId, "custom">,
+  { value: string; label: string }[]
+> = {
   anthropic: [{ value: "claude-haiku-4-5", label: "Claude Haiku 4.5" }],
   openai: [
     { value: "gpt-4o-mini", label: "GPT-4o mini" },
@@ -401,6 +405,7 @@ export function ModeEditor({
   availableTermSets = [],
   correctionSets = [],
   configuredProviders,
+  customProviderModel = "",
 }: {
   mode: Mode;
   isNew: boolean;
@@ -409,6 +414,7 @@ export function ModeEditor({
   availableTermSets?: NamedTermSet[];
   correctionSets?: NamedCorrectionSet[];
   configuredProviders?: AiProviderId[];
+  customProviderModel?: string;
 }) {
   const [draft, setDraft] = useState<Mode>(mode);
   const [creating, setCreating] = useState(false);
@@ -488,7 +494,8 @@ export function ModeEditor({
     }));
 
   const setCleanupProvider = (provider: AiProviderId) => {
-    const defaultModel = CLEANUP_MODEL_OPTIONS[provider][0].value;
+    const defaultModel =
+      provider === "custom" ? "" : CLEANUP_MODEL_OPTIONS[provider][0].value;
     setDraft((d) => ({
       ...d,
       ai_cleanup: { ...d.ai_cleanup, provider, model: defaultModel },
@@ -848,26 +855,40 @@ export function ModeEditor({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-xs text-muted-foreground/70">
-                    Model
-                  </span>
-                  <Select
-                    value={draft.ai_cleanup.model}
-                    onValueChange={setCleanupModel}
-                  >
-                    <SelectTrigger size="sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CLEANUP_MODEL_OPTIONS[cleanupProvider].map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {cleanupProvider !== "custom" ? (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-xs text-muted-foreground/70">
+                      Model
+                    </span>
+                    <Select
+                      value={draft.ai_cleanup.model}
+                      onValueChange={setCleanupModel}
+                    >
+                      <SelectTrigger size="sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CLEANUP_MODEL_OPTIONS[cleanupProvider].map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-xs text-muted-foreground/70">
+                      Model
+                    </span>
+                    <p className="text-xs text-muted-foreground">
+                      {customProviderModel || "(blank — single-model server)"}
+                    </p>
+                    <p className="text-xs text-muted-foreground/60">
+                      Configured on the Custom card in AI Providers.
+                    </p>
+                  </div>
+                )}
               </div>
               <Collapsible
                 open={promptOpen}
@@ -1080,8 +1101,10 @@ export function ModesPage() {
                   !settings.configured_providers.includes("anthropic")
                     ? (["anthropic"] as AiProviderId[])
                     : []),
+                  ...(settings.custom_provider_configured ? (["custom"] as AiProviderId[]) : []),
                 ];
               })()}
+              customProviderModel={settings.custom_provider_model}
             />
           )}
         </SheetContent>

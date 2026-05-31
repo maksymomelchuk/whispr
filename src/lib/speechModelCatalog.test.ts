@@ -26,6 +26,9 @@ const BASE_SETTINGS: Settings = {
   show_live_preview: true,
   local_whisper_idle_timeout: "fifteen_minutes",
   configured_providers: [],
+  custom_provider_configured: false,
+  custom_provider_base_url: null,
+  custom_provider_model: "",
 };
 
 describe("speechModelCatalog", () => {

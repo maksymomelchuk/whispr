@@ -35,6 +35,9 @@ pub struct SettingsView {
     pub ai_cleanup_oauth_token_configured: bool,
     /// Provider IDs that have a non-empty API key in `provider_keys`.
     pub configured_providers: Vec<String>,
+    pub custom_provider_configured: bool,
+    pub custom_provider_base_url: Option<String>,
+    pub custom_provider_model: String,
     pub ai_cleanup_min_words: usize,
     pub ai_cleanup_min_duration_ms: u64,
     pub input_device: Option<String>,
@@ -65,6 +68,22 @@ impl From<Settings> for SettingsView {
             .filter(|(_, v)| !v.is_empty())
             .map(|(k, _)| k.clone())
             .collect();
+        let custom_provider_configured = s
+            .ai_cleanup
+            .custom_provider
+            .as_ref()
+            .is_some_and(|cp| !cp.base_url.is_empty());
+        let custom_provider_base_url = s
+            .ai_cleanup
+            .custom_provider
+            .as_ref()
+            .and_then(|cp| if cp.base_url.is_empty() { None } else { Some(cp.base_url.clone()) });
+        let custom_provider_model = s
+            .ai_cleanup
+            .custom_provider
+            .as_ref()
+            .map(|cp| cp.model.clone())
+            .unwrap_or_default();
         SettingsView {
             deepgram_api_key_configured,
             groq_api_key_configured: s.groq_api_key.as_deref().is_some_and(|k| !k.is_empty()),
@@ -86,6 +105,9 @@ impl From<Settings> for SettingsView {
                 .as_deref()
                 .is_some_and(|t| !t.is_empty()),
             configured_providers,
+            custom_provider_configured,
+            custom_provider_base_url,
+            custom_provider_model,
             ai_cleanup_min_words: s.ai_cleanup.min_words,
             ai_cleanup_min_duration_ms: s.ai_cleanup.min_duration_ms,
             input_device: s.input_device,
@@ -346,6 +368,38 @@ pub fn set_provider_key(app: AppHandle, provider_id: String, api_key: String) ->
 pub fn clear_provider_key(app: AppHandle, provider_id: String) -> Result<(), String> {
     config::update(&app, |s| {
         s.ai_cleanup.provider_keys.remove(&provider_id);
+    })
+}
+
+#[tauri::command]
+pub fn set_custom_provider(
+    app: AppHandle,
+    base_url: String,
+    model: String,
+    api_key: String,
+) -> Result<(), String> {
+    let trimmed_url = base_url.trim().trim_end_matches('/').to_string();
+    if !trimmed_url.is_empty() {
+        url::Url::parse(&trimmed_url)
+            .map_err(|_| format!("Invalid base URL: {trimmed_url}"))?;
+    }
+    config::update(&app, |s| {
+        s.ai_cleanup.custom_provider = if trimmed_url.is_empty() {
+            None
+        } else {
+            Some(config::CustomProvider {
+                base_url: trimmed_url,
+                model: model.trim().to_string(),
+                api_key: config::non_empty(api_key.trim().to_string()),
+            })
+        };
+    })
+}
+
+#[tauri::command]
+pub fn clear_custom_provider(app: AppHandle) -> Result<(), String> {
+    config::update(&app, |s| {
+        s.ai_cleanup.custom_provider = None;
     })
 }
 

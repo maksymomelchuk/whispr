@@ -256,6 +256,14 @@ fn default_cleanup_min_duration_ms() -> u64 {
     DEFAULT_CLEANUP_MIN_DURATION_MS
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CustomProvider {
+    pub base_url: String,
+    pub model: String,
+    #[serde(default)]
+    pub api_key: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiCleanupSettings {
     /// Legacy global master switch; per-mode `ai_cleanup.enabled` is now the
@@ -277,6 +285,8 @@ pub struct AiCleanupSettings {
     /// Per-provider API keys. Keys are provider ID strings (`anthropic`, `openai`, …).
     #[serde(default)]
     pub provider_keys: BTreeMap<String, String>,
+    #[serde(default)]
+    pub custom_provider: Option<CustomProvider>,
     /// Minimum word count at which cleanup runs. Below this, dictations paste
     /// raw to preserve snappiness for short utterances.
     #[serde(default = "default_cleanup_min_words")]
@@ -294,6 +304,7 @@ impl Default for AiCleanupSettings {
             anthropic_api_key: None,
             anthropic_oauth_token: None,
             provider_keys: BTreeMap::new(),
+            custom_provider: None,
             min_words: DEFAULT_CLEANUP_MIN_WORDS,
             min_duration_ms: DEFAULT_CLEANUP_MIN_DURATION_MS,
         }

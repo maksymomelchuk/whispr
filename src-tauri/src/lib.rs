@@ -219,6 +219,8 @@ pub fn run() {
             commands::set_anthropic_oauth_token,
             commands::set_provider_key,
             commands::clear_provider_key,
+            commands::set_custom_provider,
+            commands::clear_custom_provider,
             commands::set_cleanup_auth_mode,
             commands::set_cleanup_thresholds,
             commands::list_input_devices,

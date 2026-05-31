@@ -543,6 +543,23 @@ async fn maybe_cleanup(
             }
         };
         cleanup::run(transcript, credential, cleanup_model, &prompt).await
+    } else if cleanup_provider == "custom" {
+        let custom = match &cleanup_settings.custom_provider {
+            Some(cp) if !cp.base_url.is_empty() => cp.clone(),
+            _ => {
+                return (
+                    transcript.to_string(),
+                    CleanupStatus::NoCredential,
+                    Notice::Focus(
+                        "AI cleanup is enabled but the Custom provider is not configured."
+                            .to_string(),
+                    ),
+                );
+            }
+        };
+        let chat_url = format!("{}/chat/completions", custom.base_url.trim_end_matches('/'));
+        let api_key = custom.api_key.as_deref().unwrap_or("");
+        cleanup::run_openai(transcript, api_key, &chat_url, &custom.model, &prompt).await
     } else {
         let api_key = match cleanup_settings
             .provider_keys

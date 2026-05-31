@@ -13,6 +13,7 @@ pub enum AiProviderId {
     DeepSeek,
     Cerebras,
     OpenRouter,
+    Custom,
 }
 
 impl Default for AiProviderId {
@@ -371,11 +372,12 @@ fn build_headers(credential: &Credential<'_>) -> Vec<(String, String)> {
     headers
 }
 
-fn build_openai_headers(api_key: &str) -> Vec<(String, String)> {
-    vec![
-        ("authorization".to_string(), format!("Bearer {api_key}")),
-        ("content-type".to_string(), "application/json".to_string()),
-    ]
+pub(crate) fn build_openai_headers(api_key: &str) -> Vec<(String, String)> {
+    let mut headers = vec![("content-type".to_string(), "application/json".to_string())];
+    if !api_key.is_empty() {
+        headers.push(("authorization".to_string(), format!("Bearer {api_key}")));
+    }
+    headers
 }
 
 async fn call_openai_with_transport<T: Transport>(
@@ -1009,6 +1011,12 @@ mod tests {
     }
 
     #[test]
+    fn ai_provider_id_custom_serializes_as_lowercase_string() {
+        let v = serde_json::to_value(AiProviderId::Custom).unwrap();
+        assert_eq!(v, serde_json::json!("custom"));
+    }
+
+    #[test]
     fn ai_provider_id_round_trips() {
         for id in [
             AiProviderId::Anthropic,
@@ -1018,11 +1026,28 @@ mod tests {
             AiProviderId::DeepSeek,
             AiProviderId::Cerebras,
             AiProviderId::OpenRouter,
+            AiProviderId::Custom,
         ] {
             let json = serde_json::to_string(&id).unwrap();
             let decoded: AiProviderId = serde_json::from_str(&json).unwrap();
             assert_eq!(decoded, id);
         }
+    }
+
+    #[test]
+    fn build_openai_headers_with_key_includes_authorization() {
+        let headers = build_openai_headers("my-secret-key");
+        let has_auth = headers
+            .iter()
+            .any(|(k, v)| k == "authorization" && v == "Bearer my-secret-key");
+        assert!(has_auth, "expected Authorization header when key is non-empty");
+    }
+
+    #[test]
+    fn build_openai_headers_without_key_omits_authorization() {
+        let headers = build_openai_headers("");
+        let has_auth = headers.iter().any(|(k, _)| k == "authorization");
+        assert!(!has_auth, "expected no Authorization header when key is empty");
     }
 
     #[test]
