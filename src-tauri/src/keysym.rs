@@ -90,6 +90,127 @@ pub fn keycode_to_code(kc: u16) -> Option<&'static str> {
     KEYSYM_MAP.iter().find(|(k, _)| *k == kc).map(|(_, c)| *c)
 }
 
+/// Maps an rdev Key variant to the web KeyboardEvent.code string used
+/// throughout Whispr's hotkey logic. Returns None for Unknown keys and for
+/// keys that have no standard KeyboardEvent.code equivalent.
+///
+/// rdev's Key::Alt is the left Alt key on most platforms; Key::AltGr is the
+/// right Alt / AltGr key. Neither variant distinguishes hardware side the way
+/// macOS keycodes do, so the mapping is best-effort on keyboards with two
+/// symmetric Alt keys where the right one is not labelled AltGr.
+#[cfg(not(target_os = "macos"))]
+pub fn rdev_key_to_code(key: &rdev::Key) -> Option<&'static str> {
+    use rdev::Key;
+    Some(match key {
+        Key::Alt => "AltLeft",
+        Key::AltGr => "AltRight",
+        Key::ShiftLeft => "ShiftLeft",
+        Key::ShiftRight => "ShiftRight",
+        Key::ControlLeft => "ControlLeft",
+        Key::ControlRight => "ControlRight",
+        Key::MetaLeft => "MetaLeft",
+        Key::MetaRight => "MetaRight",
+        Key::Backspace => "Backspace",
+        Key::CapsLock => "CapsLock",
+        Key::Delete => "Delete",
+        Key::DownArrow => "ArrowDown",
+        Key::End => "End",
+        Key::Escape => "Escape",
+        Key::F1 => "F1",
+        Key::F2 => "F2",
+        Key::F3 => "F3",
+        Key::F4 => "F4",
+        Key::F5 => "F5",
+        Key::F6 => "F6",
+        Key::F7 => "F7",
+        Key::F8 => "F8",
+        Key::F9 => "F9",
+        Key::F10 => "F10",
+        Key::F11 => "F11",
+        Key::F12 => "F12",
+        Key::Home => "Home",
+        Key::LeftArrow => "ArrowLeft",
+        Key::PageDown => "PageDown",
+        Key::PageUp => "PageUp",
+        Key::Return => "Enter",
+        Key::RightArrow => "ArrowRight",
+        Key::Space => "Space",
+        Key::Tab => "Tab",
+        Key::UpArrow => "ArrowUp",
+        Key::PrintScreen => "PrintScreen",
+        Key::ScrollLock => "ScrollLock",
+        Key::Pause => "Pause",
+        Key::NumLock => "NumLock",
+        Key::BackQuote => "Backquote",
+        Key::Num1 => "Digit1",
+        Key::Num2 => "Digit2",
+        Key::Num3 => "Digit3",
+        Key::Num4 => "Digit4",
+        Key::Num5 => "Digit5",
+        Key::Num6 => "Digit6",
+        Key::Num7 => "Digit7",
+        Key::Num8 => "Digit8",
+        Key::Num9 => "Digit9",
+        Key::Num0 => "Digit0",
+        Key::Minus => "Minus",
+        Key::Equal => "Equal",
+        Key::KeyA => "KeyA",
+        Key::KeyB => "KeyB",
+        Key::KeyC => "KeyC",
+        Key::KeyD => "KeyD",
+        Key::KeyE => "KeyE",
+        Key::KeyF => "KeyF",
+        Key::KeyG => "KeyG",
+        Key::KeyH => "KeyH",
+        Key::KeyI => "KeyI",
+        Key::KeyJ => "KeyJ",
+        Key::KeyK => "KeyK",
+        Key::KeyL => "KeyL",
+        Key::KeyM => "KeyM",
+        Key::KeyN => "KeyN",
+        Key::KeyO => "KeyO",
+        Key::KeyP => "KeyP",
+        Key::KeyQ => "KeyQ",
+        Key::KeyR => "KeyR",
+        Key::KeyS => "KeyS",
+        Key::KeyT => "KeyT",
+        Key::KeyU => "KeyU",
+        Key::KeyV => "KeyV",
+        Key::KeyW => "KeyW",
+        Key::KeyX => "KeyX",
+        Key::KeyY => "KeyY",
+        Key::KeyZ => "KeyZ",
+        Key::LeftBracket => "BracketLeft",
+        Key::RightBracket => "BracketRight",
+        Key::SemiColon => "Semicolon",
+        Key::Quote => "Quote",
+        Key::BackSlash => "Backslash",
+        Key::IntlBackslash => "IntlBackslash",
+        Key::Comma => "Comma",
+        Key::Dot => "Period",
+        Key::Slash => "Slash",
+        Key::Insert => "Insert",
+        Key::KpReturn => "NumpadEnter",
+        Key::KpMinus => "NumpadSubtract",
+        Key::KpPlus => "NumpadAdd",
+        Key::KpMultiply => "NumpadMultiply",
+        Key::KpDivide => "NumpadDivide",
+        Key::Kp0 => "Numpad0",
+        Key::Kp1 => "Numpad1",
+        Key::Kp2 => "Numpad2",
+        Key::Kp3 => "Numpad3",
+        Key::Kp4 => "Numpad4",
+        Key::Kp5 => "Numpad5",
+        Key::Kp6 => "Numpad6",
+        Key::Kp7 => "Numpad7",
+        Key::Kp8 => "Numpad8",
+        Key::Kp9 => "Numpad9",
+        Key::KpDelete => "NumpadDecimal",
+        Key::Function => "Fn",
+        Key::Unknown(_) => return None,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -128,5 +249,53 @@ mod tests {
                 "keycode {kc:#04x} should map to {code}"
             );
         }
+    }
+}
+
+#[cfg(all(test, not(target_os = "macos")))]
+mod rdev_tests {
+    use super::*;
+    use rdev::Key;
+
+    #[test]
+    fn escape_maps_to_escape() {
+        assert_eq!(rdev_key_to_code(&Key::Escape), Some("Escape"));
+    }
+
+    #[test]
+    fn modifier_keys_map_to_standard_codes() {
+        assert_eq!(rdev_key_to_code(&Key::Alt), Some("AltLeft"));
+        assert_eq!(rdev_key_to_code(&Key::AltGr), Some("AltRight"));
+        assert_eq!(rdev_key_to_code(&Key::ShiftLeft), Some("ShiftLeft"));
+        assert_eq!(rdev_key_to_code(&Key::ShiftRight), Some("ShiftRight"));
+        assert_eq!(rdev_key_to_code(&Key::ControlLeft), Some("ControlLeft"));
+        assert_eq!(rdev_key_to_code(&Key::ControlRight), Some("ControlRight"));
+        assert_eq!(rdev_key_to_code(&Key::MetaLeft), Some("MetaLeft"));
+        assert_eq!(rdev_key_to_code(&Key::MetaRight), Some("MetaRight"));
+    }
+
+    #[test]
+    fn letter_keys_map_to_web_key_codes() {
+        assert_eq!(rdev_key_to_code(&Key::KeyA), Some("KeyA"));
+        assert_eq!(rdev_key_to_code(&Key::KeyZ), Some("KeyZ"));
+    }
+
+    #[test]
+    fn top_row_numbers_map_to_digit_codes() {
+        assert_eq!(rdev_key_to_code(&Key::Num1), Some("Digit1"));
+        assert_eq!(rdev_key_to_code(&Key::Num0), Some("Digit0"));
+    }
+
+    #[test]
+    fn arrow_keys_use_arrow_prefix() {
+        assert_eq!(rdev_key_to_code(&Key::UpArrow), Some("ArrowUp"));
+        assert_eq!(rdev_key_to_code(&Key::DownArrow), Some("ArrowDown"));
+        assert_eq!(rdev_key_to_code(&Key::LeftArrow), Some("ArrowLeft"));
+        assert_eq!(rdev_key_to_code(&Key::RightArrow), Some("ArrowRight"));
+    }
+
+    #[test]
+    fn unknown_key_returns_none() {
+        assert_eq!(rdev_key_to_code(&Key::Unknown(0x1234)), None);
     }
 }

@@ -476,18 +476,10 @@ pub fn ensure_ptt_started(app: AppHandle, state: State<'_, AppState>) {
     {
         return;
     }
-    #[cfg(target_os = "macos")]
-    {
-        let recorder_opt = state.recorder.lock().unwrap().clone();
-        match recorder_opt {
-            Some(rec) => crate::ptt::start(app, (*state).clone(), rec),
-            None => state.ptt_running.store(false, Ordering::Release),
-        }
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        state.ptt_running.store(false, Ordering::Release);
-        let _ = app;
+    let recorder_opt = state.recorder.lock().unwrap().clone();
+    match recorder_opt {
+        Some(rec) => crate::ptt::start(app, (*state).clone(), rec),
+        None => state.ptt_running.store(false, Ordering::Release),
     }
 }
 

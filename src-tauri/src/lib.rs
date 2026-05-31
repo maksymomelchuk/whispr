@@ -32,13 +32,14 @@ mod groq_session;
 pub mod transcription_session;
 pub mod recorder;
 
-// macOS-only: local whisper inference (whisper-rs + Metal).
-#[cfg(target_os = "macos")]
+// cleanup is cross-platform HTTP (reqwest + serde_json, no OS APIs).
 mod cleanup;
+
+// macOS-only: local whisper inference (whisper-rs + Metal).
 #[cfg(target_os = "macos")]
 mod local_session;
 
-// macOS-only: OS API wrappers (CGEventTap, CGEventPost, NSWorkspace, etc.).
+// macOS-only: OS API wrappers (CGEventPost, NSWorkspace, etc.).
 #[cfg(target_os = "macos")]
 mod media;
 #[cfg(target_os = "macos")]
@@ -46,9 +47,11 @@ mod overlay;
 #[cfg(target_os = "macos")]
 mod paste;
 #[cfg(target_os = "macos")]
-mod ptt;
-#[cfg(target_os = "macos")]
 mod target_app;
+
+// ptt compiles on all platforms; the event source is selected internally via
+// cfg: CGEventTap on macOS, rdev on Windows/Linux.
+mod ptt;
 
 use state::AppState;
 use tauri::{Manager, WindowEvent};
@@ -143,6 +146,16 @@ pub fn run() {
                         ptt::start(app.handle().clone(), app_state.clone(), recorder);
                     }
                 }
+
+                // On Windows and Linux, rdev provides global key capture with no
+                // permission gate; start the listener unconditionally.
+                #[cfg(not(target_os = "macos"))]
+                {
+                    app_state
+                        .ptt_running
+                        .store(true, std::sync::atomic::Ordering::Release);
+                    ptt::start(app.handle().clone(), app_state.clone(), recorder);
+                }
             }
 
             #[cfg(target_os = "macos")]
@@ -175,14 +188,6 @@ pub fn run() {
             if let Some(window) = app.get_webview_window(MAIN_LABEL) {
                 let _ = window.set_focus();
             }
-            #[cfg(not(target_os = "macos"))]
-            {
-                eprintln!(
-                    "[whispr] push-to-talk / paste are not yet implemented \
-                     on this platform; cloud transcription and settings UI are available."
-                );
-            }
-
             app.manage(app_state);
             Ok(())
         })
