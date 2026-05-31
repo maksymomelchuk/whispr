@@ -6,7 +6,12 @@ import { toast } from "sonner";
 import * as z from "zod";
 
 import { AnthropicLogo } from "@/assets/AnthropicLogo";
+import { CerebrasLogo } from "@/assets/CerebrasLogo";
+import { DeepSeekLogo } from "@/assets/DeepSeekLogo";
+import { GoogleGeminiLogo } from "@/assets/GoogleGeminiLogo";
 import { OpenAiLogo } from "@/assets/OpenAiLogo";
+import { OpenRouterLogo } from "@/assets/OpenRouterLogo";
+import { GroqLogo } from "@/assets/GroqLogo";
 import {
   Form,
   FormControl,
@@ -30,7 +35,7 @@ import {
   setProviderKey,
 } from "../lib/api";
 import type { EngineDescriptor } from "../lib/speechModelCatalog";
-import type { Settings } from "../lib/types";
+import type { AiProviderId, Settings } from "../lib/types";
 
 const ANTHROPIC_API_KEY_DESCRIPTOR: EngineDescriptor = {
   id: "anthropic",
@@ -58,18 +63,80 @@ const ANTHROPIC_OAUTH_DESCRIPTOR: EngineDescriptor = {
   validate: async () => ({ kind: "valid" as const }),
 };
 
-const OPENAI_DESCRIPTOR: EngineDescriptor = {
-  id: "openai",
-  name: "OpenAI",
-  logo: OpenAiLogo,
-  description: "GPT models for AI-powered transcription cleanup.",
-  metadata: { languages: "100+ languages", streaming: "—", diarization: "—" },
-  keyPlaceholder: "sk-…",
-  helpUrl: "https://platform.openai.com/api-keys",
-  selectConfigured: (s: Settings) => s.configured_providers.includes("openai"),
-  persist: (key: string) => setProviderKey("openai", key),
-  validate: async () => ({ kind: "valid" as const }),
-};
+const OPENAI_COMPAT_DESCRIPTORS: EngineDescriptor[] = [
+  {
+    id: "openai",
+    name: "OpenAI",
+    logo: OpenAiLogo,
+    description: "GPT models for AI-powered transcription cleanup.",
+    metadata: { languages: "100+ languages", streaming: "—", diarization: "—" },
+    keyPlaceholder: "sk-…",
+    helpUrl: "https://platform.openai.com/api-keys",
+    selectConfigured: (s: Settings) => s.configured_providers.includes("openai"),
+    persist: (key: string) => setProviderKey("openai", key),
+    validate: async () => ({ kind: "valid" as const }),
+  },
+  {
+    id: "google",
+    name: "Google Gemini",
+    logo: GoogleGeminiLogo,
+    description: "Gemini models for AI-powered transcription cleanup.",
+    metadata: { languages: "100+ languages", streaming: "—", diarization: "—" },
+    keyPlaceholder: "AIza…",
+    helpUrl: "https://aistudio.google.com/apikey",
+    selectConfigured: (s: Settings) => s.configured_providers.includes("google"),
+    persist: (key: string) => setProviderKey("google", key),
+    validate: async () => ({ kind: "valid" as const }),
+  },
+  {
+    id: "groq",
+    name: "Groq",
+    logo: GroqLogo,
+    description: "Llama models for AI-powered transcription cleanup.",
+    metadata: { languages: "100+ languages", streaming: "—", diarization: "—" },
+    keyPlaceholder: "gsk_…",
+    helpUrl: "https://console.groq.com/keys",
+    selectConfigured: (s: Settings) => s.configured_providers.includes("groq"),
+    persist: (key: string) => setProviderKey("groq", key),
+    validate: async () => ({ kind: "valid" as const }),
+  },
+  {
+    id: "deepseek",
+    name: "DeepSeek",
+    logo: DeepSeekLogo,
+    description: "DeepSeek models for AI-powered transcription cleanup.",
+    metadata: { languages: "100+ languages", streaming: "—", diarization: "—" },
+    keyPlaceholder: "sk-…",
+    helpUrl: "https://platform.deepseek.com/api_keys",
+    selectConfigured: (s: Settings) => s.configured_providers.includes("deepseek"),
+    persist: (key: string) => setProviderKey("deepseek", key),
+    validate: async () => ({ kind: "valid" as const }),
+  },
+  {
+    id: "cerebras",
+    name: "Cerebras",
+    logo: CerebrasLogo,
+    description: "Llama models on Cerebras hardware for AI-powered transcription cleanup.",
+    metadata: { languages: "100+ languages", streaming: "—", diarization: "—" },
+    keyPlaceholder: "csk-…",
+    helpUrl: "https://cloud.cerebras.ai/",
+    selectConfigured: (s: Settings) => s.configured_providers.includes("cerebras"),
+    persist: (key: string) => setProviderKey("cerebras", key),
+    validate: async () => ({ kind: "valid" as const }),
+  },
+  {
+    id: "openrouter",
+    name: "OpenRouter",
+    logo: OpenRouterLogo,
+    description: "Access 200+ models via OpenRouter for AI-powered transcription cleanup.",
+    metadata: { languages: "100+ languages", streaming: "—", diarization: "—" },
+    keyPlaceholder: "sk-or-…",
+    helpUrl: "https://openrouter.ai/keys",
+    selectConfigured: (s: Settings) => s.configured_providers.includes("openrouter"),
+    persist: (key: string) => setProviderKey("openrouter", key),
+    validate: async () => ({ kind: "valid" as const }),
+  },
+];
 
 const thresholdsSchema = z.object({
   minWords: z
@@ -143,15 +210,13 @@ export function AiProvidersPage() {
     ai_cleanup_min_words: minWords,
     ai_cleanup_min_duration_ms: minDurationMs,
   } = settings;
-  const [anthropicDialogOpen, setAnthropicDialogOpen] = useState(false);
-  const [openaiDialogOpen, setOpenaiDialogOpen] = useState(false);
+  const [openDialog, setOpenDialog] = useState<string | null>(null);
 
   const anthropicDescriptor =
     authMode === "api_key"
       ? ANTHROPIC_API_KEY_DESCRIPTOR
       : ANTHROPIC_OAUTH_DESCRIPTOR;
   const isAnthropicConfigured = anthropicDescriptor.selectConfigured(settings);
-  const isOpenAiConfigured = OPENAI_DESCRIPTOR.selectConfigured(settings);
 
   const handleAuthModeChange = async (val: string) => {
     if (!val || val === authMode) return;
@@ -173,12 +238,12 @@ export function AiProvidersPage() {
     setSettings((s) => ({ ...s, [key]: configured }));
   };
 
-  const handleOpenAiConfiguredChange = (configured: boolean) => {
+  const handleProviderKeyConfiguredChange = (id: AiProviderId, configured: boolean) => {
     setSettings((s) => ({
       ...s,
       configured_providers: configured
-        ? [...s.configured_providers.filter((p) => p !== "openai"), "openai"]
-        : s.configured_providers.filter((p) => p !== "openai"),
+        ? [...s.configured_providers.filter((p) => p !== id), id]
+        : s.configured_providers.filter((p) => p !== id),
     }));
   };
 
@@ -229,13 +294,16 @@ export function AiProvidersPage() {
           <ProviderCard
             descriptor={anthropicDescriptor}
             settings={settings}
-            onCardClick={() => setAnthropicDialogOpen(true)}
+            onCardClick={() => setOpenDialog("anthropic")}
           />
-          <ProviderCard
-            descriptor={OPENAI_DESCRIPTOR}
-            settings={settings}
-            onCardClick={() => setOpenaiDialogOpen(true)}
-          />
+          {OPENAI_COMPAT_DESCRIPTORS.map((descriptor) => (
+            <ProviderCard
+              key={descriptor.id}
+              descriptor={descriptor}
+              settings={settings}
+              onCardClick={() => setOpenDialog(descriptor.id)}
+            />
+          ))}
         </div>
       </SectionCard>
 
@@ -243,8 +311,8 @@ export function AiProvidersPage() {
         descriptor={anthropicDescriptor}
         isConfigured={isAnthropicConfigured}
         onConfiguredChange={handleAnthropicConfiguredChange}
-        open={anthropicDialogOpen}
-        onOpenChange={setAnthropicDialogOpen}
+        open={openDialog === "anthropic"}
+        onOpenChange={(open) => setOpenDialog(open ? "anthropic" : null)}
       >
         <div className="flex flex-col gap-[6px]">
           <span className="text-xs font-medium text-muted-foreground">
@@ -267,13 +335,18 @@ export function AiProvidersPage() {
         </div>
       </ProviderSetupDialog>
 
-      <ProviderSetupDialog
-        descriptor={OPENAI_DESCRIPTOR}
-        isConfigured={isOpenAiConfigured}
-        onConfiguredChange={handleOpenAiConfiguredChange}
-        open={openaiDialogOpen}
-        onOpenChange={setOpenaiDialogOpen}
-      />
+      {OPENAI_COMPAT_DESCRIPTORS.map((descriptor) => (
+        <ProviderSetupDialog
+          key={descriptor.id}
+          descriptor={descriptor}
+          isConfigured={descriptor.selectConfigured(settings)}
+          onConfiguredChange={(configured) =>
+            handleProviderKeyConfiguredChange(descriptor.id as AiProviderId, configured)
+          }
+          open={openDialog === descriptor.id}
+          onOpenChange={(open) => setOpenDialog(open ? descriptor.id : null)}
+        />
+      ))}
 
       <SectionCard title="Cleanup Thresholds">
         <div className="flex flex-col gap-3">

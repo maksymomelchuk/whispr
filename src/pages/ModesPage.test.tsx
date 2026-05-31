@@ -485,4 +485,74 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
     const toggle = screen.getByRole("switch", { name: /ai cleanup/i });
     expect(toggle).not.toBeDisabled();
   });
+
+  it("shows selected model value when AI cleanup is enabled with Google", () => {
+    const googleMode: Mode = {
+      ...MODE,
+      ai_cleanup: {
+        enabled: true,
+        prompt_override: null,
+        provider: "google",
+        model: "gemini-2.5-flash",
+      },
+    };
+    render(<EditorWrapper mode={googleMode} configuredProviders={["google"]} />);
+    expect(screen.getByText("Gemini 2.5 Flash")).toBeInTheDocument();
+  });
+
+  it("shows selected model value when AI cleanup is enabled with Groq", () => {
+    const groqMode: Mode = {
+      ...MODE,
+      ai_cleanup: {
+        enabled: true,
+        prompt_override: null,
+        provider: "groq",
+        model: "llama-3.1-8b-instant",
+      },
+    };
+    render(<EditorWrapper mode={groqMode} configuredProviders={["groq"]} />);
+    expect(screen.getByText("Llama 3.1 8B")).toBeInTheDocument();
+  });
+
+  it("shows selected model value when AI cleanup is enabled with DeepSeek", () => {
+    const deepseekMode: Mode = {
+      ...MODE,
+      ai_cleanup: {
+        enabled: true,
+        prompt_override: null,
+        provider: "deepseek",
+        model: "deepseek-chat",
+      },
+    };
+    render(<EditorWrapper mode={deepseekMode} configuredProviders={["deepseek"]} />);
+    expect(screen.getByText("DeepSeek Chat")).toBeInTheDocument();
+  });
+
+  it("shows selected model value when AI cleanup is enabled with Cerebras", () => {
+    const cerebrasMode: Mode = {
+      ...MODE,
+      ai_cleanup: {
+        enabled: true,
+        prompt_override: null,
+        provider: "cerebras",
+        model: "llama-3.3-70b",
+      },
+    };
+    render(<EditorWrapper mode={cerebrasMode} configuredProviders={["cerebras"]} />);
+    expect(screen.getByText("Llama 3.3 70B")).toBeInTheDocument();
+  });
+
+  it("shows selected model value when AI cleanup is enabled with OpenRouter", () => {
+    const openrouterMode: Mode = {
+      ...MODE,
+      ai_cleanup: {
+        enabled: true,
+        prompt_override: null,
+        provider: "openrouter",
+        model: "anthropic/claude-haiku-4.5",
+      },
+    };
+    render(<EditorWrapper mode={openrouterMode} configuredProviders={["openrouter"]} />);
+    expect(screen.getByText("Claude Haiku 4.5")).toBeInTheDocument();
+  });
 });

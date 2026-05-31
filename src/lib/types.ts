@@ -128,7 +128,14 @@ export type HistoryLimit = number | null;
 
 export type CleanupAuthMode = "api_key" | "oauth";
 
-export type AiProviderId = "anthropic" | "openai";
+export type AiProviderId =
+  | "anthropic"
+  | "openai"
+  | "google"
+  | "groq"
+  | "deepseek"
+  | "cerebras"
+  | "openrouter";
 
 export type ApiKeyValidation =
   | { kind: "valid" }

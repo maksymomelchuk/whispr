@@ -146,6 +146,11 @@ const LANGUAGES: { code: string; name: string; flag: string }[] = [
 const CLEANUP_PROVIDER_OPTIONS: { value: AiProviderId; label: string }[] = [
   { value: "anthropic", label: "Anthropic" },
   { value: "openai", label: "OpenAI" },
+  { value: "google", label: "Google Gemini" },
+  { value: "groq", label: "Groq" },
+  { value: "deepseek", label: "DeepSeek" },
+  { value: "cerebras", label: "Cerebras" },
+  { value: "openrouter", label: "OpenRouter" },
 ];
 
 const CLEANUP_MODEL_OPTIONS: Record<AiProviderId, { value: string; label: string }[]> = {
@@ -153,6 +158,26 @@ const CLEANUP_MODEL_OPTIONS: Record<AiProviderId, { value: string; label: string
   openai: [
     { value: "gpt-4o-mini", label: "GPT-4o mini" },
     { value: "gpt-4o", label: "GPT-4o" },
+  ],
+  google: [
+    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+    { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+  ],
+  groq: [
+    { value: "llama-3.1-8b-instant", label: "Llama 3.1 8B" },
+    { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B" },
+  ],
+  deepseek: [
+    { value: "deepseek-chat", label: "DeepSeek Chat" },
+    { value: "deepseek-reasoner", label: "DeepSeek Reasoner" },
+  ],
+  cerebras: [
+    { value: "llama-3.3-70b", label: "Llama 3.3 70B" },
+    { value: "llama3.1-8b", label: "Llama 3.1 8B" },
+  ],
+  openrouter: [
+    { value: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5" },
+    { value: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash" },
   ],
 };
 

@@ -509,25 +509,7 @@ async fn maybe_cleanup(
     let _ = app.emit(PTT_THINKING_EVENT, ());
     let prompt = cleanup::effective_prompt(prompt_override);
 
-    let result = if cleanup_provider == "openai" {
-        let api_key = match cleanup_settings
-            .provider_keys
-            .get("openai")
-            .filter(|k| !k.is_empty())
-        {
-            Some(k) => k.clone(),
-            None => {
-                return (
-                    transcript.to_string(),
-                    CleanupStatus::NoCredential,
-                    Notice::Focus(
-                        "AI cleanup is enabled but OpenAI API key is not set.".to_string(),
-                    ),
-                );
-            }
-        };
-        cleanup::run_openai(transcript, &api_key, cleanup_model, &prompt).await
-    } else {
+    let result = if cleanup_provider == "anthropic" {
         let credential = match cleanup_settings.auth_mode {
             config::CleanupAuthMode::ApiKey => {
                 match cleanup_settings.provider_keys.get("anthropic").filter(|k| !k.is_empty()) {
@@ -561,6 +543,26 @@ async fn maybe_cleanup(
             }
         };
         cleanup::run(transcript, credential, cleanup_model, &prompt).await
+    } else {
+        let api_key = match cleanup_settings
+            .provider_keys
+            .get(cleanup_provider)
+            .filter(|k| !k.is_empty())
+        {
+            Some(k) => k.clone(),
+            None => {
+                return (
+                    transcript.to_string(),
+                    CleanupStatus::NoCredential,
+                    Notice::Focus(format!(
+                        "AI cleanup is enabled but the {} API key is not set.",
+                        cleanup_provider
+                    )),
+                );
+            }
+        };
+        let chat_url = cleanup::chat_url_for(cleanup_provider);
+        cleanup::run_openai(transcript, &api_key, chat_url, cleanup_model, &prompt).await
     };
 
     match result {

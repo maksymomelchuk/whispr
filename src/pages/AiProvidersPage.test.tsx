@@ -100,9 +100,9 @@ describe("AiProvidersPage", () => {
     expect(screen.getByText("Anthropic")).toBeInTheDocument();
   });
 
-  it("marks the provider as needing setup when not configured", () => {
+  it("marks all providers as needing setup when none are configured", () => {
     render(<Wrapper />);
-    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(2);
+    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(7);
   });
 
   it("marks the provider as configured when API key is configured", () => {
@@ -138,7 +138,7 @@ describe("AiProvidersPage", () => {
         }}
       />,
     );
-    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(2);
+    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(7);
   });
 
   it("renders the min words threshold input", () => {
@@ -177,7 +177,7 @@ describe("AiProvidersPage – OpenAI card", () => {
       <Wrapper settings={{ ...BASE_SETTINGS, configured_providers: ["openai"] }} />,
     );
     expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
-    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(1);
+    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(6);
   });
 
   it("marks both Anthropic and OpenAI as configured when both are configured", () => {
@@ -191,5 +191,61 @@ describe("AiProvidersPage – OpenAI card", () => {
       />,
     );
     expect(screen.getAllByRole("img", { name: "Configured" })).toHaveLength(2);
+  });
+});
+
+describe("AiProvidersPage – new provider cards", () => {
+  it("renders the Google Gemini card", () => {
+    render(<Wrapper />);
+    expect(screen.getByText("Google Gemini")).toBeInTheDocument();
+  });
+
+  it("renders the Groq card", () => {
+    render(<Wrapper />);
+    expect(screen.getByText("Groq")).toBeInTheDocument();
+  });
+
+  it("renders the DeepSeek card", () => {
+    render(<Wrapper />);
+    expect(screen.getByText("DeepSeek")).toBeInTheDocument();
+  });
+
+  it("renders the Cerebras card", () => {
+    render(<Wrapper />);
+    expect(screen.getByText("Cerebras")).toBeInTheDocument();
+  });
+
+  it("renders the OpenRouter card", () => {
+    render(<Wrapper />);
+    expect(screen.getByText("OpenRouter")).toBeInTheDocument();
+  });
+
+  it("marks Google as configured when it appears in configured_providers", () => {
+    render(
+      <Wrapper settings={{ ...BASE_SETTINGS, configured_providers: ["google"] }} />,
+    );
+    expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
+    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(6);
+  });
+
+  it("marks DeepSeek as configured when it appears in configured_providers", () => {
+    render(
+      <Wrapper settings={{ ...BASE_SETTINGS, configured_providers: ["deepseek"] }} />,
+    );
+    expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
+  });
+
+  it("marks Cerebras as configured when it appears in configured_providers", () => {
+    render(
+      <Wrapper settings={{ ...BASE_SETTINGS, configured_providers: ["cerebras"] }} />,
+    );
+    expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
+  });
+
+  it("marks OpenRouter as configured when it appears in configured_providers", () => {
+    render(
+      <Wrapper settings={{ ...BASE_SETTINGS, configured_providers: ["openrouter"] }} />,
+    );
+    expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
   });
 });
