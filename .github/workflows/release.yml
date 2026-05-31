@@ -83,8 +83,13 @@ jobs:
             patchelf \
             libasound2-dev \
             libvulkan-dev \
-            glslang-tools \
-            glslc
+            glslang-tools
+          wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc \
+            | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc > /dev/null
+          echo "deb https://packages.lunarg.com/vulkan jammy main" \
+            | sudo tee /etc/apt/sources.list.d/lunarg-vulkan.list
+          sudo apt-get update -qq
+          sudo apt-get install -y glslc
 
       - name: Install frontend deps
         run: pnpm install --frozen-lockfile
