@@ -61,11 +61,13 @@ function EditorWrapper({
   isNew = false,
   onClose = vi.fn(),
   onPersist = vi.fn(),
+  configuredProviders,
 }: {
   mode?: Mode;
   isNew?: boolean;
   onClose?: () => void;
   onPersist?: (m: Mode, wasNew: boolean) => void;
+  configuredProviders?: import("@/lib/types").AiProviderId[];
 }) {
   return (
     <MemoryRouter>
@@ -75,6 +77,7 @@ function EditorWrapper({
           isNew={isNew}
           onClose={onClose}
           onPersist={onPersist}
+          configuredProviders={configuredProviders}
         />
       </TooltipProvider>
     </MemoryRouter>
@@ -429,5 +432,57 @@ describe("ModeEditor – local model picker", () => {
   it("does not show Model picker when provider is Deepgram", () => {
     render(<EditorWrapper mode={MODE} />);
     expect(screen.queryByText("Model")).not.toBeInTheDocument();
+  });
+});
+
+describe("ModeEditor – cleanup provider/model pickers", () => {
+  const cleanupEnabledMode: Mode = {
+    ...MODE,
+    ai_cleanup: {
+      enabled: true,
+      prompt_override: null,
+      provider: "anthropic",
+      model: "claude-haiku-4-5",
+    },
+  };
+
+  it("shows cleanup model value when AI cleanup is enabled with Anthropic", () => {
+    render(
+      <EditorWrapper
+        mode={cleanupEnabledMode}
+        configuredProviders={["anthropic"]}
+      />,
+    );
+    expect(screen.getByText("Claude Haiku 4.5")).toBeInTheDocument();
+  });
+
+  it("shows selected model value when AI cleanup is enabled with OpenAI", () => {
+    const openaiMode: Mode = {
+      ...MODE,
+      ai_cleanup: {
+        enabled: true,
+        prompt_override: null,
+        provider: "openai",
+        model: "gpt-4o-mini",
+      },
+    };
+    render(
+      <EditorWrapper mode={openaiMode} configuredProviders={["openai"]} />,
+    );
+    expect(screen.getByText("GPT-4o mini")).toBeInTheDocument();
+  });
+
+  it("disables the cleanup toggle when no cleanup provider is configured", () => {
+    render(<EditorWrapper mode={MODE} configuredProviders={[]} />);
+    const toggle = screen.getByRole("switch", { name: /ai cleanup/i });
+    expect(toggle).toBeDisabled();
+  });
+
+  it("enables the cleanup toggle when a cleanup provider is configured", () => {
+    render(
+      <EditorWrapper mode={MODE} configuredProviders={["anthropic"]} />,
+    );
+    const toggle = screen.getByRole("switch", { name: /ai cleanup/i });
+    expect(toggle).not.toBeDisabled();
   });
 });

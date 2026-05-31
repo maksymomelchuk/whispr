@@ -165,3 +165,31 @@ describe("AiProvidersPage", () => {
     expect(screen.getByText(/per-profile/i)).toBeInTheDocument();
   });
 });
+
+describe("AiProvidersPage – OpenAI card", () => {
+  it("renders the OpenAI card", () => {
+    render(<Wrapper />);
+    expect(screen.getByText("OpenAI")).toBeInTheDocument();
+  });
+
+  it("marks OpenAI as configured when it appears in configured_providers", () => {
+    render(
+      <Wrapper settings={{ ...BASE_SETTINGS, configured_providers: ["openai"] }} />,
+    );
+    expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
+    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(1);
+  });
+
+  it("marks both Anthropic and OpenAI as configured when both are configured", () => {
+    render(
+      <Wrapper
+        settings={{
+          ...BASE_SETTINGS,
+          ai_cleanup_key_configured: true,
+          configured_providers: ["openai"],
+        }}
+      />,
+    );
+    expect(screen.getAllByRole("img", { name: "Configured" })).toHaveLength(2);
+  });
+});
