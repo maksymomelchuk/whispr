@@ -4,12 +4,11 @@ use crate::recorder::Recorder;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 #[cfg(target_os = "macos")]
 use tokio::sync::oneshot;
 #[cfg(target_os = "macos")]
 use crate::target_app::FrontmostApp;
-#[cfg(target_os = "macos")]
-use std::time::Instant;
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct ModifierState {
@@ -33,10 +32,8 @@ impl ModifierState {
     }
 }
 
-/// Cached whisper.cpp model context with last-use tracking for idle eviction.
-#[cfg(target_os = "macos")]
 pub struct LoadedModel {
-    pub context: whisper_rs::WhisperContext,
+    pub engine: transcribe_rs::whisper_cpp::WhisperEngine,
     pub last_used: Instant,
 }
 
@@ -73,6 +70,5 @@ pub struct AppState {
     /// the tap without a full app relaunch.
     pub ptt_running: Arc<AtomicBool>,
     pub recorder: Arc<Mutex<Option<Recorder>>>,
-    #[cfg(target_os = "macos")]
     pub model_cache: Arc<Mutex<HashMap<LocalWhisperModel, LoadedModel>>>,
 }

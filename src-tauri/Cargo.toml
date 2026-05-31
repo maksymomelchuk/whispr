@@ -38,6 +38,8 @@ claxon = "0.4"
 flacenc = { version = "0.5", default-features = false }
 # cpal is cross-platform (CoreAudio/WASAPI/ALSA) — used by recorder on all targets.
 cpal = "0.15"
+# transcribe-rs: base CPU backend on all platforms; GPU acceleration added per target below.
+transcribe-rs = { version = "0.3", features = ["whisper-cpp"] }
 
 [dev-dependencies]
 proptest = "1"
@@ -59,5 +61,8 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = [
     "NSBitmapImageRep", "NSGraphics", "NSGraphicsContext",
     "NSImage", "NSImageRep", "NSWorkspace",
 ] }
-whisper-rs = { version = "0.13", features = ["metal"] }
+transcribe-rs = { version = "0.3", features = ["whisper-metal"] }
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+transcribe-rs = { version = "0.3", features = ["whisper-vulkan"] }
 

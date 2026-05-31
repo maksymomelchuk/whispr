@@ -35,8 +35,9 @@ pub mod recorder;
 // cleanup is cross-platform HTTP (reqwest + serde_json, no OS APIs).
 mod cleanup;
 
-// macOS-only: local whisper inference (whisper-rs + Metal).
-#[cfg(target_os = "macos")]
+// local_session uses transcribe-rs (cross-platform: Metal on macOS, Vulkan on
+// Windows/Linux, CPU fallback). Gating is removed — the module compiles everywhere.
+pub mod model_catalog;
 mod local_session;
 
 // macOS-only: OS API wrappers (CGEventPost, NSWorkspace, etc.).
@@ -159,11 +160,11 @@ pub fn run() {
             }
 
             #[cfg(target_os = "macos")]
-            {
-                if let Err(e) = overlay::create(&app.handle()) {
-                    eprintln!("Failed to create overlay window: {e}");
-                }
+            if let Err(e) = overlay::create(&app.handle()) {
+                eprintln!("Failed to create overlay window: {e}");
+            }
 
+            {
                 let eviction_cache = app_state.model_cache.clone();
                 let eviction_app = app.handle().clone();
                 std::thread::spawn(move || {
