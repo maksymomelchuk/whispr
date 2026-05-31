@@ -69,7 +69,7 @@ export const ASSEMBLYAI_MODEL_SUPPORTED_LANGUAGES: Record<
   whisper_streaming: null,
 };
 
-export type LocalWhisperModel = "large_v3" | "large_v3_turbo";
+export type LocalWhisperModel = "large_v3" | "large_v3_turbo" | "parakeet";
 
 export type LocalWhisperIdleTimeout =
   | "five_minutes"
@@ -104,6 +104,7 @@ const ASSEMBLYAI_MODEL_LABELS: Record<AssemblyAiModel, string> = {
 const LOCAL_MODEL_LABELS: Record<LocalWhisperModel, string> = {
   large_v3: "Large v3",
   large_v3_turbo: "Large v3 Turbo",
+  parakeet: "Parakeet TDT",
 };
 
 export function providerModelLabel(pm: ProviderModel): string {
@@ -114,8 +115,10 @@ export function providerModelLabel(pm: ProviderModel): string {
       return `Groq · ${GROQ_MODEL_LABELS[pm.model]}`;
     case "assembly_ai":
       return `AssemblyAI · ${ASSEMBLYAI_MODEL_LABELS[pm.model]}`;
-    case "local":
-      return `Local Whisper · ${LOCAL_MODEL_LABELS[pm.model]}`;
+    case "local": {
+      const prefix = pm.model === "parakeet" ? "Local" : "Local Whisper";
+      return `${prefix} · ${LOCAL_MODEL_LABELS[pm.model]}`;
+    }
   }
 }
 

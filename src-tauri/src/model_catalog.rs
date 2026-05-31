@@ -12,6 +12,21 @@ const LARGE_V3_TURBO_SHA256: &str =
 const LARGE_V3_SIZE_BYTES: u64 = 3_095_033_483;
 const LARGE_V3_TURBO_SIZE_BYTES: u64 = 1_624_555_275;
 
+const PARAKEET_BASE_URL: &str =
+    "https://huggingface.co/whispr-app/parakeet-tdt-0.6b-onnx/resolve/main";
+const PARAKEET_ENCODER_SHA256: &str =
+    "0000000000000000000000000000000000000000000000000000000000000000";
+const PARAKEET_DECODER_SHA256: &str =
+    "0000000000000000000000000000000000000000000000000000000000000000";
+const PARAKEET_JOINER_SHA256: &str =
+    "0000000000000000000000000000000000000000000000000000000000000000";
+const PARAKEET_VOCAB_SHA256: &str =
+    "0000000000000000000000000000000000000000000000000000000000000000";
+const PARAKEET_ENCODER_SIZE_BYTES: u64 = 394_000_000;
+const PARAKEET_DECODER_SIZE_BYTES: u64 = 100_000_000;
+const PARAKEET_JOINER_SIZE_BYTES: u64 = 80_000_000;
+const PARAKEET_VOCAB_SIZE_BYTES: u64 = 500_000;
+
 pub struct ModelFile {
     pub filename: String,
     pub url: String,
@@ -40,6 +55,34 @@ pub fn catalog_for(model: LocalWhisperModel) -> ModelSpec {
                 sha256: LARGE_V3_TURBO_SHA256.to_string(),
                 size_bytes: LARGE_V3_TURBO_SIZE_BYTES,
             }],
+        },
+        LocalWhisperModel::Parakeet => ModelSpec {
+            files: vec![
+                ModelFile {
+                    filename: "parakeet-encoder.onnx".to_string(),
+                    url: format!("{PARAKEET_BASE_URL}/encoder.onnx"),
+                    sha256: PARAKEET_ENCODER_SHA256.to_string(),
+                    size_bytes: PARAKEET_ENCODER_SIZE_BYTES,
+                },
+                ModelFile {
+                    filename: "parakeet-decoder.onnx".to_string(),
+                    url: format!("{PARAKEET_BASE_URL}/decoder.onnx"),
+                    sha256: PARAKEET_DECODER_SHA256.to_string(),
+                    size_bytes: PARAKEET_DECODER_SIZE_BYTES,
+                },
+                ModelFile {
+                    filename: "parakeet-joiner.onnx".to_string(),
+                    url: format!("{PARAKEET_BASE_URL}/joiner.onnx"),
+                    sha256: PARAKEET_JOINER_SHA256.to_string(),
+                    size_bytes: PARAKEET_JOINER_SIZE_BYTES,
+                },
+                ModelFile {
+                    filename: "parakeet-vocab.json".to_string(),
+                    url: format!("{PARAKEET_BASE_URL}/vocab.json"),
+                    sha256: PARAKEET_VOCAB_SHA256.to_string(),
+                    size_bytes: PARAKEET_VOCAB_SIZE_BYTES,
+                },
+            ],
         },
     }
 }
@@ -100,6 +143,46 @@ mod tests {
         assert_eq!(spec.files.len(), 1);
         assert_eq!(spec.files[0].filename, "ggml-large-v3-turbo.bin");
         assert_eq!(spec.files[0].size_bytes, LARGE_V3_TURBO_SIZE_BYTES);
+    }
+
+    #[test]
+    fn parakeet_spec_is_four_files() {
+        let spec = catalog_for(LocalWhisperModel::Parakeet);
+        assert_eq!(spec.files.len(), 4);
+        let names: Vec<&str> = spec.files.iter().map(|f| f.filename.as_str()).collect();
+        assert!(names.contains(&"parakeet-encoder.onnx"));
+        assert!(names.contains(&"parakeet-decoder.onnx"));
+        assert!(names.contains(&"parakeet-joiner.onnx"));
+        assert!(names.contains(&"parakeet-vocab.json"));
+    }
+
+    #[test]
+    fn parakeet_total_size_bytes_sums_all_four_files() {
+        let spec = catalog_for(LocalWhisperModel::Parakeet);
+        let expected = PARAKEET_ENCODER_SIZE_BYTES
+            + PARAKEET_DECODER_SIZE_BYTES
+            + PARAKEET_JOINER_SIZE_BYTES
+            + PARAKEET_VOCAB_SIZE_BYTES;
+        assert_eq!(total_size_bytes(&spec), expected);
+    }
+
+    #[test]
+    fn parakeet_files_to_delete_covers_all_four_files_and_parts() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("parakeet-encoder.onnx"), b"enc").unwrap();
+        std::fs::write(dir.path().join("parakeet-decoder.onnx.part"), b"dec-partial").unwrap();
+        let spec = catalog_for(LocalWhisperModel::Parakeet);
+        let mut paths = files_to_delete(&spec, dir.path());
+        paths.sort();
+        assert_eq!(paths.len(), 2);
+        assert!(paths.iter().any(|p| p.ends_with("parakeet-encoder.onnx")));
+        assert!(paths.iter().any(|p| p.ends_with("parakeet-decoder.onnx.part")));
+    }
+
+    #[test]
+    fn parakeet_encoder_is_primary_file() {
+        let spec = catalog_for(LocalWhisperModel::Parakeet);
+        assert_eq!(spec.files[0].filename, "parakeet-encoder.onnx");
     }
 
     #[test]

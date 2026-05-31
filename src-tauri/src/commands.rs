@@ -494,7 +494,7 @@ pub fn get_local_model_statuses(
         Err(_) => return vec![],
     };
     let flags = state.download_cancel_flags.lock().unwrap();
-    [LocalWhisperModel::LargeV3, LocalWhisperModel::LargeV3Turbo]
+    [LocalWhisperModel::LargeV3, LocalWhisperModel::LargeV3Turbo, LocalWhisperModel::Parakeet]
         .iter()
         .map(|&model| {
             let path = local_model_path(&data_dir, model);

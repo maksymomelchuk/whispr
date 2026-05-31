@@ -34,11 +34,13 @@ import type {
 const MODEL_LABELS: Record<LocalWhisperModel, string> = {
   large_v3: "Large v3",
   large_v3_turbo: "Large v3 Turbo",
+  parakeet: "Parakeet TDT",
 };
 
 const MODEL_SIZE_LABELS: Record<LocalWhisperModel, string> = {
   large_v3: "~2.9 GB",
   large_v3_turbo: "~1.5 GB",
+  parakeet: "~575 MB",
 };
 
 function formatBytes(bytes: number): string {

@@ -76,12 +76,13 @@ const PROVIDER_OPTIONS: { value: ProviderModel["provider"]; label: string }[] =
     { value: "deepgram", label: "Deepgram" },
     { value: "groq", label: "Groq" },
     { value: "assembly_ai", label: "AssemblyAI" },
-    { value: "local", label: "Local — Whisper" },
+    { value: "local", label: "Local" },
   ];
 
 const LOCAL_MODEL_OPTIONS: { value: LocalWhisperModel; label: string }[] = [
-  { value: "large_v3_turbo", label: "Large v3 Turbo" },
-  { value: "large_v3", label: "Large v3" },
+  { value: "large_v3_turbo", label: "Whisper Large v3 Turbo" },
+  { value: "large_v3", label: "Whisper Large v3" },
+  { value: "parakeet", label: "Parakeet TDT" },
 ];
 
 const GROQ_MODEL_OPTIONS: { value: GroqModel; label: string }[] = [
