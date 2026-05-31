@@ -46,13 +46,30 @@ Not a Profile setting: the Catalog is global, shared across all Profiles that us
 
 ## AI Provider
 
-The LLM backend used for the post-STT cleanup step (currently Anthropic Claude), distinct from an [[Engine]] / speech model that turns audio into text. An AI Provider never sees audio — it only rewrites already-transcribed text. Cleanup is enabled per-Profile; the AI Provider's credential is configured globally.
+The LLM backend used for the post-STT cleanup step (Anthropic Claude, OpenAI, Google Gemini, …), distinct from an [[Engine]] / speech model that turns audio into text. An AI Provider never sees audio — it only rewrites already-transcribed text.
+
+Each AI Provider has **one global credential** (entered once on the AI Providers settings page — having a key saved makes the provider "configured"). But which provider + which model a cleanup run uses is chosen **per-Profile**: a Profile that enables cleanup selects its own provider and a model from that provider. So two Profiles can clean up with different providers/models while sharing the same saved keys.
+
+Anthropic is the only provider reached through its native API (and the only one supporting [[OAuth credential]]); every other provider is reached through an OpenAI-compatible HTTP path. This split is an implementation detail invisible to domain reasoning — see Flagged ambiguities for why we keep Anthropic native.
 
 Distinction from [[Engine]]: an Engine is a _speech model_ (Deepgram, Groq, AssemblyAI, local Whisper); an AI Provider is a _language model_ used only for cleanup. Both are cloud "providers", which is why the word is ambiguous — see Flagged ambiguities.
+
+## Custom Provider
+
+A user-supplied [[AI Provider]] reachable at any OpenAI-compatible `/chat/completions` endpoint — typically a self-hosted local model server (Ollama, LM Studio, llama.cpp, vLLM). Unlike the built-in providers (whose base URL is fixed and whose models come from a curated list), the Custom Provider stores its own `base_url` (required), `model` name (free-text, may be blank for single-model servers), and `api_key` (optional — omitted from the request when blank, since local servers usually need no auth). Exactly one Custom Provider exists.
+
+Named "Custom", deliberately **not** "Local", to avoid colliding with [[Local Engine]] — that is on-device Whisper _speech_ recognition, a completely separate feature. See Flagged ambiguities.
+
+## OAuth credential
+
+An alternate way to authenticate the Anthropic [[AI Provider]]: a Claude Pro/Max subscription token (`sk-ant-oat…`) used instead of a pay-per-token API key. It is **Anthropic-only** and **global** — a single app-wide toggle chooses whether Anthropic authenticates via OAuth token or API key; no other provider supports it, and Profiles never see it (a Profile picks the provider "Anthropic", not how Anthropic authenticates). The OAuth path additionally asserts the "Claude Code" identity and sends Anthropic's OAuth beta header.
 
 ## Flagged ambiguities
 
 - "Provider" was overloaded: it meant both an STT [[Engine]] (speech model) and the cleanup LLM. Resolved by splitting the settings surface into **Speech models** (cloud Engines + the local [[Model Catalog]]) and **AI Providers** (the [[AI Provider]] for cleanup). "Speech model" or "Engine" = STT; "AI Provider" = cleanup LLM.
+- "Local" is overloaded: [[Local Engine]] = on-device Whisper STT, whereas a self-hosted cleanup LLM is a [[Custom Provider]] — never called "local". The two are unrelated.
+- Groq appears on **both** sides: it is a speech [[Engine]] (Whisper STT) _and_ can be a cleanup [[AI Provider]] (Llama LLMs). Same vendor, two different jobs in two different settings sections. The Speech models / AI Providers split keeps them apart in the UI.
+- "Native vs OpenAI-compatible" is an implementation detail, not a domain concept: Anthropic is reached through its own API (the only path supporting an [[OAuth credential]] and prompt caching via `cache_control`); every other [[AI Provider]] is reached through the shared OpenAI-compatible HTTP path. The cleanup _rules_ are identical across providers — only the request envelope differs.
 
 ## Model Idle Timeout
 
