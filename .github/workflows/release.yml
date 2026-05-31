@@ -25,8 +25,8 @@ jobs:
           - platform:
               name: macOS
               os: macos-latest
-              rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
-              args: --target universal-apple-darwin
+              rust-targets: aarch64-apple-darwin
+              args: --target aarch64-apple-darwin
 
           - platform:
               name: Windows
