@@ -1,5 +1,3 @@
-use crate::config::Shortcut;
-
 pub const KC_ALT_LEFT: u16 = 0x3A;
 pub const KC_ALT_RIGHT: u16 = 0x3D;
 pub const KC_META_LEFT: u16 = 0x37;
@@ -92,22 +90,6 @@ pub fn keycode_to_code(kc: u16) -> Option<&'static str> {
     KEYSYM_MAP.iter().find(|(k, _)| *k == kc).map(|(_, c)| *c)
 }
 
-pub fn code_to_keycode(code: &str) -> Option<u16> {
-    KEYSYM_MAP.iter().find(|(_, c)| *c == code).map(|(k, _)| *k)
-}
-
-/// The `Shortcut.key` string for a shortcut, derived from the keyboard
-/// library's keycode. Returns `None` for unknown keycodes.
-pub fn shortcut_key_from_keycode(kc: u16) -> Option<String> {
-    keycode_to_code(kc).map(|s| s.to_string())
-}
-
-/// The macOS Carbon keycode for a `Shortcut.key` string, or `None` if the
-/// code is not in the macOS mapping table. Used to display a binding in the UI.
-pub fn keycode_from_shortcut_key(shortcut: &Shortcut) -> Option<u16> {
-    code_to_keycode(&shortcut.key)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -138,53 +120,13 @@ mod tests {
     }
 
     #[test]
-    fn code_to_keycode_reverses_modifier_codes() {
-        assert_eq!(code_to_keycode("AltLeft"), Some(KC_ALT_LEFT));
-        assert_eq!(code_to_keycode("AltRight"), Some(KC_ALT_RIGHT));
-        assert_eq!(code_to_keycode("MetaLeft"), Some(KC_META_LEFT));
-        assert_eq!(code_to_keycode("MetaRight"), Some(KC_META_RIGHT));
-        assert_eq!(code_to_keycode("ControlLeft"), Some(KC_CONTROL_LEFT));
-        assert_eq!(code_to_keycode("ControlRight"), Some(KC_CONTROL_RIGHT));
-        assert_eq!(code_to_keycode("ShiftLeft"), Some(KC_SHIFT_LEFT));
-        assert_eq!(code_to_keycode("ShiftRight"), Some(KC_SHIFT_RIGHT));
-    }
-
-    #[test]
-    fn unknown_code_returns_none() {
-        assert_eq!(code_to_keycode("UnknownKey"), None);
-    }
-
-    #[test]
-    fn all_entries_round_trip_keycode_to_code_to_keycode() {
+    fn all_keymap_entries_resolve() {
         for &(kc, code) in KEYSYM_MAP {
             assert_eq!(
                 keycode_to_code(kc),
                 Some(code),
                 "keycode {kc:#04x} should map to {code}"
             );
-            assert_eq!(
-                code_to_keycode(code),
-                Some(kc),
-                "code {code} should map back to keycode {kc:#04x}"
-            );
         }
-    }
-
-    #[test]
-    fn shortcut_key_from_keycode_returns_string() {
-        assert_eq!(
-            shortcut_key_from_keycode(KC_ALT_RIGHT),
-            Some("AltRight".to_string())
-        );
-    }
-
-    #[test]
-    fn keycode_from_shortcut_key_reverses_shortcut_key() {
-        let shortcut = Shortcut {
-            key: "AltRight".to_string(),
-            modifiers: vec![],
-            is_double_tap: false,
-        };
-        assert_eq!(keycode_from_shortcut_key(&shortcut), Some(KC_ALT_RIGHT));
     }
 }
