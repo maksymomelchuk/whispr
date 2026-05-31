@@ -83,7 +83,7 @@ impl LocalWhisperModel {
         match self {
             Self::LargeV3 => "ggml-large-v3.bin",
             Self::LargeV3Turbo => "ggml-large-v3-turbo.bin",
-            Self::Parakeet => "parakeet-encoder.onnx",
+            Self::Parakeet => "encoder-model.int8.onnx",
         }
     }
 }
@@ -263,7 +263,7 @@ mod tests {
     fn local_model_path_parakeet_primary_file_under_models_subdir() {
         let data_dir = Path::new("/app/data");
         let path = local_model_path(data_dir, LocalWhisperModel::Parakeet);
-        assert_eq!(path, PathBuf::from("/app/data/models/parakeet-encoder.onnx"));
+        assert_eq!(path, PathBuf::from("/app/data/models/encoder-model.int8.onnx"));
     }
 
     #[test]

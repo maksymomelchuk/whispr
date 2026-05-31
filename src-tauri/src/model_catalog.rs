@@ -13,19 +13,16 @@ const LARGE_V3_SIZE_BYTES: u64 = 3_095_033_483;
 const LARGE_V3_TURBO_SIZE_BYTES: u64 = 1_624_555_275;
 
 const PARAKEET_BASE_URL: &str =
-    "https://huggingface.co/whispr-app/parakeet-tdt-0.6b-onnx/resolve/main";
+    "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/main";
 const PARAKEET_ENCODER_SHA256: &str =
-    "0000000000000000000000000000000000000000000000000000000000000000";
+    "3e0581fda6ab843888b51e56d7ee78b6d5bc3237ec113af1f732d1d5286aa155";
 const PARAKEET_DECODER_SHA256: &str =
-    "0000000000000000000000000000000000000000000000000000000000000000";
-const PARAKEET_JOINER_SHA256: &str =
-    "0000000000000000000000000000000000000000000000000000000000000000";
+    "a449f49acd68979d418651dd2dcb737cc0f1bf0225e009e29ee326354edbf7d3";
 const PARAKEET_VOCAB_SHA256: &str =
-    "0000000000000000000000000000000000000000000000000000000000000000";
-const PARAKEET_ENCODER_SIZE_BYTES: u64 = 394_000_000;
-const PARAKEET_DECODER_SIZE_BYTES: u64 = 100_000_000;
-const PARAKEET_JOINER_SIZE_BYTES: u64 = 80_000_000;
-const PARAKEET_VOCAB_SIZE_BYTES: u64 = 500_000;
+    "ec182b70dd42113aff6c5372c75cac58c952443eb22322f57bbd7f53977d497d";
+const PARAKEET_ENCODER_SIZE_BYTES: u64 = 652_184_014;
+const PARAKEET_DECODER_SIZE_BYTES: u64 = 8_998_286;
+const PARAKEET_VOCAB_SIZE_BYTES: u64 = 9_384;
 
 pub struct ModelFile {
     pub filename: String,
@@ -59,26 +56,20 @@ pub fn catalog_for(model: LocalWhisperModel) -> ModelSpec {
         LocalWhisperModel::Parakeet => ModelSpec {
             files: vec![
                 ModelFile {
-                    filename: "parakeet-encoder.onnx".to_string(),
-                    url: format!("{PARAKEET_BASE_URL}/encoder.onnx"),
+                    filename: "encoder-model.int8.onnx".to_string(),
+                    url: format!("{PARAKEET_BASE_URL}/encoder-model.int8.onnx"),
                     sha256: PARAKEET_ENCODER_SHA256.to_string(),
                     size_bytes: PARAKEET_ENCODER_SIZE_BYTES,
                 },
                 ModelFile {
-                    filename: "parakeet-decoder.onnx".to_string(),
-                    url: format!("{PARAKEET_BASE_URL}/decoder.onnx"),
+                    filename: "decoder_joint-model.int8.onnx".to_string(),
+                    url: format!("{PARAKEET_BASE_URL}/decoder_joint-model.int8.onnx"),
                     sha256: PARAKEET_DECODER_SHA256.to_string(),
                     size_bytes: PARAKEET_DECODER_SIZE_BYTES,
                 },
                 ModelFile {
-                    filename: "parakeet-joiner.onnx".to_string(),
-                    url: format!("{PARAKEET_BASE_URL}/joiner.onnx"),
-                    sha256: PARAKEET_JOINER_SHA256.to_string(),
-                    size_bytes: PARAKEET_JOINER_SIZE_BYTES,
-                },
-                ModelFile {
-                    filename: "parakeet-vocab.json".to_string(),
-                    url: format!("{PARAKEET_BASE_URL}/vocab.json"),
+                    filename: "vocab.txt".to_string(),
+                    url: format!("{PARAKEET_BASE_URL}/vocab.txt"),
                     sha256: PARAKEET_VOCAB_SHA256.to_string(),
                     size_bytes: PARAKEET_VOCAB_SIZE_BYTES,
                 },
@@ -154,43 +145,46 @@ mod tests {
     }
 
     #[test]
-    fn parakeet_spec_is_four_files() {
+    fn parakeet_spec_is_three_files() {
         let spec = catalog_for(LocalWhisperModel::Parakeet);
-        assert_eq!(spec.files.len(), 4);
+        assert_eq!(spec.files.len(), 3);
         let names: Vec<&str> = spec.files.iter().map(|f| f.filename.as_str()).collect();
-        assert!(names.contains(&"parakeet-encoder.onnx"));
-        assert!(names.contains(&"parakeet-decoder.onnx"));
-        assert!(names.contains(&"parakeet-joiner.onnx"));
-        assert!(names.contains(&"parakeet-vocab.json"));
+        assert!(names.contains(&"encoder-model.int8.onnx"));
+        assert!(names.contains(&"decoder_joint-model.int8.onnx"));
+        assert!(names.contains(&"vocab.txt"));
     }
 
     #[test]
-    fn parakeet_total_size_bytes_sums_all_four_files() {
+    fn parakeet_total_size_bytes_sums_all_three_files() {
         let spec = catalog_for(LocalWhisperModel::Parakeet);
-        let expected = PARAKEET_ENCODER_SIZE_BYTES
-            + PARAKEET_DECODER_SIZE_BYTES
-            + PARAKEET_JOINER_SIZE_BYTES
-            + PARAKEET_VOCAB_SIZE_BYTES;
+        let expected =
+            PARAKEET_ENCODER_SIZE_BYTES + PARAKEET_DECODER_SIZE_BYTES + PARAKEET_VOCAB_SIZE_BYTES;
         assert_eq!(total_size_bytes(&spec), expected);
     }
 
     #[test]
-    fn parakeet_files_to_delete_covers_all_four_files_and_parts() {
+    fn parakeet_files_to_delete_covers_all_three_files_and_parts() {
         let dir = tempfile::TempDir::new().unwrap();
-        std::fs::write(dir.path().join("parakeet-encoder.onnx"), b"enc").unwrap();
-        std::fs::write(dir.path().join("parakeet-decoder.onnx.part"), b"dec-partial").unwrap();
+        std::fs::write(dir.path().join("encoder-model.int8.onnx"), b"enc").unwrap();
+        std::fs::write(
+            dir.path().join("decoder_joint-model.int8.onnx.part"),
+            b"dec-partial",
+        )
+        .unwrap();
         let spec = catalog_for(LocalWhisperModel::Parakeet);
         let mut paths = files_to_delete(&spec, dir.path());
         paths.sort();
         assert_eq!(paths.len(), 2);
-        assert!(paths.iter().any(|p| p.ends_with("parakeet-encoder.onnx")));
-        assert!(paths.iter().any(|p| p.ends_with("parakeet-decoder.onnx.part")));
+        assert!(paths.iter().any(|p| p.ends_with("encoder-model.int8.onnx")));
+        assert!(paths
+            .iter()
+            .any(|p| p.ends_with("decoder_joint-model.int8.onnx.part")));
     }
 
     #[test]
     fn parakeet_encoder_is_primary_file() {
         let spec = catalog_for(LocalWhisperModel::Parakeet);
-        assert_eq!(spec.files[0].filename, "parakeet-encoder.onnx");
+        assert_eq!(spec.files[0].filename, "encoder-model.int8.onnx");
     }
 
     #[test]

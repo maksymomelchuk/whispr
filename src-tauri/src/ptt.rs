@@ -1185,20 +1185,19 @@ mod tests {
     }
 
     #[test]
-    fn local_readiness_parakeet_requires_all_four_files() {
+    fn local_readiness_parakeet_requires_all_three_files() {
         use std::fs;
         let dir = tempfile::tempdir().unwrap();
         let models_dir = dir.path().join("models");
         fs::create_dir_all(&models_dir).unwrap();
 
         // Only encoder present — should still fail.
-        fs::write(models_dir.join("parakeet-encoder.onnx"), b"stub").unwrap();
+        fs::write(models_dir.join("encoder-model.int8.onnx"), b"stub").unwrap();
         assert!(local_model_readiness(dir.path(), LocalWhisperModel::Parakeet).is_err());
 
         // Add remaining files — should now pass.
-        fs::write(models_dir.join("parakeet-decoder.onnx"), b"stub").unwrap();
-        fs::write(models_dir.join("parakeet-joiner.onnx"), b"stub").unwrap();
-        fs::write(models_dir.join("parakeet-vocab.json"), b"stub").unwrap();
+        fs::write(models_dir.join("decoder_joint-model.int8.onnx"), b"stub").unwrap();
+        fs::write(models_dir.join("vocab.txt"), b"stub").unwrap();
         assert!(local_model_readiness(dir.path(), LocalWhisperModel::Parakeet).is_ok());
     }
 }

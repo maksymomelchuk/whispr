@@ -88,7 +88,7 @@ fn load_engine(model: LocalWhisperModel, model_path: &Path) -> Result<LocalEngin
     match model {
         LocalWhisperModel::Parakeet => {
             let models_dir = model_path.parent().ok_or("Cannot resolve models directory")?;
-            let engine = ParakeetModel::load(models_dir, &Quantization::default())
+            let engine = ParakeetModel::load(models_dir, &Quantization::Int8)
                 .map_err(|e| format!("Failed to load Parakeet model: {e}"))?;
             Ok(LocalEngine::Parakeet(engine))
         }
