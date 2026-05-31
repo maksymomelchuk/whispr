@@ -38,17 +38,16 @@ mod cleanup;
 #[cfg(target_os = "macos")]
 mod local_session;
 
-// macOS-only: OS API wrappers (CGEventTap, CGEventPost, NSWorkspace, etc.).
-#[cfg(target_os = "macos")]
+// media, overlay, and target_app expose platform-neutral public APIs and
+// select their OS implementation internally via cfg. paste and ptt remain
+// macOS-only until the cross-platform PTT event source is wired up.
 mod media;
-#[cfg(target_os = "macos")]
 mod overlay;
+mod target_app;
 #[cfg(target_os = "macos")]
 mod paste;
 #[cfg(target_os = "macos")]
 mod ptt;
-#[cfg(target_os = "macos")]
-mod target_app;
 
 use state::AppState;
 use tauri::{Manager, WindowEvent};
@@ -145,12 +144,14 @@ pub fn run() {
                 }
             }
 
+            if let Err(e) = overlay::create(&app.handle()) {
+                eprintln!("Failed to create overlay window: {e}");
+            }
+
+            // Model cache eviction is macOS-only: whisper-rs + Metal inference
+            // lives behind the same cfg gate.
             #[cfg(target_os = "macos")]
             {
-                if let Err(e) = overlay::create(&app.handle()) {
-                    eprintln!("Failed to create overlay window: {e}");
-                }
-
                 let eviction_cache = app_state.model_cache.clone();
                 let eviction_app = app.handle().clone();
                 std::thread::spawn(move || {
