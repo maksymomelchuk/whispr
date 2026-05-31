@@ -63,7 +63,9 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf \
-            libasound2-dev
+            libasound2-dev \
+            libvulkan-dev \
+            glslang-tools
 
       - name: Install frontend deps
         run: pnpm install --frozen-lockfile
