@@ -74,6 +74,7 @@ jobs:
             librsvg2-dev \
             patchelf \
             libasound2-dev \
+            libxdo-dev \
             vulkan-sdk
 
       - name: Install frontend deps
