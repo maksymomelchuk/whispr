@@ -9,6 +9,7 @@ import {
 import { useEffect, useReducer, useState } from "react";
 import { toast } from "sonner";
 
+import { NvidiaLogo } from "@/assets/NvidiaLogo";
 import { OpenAiLogo } from "@/assets/OpenAiLogo";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,6 +44,12 @@ const MODEL_SIZE_LABELS: Record<LocalWhisperModel, string> = {
   parakeet: "~575 MB",
 };
 
+const MODEL_LOGOS: Record<LocalWhisperModel, typeof OpenAiLogo> = {
+  large_v3: OpenAiLogo,
+  large_v3_turbo: OpenAiLogo,
+  parakeet: NvidiaLogo,
+};
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
@@ -63,6 +70,7 @@ export function LocalModelCard({ status }: Props) {
   const [downloaded, setDownloaded] = useState(status.downloaded);
 
   const { model } = status;
+  const ModelLogo = MODEL_LOGOS[model];
 
   useEffect(() => {
     let cancelled = false;
@@ -145,7 +153,7 @@ export function LocalModelCard({ status }: Props) {
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-card px-4 py-3">
       <div className="flex items-center gap-3">
-        <OpenAiLogo className="h-8 w-8 shrink-0 rounded-md" />
+        <ModelLogo className="h-8 w-8 shrink-0 rounded-md" />
         <div className="flex flex-1 flex-col gap-0.5 min-w-0">
           <span className="text-sm font-medium leading-tight">{MODEL_LABELS[model]}</span>
           <span className="text-xs text-muted-foreground">{MODEL_SIZE_LABELS[model]}</span>
@@ -158,11 +166,11 @@ export function LocalModelCard({ status }: Props) {
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
-                    size="icon-xs"
+                    size="icon-sm"
                     onClick={handleReveal}
                     aria-label="Show in Finder"
                   >
-                    <FolderOpenIcon size={14} />
+                    <FolderOpenIcon size={15} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Show in Finder</TooltipContent>
@@ -171,12 +179,12 @@ export function LocalModelCard({ status }: Props) {
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
-                    size="icon-xs"
+                    size="icon-sm"
                     onClick={handleDelete}
                     aria-label="Delete model"
                     className="text-muted-foreground hover:text-destructive"
                   >
-                    <TrashIcon size={14} />
+                    <TrashIcon size={15} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Delete</TooltipContent>
@@ -187,11 +195,11 @@ export function LocalModelCard({ status }: Props) {
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="icon-xs"
+                  size="icon-sm"
                   onClick={handleCancel}
                   aria-label="Cancel download"
                 >
-                  <XIcon size={14} />
+                  <XIcon size={15} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Cancel</TooltipContent>
@@ -201,11 +209,11 @@ export function LocalModelCard({ status }: Props) {
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="icon-xs"
+                  size="icon-sm"
                   onClick={handleDownload}
                   aria-label="Download model"
                 >
-                  <DownloadSimpleIcon size={14} />
+                  <DownloadSimpleIcon size={15} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Download</TooltipContent>
