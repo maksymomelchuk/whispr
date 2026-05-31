@@ -557,7 +557,7 @@ export function ModeEditor({
         <SheetTitle>{isNew ? "New Profile" : "Edit Profile"}</SheetTitle>
       </SheetHeader>
 
-      <div className="flex flex-col gap-4 px-4 pb-10 overflow-y-auto flex-1 min-h-0 [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb:hover]:bg-muted-foreground/40">
+      <div className="flex flex-col gap-4 px-4 pb-10 overflow-y-scroll flex-1 min-h-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb:hover]:bg-muted-foreground/40">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="mode-name" className="text-[13px]">
             Name
