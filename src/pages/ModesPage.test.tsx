@@ -474,13 +474,13 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         enabled: true,
         prompt_override: null,
         provider: "openai",
-        model: "gpt-4o-mini",
+        model: "gpt-5.4-mini",
       },
     };
     render(
       <EditorWrapper mode={openaiMode} configuredProviders={["openai"]} />,
     );
-    expect(screen.getByText("GPT-4o mini")).toBeInTheDocument();
+    expect(screen.getByText("GPT-5.4 mini")).toBeInTheDocument();
   });
 
   it("disables the cleanup toggle when no cleanup provider is configured", () => {
@@ -532,13 +532,13 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         enabled: true,
         prompt_override: null,
         provider: "deepseek",
-        model: "deepseek-chat",
+        model: "deepseek-v4-flash",
       },
     };
     render(
       <EditorWrapper mode={deepseekMode} configuredProviders={["deepseek"]} />,
     );
-    expect(screen.getByText("DeepSeek Chat")).toBeInTheDocument();
+    expect(screen.getByText("DeepSeek V4 Flash")).toBeInTheDocument();
   });
 
   it("shows selected model value when AI cleanup is enabled with Cerebras", () => {
