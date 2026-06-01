@@ -86,6 +86,10 @@ jobs:
       - name: Test frontend
         run: pnpm vitest run
 
+      - name: Check Rust formatting
+        working-directory: src-tauri
+        run: cargo fmt --check
+
       - name: Test Rust
         working-directory: src-tauri
         run: cargo test
