@@ -10,5 +10,5 @@ We removed the dedicated translation pipeline stage and its only implementation,
 ## Consequences
 
 - Translation now costs AI tokens and requires a cloud AI provider plus cleanup enabled — it is no longer available offline or for free.
-- Translation and cleanup share one prompt slot, so a mode cannot both translate *and* apply a separate custom cleanup prompt in two distinct steps.
+- Translation and cleanup share one prompt slot, so a mode cannot both translate _and_ apply a separate custom cleanup prompt in two distinct steps.
 - No config migration ships: the orphaned `translate` field in persisted Modes is silently ignored on load (Mode has no `deny_unknown_fields`). Pre-existing translating modes degrade to plain transcription until reseeded or edited.

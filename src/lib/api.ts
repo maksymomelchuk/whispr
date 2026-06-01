@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type {
+  AiProviderId,
   ApiKeyValidation,
   CleanupAuthMode,
   CleanupStats,
@@ -88,6 +89,20 @@ export const setAnthropicApiKey = (apiKey: string) =>
 export const setAnthropicOauthToken = (token: string) =>
   invoke<void>("set_anthropic_oauth_token", { token });
 
+export const setProviderKey = (providerId: AiProviderId, apiKey: string) =>
+  invoke<void>("set_provider_key", { providerId, apiKey });
+
+export const clearProviderKey = (providerId: AiProviderId) =>
+  invoke<void>("clear_provider_key", { providerId });
+
+export const setCustomProvider = (
+  baseUrl: string,
+  model: string,
+  apiKey: string,
+) => invoke<void>("set_custom_provider", { baseUrl, model, apiKey });
+
+export const clearCustomProvider = () => invoke<void>("clear_custom_provider");
+
 export const setCleanupAuthMode = (mode: CleanupAuthMode) =>
   invoke<void>("set_cleanup_auth_mode", { mode });
 
@@ -138,8 +153,7 @@ export const openMicrophoneSettings = () =>
   invoke<void>("open_microphone_settings");
 export const openAccessibilitySettings = () =>
   invoke<void>("open_accessibility_settings");
-export const ensurePttStarted = () =>
-  invoke<void>("ensure_ptt_started");
+export const ensurePttStarted = () => invoke<void>("ensure_ptt_started");
 
 export const getLocalModelStatuses = () =>
   invoke<LocalModelStatus[]>("get_local_model_statuses");

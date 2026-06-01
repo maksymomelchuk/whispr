@@ -2,14 +2,19 @@ use crate::groq_audio::{self, AUDIO_LEVEL_EVENT};
 use crate::mode::{Mode, ModeLanguage};
 use crate::provider::{self, LocalWhisperModel};
 use crate::recorder::AudioFormat;
-use crate::state::{AppState, LoadedModel};
+use crate::state::{AppState, LocalEngine, LoadedModel};
 use crate::terms;
 use crate::transcription_session::TranscriptionSession;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc::UnboundedReceiver;
+use transcribe_rs::onnx::parakeet::ParakeetModel;
+use transcribe_rs::onnx::Quantization;
+use transcribe_rs::whisper_cpp::{WhisperEngine, WhisperInferenceParams};
+use transcribe_rs::{SpeechModel, TranscribeOptions};
 
 const LEVEL_THROTTLE: Duration = Duration::from_millis(33);
 // Exponential smoothing coefficients for audio level: faster rise (0.6) to catch
@@ -57,20 +62,14 @@ impl TranscriptionSession for LocalSession {
             .path()
             .app_data_dir()
             .map_err(|e| format!("Cannot resolve app data directory: {e}"))?;
-        let model_path = {
-            let path_buf = provider::local_model_path(&data_dir, self.model);
-            path_buf
-                .to_str()
-                .ok_or_else(|| "Model path is not valid UTF-8".to_string())?
-                .to_string()
-        };
+        let model_path = provider::local_model_path(&data_dir, self.model);
         let language_code = language.as_code().map(str::to_string);
         let initial_prompt = terms::groq_prompt_hint(&terms);
         let model = self.model;
         let cache: Arc<Mutex<HashMap<LocalWhisperModel, LoadedModel>>> =
             app.state::<AppState>().model_cache.clone();
         tokio::task::spawn_blocking(move || {
-            run_whisper_cached(
+            run_local_cached(
                 &cache,
                 model,
                 &model_path,
@@ -80,67 +79,67 @@ impl TranscriptionSession for LocalSession {
             )
         })
         .await
-        .map_err(|e| format!("Whisper inference thread panicked: {e}"))?
+        .map_err(|e| format!("Local inference thread panicked: {e}"))?
         .map(|t| (t, speak_duration))
     }
 }
 
-fn run_whisper_cached(
+fn load_engine(model: LocalWhisperModel, model_path: &Path) -> Result<LocalEngine, String> {
+    match model {
+        LocalWhisperModel::Parakeet => {
+            let models_dir = model_path.parent().ok_or("Cannot resolve models directory")?;
+            let engine = ParakeetModel::load(models_dir, &Quantization::Int8)
+                .map_err(|e| format!("Failed to load Parakeet model: {e}"))?;
+            Ok(LocalEngine::Parakeet(engine))
+        }
+        _ => {
+            let engine = WhisperEngine::load(model_path)
+                .map_err(|e| format!("Failed to load Whisper model: {e}"))?;
+            Ok(LocalEngine::Whisper(engine))
+        }
+    }
+}
+
+fn run_local_cached(
     cache: &Mutex<HashMap<LocalWhisperModel, LoadedModel>>,
     model: LocalWhisperModel,
-    model_path: &str,
+    model_path: &Path,
     audio: &[f32],
     language: Option<&str>,
     initial_prompt: Option<&str>,
 ) -> Result<String, String> {
-    use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
-
     let mut guard = cache.lock().unwrap();
 
     if !guard.contains_key(&model) {
-        let context = WhisperContext::new_with_params(model_path, WhisperContextParameters::default())
-            .map_err(|e| format!("Failed to load whisper model: {e}"))?;
-        guard.insert(model, LoadedModel { context, last_used: Instant::now() });
+        let engine = load_engine(model, model_path)?;
+        guard.insert(model, LoadedModel { engine, last_used: Instant::now() });
     }
 
     let loaded = guard.get_mut(&model).unwrap();
     loaded.last_used = Instant::now();
 
-    // WhisperState borrows from the context inside the guard; the guard must
-    // remain live for the duration of inference. PTT sessions are serialized by
-    // the ptt_active flag, so holding the mutex here does not cause contention.
-    let mut state = loaded
-        .context
-        .create_state()
-        .map_err(|e| format!("Failed to create whisper state: {e}"))?;
+    // `loaded.engine` borrows from `guard`; the guard must remain live for the
+    // duration of inference. PTT sessions are serialized by the ptt_active flag,
+    // so holding the mutex here does not cause contention.
+    let text = match &mut loaded.engine {
+        LocalEngine::Whisper(engine) => {
+            let params = WhisperInferenceParams {
+                language: language.map(str::to_string),
+                initial_prompt: initial_prompt.map(str::to_string),
+                ..Default::default()
+            };
+            engine
+                .transcribe_with(audio, &params)
+                .map_err(|e| format!("Whisper inference failed: {e}"))?
+                .text
+        }
+        LocalEngine::Parakeet(engine) => {
+            engine
+                .transcribe(audio, &TranscribeOptions::default())
+                .map_err(|e| format!("Parakeet inference failed: {e}"))?
+                .text
+        }
+    };
 
-    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-    if let Some(code) = language {
-        params.set_language(Some(code));
-    }
-    if let Some(prompt) = initial_prompt {
-        params.set_initial_prompt(prompt);
-    }
-    params.set_print_special(false);
-    params.set_print_progress(false);
-    params.set_print_realtime(false);
-    params.set_print_timestamps(false);
-
-    state
-        .full(params, audio)
-        .map_err(|e| format!("Whisper inference failed: {e}"))?;
-
-    let n = state
-        .full_n_segments()
-        .map_err(|e| format!("Failed to get segment count: {e}"))?;
-
-    let mut transcript = String::new();
-    for i in 0..n {
-        let text = state
-            .full_get_segment_text(i)
-            .map_err(|e| format!("Failed to get segment text: {e}"))?;
-        transcript.push_str(text.trim_start());
-    }
-
-    Ok(transcript.trim().to_string())
+    Ok(text.trim().to_string())
 }

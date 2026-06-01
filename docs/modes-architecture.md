@@ -157,11 +157,11 @@ const GROQ_PROMPT_BUDGET_CHARS: usize = 800;
 
 These four modes are seeded on first launch and on upgrade (idempotent — match by id constant, not name). User-edited copies are not overwritten; missing seeds are recreated.
 
-| Constant id       | Name            | language      | ai_cleanup                                                       |
-| ----------------- | --------------- | ------------- | ---------------------------------------------------------------- |
-| `mode-default-en` | Default English | `Exact("en")` | `{ enabled: false }`                                             |
-| `mode-cleaned-en` | Cleaned English | `Exact("en")` | `{ enabled: true }`                                              |
-| `mode-ukrainian`  | Ukrainian       | `Exact("uk")` | `{ enabled: false }`                                             |
+| Constant id       | Name            | language      | ai_cleanup                                                               |
+| ----------------- | --------------- | ------------- | ------------------------------------------------------------------------ |
+| `mode-default-en` | Default English | `Exact("en")` | `{ enabled: false }`                                                     |
+| `mode-cleaned-en` | Cleaned English | `Exact("en")` | `{ enabled: true }`                                                      |
+| `mode-ukrainian`  | Ukrainian       | `Exact("uk")` | `{ enabled: false }`                                                     |
 | `mode-ua-en`      | UA → EN         | `Exact("uk")` | `{ enabled: true, prompt_override: "Translate Ukrainian → English..." }` |
 
 `default_mode_id = mode-default-en` after a fresh install. On upgrade, do not override the user's existing default; seed the others alongside whatever default they already have.

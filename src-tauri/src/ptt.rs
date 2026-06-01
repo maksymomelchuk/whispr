@@ -1,27 +1,53 @@
 use crate::config::{HotkeyAction, HotkeyBinding, Shortcut};
-use crate::provider::{self, LocalWhisperModel, ProviderModel, TranscriptionProvider};
+use crate::hotkey::{
+    advance_tap_state, coex_advance_down, coex_timer_should_fire, is_cancel_event,
+    key_has_both_kinds, shortcut_is_relevant, shortcut_matches, tap_state_key, CoexDown, Dispatch,
+    TapEvent, TapState, DOUBLE_TAP_THRESHOLD,
+};
+use crate::provider::{LocalWhisperModel, ProviderModel, TranscriptionProvider};
 use crate::assemblyai_session::AssemblyAiSession;
 use crate::deepgram_session::DeepgramSession;
 use crate::groq_session::GroqSession;
-use crate::local_session::LocalSession;
 use crate::history::{self, CleanupStatus, HISTORY_UPDATED_EVENT};
 use crate::pipeline::{self, CleanupOutput, Notice};
 use crate::recorder::Recorder;
 use crate::state::{AppState, ModifierState};
 use crate::transcription_session::TranscriptionSession;
-use crate::{cleanup, cleanup_stats, config, media, overlay, paste, stats, target_app};
+use crate::{cleanup, cleanup_stats, config, model_catalog, stats};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
+use std::sync::{Arc, Mutex};
+use std::sync::atomic::Ordering;
+use tauri::{AppHandle, Emitter, Manager};
+
+#[cfg(target_os = "macos")]
+use crate::keysym::{
+    keycode_to_code, KC_ALT_LEFT, KC_ALT_RIGHT, KC_CONTROL_LEFT, KC_CONTROL_RIGHT, KC_META_LEFT,
+    KC_META_RIGHT, KC_SHIFT_LEFT, KC_SHIFT_RIGHT,
+};
+#[cfg(target_os = "macos")]
+use crate::local_session::LocalSession;
+use crate::paste;
+#[cfg(target_os = "macos")]
+use crate::{media, overlay, target_app};
+#[cfg(target_os = "macos")]
 use core_foundation::base::TCFType;
+#[cfg(target_os = "macos")]
 use core_foundation::runloop::{kCFRunLoopCommonModes, CFRunLoop};
+#[cfg(target_os = "macos")]
 use core_graphics::event::{
     CGEventFlags, CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement,
     CGEventType, EventField,
 };
+#[cfg(target_os = "macos")]
 use std::os::raw::c_void;
-use std::sync::atomic::{AtomicPtr, Ordering};
-use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, Manager};
+#[cfg(target_os = "macos")]
+use std::sync::atomic::AtomicPtr;
+
+#[cfg(not(target_os = "macos"))]
+use crate::keysym::rdev_key_to_code;
+#[cfg(not(target_os = "macos"))]
+use std::collections::HashSet;
 
 const TRANSCRIPTION_ERROR_EVENT: &str = "transcription-error";
 const PTT_PRESSED_EVENT: &str = "ptt-pressed";
@@ -32,113 +58,7 @@ const PTT_CANCELLED_EVENT: &str = "ptt-cancelled";
 
 const ERROR_FLASH: Duration = Duration::from_millis(800);
 const CANCEL_FLASH: Duration = Duration::from_millis(800);
-const DOUBLE_TAP_THRESHOLD: Duration = Duration::from_millis(400);
 const MIN_SPEAK_DURATION: Duration = Duration::from_millis(300);
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum TapEvent {
-    Down,
-    Up,
-    OtherKey,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Dispatch {
-    StartPtt,
-    StopPtt,
-    Nothing,
-}
-
-#[derive(Default)]
-pub struct TapState {
-    pub tap_count: u8,
-    pub last_tap_up_time: Option<Instant>,
-    /// Bumped on every state-mutating event. Pending coexistence timers capture
-    /// the post-event value at schedule time and abort on wake if it no longer
-    /// matches — wrapping is fine, u64 collisions are not realistic.
-    pub generation: u64,
-}
-
-pub fn advance_tap_state(state: &mut TapState, event: TapEvent, now: Instant) -> Dispatch {
-    let dispatch = match event {
-        TapEvent::Down => {
-            if state.tap_count == 1 {
-                if let Some(t) = state.last_tap_up_time {
-                    if now.duration_since(t) < DOUBLE_TAP_THRESHOLD {
-                        state.tap_count = 2;
-                        state.generation = state.generation.wrapping_add(1);
-                        return Dispatch::StartPtt;
-                    }
-                }
-            }
-            state.tap_count = 1;
-            state.last_tap_up_time = None;
-            Dispatch::Nothing
-        }
-        TapEvent::Up => {
-            if state.tap_count == 2 {
-                state.tap_count = 0;
-                state.last_tap_up_time = None;
-                state.generation = state.generation.wrapping_add(1);
-                return Dispatch::StopPtt;
-            }
-            if state.tap_count == 1 {
-                state.last_tap_up_time = Some(now);
-            }
-            Dispatch::Nothing
-        }
-        TapEvent::OtherKey => {
-            if state.tap_count == 1 {
-                state.tap_count = 0;
-                state.last_tap_up_time = None;
-            }
-            Dispatch::Nothing
-        }
-    };
-    state.generation = state.generation.wrapping_add(1);
-    dispatch
-}
-
-/// Outcome of a key-down on a key that has both a single-press and a double-tap
-/// binding. State is mutated; the timer-arming variant carries the generation
-/// the caller must capture so the timer can detect later events that invalidate it.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum CoexDown {
-    FireDoubleTap,
-    ScheduleSinglePress { captured_generation: u64 },
-}
-
-pub fn coex_advance_down(state: &mut TapState, now: Instant) -> CoexDown {
-    match advance_tap_state(state, TapEvent::Down, now) {
-        Dispatch::StartPtt => CoexDown::FireDoubleTap,
-        _ => CoexDown::ScheduleSinglePress {
-            captured_generation: state.generation,
-        },
-    }
-}
-
-pub fn coex_timer_should_fire(state: &TapState, captured: u64) -> bool {
-    state.generation == captured
-        && state.tap_count == 1
-        && state.last_tap_up_time.is_none()
-}
-
-/// True iff `bindings` contains both a single-press and a double-tap binding
-/// for the same `(key, modifiers)` as `shortcut`.
-pub fn key_has_both_kinds(bindings: &[HotkeyBinding], shortcut: &Shortcut) -> bool {
-    let mut has_single = false;
-    let mut has_double = false;
-    for b in bindings {
-        if b.shortcut.key == shortcut.key && b.shortcut.modifiers == shortcut.modifiers {
-            if b.shortcut.is_double_tap {
-                has_double = true;
-            } else {
-                has_single = true;
-            }
-        }
-    }
-    has_single && has_double
-}
 
 /// No window focus — caller still owns the target app's focus for paste.
 fn notify_silent(app: &AppHandle, message: impl Into<String>) {
@@ -159,11 +79,11 @@ fn notify_error(app: &AppHandle, message: impl Into<String>) {
     }
 }
 
-
 // core-graphics keeps CGEventTapEnable private, but we need to call it from
 // inside the tap's own callback (the only place we learn the system has
 // disabled the tap). Redeclare the symbol — it resolves at link time against
 // the CoreGraphics framework the crate already links.
+#[cfg(target_os = "macos")]
 #[link(name = "CoreGraphics", kind = "framework")]
 extern "C" {
     fn CGEventTapEnable(tap: *mut c_void, enable: bool);
@@ -173,6 +93,7 @@ extern "C" {
 /// authoritative view of modifier-family state (alt / meta / ctrl / shift),
 /// but it can't distinguish L vs R — so we track each side explicitly and
 /// reconcile with the bitmask on every FlagsChanged to self-heal any drift.
+#[cfg(target_os = "macos")]
 #[derive(Default)]
 struct ModKeyState {
     l_alt: bool,
@@ -186,32 +107,34 @@ struct ModKeyState {
 }
 
 /// The CGEventFlags family bit that a given modifier keycode belongs to.
+#[cfg(target_os = "macos")]
 fn modifier_family(keycode: u16) -> Option<CGEventFlags> {
     Some(match keycode {
-        0x3A | 0x3D => CGEventFlags::CGEventFlagAlternate,
-        0x37 | 0x36 => CGEventFlags::CGEventFlagCommand,
-        0x3B | 0x3E => CGEventFlags::CGEventFlagControl,
-        0x38 | 0x3C => CGEventFlags::CGEventFlagShift,
+        KC_ALT_LEFT | KC_ALT_RIGHT => CGEventFlags::CGEventFlagAlternate,
+        KC_META_LEFT | KC_META_RIGHT => CGEventFlags::CGEventFlagCommand,
+        KC_CONTROL_LEFT | KC_CONTROL_RIGHT => CGEventFlags::CGEventFlagControl,
+        KC_SHIFT_LEFT | KC_SHIFT_RIGHT => CGEventFlags::CGEventFlagShift,
         _ => return None,
     })
 }
 
 /// Clear both sides of the modifier family a given keycode belongs to.
+#[cfg(target_os = "macos")]
 fn clear_family(state: &mut ModKeyState, keycode: u16) {
     match keycode {
-        0x3A | 0x3D => {
+        KC_ALT_LEFT | KC_ALT_RIGHT => {
             state.l_alt = false;
             state.r_alt = false;
         }
-        0x37 | 0x36 => {
+        KC_META_LEFT | KC_META_RIGHT => {
             state.l_meta = false;
             state.r_meta = false;
         }
-        0x3B | 0x3E => {
+        KC_CONTROL_LEFT | KC_CONTROL_RIGHT => {
             state.l_control = false;
             state.r_control = false;
         }
-        0x38 | 0x3C => {
+        KC_SHIFT_LEFT | KC_SHIFT_RIGHT => {
             state.l_shift = false;
             state.r_shift = false;
         }
@@ -219,20 +142,22 @@ fn clear_family(state: &mut ModKeyState, keycode: u16) {
     }
 }
 
+#[cfg(target_os = "macos")]
 fn side_mut(state: &mut ModKeyState, keycode: u16) -> Option<&mut bool> {
     Some(match keycode {
-        0x3A => &mut state.l_alt,
-        0x3D => &mut state.r_alt,
-        0x37 => &mut state.l_meta,
-        0x36 => &mut state.r_meta,
-        0x3B => &mut state.l_control,
-        0x3E => &mut state.r_control,
-        0x38 => &mut state.l_shift,
-        0x3C => &mut state.r_shift,
+        KC_ALT_LEFT => &mut state.l_alt,
+        KC_ALT_RIGHT => &mut state.r_alt,
+        KC_META_LEFT => &mut state.l_meta,
+        KC_META_RIGHT => &mut state.r_meta,
+        KC_CONTROL_LEFT => &mut state.l_control,
+        KC_CONTROL_RIGHT => &mut state.r_control,
+        KC_SHIFT_LEFT => &mut state.l_shift,
+        KC_SHIFT_RIGHT => &mut state.r_shift,
         _ => return None,
     })
 }
 
+#[cfg(target_os = "macos")]
 fn modifier_state_from_flags(flags: CGEventFlags) -> ModifierState {
     ModifierState {
         meta: flags.contains(CGEventFlags::CGEventFlagCommand),
@@ -242,140 +167,44 @@ fn modifier_state_from_flags(flags: CGEventFlags) -> ModifierState {
     }
 }
 
-/// Map macOS virtual keycodes (from <Carbon/HIToolbox/Events.h>) to the
-/// KeyboardEvent.code strings the frontend uses.
-fn macos_keycode_to_code(kc: u16) -> Option<&'static str> {
-    Some(match kc {
-        0x00 => "KeyA",
-        0x0B => "KeyB",
-        0x08 => "KeyC",
-        0x02 => "KeyD",
-        0x0E => "KeyE",
-        0x03 => "KeyF",
-        0x05 => "KeyG",
-        0x04 => "KeyH",
-        0x22 => "KeyI",
-        0x26 => "KeyJ",
-        0x28 => "KeyK",
-        0x25 => "KeyL",
-        0x2E => "KeyM",
-        0x2D => "KeyN",
-        0x1F => "KeyO",
-        0x23 => "KeyP",
-        0x0C => "KeyQ",
-        0x0F => "KeyR",
-        0x01 => "KeyS",
-        0x11 => "KeyT",
-        0x20 => "KeyU",
-        0x09 => "KeyV",
-        0x0D => "KeyW",
-        0x07 => "KeyX",
-        0x10 => "KeyY",
-        0x06 => "KeyZ",
-        0x1D => "Digit0",
-        0x12 => "Digit1",
-        0x13 => "Digit2",
-        0x14 => "Digit3",
-        0x15 => "Digit4",
-        0x17 => "Digit5",
-        0x16 => "Digit6",
-        0x1A => "Digit7",
-        0x1C => "Digit8",
-        0x19 => "Digit9",
-        0x31 => "Space",
-        0x24 => "Enter",
-        0x30 => "Tab",
-        0x35 => "Escape",
-        0x33 => "Backspace",
-        0x7E => "ArrowUp",
-        0x7D => "ArrowDown",
-        0x7B => "ArrowLeft",
-        0x7C => "ArrowRight",
-        // Punctuation
-        0x2C => "Slash",
-        0x2B => "Comma",
-        0x2F => "Period",
-        0x29 => "Semicolon",
-        0x27 => "Quote",
-        0x32 => "Backquote",
-        0x2A => "Backslash",
-        0x1B => "Minus",
-        0x18 => "Equal",
-        0x21 => "BracketLeft",
-        0x1E => "BracketRight",
-        // Modifiers (also produce FlagsChanged)
-        0x3A => "AltLeft",
-        0x3D => "AltRight",
-        0x37 => "MetaLeft",
-        0x36 => "MetaRight",
-        0x3B => "ControlLeft",
-        0x3E => "ControlRight",
-        0x38 => "ShiftLeft",
-        0x3C => "ShiftRight",
-        // Function keys
-        0x7A => "F1",
-        0x78 => "F2",
-        0x63 => "F3",
-        0x76 => "F4",
-        0x60 => "F5",
-        0x61 => "F6",
-        0x62 => "F7",
-        0x64 => "F8",
-        0x65 => "F9",
-        0x6D => "F10",
-        0x67 => "F11",
-        0x6F => "F12",
-        _ => return None,
-    })
+// Non-macOS: L/R modifier tracking fed from rdev key events.
+#[cfg(not(target_os = "macos"))]
+#[derive(Default)]
+struct ModKeyState {
+    l_alt: bool,
+    r_alt: bool,
+    l_meta: bool,
+    r_meta: bool,
+    l_control: bool,
+    r_control: bool,
+    l_shift: bool,
+    r_shift: bool,
 }
 
-/// True if `code` is the shortcut's key or one of its required modifiers.
-/// Used to decide whether an event is worth processing for PTT.
-fn shortcut_is_relevant(code: &str, shortcut: &Shortcut) -> bool {
-    if code == shortcut.key {
-        return true;
-    }
-    shortcut.modifiers.iter().any(|m| match m.as_str() {
-        "Meta" => matches!(code, "MetaLeft" | "MetaRight"),
-        "Control" => matches!(code, "ControlLeft" | "ControlRight"),
-        "Alt" => matches!(code, "AltLeft" | "AltRight"),
-        "Shift" => matches!(code, "ShiftLeft" | "ShiftRight"),
+// Updates both the L/R side tracker and the shared ModifierState for a
+// non-macOS key event. rdev reports each modifier side directly, so there
+// is no FlagsChanged reconciliation step.
+#[cfg(not(target_os = "macos"))]
+fn update_modifier_state(state: &AppState, code: &str, is_press: bool, sides: &mut ModKeyState) {
+    let changed = match code {
+        "AltLeft" => { sides.l_alt = is_press; true }
+        "AltRight" => { sides.r_alt = is_press; true }
+        "MetaLeft" => { sides.l_meta = is_press; true }
+        "MetaRight" => { sides.r_meta = is_press; true }
+        "ControlLeft" => { sides.l_control = is_press; true }
+        "ControlRight" => { sides.r_control = is_press; true }
+        "ShiftLeft" => { sides.l_shift = is_press; true }
+        "ShiftRight" => { sides.r_shift = is_press; true }
         _ => false,
-    })
-}
-
-/// True if this event triggers `shortcut`: same key, and required modifiers
-/// held. Modifier-only shortcuts (key is itself a modifier) skip the modifier
-/// check because the FlagsChanged that fires the key also mutates the bitmask.
-fn shortcut_matches(code: &str, shortcut: &Shortcut, mods: ModifierState) -> bool {
-    code == shortcut.key
-        && (is_modifier_code(&shortcut.key) || mods.matches(&shortcut.modifiers))
-}
-
-/// Identity for the per-binding double-tap state map.
-fn tap_state_key(shortcut: &Shortcut) -> (String, Vec<String>) {
-    (shortcut.key.clone(), shortcut.modifiers.clone())
-}
-
-fn is_modifier_code(code: &str) -> bool {
-    matches!(
-        code,
-        "AltLeft"
-            | "AltRight"
-            | "MetaLeft"
-            | "MetaRight"
-            | "ControlLeft"
-            | "ControlRight"
-            | "ShiftLeft"
-            | "ShiftRight"
-    )
-}
-
-/// True iff this event should cancel the in-flight Session. Escape press while
-/// recording — modifiers intentionally ignored so held-modifier PTT shortcuts
-/// (e.g. hold Right-Alt) still allow cancellation without releasing PTT first.
-pub fn is_cancel_event(code: &str, is_press: bool, ptt_active: bool) -> bool {
-    code == "Escape" && is_press && ptt_active
+    };
+    if changed {
+        *state.modifiers.lock().unwrap() = ModifierState {
+            alt: sides.l_alt || sides.r_alt,
+            meta: sides.l_meta || sides.r_meta,
+            control: sides.l_control || sides.r_control,
+            shift: sides.l_shift || sides.r_shift,
+        };
+    }
 }
 
 /// Tear down the recording side of a Session: mark cancelled, drop the active
@@ -392,16 +221,15 @@ fn cancel_session(app: &AppHandle, state: &AppState, recorder: &Recorder) {
     let _ = app.emit(PTT_CANCELLED_EVENT, ());
 }
 
-/// Mute system audio output when the user starts dictating. Runs in
-/// spawn_blocking because we shell out to osascript, which can take tens of
-/// milliseconds — too long to block the CGEventTap callback.
+/// Mute system audio output when the user starts dictating. No-op on
+/// non-macOS platforms where media control is not yet implemented.
 fn maybe_pause_media(state: &AppState) {
-    if !*state.pause_media_on_record.lock().unwrap() {
-        *state.did_pause_media.lock().unwrap() = false;
-        return;
+    *state.did_pause_media.lock().unwrap() = false;
+    #[cfg(target_os = "macos")]
+    if *state.pause_media_on_record.lock().unwrap() {
+        *state.did_pause_media.lock().unwrap() = true;
+        tauri::async_runtime::spawn_blocking(media::mute_output);
     }
-    *state.did_pause_media.lock().unwrap() = true;
-    tauri::async_runtime::spawn_blocking(media::mute_output);
 }
 
 /// Mirror of maybe_pause_media. Unmutes only if this session was the one
@@ -412,12 +240,14 @@ fn maybe_resume_media(state: &AppState) {
         return;
     }
     *flag = false;
+    #[cfg(target_os = "macos")]
     tauri::async_runtime::spawn_blocking(media::unmute_output);
 }
 
 fn local_model_readiness(data_dir: &std::path::Path, model: LocalWhisperModel) -> Result<(), String> {
-    let path = provider::local_model_path(data_dir, model);
-    if path.exists() {
+    let catalog = model_catalog::catalog_for(model);
+    let models_dir = data_dir.join("models");
+    if model_catalog::all_files_present(&catalog, &models_dir) {
         Ok(())
     } else {
         Err("Local model not downloaded. Go to Settings → Local Models to download it.".to_string())
@@ -435,6 +265,7 @@ fn spawn_session(app: AppHandle, recorder: Recorder, device: Option<String>, mod
             eprintln!("[pipeline] {e}");
             notify_error(&app, e);
         }
+        #[cfg(target_os = "macos")]
         overlay::hide(&app);
     });
 }
@@ -468,6 +299,8 @@ async fn run_session(
     let mode_cleanup_enabled = active_mode.ai_cleanup.enabled;
     let mode_language = active_mode.language.clone();
     let mode_prompt_override = active_mode.ai_cleanup.prompt_override.clone();
+    let cleanup_provider = active_mode.ai_cleanup.provider;
+    let cleanup_model = active_mode.ai_cleanup.model.clone();
     let session_terms =
         crate::terms::compose_term_hints(&settings.term_sets, &active_mode.term_set_ids);
 
@@ -526,9 +359,18 @@ async fn run_session(
                 .await
         }
         ProviderModel::Local { model } => {
-            LocalSession { model: *model }
-                .run(app.clone(), format, chunk_rx, mode_language, session_terms, active_mode)
-                .await
+            #[cfg(target_os = "macos")]
+            {
+                LocalSession { model: *model }
+                    .run(app.clone(), format, chunk_rx, mode_language, session_terms, active_mode)
+                    .await
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                let _ = (model, format, chunk_rx, mode_language, session_terms);
+                recorder.stop();
+                return Err("Local transcription is not yet supported on this platform.".to_string());
+            }
         }
     };
 
@@ -564,6 +406,8 @@ async fn run_session(
         &raw_text,
         speak_duration,
         mode_prompt_override.as_deref(),
+        cleanup_provider,
+        &cleanup_model,
     )
     .await;
 
@@ -575,24 +419,27 @@ async fn run_session(
         CleanupOutput { replaced_text, status: cleanup_status },
     );
 
-    let resolved_app = {
-        let rx = app
-            .state::<crate::state::AppState>()
-            .pending_app_rx
-            .lock()
-            .unwrap()
-            .take();
-        match rx {
-            Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
-                .await
-                .ok()
-                .and_then(|r| r.ok())
-                .flatten(),
-            None => None,
-        }
-    };
-    history_entry.app_name = resolved_app.as_ref().map(|a| a.name.clone());
-    history_entry.bundle_id = resolved_app.map(|a| a.bundle_id);
+    #[cfg(target_os = "macos")]
+    {
+        let resolved_app = {
+            let rx = app
+                .state::<crate::state::AppState>()
+                .pending_app_rx
+                .lock()
+                .unwrap()
+                .take();
+            match rx {
+                Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
+                    .await
+                    .ok()
+                    .and_then(|r| r.ok())
+                    .flatten(),
+                None => None,
+            }
+        };
+        history_entry.app_name = resolved_app.as_ref().map(|a| a.name.clone());
+        history_entry.bundle_id = resolved_app.map(|a| a.bundle_id);
+    }
 
     // paste_handle must complete before any notify_error: set_focus()
     // during the modifier-release wait would steal focus mid-paste.
@@ -633,42 +480,14 @@ async fn maybe_cleanup(
     transcript: &str,
     speak_duration: Duration,
     prompt_override: Option<&str>,
+    cleanup_provider: cleanup::AiProviderId,
+    cleanup_model: &str,
 ) -> (String, CleanupStatus, Notice) {
     let cleanup_settings = &settings.ai_cleanup;
 
     if !mode_cleanup_enabled {
         return (transcript.to_string(), CleanupStatus::Disabled, Notice::None);
     }
-
-    let credential = match cleanup_settings.auth_mode {
-        config::CleanupAuthMode::ApiKey => match cleanup_settings.anthropic_api_key.as_deref() {
-            Some(k) if !k.is_empty() => cleanup::Credential::ApiKey(k),
-            _ => {
-                return (
-                    transcript.to_string(),
-                    CleanupStatus::NoCredential,
-                    Notice::Focus(
-                        "AI cleanup is enabled but Anthropic API key is not set.".to_string(),
-                    ),
-                );
-            }
-        },
-        config::CleanupAuthMode::Oauth => {
-            match cleanup_settings.anthropic_oauth_token.as_deref() {
-                Some(t) if !t.is_empty() => cleanup::Credential::OauthToken(t),
-                _ => {
-                    return (
-                        transcript.to_string(),
-                        CleanupStatus::NoCredential,
-                        Notice::Focus(
-                            "AI cleanup is set to OAuth but no Claude Code token is configured."
-                                .to_string(),
-                        ),
-                    );
-                }
-            }
-        }
-    };
 
     let words = transcript.split_whitespace().count();
     if words < cleanup_settings.min_words {
@@ -688,9 +507,92 @@ async fn maybe_cleanup(
     }
 
     let _ = app.emit(PTT_THINKING_EVENT, ());
-
     let prompt = cleanup::effective_prompt(prompt_override);
-    match cleanup::run(transcript, credential, &prompt).await {
+
+    use cleanup::AiProviderId;
+    let result = match cleanup_provider {
+        AiProviderId::Anthropic => {
+            let credential = match cleanup_settings.auth_mode {
+                config::CleanupAuthMode::ApiKey => {
+                    match cleanup_settings.provider_keys.get("anthropic").filter(|k| !k.is_empty()) {
+                        Some(k) => cleanup::Credential::ApiKey(k),
+                        None => {
+                            return (
+                                transcript.to_string(),
+                                CleanupStatus::NoCredential,
+                                Notice::Focus(
+                                    "AI cleanup is enabled but Anthropic API key is not set."
+                                        .to_string(),
+                                ),
+                            );
+                        }
+                    }
+                }
+                config::CleanupAuthMode::Oauth => {
+                    match cleanup_settings.anthropic_oauth_token.as_deref() {
+                        Some(t) if !t.is_empty() => cleanup::Credential::OauthToken(t),
+                        _ => {
+                            return (
+                                transcript.to_string(),
+                                CleanupStatus::NoCredential,
+                                Notice::Focus(
+                                    "AI cleanup is set to OAuth but no Claude Code token is configured."
+                                        .to_string(),
+                                ),
+                            );
+                        }
+                    }
+                }
+            };
+            cleanup::run(transcript, credential, cleanup_model, &prompt).await
+        }
+        AiProviderId::Custom => {
+            let custom = match &cleanup_settings.custom_provider {
+                Some(cp) if !cp.base_url.is_empty() => cp.clone(),
+                _ => {
+                    return (
+                        transcript.to_string(),
+                        CleanupStatus::NoCredential,
+                        Notice::Focus(
+                            "AI cleanup is enabled but the Custom provider is not configured."
+                                .to_string(),
+                        ),
+                    );
+                }
+            };
+            let chat_url = format!("{}/chat/completions", custom.base_url.trim_end_matches('/'));
+            let api_key = custom.api_key.as_deref().unwrap_or("");
+            cleanup::run_openai(transcript, api_key, &chat_url, &custom.model, &prompt).await
+        }
+        AiProviderId::OpenAi
+        | AiProviderId::Google
+        | AiProviderId::Groq
+        | AiProviderId::DeepSeek
+        | AiProviderId::Cerebras
+        | AiProviderId::OpenRouter => {
+            let api_key = match cleanup_settings
+                .provider_keys
+                .get(cleanup_provider.as_str())
+                .filter(|k| !k.is_empty())
+            {
+                Some(k) => k.clone(),
+                None => {
+                    return (
+                        transcript.to_string(),
+                        CleanupStatus::NoCredential,
+                        Notice::Focus(format!(
+                            "AI cleanup is enabled but the {} API key is not set.",
+                            cleanup_provider.as_str()
+                        )),
+                    );
+                }
+            };
+            let chat_url = cleanup_provider.openai_chat_url();
+            cleanup::run_openai(transcript, &api_key, chat_url, cleanup_model, &prompt).await
+        }
+    };
+
+    match result {
         Ok((cleaned, usage)) => {
             cleanup_stats::record(app, usage.input_tokens, usage.output_tokens);
             (cleaned, CleanupStatus::Ran, Notice::None)
@@ -716,9 +618,9 @@ async fn maybe_cleanup(
 }
 
 /// Acquires `ptt_active`, double-checks it's still false, then drives the full
-/// PTT-start sequence: mark active, capture the target app, spawn the STT
-/// session, show the overlay, notify the UI, and (optionally) pause media.
-/// Safe to call from the CGEventTap callback or from a tokio task.
+/// PTT-start sequence: mark active, capture the target app (macOS only), spawn
+/// the STT session, show the overlay (macOS only), notify the UI, and
+/// (optionally) pause media.
 fn start_ptt(
     app: &AppHandle,
     state: &AppState,
@@ -737,19 +639,17 @@ fn start_ptt(
     // Capture frontmost app before overlay::show so the worker's
     // frontmostApplication() lookup can't race any window-server bookkeeping
     // that show() triggers.
+    #[cfg(target_os = "macos")]
     target_app::capture(app.clone());
     // Spawn up front so the WS handshake overlaps with capture rather than
     // waiting for PTT release.
     spawn_session(app.clone(), recorder.clone(), device, mode_id);
+    #[cfg(target_os = "macos")]
     overlay::show(app);
     let _ = app.emit(PTT_PRESSED_EVENT, shortcut);
     maybe_pause_media(state);
 }
 
-/// Fire-and-forget paste of the latest history entry. No overlay, no recording,
-/// no state mutation — re-injects the text the user already saw at the current
-/// cursor. Silent no-op when history is empty. Spawned off the CGEventTap
-/// callback so file I/O can't stall the event loop.
 fn fire_paste_latest(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -788,9 +688,11 @@ fn dispatch_binding(
     }
 }
 
+// ── macOS event source: CGEventTap ───────────────────────────────────────────
 
 /// Caller must set `state.ptt_running` to true (via CAS) before invoking.
 /// This function only clears it on `CGEventTap::new` failure.
+#[cfg(target_os = "macos")]
 pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
     std::thread::spawn(move || {
         let ptt_running = state.ptt_running.clone();
@@ -836,7 +738,7 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                 let keycode =
                     event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE) as u16;
 
-                let Some(code) = macos_keycode_to_code(keycode) else {
+                let Some(code) = keycode_to_code(keycode) else {
                     return None;
                 };
 
@@ -1090,339 +992,226 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
     });
 }
 
+// ── Non-macOS event source: rdev ─────────────────────────────────────────────
+
+/// Caller must set `state.ptt_running` to true (via CAS) before invoking.
+/// Spawns a dedicated thread that runs rdev::listen; the callback translates
+/// rdev events into (code, is_press) pairs and drives the same hotkey state
+/// machine used by the macOS CGEventTap source.
+///
+// Keyboard-capture pattern adapted from the MIT-licensed Handy project
+// (https://github.com/cjpais/Handy). Copyright (c) cjpais.
+#[cfg(not(target_os = "macos"))]
+pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
+    std::thread::spawn(move || {
+        // Per-shortcut tap state, keyed by (key, modifiers). Shared with
+        // spawned coexistence timer tasks via Arc.
+        let tap_states: Arc<Mutex<HashMap<(String, Vec<String>), TapState>>> =
+            Arc::new(Mutex::new(HashMap::new()));
+        // Tracks currently-held keys so OS key-repeat events (successive
+        // KeyPress without an intervening KeyRelease) are ignored.
+        let pressed_keys: Arc<Mutex<HashSet<String>>> =
+            Arc::new(Mutex::new(HashSet::new()));
+        // L/R per-side modifier tracking; the aggregated ModifierState is
+        // written into state.modifiers after each modifier event.
+        let mod_sides = Arc::new(Mutex::new(ModKeyState::default()));
+
+        let callback = {
+            let app = app.clone();
+            let state = state.clone();
+            let recorder = recorder.clone();
+
+            move |event: rdev::Event| {
+                let (code, is_press) = match event.event_type {
+                    rdev::EventType::KeyPress(key) => match rdev_key_to_code(&key) {
+                        Some(c) => (c, true),
+                        None => return,
+                    },
+                    rdev::EventType::KeyRelease(key) => match rdev_key_to_code(&key) {
+                        Some(c) => (c, false),
+                        None => return,
+                    },
+                    _ => return,
+                };
+
+                // Auto-repeat suppression: skip a press if the key is already
+                // in the held set. The set is cleared on release so a genuine
+                // re-press after release goes through.
+                {
+                    let mut pressed = pressed_keys.lock().unwrap();
+                    if is_press {
+                        if !pressed.insert(code.to_string()) {
+                            return;
+                        }
+                    } else {
+                        pressed.remove(code);
+                    }
+                }
+
+                update_modifier_state(&state, code, is_press, &mut mod_sides.lock().unwrap());
+
+                if *state.shortcut_capture_paused.lock().unwrap() {
+                    return;
+                }
+
+                let now = Instant::now();
+                let ptt_active_now = *state.ptt_active.lock().unwrap();
+
+                if is_cancel_event(code, is_press, ptt_active_now) {
+                    cancel_session(&app, &state, &recorder);
+                    return;
+                }
+
+                let bindings = state.hotkey_bindings.lock().unwrap().clone();
+                let modifiers_val = *state.modifiers.lock().unwrap();
+
+                if is_press && !ptt_active_now {
+                    let mut tap_states_guard = tap_states.lock().unwrap();
+                    for b in bindings.iter().filter(|b| b.shortcut.is_double_tap) {
+                        if !shortcut_matches(code, &b.shortcut, modifiers_val) {
+                            if let Some(ts) =
+                                tap_states_guard.get_mut(&tap_state_key(&b.shortcut))
+                            {
+                                advance_tap_state(ts, TapEvent::OtherKey, now);
+                            }
+                        }
+                    }
+                }
+
+                let relevant = if ptt_active_now {
+                    state
+                        .active_shortcut
+                        .lock()
+                        .unwrap()
+                        .as_ref()
+                        .map(|sc| shortcut_is_relevant(code, sc))
+                        .unwrap_or(false)
+                } else {
+                    bindings.iter().any(|b| shortcut_is_relevant(code, &b.shortcut))
+                };
+                if !relevant {
+                    return;
+                }
+
+                if is_press && !ptt_active_now {
+                    let sp = bindings.iter().find(|b| {
+                        !b.shortcut.is_double_tap
+                            && shortcut_matches(code, &b.shortcut, modifiers_val)
+                    });
+                    let dt = bindings.iter().find(|b| {
+                        b.shortcut.is_double_tap
+                            && shortcut_matches(code, &b.shortcut, modifiers_val)
+                    });
+
+                    match (sp, dt) {
+                        (Some(sp_b), Some(dt_b))
+                            if key_has_both_kinds(&bindings, &dt_b.shortcut) =>
+                        {
+                            let key = tap_state_key(&dt_b.shortcut);
+                            let outcome = {
+                                let mut guard = tap_states.lock().unwrap();
+                                let ts = guard.entry(key.clone()).or_default();
+                                coex_advance_down(ts, now)
+                            };
+                            match outcome {
+                                CoexDown::FireDoubleTap => {
+                                    dispatch_binding(&app, &state, &recorder, dt_b);
+                                }
+                                CoexDown::ScheduleSinglePress { captured_generation } => {
+                                    let tap_states_for_timer = tap_states.clone();
+                                    let app_for_timer = app.clone();
+                                    let state_for_timer = state.clone();
+                                    let recorder_for_timer = recorder.clone();
+                                    let sp_for_timer = sp_b.clone();
+                                    tauri::async_runtime::spawn(async move {
+                                        tokio::time::sleep(DOUBLE_TAP_THRESHOLD).await;
+                                        let should_fire = {
+                                            let mut guard =
+                                                tap_states_for_timer.lock().unwrap();
+                                            let Some(ts) = guard.get_mut(&key) else {
+                                                return;
+                                            };
+                                            if !coex_timer_should_fire(ts, captured_generation) {
+                                                return;
+                                            }
+                                            ts.generation = ts.generation.wrapping_add(1);
+                                            true
+                                        };
+                                        if should_fire {
+                                            dispatch_binding(
+                                                &app_for_timer,
+                                                &state_for_timer,
+                                                &recorder_for_timer,
+                                                &sp_for_timer,
+                                            );
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                        (_, Some(dt_b)) => {
+                            let dispatch = {
+                                let mut guard = tap_states.lock().unwrap();
+                                let ts = guard.entry(tap_state_key(&dt_b.shortcut)).or_default();
+                                advance_tap_state(ts, TapEvent::Down, now)
+                            };
+                            if dispatch == Dispatch::StartPtt {
+                                dispatch_binding(&app, &state, &recorder, dt_b);
+                            }
+                        }
+                        (Some(sp_b), None) => {
+                            dispatch_binding(&app, &state, &recorder, sp_b);
+                        }
+                        (None, None) => {}
+                    }
+                } else if !is_press {
+                    let mut active = state.ptt_active.lock().unwrap();
+                    if *active {
+                        let sc_opt = state.active_shortcut.lock().unwrap().clone();
+                        let should_stop = match sc_opt {
+                            Some(ref sc) if sc.is_double_tap => {
+                                let mut tap_states_guard = tap_states.lock().unwrap();
+                                let ts =
+                                    tap_states_guard.entry(tap_state_key(sc)).or_default();
+                                advance_tap_state(ts, TapEvent::Up, now) == Dispatch::StopPtt
+                            }
+                            _ => true,
+                        };
+                        if should_stop {
+                            *active = false;
+                            *state.active_shortcut.lock().unwrap() = None;
+                            let _ = app.emit(PTT_RELEASED_EVENT, ());
+                            maybe_resume_media(&state);
+                            recorder.stop();
+                        }
+                    } else {
+                        let mut tap_states_guard = tap_states.lock().unwrap();
+                        for b in bindings.iter().filter(|b| b.shortcut.is_double_tap) {
+                            if shortcut_matches(code, &b.shortcut, modifiers_val) {
+                                if let Some(ts) =
+                                    tap_states_guard.get_mut(&tap_state_key(&b.shortcut))
+                                {
+                                    if ts.tap_count > 0 {
+                                        advance_tap_state(ts, TapEvent::Up, now);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        if let Err(e) = rdev::listen(callback) {
+            eprintln!("[ptt] rdev listener failed: {e:?}");
+            state.ptt_running.store(false, Ordering::Release);
+        }
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn double_tap_within_window_starts_on_second_down_stops_on_second_up() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-
-        // First down: tap_count → 1, no start
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Down, base), Dispatch::Nothing);
-        assert_eq!(state.tap_count, 1);
-
-        // First up: record timestamp
-        let t1 = base + Duration::from_millis(50);
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Up, t1), Dispatch::Nothing);
-        assert!(state.last_tap_up_time.is_some());
-
-        // Second down within 400ms: start PTT
-        let t2 = base + Duration::from_millis(150);
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Down, t2), Dispatch::StartPtt);
-        assert_eq!(state.tap_count, 2);
-
-        // Second up: stop PTT, reset
-        let t3 = base + Duration::from_millis(300);
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Up, t3), Dispatch::StopPtt);
-        assert_eq!(state.tap_count, 0);
-        assert!(state.last_tap_up_time.is_none());
-    }
-
-    #[test]
-    fn double_tap_expired_window_second_down_treated_as_new_first_tap() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Down, base), Dispatch::Nothing);
-        let t1 = base + Duration::from_millis(50);
-        advance_tap_state(&mut state, TapEvent::Up, t1);
-
-        // Second down after threshold: resets to tap_count=1, no start
-        let t2 = base + Duration::from_millis(500);
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Down, t2), Dispatch::Nothing);
-        assert_eq!(state.tap_count, 1);
-        assert!(state.last_tap_up_time.is_none());
-    }
-
-    #[test]
-    fn other_key_between_taps_resets_state() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-
-        advance_tap_state(&mut state, TapEvent::Down, base);
-        let t1 = base + Duration::from_millis(50);
-        advance_tap_state(&mut state, TapEvent::Up, t1);
-        assert_eq!(state.tap_count, 1);
-
-        // Unrelated key press cancels the pending double-tap
-        let t2 = base + Duration::from_millis(100);
-        assert_eq!(advance_tap_state(&mut state, TapEvent::OtherKey, t2), Dispatch::Nothing);
-        assert_eq!(state.tap_count, 0);
-        assert!(state.last_tap_up_time.is_none());
-
-        // Subsequent down within what would have been the window: no start
-        let t3 = base + Duration::from_millis(150);
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Down, t3), Dispatch::Nothing);
-        assert_eq!(state.tap_count, 1);
-    }
-
-    #[test]
-    fn fresh_state_up_event_is_noop() {
-        let mut state = TapState::default();
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Up, Instant::now()), Dispatch::Nothing);
-        assert_eq!(state.tap_count, 0);
-        assert!(state.last_tap_up_time.is_none());
-    }
-
-    fn sp_binding(key: &str) -> HotkeyBinding {
-        HotkeyBinding::ptt(
-            Shortcut {
-                key: key.to_string(),
-                modifiers: vec![],
-                is_double_tap: false,
-            },
-            "mode-a".to_string(),
-        )
-    }
-
-    fn dt_binding(key: &str) -> HotkeyBinding {
-        HotkeyBinding::ptt(
-            Shortcut {
-                key: key.to_string(),
-                modifiers: vec![],
-                is_double_tap: true,
-            },
-            "mode-b".to_string(),
-        )
-    }
-
-    #[test]
-    fn key_has_both_kinds_detects_coexistence_pair() {
-        let bindings = vec![sp_binding("AltRight"), dt_binding("AltRight")];
-        assert!(key_has_both_kinds(&bindings, &bindings[0].shortcut));
-        assert!(key_has_both_kinds(&bindings, &bindings[1].shortcut));
-    }
-
-    #[test]
-    fn key_has_both_kinds_false_for_single_press_only() {
-        let bindings = vec![sp_binding("AltRight")];
-        assert!(!key_has_both_kinds(&bindings, &bindings[0].shortcut));
-    }
-
-    #[test]
-    fn key_has_both_kinds_false_for_double_tap_only() {
-        let bindings = vec![dt_binding("AltRight")];
-        assert!(!key_has_both_kinds(&bindings, &bindings[0].shortcut));
-    }
-
-    #[test]
-    fn key_has_both_kinds_distinguishes_by_modifiers() {
-        let with_shift = HotkeyBinding::ptt(
-            Shortcut {
-                key: "AltRight".to_string(),
-                modifiers: vec!["Shift".to_string()],
-                is_double_tap: true,
-            },
-            "mode-x".to_string(),
-        );
-        let bindings = vec![sp_binding("AltRight"), with_shift];
-        assert!(!key_has_both_kinds(&bindings, &bindings[0].shortcut));
-        assert!(!key_has_both_kinds(&bindings, &bindings[1].shortcut));
-    }
-
-    #[test]
-    fn advance_tap_state_bumps_generation_on_every_event() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-        let g0 = state.generation;
-
-        advance_tap_state(&mut state, TapEvent::Down, base);
-        let g1 = state.generation;
-        assert_ne!(g0, g1, "Down must bump generation");
-
-        advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(50));
-        let g2 = state.generation;
-        assert_ne!(g1, g2, "Up must bump generation");
-
-        advance_tap_state(&mut state, TapEvent::OtherKey, base + Duration::from_millis(100));
-        let g3 = state.generation;
-        assert_ne!(g2, g3, "OtherKey must bump generation");
-    }
-
-    // ── Coexistence edge-case 1: tap-and-hold past 400 ms → Mode A fires ────
-    #[test]
-    fn coex_tap_and_hold_fires_single_press_at_threshold() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-
-        let outcome = coex_advance_down(&mut state, base);
-        let CoexDown::ScheduleSinglePress { captured_generation } = outcome else {
-            panic!("first down should schedule single-press timer");
-        };
-        assert!(coex_timer_should_fire(&state, captured_generation));
-    }
-
-    // ── Edge-case 2: tap-tap-and-hold → Mode B on 2nd down ───────────────────
-    #[test]
-    fn coex_tap_tap_and_hold_fires_double_tap_on_second_down() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-
-        let CoexDown::ScheduleSinglePress { captured_generation: g1 } =
-            coex_advance_down(&mut state, base)
-        else {
-            panic!();
-        };
-
-        // First up records last_tap_up_time and invalidates the SP timer.
-        advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(50));
-        assert!(!coex_timer_should_fire(&state, g1));
-
-        // Second down within window fires the double-tap immediately.
-        let outcome = coex_advance_down(&mut state, base + Duration::from_millis(150));
-        assert_eq!(outcome, CoexDown::FireDoubleTap);
-
-        let stop = advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(300));
-        assert_eq!(stop, Dispatch::StopPtt);
-    }
-
-    // ── Edge-case 3: tap-and-release within 400 ms, then silence ─────────────
-    #[test]
-    fn coex_tap_release_within_window_then_silence_fires_nothing() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-
-        let CoexDown::ScheduleSinglePress { captured_generation } =
-            coex_advance_down(&mut state, base)
-        else {
-            panic!();
-        };
-        advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(100));
-        assert!(!coex_timer_should_fire(&state, captured_generation));
-    }
-
-    // ── Edge-case 4: tap, release, 1 s pause, another tap-and-release ───────
-    #[test]
-    fn coex_two_separated_taps_with_gap_over_window_fire_nothing() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-
-        let CoexDown::ScheduleSinglePress { captured_generation: g1 } =
-            coex_advance_down(&mut state, base)
-        else {
-            panic!();
-        };
-        advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(100));
-        assert!(!coex_timer_should_fire(&state, g1));
-
-        let outcome2 = coex_advance_down(&mut state, base + Duration::from_millis(1100));
-        let CoexDown::ScheduleSinglePress { captured_generation: g2 } = outcome2 else {
-            panic!("gap > window should schedule a fresh SP timer, not fire DT");
-        };
-        advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(1200));
-        assert!(!coex_timer_should_fire(&state, g2));
-    }
-
-    // ── Edge-case 5: rapid triple tap (2nd fires Mode B; 3rd ignored) ───────
-    #[test]
-    fn coex_rapid_triple_tap_fires_double_tap_then_resets() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-
-        let _ = coex_advance_down(&mut state, base);
-        advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(50));
-        assert_eq!(
-            coex_advance_down(&mut state, base + Duration::from_millis(150)),
-            CoexDown::FireDoubleTap,
-        );
-        assert_eq!(
-            advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(250)),
-            Dispatch::StopPtt,
-        );
-
-        // A 3rd down after dt completes is a fresh first tap, NOT another
-        // double-tap (state was reset on StopPtt).
-        let outcome3 = coex_advance_down(&mut state, base + Duration::from_millis(350));
-        assert!(matches!(outcome3, CoexDown::ScheduleSinglePress { .. }));
-    }
-
-    // ── Edge-case 6: hold 600 ms past threshold, then release → standard stop
-    #[test]
-    fn coex_hold_past_threshold_keeps_timer_eligible_until_event_arrives() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-
-        let CoexDown::ScheduleSinglePress { captured_generation } =
-            coex_advance_down(&mut state, base)
-        else {
-            panic!();
-        };
-        assert!(coex_timer_should_fire(&state, captured_generation));
-
-        // A subsequent fresh first-tap correctly transitions through the
-        // state machine even though tap_count was still 1 from the prior
-        // press (sp fired without resetting it — that's intentional).
-        let outcome2 = coex_advance_down(&mut state, base + Duration::from_millis(800));
-        assert!(matches!(outcome2, CoexDown::ScheduleSinglePress { .. }));
-        assert_eq!(state.tap_count, 1);
-    }
-
-    // ── Edge-case 9: only sp binding → key_has_both_kinds is false ──────────
-    #[test]
-    fn coex_helper_says_no_for_single_press_only_key() {
-        let bindings = vec![sp_binding("AltRight")];
-        let other = Shortcut {
-            key: "AltRight".to_string(),
-            modifiers: vec![],
-            is_double_tap: false,
-        };
-        assert!(!key_has_both_kinds(&bindings, &other));
-    }
-
-    // ── Edge-case 10: only dt binding → key_has_both_kinds is false ─────────
-    #[test]
-    fn coex_helper_says_no_for_double_tap_only_key() {
-        let bindings = vec![dt_binding("AltRight")];
-        let other = Shortcut {
-            key: "AltRight".to_string(),
-            modifiers: vec![],
-            is_double_tap: true,
-        };
-        assert!(!key_has_both_kinds(&bindings, &other));
-    }
-
-    // ── Timer cancellation: stale generation never fires ────────────────────
-    #[test]
-    fn coex_timer_with_stale_generation_does_not_fire() {
-        let base = Instant::now();
-        let mut state = TapState::default();
-        let CoexDown::ScheduleSinglePress { captured_generation } =
-            coex_advance_down(&mut state, base)
-        else {
-            panic!();
-        };
-
-        advance_tap_state(&mut state, TapEvent::OtherKey, base + Duration::from_millis(10));
-        assert!(!coex_timer_should_fire(&state, captured_generation));
-    }
-
-    #[test]
-    fn cancel_predicate_fires_on_escape_press_during_active_session() {
-        assert!(is_cancel_event("Escape", true, true));
-    }
-
-    #[test]
-    fn cancel_predicate_inert_when_no_session_active() {
-        assert!(!is_cancel_event("Escape", true, false));
-    }
-
-    #[test]
-    fn cancel_predicate_ignores_escape_release() {
-        assert!(!is_cancel_event("Escape", false, true));
-    }
-
-    #[test]
-    fn cancel_predicate_ignores_non_escape_keys() {
-        assert!(!is_cancel_event("Space", true, true));
-        assert!(!is_cancel_event("KeyA", true, true));
-    }
-
-    #[test]
-    fn cancel_predicate_ignores_escape_release_when_idle() {
-        assert!(!is_cancel_event("Escape", false, false));
-    }
 
     #[test]
     fn local_readiness_fails_when_model_file_absent() {
@@ -1450,9 +1239,25 @@ mod tests {
         let path_v3 = crate::provider::local_model_path(dir.path(), LocalWhisperModel::LargeV3);
         fs::create_dir_all(path_v3.parent().unwrap()).unwrap();
         fs::write(&path_v3, b"stub").unwrap();
-        // LargeV3 present → ok
         assert!(local_model_readiness(dir.path(), LocalWhisperModel::LargeV3).is_ok());
-        // LargeV3Turbo still absent → err
         assert!(local_model_readiness(dir.path(), LocalWhisperModel::LargeV3Turbo).is_err());
+    }
+
+    #[test]
+    fn local_readiness_parakeet_requires_all_three_files() {
+        use std::fs;
+        let dir = tempfile::tempdir().unwrap();
+        let models_dir = dir.path().join("models");
+        fs::create_dir_all(&models_dir).unwrap();
+
+        // Only encoder present — should still fail.
+        fs::write(models_dir.join("encoder-model.int8.onnx"), b"stub").unwrap();
+        assert!(local_model_readiness(dir.path(), LocalWhisperModel::Parakeet).is_err());
+
+        // Add remaining files — should now pass.
+        fs::write(models_dir.join("decoder_joint-model.int8.onnx"), b"stub").unwrap();
+        fs::write(models_dir.join("vocab.txt"), b"stub").unwrap();
+        fs::write(models_dir.join("nemo128.onnx"), b"stub").unwrap();
+        assert!(local_model_readiness(dir.path(), LocalWhisperModel::Parakeet).is_ok());
     }
 }

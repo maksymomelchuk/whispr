@@ -1,6 +1,54 @@
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::OnceLock;
 use std::time::Duration;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AiProviderId {
+    #[default]
+    Anthropic,
+    OpenAi,
+    Google,
+    Groq,
+    DeepSeek,
+    Cerebras,
+    OpenRouter,
+    Custom,
+}
+
+impl AiProviderId {
+    /// Canonical wire string. Must stay identical to the serde representation
+    /// because `provider_keys` is keyed by these strings.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AiProviderId::Anthropic => "anthropic",
+            AiProviderId::OpenAi => "openai",
+            AiProviderId::Google => "google",
+            AiProviderId::Groq => "groq",
+            AiProviderId::DeepSeek => "deepseek",
+            AiProviderId::Cerebras => "cerebras",
+            AiProviderId::OpenRouter => "openrouter",
+            AiProviderId::Custom => "custom",
+        }
+    }
+
+    /// `/chat/completions` endpoint for the built-in OpenAI-compatible providers.
+    /// Anthropic uses its native Messages API and Custom uses a user-supplied
+    /// base URL, so both are routed before reaching here; they map to the OpenAI
+    /// endpoint only as a defensive default.
+    pub fn openai_chat_url(self) -> &'static str {
+        match self {
+            AiProviderId::OpenAi => OPENAI_CHAT_URL,
+            AiProviderId::Google => GOOGLE_CHAT_URL,
+            AiProviderId::Groq => GROQ_CHAT_URL,
+            AiProviderId::DeepSeek => DEEPSEEK_CHAT_URL,
+            AiProviderId::Cerebras => CEREBRAS_CHAT_URL,
+            AiProviderId::OpenRouter => OPENROUTER_CHAT_URL,
+            AiProviderId::Anthropic | AiProviderId::Custom => OPENAI_CHAT_URL,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Usage {
@@ -15,12 +63,23 @@ const ANTHROPIC_VERSION: &str = "2023-06-01";
 /// Beta header required when authenticating with a Claude Code OAuth token.
 /// Without it the Messages endpoint rejects bearer auth.
 const OAUTH_BETA: &str = "oauth-2025-04-20";
-const MODEL: &str = "claude-haiku-4-5";
+#[cfg(test)]
+const ANTHROPIC_DEFAULT_MODEL: &str = "claude-haiku-4-5";
 const MAX_TOKENS: u32 = 1024;
 /// First system block when authenticating via OAuth. The OAuth surface is
 /// gated to Claude Code workloads, and rejects requests whose system prompt
 /// doesn't lead with this exact identity assertion.
 const CLAUDE_CODE_IDENTITY: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
+
+const OPENAI_CHAT_URL: &str = "https://api.openai.com/v1/chat/completions";
+#[cfg(test)]
+const OPENAI_DEFAULT_MODEL: &str = "gpt-4o-mini";
+const GOOGLE_CHAT_URL: &str =
+    "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+const GROQ_CHAT_URL: &str = "https://api.groq.com/openai/v1/chat/completions";
+const DEEPSEEK_CHAT_URL: &str = "https://api.deepseek.com/chat/completions";
+const CEREBRAS_CHAT_URL: &str = "https://api.cerebras.ai/v1/chat/completions";
+const OPENROUTER_CHAT_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
 
 /// Which credential the user has chosen to authenticate cleanup calls with.
 pub enum Credential<'a> {
@@ -186,22 +245,64 @@ impl Transport for ReqwestTransport {
 pub async fn run(
     transcript: &str,
     credential: Credential<'_>,
+    model: &str,
     prompt: &str,
 ) -> Result<(String, Usage), CleanupError> {
-    run_with_transport(transcript, credential, prompt, &ReqwestTransport, TIMEOUT).await
+    run_with_transport(transcript, credential, model, prompt, &ReqwestTransport, TIMEOUT).await
 }
 
 /// Testable variant of `run` with injectable transport and configurable timeout.
 pub(crate) async fn run_with_transport<T: Transport>(
     transcript: &str,
     credential: Credential<'_>,
+    model: &str,
     prompt: &str,
     transport: &T,
     timeout: Duration,
 ) -> Result<(String, Usage), CleanupError> {
     match tokio::time::timeout(
         timeout,
-        call_with_transport(transcript, credential, prompt, transport),
+        call_with_transport(transcript, credential, model, prompt, transport),
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(_) => Err(CleanupError::Timeout),
+    }
+}
+
+/// Runs cleanup via any OpenAI-compatible `/chat/completions` endpoint.
+pub async fn run_openai(
+    transcript: &str,
+    api_key: &str,
+    chat_url: &str,
+    model: &str,
+    prompt: &str,
+) -> Result<(String, Usage), CleanupError> {
+    run_openai_with_transport(
+        transcript,
+        api_key,
+        chat_url,
+        model,
+        prompt,
+        &ReqwestTransport,
+        TIMEOUT,
+    )
+    .await
+}
+
+pub(crate) async fn run_openai_with_transport<T: Transport>(
+    transcript: &str,
+    api_key: &str,
+    chat_url: &str,
+    model: &str,
+    prompt: &str,
+    transport: &T,
+    timeout: Duration,
+) -> Result<(String, Usage), CleanupError> {
+    match tokio::time::timeout(
+        timeout,
+        call_openai_with_transport(transcript, api_key, chat_url, model, prompt, transport),
     )
     .await
     {
@@ -255,6 +356,83 @@ fn build_headers(credential: &Credential<'_>) -> Vec<(String, String)> {
     headers
 }
 
+pub(crate) fn build_openai_headers(api_key: &str) -> Vec<(String, String)> {
+    let mut headers = vec![("content-type".to_string(), "application/json".to_string())];
+    if !api_key.is_empty() {
+        headers.push(("authorization".to_string(), format!("Bearer {api_key}")));
+    }
+    headers
+}
+
+async fn call_openai_with_transport<T: Transport>(
+    transcript: &str,
+    api_key: &str,
+    chat_url: &str,
+    model: &str,
+    prompt: &str,
+    transport: &T,
+) -> Result<(String, Usage), CleanupError> {
+    let headers = build_openai_headers(api_key);
+    let body = serde_json::json!({
+        "model": model,
+        "max_tokens": MAX_TOKENS,
+        "messages": [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": format!("<transcript>\n{transcript}\n</transcript>")}
+        ]
+    });
+    let resp = transport
+        .post(chat_url, &headers, &body)
+        .await
+        .map_err(|e| CleanupError::Transient(format!("cleanup request failed: {e}")))?;
+    parse_openai_response(resp.status, &resp.body)
+}
+
+fn parse_openai_response(status: u16, body: &str) -> Result<(String, Usage), CleanupError> {
+    if !(200..300).contains(&status) {
+        let message = serde_json::from_str::<Value>(body)
+            .ok()
+            .and_then(|v| v["error"]["message"].as_str().map(String::from))
+            .unwrap_or_else(|| {
+                let snippet: String = body.chars().take(200).collect();
+                format!("HTTP {status}: {snippet}")
+            });
+        return Err(if status == 401 || status == 403 {
+            CleanupError::Credential(message)
+        } else {
+            CleanupError::Transient(message)
+        });
+    }
+
+    let v: Value = serde_json::from_str(body)
+        .map_err(|e| CleanupError::Transient(format!("cleanup response parse failed: {e}")))?;
+
+    let cleaned = v["choices"][0]["message"]["content"]
+        .as_str()
+        .ok_or_else(|| {
+            CleanupError::Transient(
+                "cleanup response missing choices[0].message.content".to_string(),
+            )
+        })?
+        .trim();
+
+    if cleaned.is_empty() {
+        return Err(CleanupError::Transient(
+            "cleanup returned empty text".to_string(),
+        ));
+    }
+
+    let usage = parse_openai_usage(&v["usage"]);
+    Ok((cleaned.to_string(), usage))
+}
+
+fn parse_openai_usage(usage: &Value) -> Usage {
+    Usage {
+        input_tokens: usage["prompt_tokens"].as_u64().unwrap_or(0),
+        output_tokens: usage["completion_tokens"].as_u64().unwrap_or(0),
+    }
+}
+
 fn parse_response(status: u16, body: &str) -> Result<(String, Usage), CleanupError> {
     if !(200..300).contains(&status) {
         let message = serde_json::from_str::<Value>(body)
@@ -294,12 +472,13 @@ fn parse_response(status: u16, body: &str) -> Result<(String, Usage), CleanupErr
 async fn call_with_transport<T: Transport>(
     transcript: &str,
     credential: Credential<'_>,
+    model: &str,
     prompt: &str,
     transport: &T,
 ) -> Result<(String, Usage), CleanupError> {
     let system = build_system(&credential, prompt);
     let body = serde_json::json!({
-        "model": MODEL,
+        "model": model,
         "max_tokens": MAX_TOKENS,
         "system": system,
         "messages": [
@@ -415,6 +594,14 @@ mod tests {
         Credential::ApiKey("test-key")
     }
 
+    fn openai_success_body(text: &str) -> String {
+        serde_json::json!({
+            "choices": [{"message": {"content": text}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5}
+        })
+        .to_string()
+    }
+
     fn success_body(text: &str) -> String {
         serde_json::json!({
             "content": [{"type": "text", "text": text}],
@@ -501,6 +688,7 @@ mod tests {
         let result = run_with_transport(
             "hello world",
             api_key_cred(),
+            ANTHROPIC_DEFAULT_MODEL,
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -520,6 +708,7 @@ mod tests {
         let result = run_with_transport(
             "some text here",
             api_key_cred(),
+            ANTHROPIC_DEFAULT_MODEL,
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -537,6 +726,7 @@ mod tests {
         let result = run_with_transport(
             "some text here",
             api_key_cred(),
+            ANTHROPIC_DEFAULT_MODEL,
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -554,6 +744,7 @@ mod tests {
         let result = run_with_transport(
             "some text here",
             api_key_cred(),
+            ANTHROPIC_DEFAULT_MODEL,
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -571,6 +762,7 @@ mod tests {
         let result = run_with_transport(
             "some text here",
             api_key_cred(),
+            ANTHROPIC_DEFAULT_MODEL,
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -587,6 +779,7 @@ mod tests {
         let result = run_with_transport(
             "some text here for timing",
             api_key_cred(),
+            ANTHROPIC_DEFAULT_MODEL,
             DEFAULT_SYSTEM_PROMPT,
             &HangingTransport,
             Duration::from_millis(50),
@@ -606,6 +799,7 @@ mod tests {
         let result = run_with_transport(
             "some text here",
             api_key_cred(),
+            ANTHROPIC_DEFAULT_MODEL,
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -625,6 +819,7 @@ mod tests {
         let result = run_with_transport(
             "some text here",
             api_key_cred(),
+            ANTHROPIC_DEFAULT_MODEL,
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -636,5 +831,192 @@ mod tests {
             }
             other => panic!("expected Transient error, got {other:?}"),
         }
+    }
+
+    // --- OpenAI-compatible transport tests ---
+
+    #[tokio::test]
+    async fn openai_compat_success_path_returns_cleaned_text() {
+        let transport = MockTransport::returning(200, openai_success_body("Hello, world."));
+        let result = run_openai_with_transport(
+            "hello world",
+            "test-key",
+            OPENAI_CHAT_URL,
+            OPENAI_DEFAULT_MODEL,
+            DEFAULT_SYSTEM_PROMPT,
+            &transport,
+            Duration::from_secs(5),
+        )
+        .await;
+        let (text, usage) = result.expect("should succeed");
+        assert_eq!(text, "Hello, world.");
+        assert_eq!(usage.input_tokens, 10);
+        assert_eq!(usage.output_tokens, 5);
+        assert_eq!(transport.call_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn openai_compat_credential_error_on_401() {
+        let transport = MockTransport::returning(401, error_body("invalid api key"));
+        let result = run_openai_with_transport(
+            "some text",
+            "bad-key",
+            OPENAI_CHAT_URL,
+            OPENAI_DEFAULT_MODEL,
+            DEFAULT_SYSTEM_PROMPT,
+            &transport,
+            Duration::from_secs(5),
+        )
+        .await;
+        assert!(
+            matches!(result, Err(CleanupError::Credential(_))),
+            "expected Credential error, got {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn openai_compat_credential_error_on_403() {
+        let transport = MockTransport::returning(403, error_body("forbidden"));
+        let result = run_openai_with_transport(
+            "some text",
+            "bad-key",
+            OPENAI_CHAT_URL,
+            OPENAI_DEFAULT_MODEL,
+            DEFAULT_SYSTEM_PROMPT,
+            &transport,
+            Duration::from_secs(5),
+        )
+        .await;
+        assert!(
+            matches!(result, Err(CleanupError::Credential(_))),
+            "expected Credential error, got {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn openai_compat_transient_error_on_500() {
+        let transport = MockTransport::returning(500, error_body("internal server error"));
+        let result = run_openai_with_transport(
+            "some text",
+            "test-key",
+            OPENAI_CHAT_URL,
+            OPENAI_DEFAULT_MODEL,
+            DEFAULT_SYSTEM_PROMPT,
+            &transport,
+            Duration::from_secs(5),
+        )
+        .await;
+        assert!(
+            matches!(result, Err(CleanupError::Transient(_))),
+            "expected Transient error, got {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn openai_compat_missing_usage_records_zero() {
+        let body = serde_json::json!({
+            "choices": [{"message": {"content": "cleaned text"}, "finish_reason": "stop"}]
+        })
+        .to_string();
+        let transport = MockTransport::returning(200, body);
+        let result = run_openai_with_transport(
+            "some text",
+            "test-key",
+            OPENAI_CHAT_URL,
+            OPENAI_DEFAULT_MODEL,
+            DEFAULT_SYSTEM_PROMPT,
+            &transport,
+            Duration::from_secs(5),
+        )
+        .await;
+        let (_, usage) = result.expect("should succeed even without usage field");
+        assert_eq!(usage.input_tokens, 0);
+        assert_eq!(usage.output_tokens, 0);
+    }
+
+    #[tokio::test]
+    async fn openai_compat_timeout_returns_timeout_error() {
+        let result = run_openai_with_transport(
+            "some text",
+            "test-key",
+            OPENAI_CHAT_URL,
+            OPENAI_DEFAULT_MODEL,
+            DEFAULT_SYSTEM_PROMPT,
+            &HangingTransport,
+            Duration::from_millis(50),
+        )
+        .await;
+        assert!(
+            matches!(result, Err(CleanupError::Timeout)),
+            "expected Timeout error, got {result:?}"
+        );
+    }
+
+    const ALL_PROVIDER_IDS: [AiProviderId; 8] = [
+        AiProviderId::Anthropic,
+        AiProviderId::OpenAi,
+        AiProviderId::Google,
+        AiProviderId::Groq,
+        AiProviderId::DeepSeek,
+        AiProviderId::Cerebras,
+        AiProviderId::OpenRouter,
+        AiProviderId::Custom,
+    ];
+
+    #[test]
+    fn ai_provider_id_wire_strings_are_stable_and_match_as_str() {
+        let expected = [
+            (AiProviderId::Anthropic, "anthropic"),
+            (AiProviderId::OpenAi, "openai"),
+            (AiProviderId::Google, "google"),
+            (AiProviderId::Groq, "groq"),
+            (AiProviderId::DeepSeek, "deepseek"),
+            (AiProviderId::Cerebras, "cerebras"),
+            (AiProviderId::OpenRouter, "openrouter"),
+            (AiProviderId::Custom, "custom"),
+        ];
+        for (id, wire) in expected {
+            assert_eq!(id.as_str(), wire);
+            assert_eq!(
+                serde_json::to_value(id).unwrap(),
+                serde_json::json!(wire),
+                "serde wire format must match as_str() for {id:?}, else provider_keys lookups break"
+            );
+        }
+    }
+
+    #[test]
+    fn ai_provider_id_round_trips() {
+        for id in ALL_PROVIDER_IDS {
+            let json = serde_json::to_string(&id).unwrap();
+            let decoded: AiProviderId = serde_json::from_str(&json).unwrap();
+            assert_eq!(decoded, id);
+        }
+    }
+
+    #[test]
+    fn build_openai_headers_with_key_includes_authorization() {
+        let headers = build_openai_headers("my-secret-key");
+        let has_auth = headers
+            .iter()
+            .any(|(k, v)| k == "authorization" && v == "Bearer my-secret-key");
+        assert!(has_auth, "expected Authorization header when key is non-empty");
+    }
+
+    #[test]
+    fn build_openai_headers_without_key_omits_authorization() {
+        let headers = build_openai_headers("");
+        let has_auth = headers.iter().any(|(k, _)| k == "authorization");
+        assert!(!has_auth, "expected no Authorization header when key is empty");
+    }
+
+    #[test]
+    fn openai_chat_url_maps_each_compatible_provider() {
+        assert_eq!(AiProviderId::OpenAi.openai_chat_url(), OPENAI_CHAT_URL);
+        assert_eq!(AiProviderId::Google.openai_chat_url(), GOOGLE_CHAT_URL);
+        assert_eq!(AiProviderId::Groq.openai_chat_url(), GROQ_CHAT_URL);
+        assert_eq!(AiProviderId::DeepSeek.openai_chat_url(), DEEPSEEK_CHAT_URL);
+        assert_eq!(AiProviderId::Cerebras.openai_chat_url(), CEREBRAS_CHAT_URL);
+        assert_eq!(AiProviderId::OpenRouter.openai_chat_url(), OPENROUTER_CHAT_URL);
     }
 }

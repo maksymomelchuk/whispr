@@ -36,6 +36,10 @@ time = { version = "0.3", features = ["local-offset", "formatting", "parsing", "
 # which we don't need.
 claxon = "0.4"
 flacenc = { version = "0.5", default-features = false }
+# cpal is cross-platform (CoreAudio/WASAPI/ALSA) — used by recorder on all targets.
+cpal = "0.15"
+# transcribe-rs: base CPU backend + ONNX (Parakeet) on all platforms; GPU acceleration added per target below.
+transcribe-rs = { version = "0.3", features = ["whisper-cpp", "onnx"] }
 
 [dev-dependencies]
 proptest = "1"
@@ -44,16 +48,26 @@ tempfile = "3"
 mockito = "1"
 tokio = { version = "1", features = ["rt", "macros"] }
 
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+rdev = "0.5"
+enigo = "0.2"
+
 [target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
 macos-accessibility-client = "0.0.1"
 core-foundation = "0.10"
 core-graphics = "0.24"
-cpal = "0.15"
 objc2 = "0.6"
 objc2-foundation = "0.3"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = [
     "NSBitmapImageRep", "NSGraphics", "NSGraphicsContext",
     "NSImage", "NSImageRep", "NSWorkspace",
 ] }
-whisper-rs = { version = "0.13", features = ["metal"] }
+transcribe-rs = { version = "0.3", features = ["whisper-metal", "ort-coreml"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+transcribe-rs = { version = "0.3", features = ["ort-directml"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+transcribe-rs = { version = "0.3", features = ["whisper-vulkan"] }
 

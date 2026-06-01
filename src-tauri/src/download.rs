@@ -1,3 +1,4 @@
+use crate::model_catalog;
 use crate::provider::LocalWhisperModel;
 use futures_util::StreamExt;
 use serde::Serialize;
@@ -11,20 +12,6 @@ use tauri::{AppHandle, Emitter, Manager};
 pub const MODEL_DOWNLOAD_PROGRESS_EVENT: &str = "model-download-progress";
 pub const MODEL_DOWNLOAD_COMPLETE_EVENT: &str = "model-download-complete";
 pub const MODEL_DOWNLOAD_ERROR_EVENT: &str = "model-download-error";
-
-// Sizes and SHA256s come from the Hugging Face tree API for
-// ggerganov/whisper.cpp at main. Refresh via:
-//   curl -s 'https://huggingface.co/api/models/ggerganov/whisper.cpp/tree/main'
-const LARGE_V3_URL: &str =
-    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin";
-const LARGE_V3_TURBO_URL: &str =
-    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin";
-const LARGE_V3_SHA256: &str =
-    "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2";
-const LARGE_V3_TURBO_SHA256: &str =
-    "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69";
-const LARGE_V3_SIZE_BYTES: u64 = 3_095_033_483;
-const LARGE_V3_TURBO_SIZE_BYTES: u64 = 1_624_555_275;
 
 #[derive(Debug, Serialize, Clone)]
 pub struct DownloadProgress {
@@ -48,25 +35,8 @@ pub struct LocalModelStatus {
     pub size_bytes: u64,
 }
 
-pub fn model_url(model: LocalWhisperModel) -> &'static str {
-    match model {
-        LocalWhisperModel::LargeV3 => LARGE_V3_URL,
-        LocalWhisperModel::LargeV3Turbo => LARGE_V3_TURBO_URL,
-    }
-}
-
-fn model_sha256(model: LocalWhisperModel) -> &'static str {
-    match model {
-        LocalWhisperModel::LargeV3 => LARGE_V3_SHA256,
-        LocalWhisperModel::LargeV3Turbo => LARGE_V3_TURBO_SHA256,
-    }
-}
-
 pub fn model_size_bytes(model: LocalWhisperModel) -> u64 {
-    match model {
-        LocalWhisperModel::LargeV3 => LARGE_V3_SIZE_BYTES,
-        LocalWhisperModel::LargeV3Turbo => LARGE_V3_TURBO_SIZE_BYTES,
-    }
+    model_catalog::total_size_bytes(&model_catalog::catalog_for(model))
 }
 
 struct DownloadCleanup {
@@ -96,7 +66,6 @@ fn hex_encode(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
-/// Groups the parameters for a file download. Passed to `download_to_dir`.
 pub struct DownloadSpec {
     pub models_dir: PathBuf,
     pub filename: String,
@@ -105,8 +74,6 @@ pub struct DownloadSpec {
     pub cancel_flag: Arc<AtomicBool>,
 }
 
-/// Hashes the bytes already written to a `.part` file so a resumed download
-/// can continue updating a single hasher over the full file contents.
 fn hash_partial_file(path: &Path) -> Result<Sha256, String> {
     let mut hasher = Sha256::new();
     let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
@@ -201,29 +168,48 @@ pub async fn download_model(
     cancel_flag: Arc<AtomicBool>,
 ) -> Result<(), String> {
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    let spec = DownloadSpec {
-        models_dir: data_dir.join("models"),
-        filename: model.filename().to_string(),
-        url: model_url(model).to_string(),
-        expected_sha256: model_sha256(model).to_string(),
-        cancel_flag,
-    };
-    let app_clone = app.clone();
-    download_to_dir(
-        &spec,
-        move |downloaded, total| {
-            let percentage = if total > 0 {
-                ((downloaded as f64 / total as f64) * 100.0).min(100.0) as u8
-            } else {
-                0
-            };
-            let _ = app_clone.emit(
-                MODEL_DOWNLOAD_PROGRESS_EVENT,
-                DownloadProgress { model, bytes_downloaded: downloaded, total_bytes: total, percentage },
-            );
-        },
-    )
-    .await
+    let models_dir = data_dir.join("models");
+    let catalog = model_catalog::catalog_for(model);
+
+    for model_file in &catalog.files {
+        if model_catalog::is_placeholder_hash(&model_file.sha256) {
+            return Err(format!(
+                "Model file '{}' has no verified SHA256 hash — this model is not yet available for download.",
+                model_file.filename
+            ));
+        }
+        let spec = DownloadSpec {
+            models_dir: models_dir.clone(),
+            filename: model_file.filename.clone(),
+            url: model_file.url.clone(),
+            expected_sha256: model_file.sha256.clone(),
+            cancel_flag: cancel_flag.clone(),
+        };
+        let app_clone = app.clone();
+        let total_size = model_catalog::total_size_bytes(&catalog);
+        download_to_dir(
+            &spec,
+            move |downloaded, total| {
+                let report_total = if total > 0 { total } else { total_size };
+                let percentage = if report_total > 0 {
+                    ((downloaded as f64 / report_total as f64) * 100.0).min(100.0) as u8
+                } else {
+                    0
+                };
+                let _ = app_clone.emit(
+                    MODEL_DOWNLOAD_PROGRESS_EVENT,
+                    DownloadProgress {
+                        model,
+                        bytes_downloaded: downloaded,
+                        total_bytes: report_total,
+                        percentage,
+                    },
+                );
+            },
+        )
+        .await?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

@@ -19,12 +19,9 @@ function App() {
   const [settings, setRawSettings] = useState<Settings | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const setSettings = useCallback(
-    (updater: (prev: Settings) => Settings) => {
-      setRawSettings((prev) => (prev ? updater(prev) : prev));
-    },
-    [],
-  );
+  const setSettings = useCallback((updater: (prev: Settings) => Settings) => {
+    setRawSettings((prev) => (prev ? updater(prev) : prev));
+  }, []);
 
   const setSetting = useCallback(
     async <K extends keyof Settings>(

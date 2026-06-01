@@ -8,14 +8,13 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-
-import { Separator } from "@/components/ui/separator";
 
 import { useSettings } from "../context/SettingsContext";
 import { useFlash } from "../hooks/useFlash";
@@ -321,86 +320,86 @@ export function HotkeysPage() {
           Dictation Modes
         </p>
         <div className="flex flex-col gap-8">
-      {settings.modes.map((mode, modeIdx) => {
-        const rows = modeBindings(mode);
-        const isRecordingForThisMode =
-          recorderTarget?.target.kind === "mode" &&
-          recorderTarget.target.modeId === mode.id;
-        const recordingExistingIndex =
-          isRecordingForThisMode && recorderTarget?.bindingIndex !== null
-            ? recorderTarget?.bindingIndex
-            : null;
-        const recordingNewBinding =
-          isRecordingForThisMode && recorderTarget?.bindingIndex === null;
-        const startRecording = (
-          bindingIndex: number | null,
-          current: Shortcut,
-        ) =>
-          setRecorderTarget({
-            target: { kind: "mode", modeId: mode.id },
-            bindingIndex,
-            current,
-          });
+          {settings.modes.map((mode, modeIdx) => {
+            const rows = modeBindings(mode);
+            const isRecordingForThisMode =
+              recorderTarget?.target.kind === "mode" &&
+              recorderTarget.target.modeId === mode.id;
+            const recordingExistingIndex =
+              isRecordingForThisMode && recorderTarget?.bindingIndex !== null
+                ? recorderTarget?.bindingIndex
+                : null;
+            const recordingNewBinding =
+              isRecordingForThisMode && recorderTarget?.bindingIndex === null;
+            const startRecording = (
+              bindingIndex: number | null,
+              current: Shortcut,
+            ) =>
+              setRecorderTarget({
+                target: { kind: "mode", modeId: mode.id },
+                bindingIndex,
+                current,
+              });
 
-        return (
-          <section key={mode.id} className="flex flex-col gap-2.5">
-            <SectionHeader index={modeIdx} title={mode.name} />
+            return (
+              <section key={mode.id} className="flex flex-col gap-2.5">
+                <SectionHeader index={modeIdx} title={mode.name} />
 
-            {rows.length === 0 ? (
-              recordingNewBinding ? (
-                <RecordingRow
-                  initial={recorderTarget!.current}
-                  onSave={handleRecordSave}
-                  onCancel={() => setRecorderTarget(null)}
-                />
-              ) : (
-                <EmptyModeCard
-                  onAdd={() => startRecording(null, DEFAULT_SHORTCUT)}
-                />
-              )
-            ) : (
-              <div className="flex flex-col gap-2">
-                {rows.map(({ binding, index }) => {
-                  if (recordingExistingIndex === index) {
-                    return (
+                {rows.length === 0 ? (
+                  recordingNewBinding ? (
+                    <RecordingRow
+                      initial={recorderTarget!.current}
+                      onSave={handleRecordSave}
+                      onCancel={() => setRecorderTarget(null)}
+                    />
+                  ) : (
+                    <EmptyModeCard
+                      onAdd={() => startRecording(null, DEFAULT_SHORTCUT)}
+                    />
+                  )
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {rows.map(({ binding, index }) => {
+                      if (recordingExistingIndex === index) {
+                        return (
+                          <RecordingRow
+                            key={index}
+                            initial={recorderTarget!.current}
+                            onSave={handleRecordSave}
+                            onCancel={() => setRecorderTarget(null)}
+                          />
+                        );
+                      }
+                      const flashing = isFlashing(
+                        rowFlashId(mode.id, binding.shortcut),
+                      );
+                      const armed =
+                        !!activeShortcut &&
+                        shortcutsEqual(activeShortcut, binding.shortcut);
+                      return (
+                        <BindingRow
+                          key={index}
+                          binding={binding}
+                          conflict={hasConflict(bindings, index)}
+                          armed={armed}
+                          flashing={flashing}
+                          onEdit={() => startRecording(index, binding.shortcut)}
+                          onRemove={() => handleRemove(index)}
+                        />
+                      );
+                    })}
+                    {recordingNewBinding && (
                       <RecordingRow
-                        key={index}
                         initial={recorderTarget!.current}
                         onSave={handleRecordSave}
                         onCancel={() => setRecorderTarget(null)}
                       />
-                    );
-                  }
-                  const flashing = isFlashing(
-                    rowFlashId(mode.id, binding.shortcut),
-                  );
-                  const armed =
-                    !!activeShortcut &&
-                    shortcutsEqual(activeShortcut, binding.shortcut);
-                  return (
-                    <BindingRow
-                      key={index}
-                      binding={binding}
-                      conflict={hasConflict(bindings, index)}
-                      armed={armed}
-                      flashing={flashing}
-                      onEdit={() => startRecording(index, binding.shortcut)}
-                      onRemove={() => handleRemove(index)}
-                    />
-                  );
-                })}
-                {recordingNewBinding && (
-                  <RecordingRow
-                    initial={recorderTarget!.current}
-                    onSave={handleRecordSave}
-                    onCancel={() => setRecorderTarget(null)}
-                  />
+                    )}
+                  </div>
                 )}
-              </div>
-            )}
-          </section>
-        );
-      })}
+              </section>
+            );
+          })}
         </div>
       </div>
 
@@ -449,10 +448,7 @@ function PasteLatestSection({
   const recordingNewBinding =
     isRecordingHere && recorderTarget?.bindingIndex === null;
 
-  const startRecording = (
-    bindingIndex: number | null,
-    current: Shortcut,
-  ) =>
+  const startRecording = (bindingIndex: number | null, current: Shortcut) =>
     setRecorderTarget({
       target: { kind: "paste_latest" },
       bindingIndex,
@@ -496,9 +492,7 @@ function PasteLatestSection({
                 conflict={hasConflict(bindings, bindingIndex)}
                 armed={false}
                 flashing={flashing}
-                onEdit={() =>
-                  startRecording(bindingIndex, binding.shortcut)
-                }
+                onEdit={() => startRecording(bindingIndex, binding.shortcut)}
                 onRemove={() => onRemove(bindingIndex)}
               />
             );

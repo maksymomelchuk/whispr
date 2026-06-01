@@ -75,6 +75,7 @@ pub enum LocalWhisperModel {
     LargeV3,
     #[default]
     LargeV3Turbo,
+    Parakeet,
 }
 
 impl LocalWhisperModel {
@@ -82,6 +83,7 @@ impl LocalWhisperModel {
         match self {
             Self::LargeV3 => "ggml-large-v3.bin",
             Self::LargeV3Turbo => "ggml-large-v3-turbo.bin",
+            Self::Parakeet => "encoder-model.int8.onnx",
         }
     }
 }
@@ -228,11 +230,40 @@ mod tests {
 
     #[test]
     fn local_whisper_model_round_trips() {
-        for model in [LocalWhisperModel::LargeV3, LocalWhisperModel::LargeV3Turbo] {
+        for model in [LocalWhisperModel::LargeV3, LocalWhisperModel::LargeV3Turbo, LocalWhisperModel::Parakeet] {
             let json = serde_json::to_string(&model).unwrap();
             let decoded: LocalWhisperModel = serde_json::from_str(&json).unwrap();
             assert_eq!(decoded, model);
         }
+    }
+
+    #[test]
+    fn local_whisper_model_parakeet_serializes_as_snake_case() {
+        let v: serde_json::Value = serde_json::to_value(LocalWhisperModel::Parakeet).unwrap();
+        assert_eq!(v, "parakeet");
+    }
+
+    #[test]
+    fn provider_model_local_parakeet_round_trips() {
+        let pm = ProviderModel::Local { model: LocalWhisperModel::Parakeet };
+        let json = serde_json::to_string(&pm).unwrap();
+        let decoded: ProviderModel = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded, pm);
+    }
+
+    #[test]
+    fn provider_model_local_parakeet_serializes_with_provider_and_model() {
+        let m = ProviderModel::Local { model: LocalWhisperModel::Parakeet };
+        let v: serde_json::Value = serde_json::to_value(&m).unwrap();
+        assert_eq!(v["provider"], "local");
+        assert_eq!(v["model"], "parakeet");
+    }
+
+    #[test]
+    fn local_model_path_parakeet_primary_file_under_models_subdir() {
+        let data_dir = Path::new("/app/data");
+        let path = local_model_path(data_dir, LocalWhisperModel::Parakeet);
+        assert_eq!(path, PathBuf::from("/app/data/models/encoder-model.int8.onnx"));
     }
 
     #[test]

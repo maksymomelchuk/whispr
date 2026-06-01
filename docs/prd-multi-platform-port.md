@@ -93,7 +93,7 @@ our own, keeping its copyright notice on any lifted code.
 - Formal capability traits are explicitly **not** used: a Tauri build compiles exactly
   one impl per target, so compile-time `cfg` selection is sufficient and trait
   ceremony would buy nothing. The discipline that matters is keeping each module's
-  *public* surface platform-neutral.
+  _public_ surface platform-neutral.
 - Modules currently gated only because they were wired into the macOS pipeline —
   `recorder` (already `cpal`), and the Cloud [[Engine]] sessions
   (`deepgram_session`, `groq_session`, `assemblyai_session`, pure
@@ -103,7 +103,7 @@ our own, keeping its copyright notice on any lifted code.
 
 - **`hotkey` core** — the double-tap state machine (`advance_tap_state`) and
   [[Hotkey binding]] resolution, already platform-agnostic in `ptt.rs`. Extracted to
-  consume *abstract* key events (`KeyDown`/`KeyUp` + keysym + modifier state) and emit
+  consume _abstract_ key events (`KeyDown`/`KeyUp` + keysym + modifier state) and emit
   the existing dispatch decisions, independent of the event source.
 - **`keysym` mapping** — pure translation between the keyboard library's key
   representation and Whispr's `Shortcut`, replacing the hardcoded macOS keycodes
@@ -112,7 +112,7 @@ our own, keeping its copyright notice on any lifted code.
   word-boundary chunker stays pure; a new pure decision picks the Linux injector given
   the detected display server and which tools are present on `PATH`.
 - **`model_catalog` spec + download planner** — a `ModelSpec` describing a model's
-  files (single-file Whisper GGUF *vs.* multi-file Parakeet ONNX set + tokenizer) and a
+  files (single-file Whisper GGUF _vs._ multi-file Parakeet ONNX set + tokenizer) and a
   planner computing which files to fetch and where to resume. Pure logic over a spec.
 - **`platform` detection** — pure detection of OS and Linux display server
   (`XDG_SESSION_TYPE` / `WAYLAND_DISPLAY`), feeding injector choice and overlay
@@ -187,7 +187,7 @@ A good test here asserts **external behavior of pure logic**, never implementati
 detail or OS calls. Per `AGENTS.md`: test behavior not implementation, one logical
 concept per test, no shared mutable state, and **do not mock what we own** — only the
 genuine external boundary (the OS) is excluded, by virtue of the pure cores having no
-OS dependency. The user's directive: test as much as possible *without overhead* —
+OS dependency. The user's directive: test as much as possible _without overhead_ —
 i.e. cover every pure core, but do not write OS-mocking or integration-glue tests that
 would be brittle and low-value.
 

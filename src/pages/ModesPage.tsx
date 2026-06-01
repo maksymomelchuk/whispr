@@ -58,6 +58,7 @@ import {
   updateMode,
 } from "../lib/api";
 import type {
+  AiProviderId,
   AssemblyAiModel,
   GroqModel,
   HotkeyBinding,
@@ -76,12 +77,13 @@ const PROVIDER_OPTIONS: { value: ProviderModel["provider"]; label: string }[] =
     { value: "deepgram", label: "Deepgram" },
     { value: "groq", label: "Groq" },
     { value: "assembly_ai", label: "AssemblyAI" },
-    { value: "local", label: "Local — Whisper" },
+    { value: "local", label: "Local" },
   ];
 
 const LOCAL_MODEL_OPTIONS: { value: LocalWhisperModel; label: string }[] = [
-  { value: "large_v3_turbo", label: "Large v3 Turbo" },
-  { value: "large_v3", label: "Large v3" },
+  { value: "large_v3_turbo", label: "Whisper Large v3 Turbo" },
+  { value: "large_v3", label: "Whisper Large v3" },
+  { value: "parakeet", label: "Parakeet TDT" },
 ];
 
 const GROQ_MODEL_OPTIONS: { value: GroqModel; label: string }[] = [
@@ -140,6 +142,85 @@ const LANGUAGES: { code: string; name: string; flag: string }[] = [
   { code: "id", name: "Indonesian", flag: "🇮🇩" },
   { code: "he", name: "Hebrew", flag: "🇮🇱" },
 ];
+
+const CLEANUP_PROVIDER_OPTIONS: { value: AiProviderId; label: string }[] = [
+  { value: "anthropic", label: "Anthropic" },
+  { value: "openai", label: "OpenAI" },
+  { value: "google", label: "Google Gemini" },
+  { value: "groq", label: "Groq" },
+  { value: "deepseek", label: "DeepSeek" },
+  { value: "cerebras", label: "Cerebras" },
+  { value: "openrouter", label: "OpenRouter" },
+  { value: "custom", label: "Custom" },
+];
+
+type CleanupModelOption = {
+  value: string;
+  label: string;
+  recommended?: boolean;
+};
+
+const CLEANUP_MODEL_OPTIONS: Record<
+  Exclude<AiProviderId, "custom">,
+  CleanupModelOption[]
+> = {
+  anthropic: [
+    { value: "claude-haiku-4-5", label: "Claude Haiku 4.5", recommended: true },
+    { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
+    { value: "claude-opus-4-8", label: "Claude Opus 4.8" },
+  ],
+  openai: [
+    { value: "gpt-5.4-mini", label: "GPT-5.4 mini", recommended: true },
+    { value: "gpt-5.4-nano", label: "GPT-5.4 nano" },
+    { value: "gpt-5-mini", label: "GPT-5 mini" },
+    { value: "gpt-5-nano", label: "GPT-5 nano" },
+    { value: "gpt-5.4", label: "GPT-5.4" },
+    { value: "gpt-5.5", label: "GPT-5.5" },
+  ],
+  google: [
+    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash", recommended: true },
+    { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash" },
+    { value: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite" },
+    { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+    { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (preview)" },
+  ],
+  groq: [
+    {
+      value: "llama-3.1-8b-instant",
+      label: "Llama 3.1 8B",
+      recommended: true,
+    },
+    { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B" },
+    { value: "openai/gpt-oss-20b", label: "GPT-OSS 20B" },
+    { value: "openai/gpt-oss-120b", label: "GPT-OSS 120B" },
+  ],
+  deepseek: [
+    {
+      value: "deepseek-v4-flash",
+      label: "DeepSeek V4 Flash",
+      recommended: true,
+    },
+    { value: "deepseek-v4-pro", label: "DeepSeek V4 Pro" },
+  ],
+  cerebras: [
+    { value: "llama-3.3-70b", label: "Llama 3.3 70B", recommended: true },
+    { value: "llama3.1-8b", label: "Llama 3.1 8B" },
+    { value: "gpt-oss-120b", label: "GPT-OSS 120B" },
+    { value: "qwen-3-235b-a22b-instruct-2507", label: "Qwen 3 235B" },
+  ],
+  openrouter: [
+    {
+      value: "anthropic/claude-haiku-4.5",
+      label: "Claude Haiku 4.5",
+      recommended: true,
+    },
+    { value: "openai/gpt-5-mini", label: "GPT-5 mini" },
+    { value: "openai/gpt-5-nano", label: "GPT-5 nano" },
+    { value: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+    { value: "google/gemini-3.5-flash", label: "Gemini 3.5 Flash" },
+    { value: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B" },
+  ],
+};
 
 function langLabel(code: string): string {
   const entry = LANGUAGES.find((l) => l.code === code);
@@ -360,7 +441,8 @@ export function ModeEditor({
   onPersist,
   availableTermSets = [],
   correctionSets = [],
-  cleanupCredentialConfigured = true,
+  configuredProviders,
+  customProviderModel = "",
 }: {
   mode: Mode;
   isNew: boolean;
@@ -368,14 +450,17 @@ export function ModeEditor({
   onPersist: (mode: Mode, wasNew: boolean) => void;
   availableTermSets?: NamedTermSet[];
   correctionSets?: NamedCorrectionSet[];
-  cleanupCredentialConfigured?: boolean;
+  configuredProviders?: AiProviderId[];
+  customProviderModel?: string;
 }) {
   const [draft, setDraft] = useState<Mode>(mode);
   const [creating, setCreating] = useState(false);
   const [promptOpen, setPromptOpen] = useState(
     !!mode.ai_cleanup.prompt_override,
   );
-  const [localStatuses, setLocalStatuses] = useState<LocalModelStatus[] | null>(null);
+  const [localStatuses, setLocalStatuses] = useState<LocalModelStatus[] | null>(
+    null,
+  );
 
   // Language UI state — kept separate so chip list survives toggling to Auto.
   const [langMode, setLangMode] = useState<"auto" | "restrict">(
@@ -445,6 +530,23 @@ export function ModeEditor({
         : d.correction_set_ids.filter((id) => id !== setId),
     }));
 
+  const setCleanupProvider = (provider: AiProviderId) => {
+    const defaultModel =
+      provider === "custom" ? "" : CLEANUP_MODEL_OPTIONS[provider][0].value;
+    setDraft((d) => ({
+      ...d,
+      ai_cleanup: { ...d.ai_cleanup, provider, model: defaultModel },
+    }));
+  };
+
+  const setCleanupModel = (model: string) =>
+    setDraft((d) => ({ ...d, ai_cleanup: { ...d.ai_cleanup, model } }));
+
+  const cleanupProvider = draft.ai_cleanup.provider;
+  const cleanupProviderConfigured = (configuredProviders ?? []).includes(
+    cleanupProvider,
+  );
+
   const normalized = useMemo<Mode>(
     () => ({
       ...draft,
@@ -509,12 +611,18 @@ export function ModeEditor({
     let unlisten: (() => void) | undefined;
 
     const attach = async () => {
-      const fn = await listen<LocalWhisperModel>("model-download-complete", (e) => {
-        const model = e.payload;
-        setLocalStatuses((prev) =>
-          prev?.map((s) => (s.model === model ? { ...s, downloaded: true } : s)) ?? prev,
-        );
-      });
+      const fn = await listen<LocalWhisperModel>(
+        "model-download-complete",
+        (e) => {
+          const model = e.payload;
+          setLocalStatuses(
+            (prev) =>
+              prev?.map((s) =>
+                s.model === model ? { ...s, downloaded: true } : s,
+              ) ?? prev,
+          );
+        },
+      );
       if (cancelled) {
         fn();
         return;
@@ -548,7 +656,7 @@ export function ModeEditor({
         <SheetTitle>{isNew ? "New Profile" : "Edit Profile"}</SheetTitle>
       </SheetHeader>
 
-      <div className="flex flex-col gap-4 px-4 pb-10 overflow-y-auto flex-1 min-h-0 [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb:hover]:bg-muted-foreground/40">
+      <div className="flex flex-col gap-4 px-4 pb-10 overflow-y-scroll flex-1 min-h-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb:hover]:bg-muted-foreground/40">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="mode-name" className="text-[13px]">
             Name
@@ -753,45 +861,102 @@ export function ModeEditor({
             id="cleanup"
             label="AI cleanup"
             info={
-              !cleanupCredentialConfigured && !draft.ai_cleanup.enabled
-                ? "Set Anthropic credentials in AI Providers to enable cleanup."
+              !cleanupProviderConfigured && !draft.ai_cleanup.enabled
+                ? "Set up a provider in AI Providers to enable cleanup."
                 : undefined
             }
             checked={draft.ai_cleanup.enabled}
             onCheckedChange={setCleanup}
-            disabled={
-              !cleanupCredentialConfigured && !draft.ai_cleanup.enabled
-            }
+            disabled={!cleanupProviderConfigured && !draft.ai_cleanup.enabled}
           />
           {draft.ai_cleanup.enabled && (
-            <Collapsible
-              open={promptOpen}
-              onOpenChange={setPromptOpen}
-              className="flex flex-col gap-2"
-            >
-              <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-fit">
-                <CaretRightIcon
-                  size={10}
-                  className={`transition-transform ${promptOpen ? "rotate-90" : ""}`}
-                />
-                Custom prompt
-              </CollapsibleTrigger>
-              <CollapsibleContent className="flex flex-col gap-2">
-                <Textarea
-                  className="resize-none min-h-[80px] leading-[1.5]"
-                  placeholder="Leave empty to use the default cleanup prompt."
-                  value={draft.ai_cleanup.prompt_override ?? ""}
-                  onChange={(e) => setPromptOverride(e.target.value)}
-                  spellCheck={false}
-                />
-                <p className="text-help text-muted-foreground leading-relaxed">
-                  The text inside{" "}
-                  <code className="font-mono">&lt;transcript&gt;</code> tags
-                  will be your dictation. Your prompt is responsible for
-                  treating it as data to transform, not instructions to execute.
-                </p>
-              </CollapsibleContent>
-            </Collapsible>
+            <>
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs text-muted-foreground/70">
+                    Provider
+                  </span>
+                  <Select
+                    value={draft.ai_cleanup.provider}
+                    onValueChange={(v) => setCleanupProvider(v as AiProviderId)}
+                  >
+                    <SelectTrigger size="sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CLEANUP_PROVIDER_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                          {!(configuredProviders ?? []).includes(opt.value) &&
+                            " (needs setup)"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {cleanupProvider !== "custom" ? (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-xs text-muted-foreground/70">
+                      Model
+                    </span>
+                    <Select
+                      value={draft.ai_cleanup.model}
+                      onValueChange={setCleanupModel}
+                    >
+                      <SelectTrigger size="sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CLEANUP_MODEL_OPTIONS[cleanupProvider].map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                            {opt.recommended && (
+                              <span className="ml-1.5 text-muted-foreground/70">
+                                (recommended)
+                              </span>
+                            )}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-xs text-muted-foreground/70">
+                      Model
+                    </span>
+                    <p className="text-xs text-muted-foreground">
+                      {customProviderModel || "(blank — single-model server)"}
+                    </p>
+                    <p className="text-xs text-muted-foreground/60">
+                      Configured on the Custom card in AI Providers.
+                    </p>
+                  </div>
+                )}
+              </div>
+              <Collapsible
+                open={promptOpen}
+                onOpenChange={setPromptOpen}
+                className="flex flex-col gap-2"
+              >
+                <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-fit">
+                  <CaretRightIcon
+                    size={10}
+                    className={`transition-transform ${promptOpen ? "rotate-90" : ""}`}
+                  />
+                  Custom prompt
+                </CollapsibleTrigger>
+                <CollapsibleContent className="flex flex-col gap-2">
+                  <Textarea
+                    className="resize-none min-h-[80px] leading-[1.5]"
+                    placeholder="Leave empty to use the default cleanup prompt."
+                    value={draft.ai_cleanup.prompt_override ?? ""}
+                    onChange={(e) => setPromptOverride(e.target.value)}
+                    spellCheck={false}
+                  />
+                </CollapsibleContent>
+              </Collapsible>
+            </>
           )}
           <div className="flex items-center gap-3 mt-3 mb-1">
             <span className="text-eyebrow uppercase text-muted-foreground/70">
@@ -874,7 +1039,12 @@ export function ModesPage() {
       name: "",
       icon: null,
       language: { kind: "exact", code: "en" },
-      ai_cleanup: { enabled: false, prompt_override: null },
+      ai_cleanup: {
+        enabled: false,
+        prompt_override: null,
+        provider: "anthropic",
+        model: "claude-haiku-4-5",
+      },
       term_set_ids: [],
       correction_set_ids: [],
       use_snippets: true,
@@ -918,7 +1088,8 @@ export function ModesPage() {
         {settings.modes.map((mode) => {
           const provider = mode.provider_model.provider;
           const missingProviderKey =
-            (provider === "deepgram" && !settings.deepgram_api_key_configured) ||
+            (provider === "deepgram" &&
+              !settings.deepgram_api_key_configured) ||
             (provider === "groq" && !settings.groq_api_key_configured) ||
             (provider === "assembly_ai" &&
               !settings.assemblyai_api_key_configured);
@@ -969,11 +1140,22 @@ export function ModesPage() {
               onPersist={handlePersist}
               availableTermSets={settings.term_sets ?? []}
               correctionSets={settings.correction_sets ?? []}
-              cleanupCredentialConfigured={
-                settings.ai_cleanup_auth_mode === "api_key"
-                  ? settings.ai_cleanup_key_configured
-                  : settings.ai_cleanup_oauth_token_configured
-              }
+              configuredProviders={(() => {
+                const anthropicConfigured =
+                  settings.ai_cleanup_key_configured ||
+                  settings.ai_cleanup_oauth_token_configured;
+                return [
+                  ...settings.configured_providers,
+                  ...(anthropicConfigured &&
+                  !settings.configured_providers.includes("anthropic")
+                    ? (["anthropic"] as AiProviderId[])
+                    : []),
+                  ...(settings.custom_provider_configured
+                    ? (["custom"] as AiProviderId[])
+                    : []),
+                ];
+              })()}
+              customProviderModel={settings.custom_provider_model}
             />
           )}
         </SheetContent>

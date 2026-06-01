@@ -3,9 +3,9 @@ name: Release
 # Cut a release by pushing a semver tag:
 #   git tag v0.2.0 && git push origin v0.2.0
 #
-# The job builds a macOS universal binary (Intel + Apple Silicon), uploads
-# the .dmg / .app.tar.gz to a new GitHub Release, and publishes latest.json
-# so existing installs pick up the update.
+# Each platform builds its installable artifacts and updater package, then
+# uploads them to the same GitHub Release and updates latest.json so existing
+# installs pick up the update.
 
 on:
   push:
@@ -17,17 +17,45 @@ permissions:
 
 jobs:
   release:
-    name: Build and publish
-    runs-on: macos-latest
+    name: Build and publish (${{ matrix.platform.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform:
+              name: macOS
+              os: macos-latest
+              rust-targets: aarch64-apple-darwin
+              args: --target aarch64-apple-darwin
+
+          - platform:
+              name: Windows
+              os: windows-latest
+              rust-targets: ""
+              args: ""
+
+          - platform:
+              name: Linux
+              os: ubuntu-24.04
+              rust-targets: ""
+              args: ""
+
+    runs-on: ${{ matrix.platform.os }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set macOS deployment target
+        if: runner.os == 'macOS'
+        run: |
+          echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> "$GITHUB_ENV"
+          echo "CMAKE_OSX_DEPLOYMENT_TARGET=10.15" >> "$GITHUB_ENV"
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: 10.5.0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -38,12 +66,27 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+          targets: ${{ matrix.platform.rust-targets }}
 
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libasound2-dev \
+            libxdo-dev \
+            libvulkan-dev \
+            glslc
 
       - name: Install frontend deps
         run: pnpm install --frozen-lockfile
@@ -54,26 +97,40 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          MACOSX_DEPLOYMENT_TARGET: "10.15"
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Whispr ${{ github.ref_name }}"
           releaseBody: |
-            ## Installation (macOS, unsigned build)
+            ## Installation
 
+            ### macOS (unsigned build)
             1. Download the `.dmg`, drag Whispr into Applications.
-            2. First launch: **right-click → Open** (Gatekeeper will complain
-               about an "unidentified developer" — that's expected for this
-               unsigned build). Subsequent launches go directly.
-            3. Grant **Accessibility** permission when prompted (required for
-               the push-to-talk listener and keystroke injection).
+            2. First launch: **right-click → Open** (Gatekeeper will warn about an
+               "unidentified developer" — expected for this unsigned build). Subsequent
+               launches go directly.
+            3. Grant **Accessibility** permission when prompted (required for the
+               push-to-talk listener and keystroke injection).
 
-            Auto-updates will handle future releases without the right-click
-            dance — the already-trusted app writes its own update in place.
+            ### Windows (unsigned build)
+            1. Download and run the `.msi` or `_en-US.setup.exe` installer.
+            2. If SmartScreen shows "Windows protected your PC": click
+               **More info → Run anyway**.
+            3. No additional permissions are required.
+
+            ### Linux
+            - **AppImage:** Download the `.AppImage`, mark it executable
+              (`chmod +x Whispr_*.AppImage`), and run it directly.
+            - **deb:** Download the `.deb` and install with
+              `sudo dpkg -i whispr_*.deb`.
+
+            Auto-updates will handle future releases — no reinstall needed for AppImage
+            and Windows installs. See `docs/adr/0002-distribution-signing-packaging-updater.md`
+            for the rationale behind unsigned builds on macOS and Windows.
 
             ## What's in this release
-
             _See commits since the previous tag._
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
-          args: --target universal-apple-darwin
+          args: ${{ matrix.platform.args }}

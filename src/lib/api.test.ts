@@ -111,9 +111,15 @@ const COMMANDS: Array<{
   },
   {
     call: () =>
-      addCorrectionSet({ id: "cs1", name: "My Set", entries: [{ from: "x", to: "y" }] }),
+      addCorrectionSet({
+        id: "cs1",
+        name: "My Set",
+        entries: [{ from: "x", to: "y" }],
+      }),
     cmd: "add_correction_set",
-    args: { set: { id: "cs1", name: "My Set", entries: [{ from: "x", to: "y" }] } },
+    args: {
+      set: { id: "cs1", name: "My Set", entries: [{ from: "x", to: "y" }] },
+    },
   },
   {
     call: () =>
@@ -139,7 +145,12 @@ const COMMANDS: Array<{
         icon: null,
         language: { kind: "auto" },
 
-        ai_cleanup: { enabled: false, prompt_override: null },
+        ai_cleanup: {
+          enabled: false,
+          prompt_override: null,
+          provider: "anthropic",
+          model: "claude-haiku-4-5",
+        },
         term_set_ids: [],
         correction_set_ids: [],
         use_snippets: true,
@@ -153,7 +164,12 @@ const COMMANDS: Array<{
         icon: null,
         language: { kind: "auto" },
 
-        ai_cleanup: { enabled: false, prompt_override: null },
+        ai_cleanup: {
+          enabled: false,
+          prompt_override: null,
+          provider: "anthropic",
+          model: "claude-haiku-4-5",
+        },
         term_set_ids: [],
         correction_set_ids: [],
         use_snippets: true,
@@ -169,7 +185,12 @@ const COMMANDS: Array<{
         icon: null,
         language: { kind: "auto" },
 
-        ai_cleanup: { enabled: false, prompt_override: null },
+        ai_cleanup: {
+          enabled: false,
+          prompt_override: null,
+          provider: "anthropic",
+          model: "claude-haiku-4-5",
+        },
         term_set_ids: [],
         correction_set_ids: [],
         use_snippets: true,
@@ -183,7 +204,12 @@ const COMMANDS: Array<{
         icon: null,
         language: { kind: "auto" },
 
-        ai_cleanup: { enabled: false, prompt_override: null },
+        ai_cleanup: {
+          enabled: false,
+          prompt_override: null,
+          provider: "anthropic",
+          model: "claude-haiku-4-5",
+        },
         term_set_ids: [],
         correction_set_ids: [],
         use_snippets: true,

@@ -49,7 +49,12 @@ const MODE: Mode = {
   name: "Original",
   icon: null,
   language: { kind: "auto" },
-  ai_cleanup: { enabled: false, prompt_override: null },
+  ai_cleanup: {
+    enabled: false,
+    prompt_override: null,
+    provider: "anthropic",
+    model: "claude-haiku-4-5",
+  },
   term_set_ids: [],
   correction_set_ids: [],
   use_snippets: true,
@@ -61,20 +66,28 @@ function EditorWrapper({
   isNew = false,
   onClose = vi.fn(),
   onPersist = vi.fn(),
+  configuredProviders,
+  customProviderModel,
 }: {
   mode?: Mode;
   isNew?: boolean;
   onClose?: () => void;
   onPersist?: (m: Mode, wasNew: boolean) => void;
+  configuredProviders?: import("@/lib/types").AiProviderId[];
+  customProviderModel?: string;
 }) {
   return (
     <MemoryRouter>
-      <ModeEditor
-        mode={mode}
-        isNew={isNew}
-        onClose={onClose}
-        onPersist={onPersist}
-      />
+      <TooltipProvider>
+        <ModeEditor
+          mode={mode}
+          isNew={isNew}
+          onClose={onClose}
+          onPersist={onPersist}
+          configuredProviders={configuredProviders}
+          customProviderModel={customProviderModel}
+        />
+      </TooltipProvider>
     </MemoryRouter>
   );
 }
@@ -168,7 +181,9 @@ describe("ModeEditor – autosave", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Create profile" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Create profile" }),
+    ).toBeDisabled();
 
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 
@@ -186,7 +201,9 @@ describe("ModeEditor – autosave", () => {
     expect(
       screen.getByRole("button", { name: "Create profile" }),
     ).not.toBeDisabled();
-    await userEvent.click(screen.getByRole("button", { name: "Create profile" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Create profile" }),
+    );
 
     await waitFor(() =>
       expect(vi.mocked(mockAddMode)).toHaveBeenCalledTimes(1),
@@ -208,6 +225,10 @@ const BASE_SETTINGS: Settings = {
   ai_cleanup_auth_mode: "api_key",
   ai_cleanup_key_configured: false,
   ai_cleanup_oauth_token_configured: false,
+  configured_providers: [],
+  custom_provider_configured: false,
+  custom_provider_base_url: null,
+  custom_provider_model: "",
   ai_cleanup_min_words: 9,
   ai_cleanup_min_duration_ms: 3000,
   input_device: null,
@@ -306,13 +327,15 @@ describe("ModeEditor – correction sets", () => {
 
   it("renders a chip for each selected correction set", () => {
     render(
-      <ModeEditor
-        mode={{ ...MODE, correction_set_ids: ["cs-1"] }}
-        isNew={false}
-        onClose={vi.fn()}
-        onPersist={vi.fn()}
-        correctionSets={SETS}
-      />,
+      <TooltipProvider>
+        <ModeEditor
+          mode={{ ...MODE, correction_set_ids: ["cs-1"] }}
+          isNew={false}
+          onClose={vi.fn()}
+          onPersist={vi.fn()}
+          correctionSets={SETS}
+        />
+      </TooltipProvider>,
     );
     expect(
       screen.getByRole("button", { name: "Remove Punctuation" }),
@@ -324,33 +347,35 @@ describe("ModeEditor – correction sets", () => {
 
   it("shows the add picker when not every set is selected", () => {
     render(
-      <ModeEditor
-        mode={{ ...MODE, correction_set_ids: ["cs-1"] }}
-        isNew={false}
-        onClose={vi.fn()}
-        onPersist={vi.fn()}
-        correctionSets={SETS}
-      />,
+      <TooltipProvider>
+        <ModeEditor
+          mode={{ ...MODE, correction_set_ids: ["cs-1"] }}
+          isNew={false}
+          onClose={vi.fn()}
+          onPersist={vi.fn()}
+          correctionSets={SETS}
+        />
+      </TooltipProvider>,
     );
     expect(screen.getByText("+ Add correction set")).toBeInTheDocument();
   });
 
   it("removing a chip autosaves without that set in correction_set_ids", async () => {
     render(
-      <ModeEditor
-        mode={{ ...MODE, correction_set_ids: ["cs-1"] }}
-        isNew={false}
-        onClose={vi.fn()}
-        onPersist={vi.fn()}
-        correctionSets={SETS}
-      />,
+      <TooltipProvider>
+        <ModeEditor
+          mode={{ ...MODE, correction_set_ids: ["cs-1"] }}
+          isNew={false}
+          onClose={vi.fn()}
+          onPersist={vi.fn()}
+          correctionSets={SETS}
+        />
+      </TooltipProvider>,
     );
 
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Remove Punctuation" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Remove Punctuation" }));
 
     await act(async () => {
       vi.advanceTimersByTime(450);
@@ -375,8 +400,18 @@ describe("ModeEditor – local model picker", () => {
 
   it("shows download hint when some local models are not downloaded", async () => {
     vi.mocked(mockGetLocalModelStatuses).mockResolvedValue([
-      { model: "large_v3_turbo", downloaded: false, downloading: false, size_bytes: 0 },
-      { model: "large_v3", downloaded: false, downloading: false, size_bytes: 0 },
+      {
+        model: "large_v3_turbo",
+        downloaded: false,
+        downloading: false,
+        size_bytes: 0,
+      },
+      {
+        model: "large_v3",
+        downloaded: false,
+        downloading: false,
+        size_bytes: 0,
+      },
     ]);
     render(<EditorWrapper mode={LOCAL_MODE} />);
     await waitFor(() =>
@@ -386,8 +421,18 @@ describe("ModeEditor – local model picker", () => {
 
   it("does not show download hint when all local models are downloaded", async () => {
     vi.mocked(mockGetLocalModelStatuses).mockResolvedValue([
-      { model: "large_v3_turbo", downloaded: true, downloading: false, size_bytes: 0 },
-      { model: "large_v3", downloaded: true, downloading: false, size_bytes: 0 },
+      {
+        model: "large_v3_turbo",
+        downloaded: true,
+        downloading: false,
+        size_bytes: 0,
+      },
+      {
+        model: "large_v3",
+        downloaded: true,
+        downloading: false,
+        size_bytes: 0,
+      },
     ]);
     render(<EditorWrapper mode={LOCAL_MODE} />);
     await waitFor(() =>
@@ -398,5 +443,198 @@ describe("ModeEditor – local model picker", () => {
   it("does not show Model picker when provider is Deepgram", () => {
     render(<EditorWrapper mode={MODE} />);
     expect(screen.queryByText("Model")).not.toBeInTheDocument();
+  });
+});
+
+describe("ModeEditor – cleanup provider/model pickers", () => {
+  const cleanupEnabledMode: Mode = {
+    ...MODE,
+    ai_cleanup: {
+      enabled: true,
+      prompt_override: null,
+      provider: "anthropic",
+      model: "claude-haiku-4-5",
+    },
+  };
+
+  it("shows cleanup model value when AI cleanup is enabled with Anthropic", () => {
+    render(
+      <EditorWrapper
+        mode={cleanupEnabledMode}
+        configuredProviders={["anthropic"]}
+      />,
+    );
+    expect(screen.getByText("Claude Haiku 4.5")).toBeInTheDocument();
+  });
+
+  it("shows selected model value when AI cleanup is enabled with OpenAI", () => {
+    const openaiMode: Mode = {
+      ...MODE,
+      ai_cleanup: {
+        enabled: true,
+        prompt_override: null,
+        provider: "openai",
+        model: "gpt-5.4-mini",
+      },
+    };
+    render(
+      <EditorWrapper mode={openaiMode} configuredProviders={["openai"]} />,
+    );
+    expect(screen.getByText("GPT-5.4 mini")).toBeInTheDocument();
+  });
+
+  it("disables the cleanup toggle when no cleanup provider is configured", () => {
+    render(<EditorWrapper mode={MODE} configuredProviders={[]} />);
+    const toggle = screen.getByRole("switch", { name: /ai cleanup/i });
+    expect(toggle).toBeDisabled();
+  });
+
+  it("enables the cleanup toggle when a cleanup provider is configured", () => {
+    render(<EditorWrapper mode={MODE} configuredProviders={["anthropic"]} />);
+    const toggle = screen.getByRole("switch", { name: /ai cleanup/i });
+    expect(toggle).not.toBeDisabled();
+  });
+
+  it("shows selected model value when AI cleanup is enabled with Google", () => {
+    const googleMode: Mode = {
+      ...MODE,
+      ai_cleanup: {
+        enabled: true,
+        prompt_override: null,
+        provider: "google",
+        model: "gemini-2.5-flash",
+      },
+    };
+    render(
+      <EditorWrapper mode={googleMode} configuredProviders={["google"]} />,
+    );
+    expect(screen.getByText("Gemini 2.5 Flash")).toBeInTheDocument();
+  });
+
+  it("shows selected model value when AI cleanup is enabled with Groq", () => {
+    const groqMode: Mode = {
+      ...MODE,
+      ai_cleanup: {
+        enabled: true,
+        prompt_override: null,
+        provider: "groq",
+        model: "llama-3.1-8b-instant",
+      },
+    };
+    render(<EditorWrapper mode={groqMode} configuredProviders={["groq"]} />);
+    expect(screen.getByText("Llama 3.1 8B")).toBeInTheDocument();
+  });
+
+  it("shows selected model value when AI cleanup is enabled with DeepSeek", () => {
+    const deepseekMode: Mode = {
+      ...MODE,
+      ai_cleanup: {
+        enabled: true,
+        prompt_override: null,
+        provider: "deepseek",
+        model: "deepseek-v4-flash",
+      },
+    };
+    render(
+      <EditorWrapper mode={deepseekMode} configuredProviders={["deepseek"]} />,
+    );
+    expect(screen.getByText("DeepSeek V4 Flash")).toBeInTheDocument();
+  });
+
+  it("shows selected model value when AI cleanup is enabled with Cerebras", () => {
+    const cerebrasMode: Mode = {
+      ...MODE,
+      ai_cleanup: {
+        enabled: true,
+        prompt_override: null,
+        provider: "cerebras",
+        model: "llama-3.3-70b",
+      },
+    };
+    render(
+      <EditorWrapper mode={cerebrasMode} configuredProviders={["cerebras"]} />,
+    );
+    expect(screen.getByText("Llama 3.3 70B")).toBeInTheDocument();
+  });
+
+  it("shows selected model value when AI cleanup is enabled with OpenRouter", () => {
+    const openrouterMode: Mode = {
+      ...MODE,
+      ai_cleanup: {
+        enabled: true,
+        prompt_override: null,
+        provider: "openrouter",
+        model: "anthropic/claude-haiku-4.5",
+      },
+    };
+    render(
+      <EditorWrapper
+        mode={openrouterMode}
+        configuredProviders={["openrouter"]}
+      />,
+    );
+    expect(screen.getByText("Claude Haiku 4.5")).toBeInTheDocument();
+  });
+
+  it("shows global model text for Custom provider instead of a model dropdown", () => {
+    const customMode: Mode = {
+      ...MODE,
+      ai_cleanup: {
+        enabled: true,
+        prompt_override: null,
+        provider: "custom",
+        model: "",
+      },
+    };
+    render(
+      <EditorWrapper
+        mode={customMode}
+        configuredProviders={["custom"]}
+        customProviderModel="llama3.2"
+      />,
+    );
+    expect(screen.getByText("llama3.2")).toBeInTheDocument();
+  });
+
+  it("shows blank model hint when Custom provider has no model configured", () => {
+    const customMode: Mode = {
+      ...MODE,
+      ai_cleanup: {
+        enabled: true,
+        prompt_override: null,
+        provider: "custom",
+        model: "",
+      },
+    };
+    render(
+      <EditorWrapper
+        mode={customMode}
+        configuredProviders={["custom"]}
+        customProviderModel=""
+      />,
+    );
+    expect(
+      screen.getByText("(blank — single-model server)"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows Custom as selected cleanup provider label when provider is custom", () => {
+    const customMode: Mode = {
+      ...MODE,
+      ai_cleanup: {
+        enabled: true,
+        prompt_override: null,
+        provider: "custom",
+        model: "",
+      },
+    };
+    render(
+      <EditorWrapper
+        mode={customMode}
+        configuredProviders={["custom"]}
+        customProviderModel="llama3.2"
+      />,
+    );
+    expect(screen.getByText("Custom")).toBeInTheDocument();
   });
 });

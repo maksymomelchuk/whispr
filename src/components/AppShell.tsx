@@ -20,17 +20,17 @@ import {
   useNavigate,
 } from "react-router-dom";
 
+import { AiProvidersPage } from "../pages/AiProvidersPage";
 import { CorrectionsPage } from "../pages/CorrectionsPage";
-import { TermsPage } from "../pages/TermsPage";
 import { GeneralPage } from "../pages/GeneralPage";
 import { HistoryPage } from "../pages/HistoryPage";
 import { HomePage } from "../pages/HomePage";
 import { HotkeysPage } from "../pages/HotkeysPage";
 import { ModesPage } from "../pages/ModesPage";
 import { SnippetsPage } from "../pages/SnippetsPage";
-import { StatsPage } from "../pages/StatsPage";
-import { AiProvidersPage } from "../pages/AiProvidersPage";
 import { SpeechModelsPage } from "../pages/SpeechModelsPage";
+import { StatsPage } from "../pages/StatsPage";
+import { TermsPage } from "../pages/TermsPage";
 import {
   Sidebar,
   SidebarContent,
@@ -67,7 +67,11 @@ const NAV_SECTIONS: NavSection[] = [
       { label: "Speech models", icon: WaveformIcon, path: "/speech-models" },
       { label: "AI Providers", icon: SparkleIcon, path: "/ai-providers" },
       { label: "Vocabulary", icon: TextTIcon, path: "/terms" },
-      { label: "Corrections", icon: ArrowsHorizontalIcon, path: "/corrections" },
+      {
+        label: "Corrections",
+        icon: ArrowsHorizontalIcon,
+        path: "/corrections",
+      },
       { label: "Snippets", icon: LightningIcon, path: "/snippets" },
     ],
   },
@@ -113,7 +117,9 @@ function NavMenuButton({
     <SidebarMenuButton
       asChild
       isActive={isActive}
-      tooltip={collapsed ? (shortcut ? `${label}  ${shortcut}` : label) : undefined}
+      tooltip={
+        collapsed ? (shortcut ? `${label}  ${shortcut}` : label) : undefined
+      }
       className="group/nav-item h-8 gap-2.5 data-[active=true]:font-normal"
     >
       <NavLink to={path} end={path === "/"}>
@@ -121,9 +127,7 @@ function NavMenuButton({
           size={15}
           className="shrink-0 text-muted-foreground group-data-[active=true]/nav-item:text-foreground"
         />
-        <span className="flex-1 text-[13px]">
-          {label}
-        </span>
+        <span className="flex-1 text-[13px]">{label}</span>
         {!collapsed && shortcut && (
           <kbd
             aria-hidden

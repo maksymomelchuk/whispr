@@ -27,17 +27,18 @@ const MOCK_SETTINGS: Settings = {
   start_at_login: false,
   show_live_preview: true,
   local_whisper_idle_timeout: "fifteen_minutes",
+  configured_providers: [],
+  custom_provider_configured: false,
+  custom_provider_base_url: null,
+  custom_provider_model: "",
 };
 
 function TestWrapper({ children }: { children: React.ReactNode }) {
   const [settings, setRawSettings] = useState<Settings>(MOCK_SETTINGS);
 
-  const setSettings = useCallback(
-    (updater: (prev: Settings) => Settings) => {
-      setRawSettings(updater);
-    },
-    [],
-  );
+  const setSettings = useCallback((updater: (prev: Settings) => Settings) => {
+    setRawSettings(updater);
+  }, []);
 
   const setSetting = useCallback(
     async <K extends keyof Settings>(

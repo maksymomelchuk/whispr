@@ -30,7 +30,12 @@ const BASE_MODE: Mode = {
   name: "Default",
   icon: null,
   language: { kind: "auto" },
-  ai_cleanup: { enabled: false, prompt_override: null },
+  ai_cleanup: {
+    enabled: false,
+    prompt_override: null,
+    provider: "anthropic",
+    model: "claude-haiku-4-5",
+  },
   term_set_ids: [],
   correction_set_ids: [],
   use_snippets: true,
@@ -59,6 +64,10 @@ const BASE: Settings = {
   start_at_login: false,
   show_live_preview: true,
   local_whisper_idle_timeout: "fifteen_minutes",
+  configured_providers: [],
+  custom_provider_configured: false,
+  custom_provider_base_url: null,
+  custom_provider_model: "",
 };
 
 function Wrapper({ initial = BASE }: { initial?: Settings }) {
@@ -97,13 +106,17 @@ afterEach(() => {
 describe("CorrectionsPage – set creation", () => {
   it("empty state shows create action", () => {
     render(<Wrapper />);
-    expect(screen.getByRole("button", { name: /new correction set/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /new correction set/i }),
+    ).toBeInTheDocument();
   });
 
   it("create: saves set and expands it", async () => {
     render(<Wrapper />);
 
-    await userEvent.click(screen.getByRole("button", { name: /new correction set/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /new correction set/i }),
+    );
     const input = screen.getByPlaceholderText("Set name");
     await userEvent.type(input, "My Rules");
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
@@ -118,7 +131,9 @@ describe("CorrectionsPage – set creation", () => {
 
   it("create: cancel clears the inline form", async () => {
     render(<Wrapper />);
-    await userEvent.click(screen.getByRole("button", { name: /new correction set/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /new correction set/i }),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(screen.queryByPlaceholderText("Set name")).not.toBeInTheDocument();

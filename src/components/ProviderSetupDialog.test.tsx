@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EngineDescriptor } from "../lib/speechModelCatalog";
 import type { Settings } from "../lib/types";
@@ -12,11 +12,25 @@ vi.mock("@/components/ui/dialog", () => ({
   DialogContent: ({ children }: { children: React.ReactNode }) => (
     <div role="dialog">{children}</div>
   ),
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
-  DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
-  DialogClose: ({ children, onClick }: { children?: React.ReactNode; onClick?: React.MouseEventHandler<HTMLButtonElement> }) => (
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2>{children}</h2>
+  ),
+  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <p>{children}</p>
+  ),
+  DialogClose: ({
+    children,
+    onClick,
+  }: {
+    children?: React.ReactNode;
+    onClick?: React.MouseEventHandler<HTMLButtonElement>;
+  }) => (
     <button type="button" onClick={onClick}>
       {children}
     </button>
@@ -36,7 +50,11 @@ const mockDescriptor: EngineDescriptor = {
   validate: vi.fn(),
 };
 
-function renderDialog(isConfigured = false, onConfiguredChange = vi.fn(), onOpenChange = vi.fn()) {
+function renderDialog(
+  isConfigured = false,
+  onConfiguredChange = vi.fn(),
+  onOpenChange = vi.fn(),
+) {
   return render(
     <ProviderSetupDialog
       descriptor={mockDescriptor}
@@ -95,7 +113,9 @@ describe("ProviderSetupDialog", () => {
 
   it("configured provider shows Disconnect button", () => {
     renderDialog(true);
-    expect(screen.getByRole("button", { name: "Disconnect" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Disconnect" }),
+    ).toBeInTheDocument();
   });
 
   it("Disconnect calls persist with empty value and onConfiguredChange(false)", async () => {
@@ -104,13 +124,17 @@ describe("ProviderSetupDialog", () => {
     const user = userEvent.setup();
     renderDialog(true, onConfiguredChange);
     await user.click(screen.getByRole("button", { name: "Disconnect" }));
-    await waitFor(() => expect(mockDescriptor.persist).toHaveBeenCalledWith(""));
+    await waitFor(() =>
+      expect(mockDescriptor.persist).toHaveBeenCalledWith(""),
+    );
     expect(onConfiguredChange).toHaveBeenCalledWith(false);
   });
 
   it("unconfigured provider does not show Disconnect button", () => {
     renderDialog(false);
-    expect(screen.queryByRole("button", { name: "Disconnect" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Disconnect" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows the provider name in the dialog title", () => {
@@ -120,6 +144,8 @@ describe("ProviderSetupDialog", () => {
 
   it("shows the provider description", () => {
     renderDialog();
-    expect(screen.getByText("A test provider for unit tests.")).toBeInTheDocument();
+    expect(
+      screen.getByText("A test provider for unit tests."),
+    ).toBeInTheDocument();
   });
 });

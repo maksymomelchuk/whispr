@@ -4,7 +4,7 @@ use crate::mode::{
 };
 pub use crate::provider::{AssemblyAiModel, GroqModel, ProviderModel, TranscriptionProvider};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 use tauri::Manager;
@@ -256,6 +256,14 @@ fn default_cleanup_min_duration_ms() -> u64 {
     DEFAULT_CLEANUP_MIN_DURATION_MS
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CustomProvider {
+    pub base_url: String,
+    pub model: String,
+    #[serde(default)]
+    pub api_key: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiCleanupSettings {
     /// Legacy global master switch; per-mode `ai_cleanup.enabled` is now the
@@ -266,13 +274,19 @@ pub struct AiCleanupSettings {
     pub legacy_enabled: Option<bool>,
     #[serde(default)]
     pub auth_mode: CleanupAuthMode,
-    #[serde(default)]
+    /// Legacy Anthropic API key; migrated to `provider_keys["anthropic"]` on first load.
+    #[serde(default, skip_serializing)]
     pub anthropic_api_key: Option<String>,
     /// Long-lived `sk-ant-oat…` token from `claude setup-token`. Sent as
     /// `Authorization: Bearer` against the OAuth-gated Messages endpoint —
     /// outside Anthropic's recommended path; see README for caveats.
     #[serde(default)]
     pub anthropic_oauth_token: Option<String>,
+    /// Per-provider API keys. Keys are provider ID strings (`anthropic`, `openai`, …).
+    #[serde(default)]
+    pub provider_keys: BTreeMap<String, String>,
+    #[serde(default)]
+    pub custom_provider: Option<CustomProvider>,
     /// Minimum word count at which cleanup runs. Below this, dictations paste
     /// raw to preserve snappiness for short utterances.
     #[serde(default = "default_cleanup_min_words")]
@@ -289,6 +303,8 @@ impl Default for AiCleanupSettings {
             auth_mode: CleanupAuthMode::default(),
             anthropic_api_key: None,
             anthropic_oauth_token: None,
+            provider_keys: BTreeMap::new(),
+            custom_provider: None,
             min_words: DEFAULT_CLEANUP_MIN_WORDS,
             min_duration_ms: DEFAULT_CLEANUP_MIN_DURATION_MS,
         }
@@ -489,6 +505,14 @@ fn migrate(s: &mut Settings) -> bool {
             s.deepgram_api_key = Some(legacy);
         }
         changed = true;
+    }
+
+    // ── anthropic_api_key → provider_keys["anthropic"] ───────────────────────
+    if let Some(key) = s.ai_cleanup.anthropic_api_key.take() {
+        changed = true;
+        if !key.is_empty() && !s.ai_cleanup.provider_keys.contains_key("anthropic") {
+            s.ai_cleanup.provider_keys.insert("anthropic".to_string(), key);
+        }
     }
 
     // ── Seed predefined modes ─────────────────────────────────────────────

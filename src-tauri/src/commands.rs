@@ -6,6 +6,7 @@ use crate::config::{
 use crate::download::{self, LocalModelStatus, MODEL_DOWNLOAD_COMPLETE_EVENT, MODEL_DOWNLOAD_ERROR_EVENT};
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::mode::{Mode, ModeId, SetId};
+use crate::model_catalog;
 use crate::permissions;
 use crate::provider::{local_model_path, GroqModel, LocalWhisperModel};
 use crate::state::AppState;
@@ -32,6 +33,11 @@ pub struct SettingsView {
     pub ai_cleanup_auth_mode: CleanupAuthMode,
     pub ai_cleanup_key_configured: bool,
     pub ai_cleanup_oauth_token_configured: bool,
+    /// Provider IDs that have a non-empty API key in `provider_keys`.
+    pub configured_providers: Vec<String>,
+    pub custom_provider_configured: bool,
+    pub custom_provider_base_url: Option<String>,
+    pub custom_provider_model: String,
     pub ai_cleanup_min_words: usize,
     pub ai_cleanup_min_duration_ms: u64,
     pub input_device: Option<String>,
@@ -50,6 +56,34 @@ impl From<Settings> for SettingsView {
             .as_deref()
             .or(s.api_key.as_deref())
             .is_some_and(|k| !k.is_empty());
+        let anthropic_key_configured = s
+            .ai_cleanup
+            .provider_keys
+            .get("anthropic")
+            .is_some_and(|k| !k.is_empty());
+        let configured_providers: Vec<String> = s
+            .ai_cleanup
+            .provider_keys
+            .iter()
+            .filter(|(_, v)| !v.is_empty())
+            .map(|(k, _)| k.clone())
+            .collect();
+        let custom_provider_configured = s
+            .ai_cleanup
+            .custom_provider
+            .as_ref()
+            .is_some_and(|cp| !cp.base_url.is_empty());
+        let custom_provider_base_url = s
+            .ai_cleanup
+            .custom_provider
+            .as_ref()
+            .and_then(|cp| if cp.base_url.is_empty() { None } else { Some(cp.base_url.clone()) });
+        let custom_provider_model = s
+            .ai_cleanup
+            .custom_provider
+            .as_ref()
+            .map(|cp| cp.model.clone())
+            .unwrap_or_default();
         SettingsView {
             deepgram_api_key_configured,
             groq_api_key_configured: s.groq_api_key.as_deref().is_some_and(|k| !k.is_empty()),
@@ -64,16 +98,16 @@ impl From<Settings> for SettingsView {
             modes: s.modes,
             default_mode_id: s.default_mode_id,
             ai_cleanup_auth_mode: s.ai_cleanup.auth_mode,
-            ai_cleanup_key_configured: s
-                .ai_cleanup
-                .anthropic_api_key
-                .as_deref()
-                .is_some_and(|k| !k.is_empty()),
+            ai_cleanup_key_configured: anthropic_key_configured,
             ai_cleanup_oauth_token_configured: s
                 .ai_cleanup
                 .anthropic_oauth_token
                 .as_deref()
                 .is_some_and(|t| !t.is_empty()),
+            configured_providers,
+            custom_provider_configured,
+            custom_provider_base_url,
+            custom_provider_model,
             ai_cleanup_min_words: s.ai_cleanup.min_words,
             ai_cleanup_min_duration_ms: s.ai_cleanup.min_duration_ms,
             input_device: s.input_device,
@@ -298,7 +332,14 @@ pub fn set_default_mode(app: AppHandle, id: ModeId) -> Result<(), String> {
 #[tauri::command]
 pub fn set_anthropic_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
     config::update(&app, |s| {
-        s.ai_cleanup.anthropic_api_key = config::non_empty(api_key)
+        match config::non_empty(api_key) {
+            Some(k) => {
+                s.ai_cleanup.provider_keys.insert("anthropic".to_string(), k);
+            }
+            None => {
+                s.ai_cleanup.provider_keys.remove("anthropic");
+            }
+        }
     })
 }
 
@@ -306,6 +347,59 @@ pub fn set_anthropic_api_key(app: AppHandle, api_key: String) -> Result<(), Stri
 pub fn set_anthropic_oauth_token(app: AppHandle, token: String) -> Result<(), String> {
     config::update(&app, |s| {
         s.ai_cleanup.anthropic_oauth_token = config::non_empty(token)
+    })
+}
+
+#[tauri::command]
+pub fn set_provider_key(app: AppHandle, provider_id: String, api_key: String) -> Result<(), String> {
+    config::update(&app, |s| {
+        match config::non_empty(api_key) {
+            Some(k) => {
+                s.ai_cleanup.provider_keys.insert(provider_id, k);
+            }
+            None => {
+                s.ai_cleanup.provider_keys.remove(&provider_id);
+            }
+        }
+    })
+}
+
+#[tauri::command]
+pub fn clear_provider_key(app: AppHandle, provider_id: String) -> Result<(), String> {
+    config::update(&app, |s| {
+        s.ai_cleanup.provider_keys.remove(&provider_id);
+    })
+}
+
+#[tauri::command]
+pub fn set_custom_provider(
+    app: AppHandle,
+    base_url: String,
+    model: String,
+    api_key: String,
+) -> Result<(), String> {
+    let trimmed_url = base_url.trim().trim_end_matches('/').to_string();
+    if !trimmed_url.is_empty() {
+        url::Url::parse(&trimmed_url)
+            .map_err(|_| format!("Invalid base URL: {trimmed_url}"))?;
+    }
+    config::update(&app, |s| {
+        s.ai_cleanup.custom_provider = if trimmed_url.is_empty() {
+            None
+        } else {
+            Some(config::CustomProvider {
+                base_url: trimmed_url,
+                model: model.trim().to_string(),
+                api_key: config::non_empty(api_key.trim().to_string()),
+            })
+        };
+    })
+}
+
+#[tauri::command]
+pub fn clear_custom_provider(app: AppHandle) -> Result<(), String> {
+    config::update(&app, |s| {
+        s.ai_cleanup.custom_provider = None;
     })
 }
 
@@ -373,14 +467,7 @@ pub fn set_show_in_dock(app: AppHandle, enabled: bool) -> Result<(), String> {
 
 #[tauri::command]
 pub fn list_input_devices() -> Vec<String> {
-    #[cfg(target_os = "macos")]
-    {
-        crate::recorder::Recorder::list_input_devices()
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        Vec::new()
-    }
+    crate::recorder::Recorder::list_input_devices()
 }
 
 #[tauri::command]
@@ -428,10 +515,16 @@ pub fn clear_stats(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn get_app_icon(bundle_id: String) -> Option<String> {
-    tauri::async_runtime::spawn_blocking(move || crate::target_app::resolve_icon(&bundle_id))
+    #[cfg(target_os = "macos")]
+    return tauri::async_runtime::spawn_blocking(move || crate::target_app::resolve_icon(&bundle_id))
         .await
         .ok()
-        .flatten()
+        .flatten();
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = bundle_id;
+        None
+    }
 }
 
 #[tauri::command]
@@ -477,18 +570,10 @@ pub fn ensure_ptt_started(app: AppHandle, state: State<'_, AppState>) {
     {
         return;
     }
-    #[cfg(target_os = "macos")]
-    {
-        let recorder_opt = state.recorder.lock().unwrap().clone();
-        match recorder_opt {
-            Some(rec) => crate::ptt::start(app, (*state).clone(), rec),
-            None => state.ptt_running.store(false, Ordering::Release),
-        }
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        state.ptt_running.store(false, Ordering::Release);
-        let _ = app;
+    let recorder_opt = state.recorder.lock().unwrap().clone();
+    match recorder_opt {
+        Some(rec) => crate::ptt::start(app, (*state).clone(), rec),
+        None => state.ptt_running.store(false, Ordering::Release),
     }
 }
 
@@ -502,13 +587,14 @@ pub fn get_local_model_statuses(
         Err(_) => return vec![],
     };
     let flags = state.download_cancel_flags.lock().unwrap();
-    [LocalWhisperModel::LargeV3, LocalWhisperModel::LargeV3Turbo]
+    let models_dir = data_dir.join("models");
+    [LocalWhisperModel::LargeV3, LocalWhisperModel::LargeV3Turbo, LocalWhisperModel::Parakeet]
         .iter()
         .map(|&model| {
-            let path = local_model_path(&data_dir, model);
+            let catalog = model_catalog::catalog_for(model);
             LocalModelStatus {
                 model,
-                downloaded: path.exists(),
+                downloaded: model_catalog::all_files_present(&catalog, &models_dir),
                 downloading: flags.contains_key(&model),
                 size_bytes: download::model_size_bytes(model),
             }
@@ -571,8 +657,9 @@ pub fn cancel_model_download(
 #[tauri::command]
 pub fn delete_local_model(app: AppHandle, model: LocalWhisperModel) -> Result<(), String> {
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    let path = local_model_path(&data_dir, model);
-    if path.exists() {
+    let models_dir = data_dir.join("models");
+    let spec = model_catalog::catalog_for(model);
+    for path in model_catalog::files_to_delete(&spec, &models_dir) {
         std::fs::remove_file(&path).map_err(|e| e.to_string())?;
     }
     Ok(())

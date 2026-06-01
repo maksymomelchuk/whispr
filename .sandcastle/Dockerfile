@@ -1,10 +1,32 @@
-FROM node:22-bookworm
+FROM node:22-trixie
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
   git \
   curl \
   jq \
+  && rm -rf /var/lib/apt/lists/*
+
+# Build dependencies for the Rust/Tauri backend so agents can `cargo check`.
+# Tauri v2 (webkit/gtk/appindicator/rsvg), native-tls (openssl), cpal/ALSA,
+# enigo + rdev input injection (xdo), the whisper.cpp + ggml C/C++ build
+# (build-essential/cmake/clang), and the Vulkan backend transcribe-rs enables
+# on Linux (vulkan loader + glslc shader compiler).
+RUN apt-get update && apt-get install -y \
+  build-essential \
+  cmake \
+  clang \
+  pkg-config \
+  libssl-dev \
+  libasound2-dev \
+  libxdo-dev \
+  libwebkit2gtk-4.1-dev \
+  libgtk-3-dev \
+  libayatana-appindicator3-dev \
+  librsvg2-dev \
+  libvulkan-dev \
+  glslc \
+  mold \
   && rm -rf /var/lib/apt/lists/*
 
 # Install GitHub CLI
@@ -43,8 +65,27 @@ USER ${AGENT_UID}:${AGENT_GID}
 # Install Claude Code CLI
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
-# Add Claude to PATH
-ENV PATH="/home/agent/.local/bin:$PATH"
+# Install the Rust toolchain so agents can build and check the Tauri backend.
+RUN curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
+  | sh -s -- -y --default-toolchain stable --profile minimal --component clippy
+
+# Link with mold. The test binaries statically embed whisper.cpp + ggml-vulkan
+# + onnxruntime, so the dozen integration-test links GNU ld runs concurrently
+# during `cargo test` exhaust the ~8 GB Docker VM and OOM. mold links the same
+# binaries with a fraction of the peak memory, so default parallelism fits.
+RUN printf '[build]\nrustflags = ["-C", "link-arg=-fuse-ld=mold"]\n' \
+  > /home/agent/.cargo/config.toml
+
+# Add Claude and Cargo to PATH
+ENV PATH="/home/agent/.cargo/bin:/home/agent/.local/bin:$PATH"
+
+# whisper.cpp's ggml-cpu backend uses ARMv8.2 FP16 vector intrinsics
+# (e.g. vfmaq_f16). Under Docker on Apple Silicon, ggml's `-mcpu=native`
+# autodetection resolves to a baseline lacking +fp16, so GCC refuses to inline
+# them. Pin a known-good arm64 arch (whisper-rs-sys forwards GGML_* to CMake)
+# so `cargo check`/`cargo build` of the Tauri backend succeed in the sandbox.
+ENV GGML_NATIVE=OFF \
+    GGML_CPU_ARM_ARCH=armv8.2-a+fp16
 
 WORKDIR /home/agent
 

@@ -29,7 +29,9 @@ export function CorrectionsPage() {
   const { settings, setSettings } = useSettings();
   const [expandedSetId, setExpandedSetId] = useState<string | null>(null);
   const [creatingName, setCreatingName] = useState<string | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirm | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirm | null>(
+    null,
+  );
 
   const correctionSets = settings.correction_sets ?? [];
 
@@ -43,7 +45,10 @@ export function CorrectionsPage() {
     };
     try {
       await addCorrectionSet(newSet);
-      setSettings((s) => ({ ...s, correction_sets: [...s.correction_sets, newSet] }));
+      setSettings((s) => ({
+        ...s,
+        correction_sets: [...s.correction_sets, newSet],
+      }));
       setCreatingName(null);
       setExpandedSetId(newSet.id);
     } catch (e) {
@@ -68,7 +73,10 @@ export function CorrectionsPage() {
     }
   };
 
-  const handleEntriesChange = async (setId: string, entries: CorrectionEntry[]) => {
+  const handleEntriesChange = async (
+    setId: string,
+    entries: CorrectionEntry[],
+  ) => {
     const existing = correctionSets.find((cs) => cs.id === setId);
     if (!existing) return;
     const updated = { ...existing, entries };
@@ -102,7 +110,9 @@ export function CorrectionsPage() {
         correction_sets: s.correction_sets.filter((cs) => cs.id !== set.id),
         modes: s.modes.map((m) => ({
           ...m,
-          correction_set_ids: m.correction_set_ids.filter((id) => id !== set.id),
+          correction_set_ids: m.correction_set_ids.filter(
+            (id) => id !== set.id,
+          ),
         })),
       }));
       if (expandedSetId === set.id) setExpandedSetId(null);
@@ -148,7 +158,9 @@ export function CorrectionsPage() {
                 }
                 onRename={(name) => handleRename(set.id, name)}
                 onDelete={() => handleDeleteClick(set)}
-                onEntriesChange={(entries) => handleEntriesChange(set.id, entries)}
+                onEntriesChange={(entries) =>
+                  handleEntriesChange(set.id, entries)
+                }
               />
             ))}
 
@@ -198,10 +210,16 @@ function NewSetRow({
   onCancel: () => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => { ref.current?.focus(); }, []);
+  useEffect(() => {
+    ref.current?.focus();
+  }, []);
 
   return (
-    <RowCard tone="accent" interactive={false} className="shadow-sm ring-2 ring-ring/15 gap-2 py-2.5">
+    <RowCard
+      tone="accent"
+      interactive={false}
+      className="shadow-sm ring-2 ring-ring/15 gap-2 py-2.5"
+    >
       <Input
         ref={ref}
         value={name}
@@ -214,8 +232,12 @@ function NewSetRow({
         }}
       />
       <div className="flex items-center gap-1">
-        <Button variant="ghost" size="xs" onClick={onCancel}>Cancel</Button>
-        <Button size="xs" onClick={onSave} disabled={!name.trim()}>Create</Button>
+        <Button variant="ghost" size="xs" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button size="xs" onClick={onSave} disabled={!name.trim()}>
+          Create
+        </Button>
       </div>
     </RowCard>
   );
@@ -266,7 +288,10 @@ function SetCard({
               onBlur={commitRename}
               onKeyDown={(e) => {
                 if (e.key === "Enter") commitRename();
-                if (e.key === "Escape") { setDraftName(set.name); setRenaming(false); }
+                if (e.key === "Escape") {
+                  setDraftName(set.name);
+                  setRenaming(false);
+                }
               }}
             />
           ) : (
@@ -296,7 +321,10 @@ function SetCard({
                 variant="ghost"
                 size="icon-sm"
                 aria-label="Rename"
-                onClick={() => { setDraftName(set.name); setRenaming(true); }}
+                onClick={() => {
+                  setDraftName(set.name);
+                  setRenaming(true);
+                }}
               >
                 <PencilSimpleIcon size={14} />
               </Button>
@@ -344,7 +372,9 @@ function DeleteConfirmDialog({
       role="dialog"
       aria-modal="true"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
     >
       <div className="bg-background border border-border rounded-lg shadow-lg p-5 max-w-sm w-full flex flex-col gap-4">
         <div className="flex flex-col gap-1">
@@ -355,13 +385,18 @@ function DeleteConfirmDialog({
               <span className="font-medium text-foreground">
                 {affectedModes.map((m) => m.name).join(", ")}
               </span>
-              . It will be unlinked from {affectedModes.length === 1 ? "that profile" : "those profiles"}.
+              . It will be unlinked from{" "}
+              {affectedModes.length === 1 ? "that profile" : "those profiles"}.
             </p>
           )}
         </div>
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
-          <Button variant="destructive" size="sm" onClick={onConfirm}>Delete</Button>
+          <Button variant="ghost" size="sm" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="destructive" size="sm" onClick={onConfirm}>
+            Delete
+          </Button>
         </div>
       </div>
     </div>
