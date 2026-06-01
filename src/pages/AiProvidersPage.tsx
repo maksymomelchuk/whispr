@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CheckFatIcon, GearIcon, PlugIcon } from "@phosphor-icons/react";
+import { CheckFatIcon, GearIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -7,6 +7,7 @@ import * as z from "zod";
 
 import { AnthropicLogo } from "@/assets/AnthropicLogo";
 import { CerebrasLogo } from "@/assets/CerebrasLogo";
+import { CustomLogo } from "@/assets/CustomLogo";
 import { DeepSeekLogo } from "@/assets/DeepSeekLogo";
 import { GoogleGeminiLogo } from "@/assets/GoogleGeminiLogo";
 import { GroqLogo } from "@/assets/GroqLogo";
@@ -312,7 +313,7 @@ function CustomProviderDialog({
       <DialogContent className="sm:max-w-md" showCloseButton>
         <DialogHeader>
           <div className="flex items-center gap-3 mb-1">
-            <PlugIcon className="h-8 w-8 shrink-0 rounded-md text-muted-foreground" />
+            <CustomLogo className="h-8 w-8 shrink-0 rounded-md" />
             <DialogTitle className="text-base">Custom</DialogTitle>
           </div>
           <DialogDescription>
@@ -560,7 +561,7 @@ export function AiProvidersPage() {
               "text-left transition-colors hover:bg-accent/40 cursor-pointer w-full",
             )}
           >
-            <PlugIcon className="h-8 w-8 shrink-0 rounded-md text-muted-foreground" />
+            <CustomLogo className="h-8 w-8 shrink-0 rounded-md" />
             <span className="flex-1 min-w-0 truncate text-sm font-medium leading-tight">
               Custom
             </span>

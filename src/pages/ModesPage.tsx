@@ -154,34 +154,71 @@ const CLEANUP_PROVIDER_OPTIONS: { value: AiProviderId; label: string }[] = [
   { value: "custom", label: "Custom" },
 ];
 
+type CleanupModelOption = {
+  value: string;
+  label: string;
+  recommended?: boolean;
+};
+
 const CLEANUP_MODEL_OPTIONS: Record<
   Exclude<AiProviderId, "custom">,
-  { value: string; label: string }[]
+  CleanupModelOption[]
 > = {
-  anthropic: [{ value: "claude-haiku-4-5", label: "Claude Haiku 4.5" }],
+  anthropic: [
+    { value: "claude-haiku-4-5", label: "Claude Haiku 4.5", recommended: true },
+    { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
+    { value: "claude-opus-4-8", label: "Claude Opus 4.8" },
+  ],
   openai: [
-    { value: "gpt-4o-mini", label: "GPT-4o mini" },
-    { value: "gpt-4o", label: "GPT-4o" },
+    { value: "gpt-5.4-mini", label: "GPT-5.4 mini", recommended: true },
+    { value: "gpt-5.4-nano", label: "GPT-5.4 nano" },
+    { value: "gpt-5-mini", label: "GPT-5 mini" },
+    { value: "gpt-5-nano", label: "GPT-5 nano" },
+    { value: "gpt-5.4", label: "GPT-5.4" },
+    { value: "gpt-5.5", label: "GPT-5.5" },
   ],
   google: [
-    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-    { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash", recommended: true },
+    { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash" },
+    { value: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite" },
+    { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+    { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (preview)" },
   ],
   groq: [
-    { value: "llama-3.1-8b-instant", label: "Llama 3.1 8B" },
+    {
+      value: "llama-3.1-8b-instant",
+      label: "Llama 3.1 8B",
+      recommended: true,
+    },
     { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B" },
+    { value: "openai/gpt-oss-20b", label: "GPT-OSS 20B" },
+    { value: "openai/gpt-oss-120b", label: "GPT-OSS 120B" },
   ],
   deepseek: [
-    { value: "deepseek-chat", label: "DeepSeek Chat" },
-    { value: "deepseek-reasoner", label: "DeepSeek Reasoner" },
+    {
+      value: "deepseek-v4-flash",
+      label: "DeepSeek V4 Flash",
+      recommended: true,
+    },
+    { value: "deepseek-v4-pro", label: "DeepSeek V4 Pro" },
   ],
   cerebras: [
-    { value: "llama-3.3-70b", label: "Llama 3.3 70B" },
+    { value: "llama-3.3-70b", label: "Llama 3.3 70B", recommended: true },
     { value: "llama3.1-8b", label: "Llama 3.1 8B" },
+    { value: "gpt-oss-120b", label: "GPT-OSS 120B" },
+    { value: "qwen-3-235b-a22b-instruct-2507", label: "Qwen 3 235B" },
   ],
   openrouter: [
-    { value: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5" },
-    { value: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash" },
+    {
+      value: "anthropic/claude-haiku-4.5",
+      label: "Claude Haiku 4.5",
+      recommended: true,
+    },
+    { value: "openai/gpt-5-mini", label: "GPT-5 mini" },
+    { value: "openai/gpt-5-nano", label: "GPT-5 nano" },
+    { value: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+    { value: "google/gemini-3.5-flash", label: "Gemini 3.5 Flash" },
+    { value: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B" },
   ],
 };
 
@@ -834,7 +871,7 @@ export function ModeEditor({
           />
           {draft.ai_cleanup.enabled && (
             <>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-2">
                 <div className="flex flex-col gap-1.5">
                   <span className="text-xs text-muted-foreground/70">
                     Provider
@@ -873,6 +910,11 @@ export function ModeEditor({
                         {CLEANUP_MODEL_OPTIONS[cleanupProvider].map((opt) => (
                           <SelectItem key={opt.value} value={opt.value}>
                             {opt.label}
+                            {opt.recommended && (
+                              <span className="ml-1.5 text-muted-foreground/70">
+                                (recommended)
+                              </span>
+                            )}
                           </SelectItem>
                         ))}
                       </SelectContent>
