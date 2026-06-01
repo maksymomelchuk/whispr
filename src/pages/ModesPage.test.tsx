@@ -49,7 +49,12 @@ const MODE: Mode = {
   name: "Original",
   icon: null,
   language: { kind: "auto" },
-  ai_cleanup: { enabled: false, prompt_override: null, provider: "anthropic", model: "claude-haiku-4-5" },
+  ai_cleanup: {
+    enabled: false,
+    prompt_override: null,
+    provider: "anthropic",
+    model: "claude-haiku-4-5",
+  },
   term_set_ids: [],
   correction_set_ids: [],
   use_snippets: true,
@@ -485,9 +490,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
   });
 
   it("enables the cleanup toggle when a cleanup provider is configured", () => {
-    render(
-      <EditorWrapper mode={MODE} configuredProviders={["anthropic"]} />,
-    );
+    render(<EditorWrapper mode={MODE} configuredProviders={["anthropic"]} />);
     const toggle = screen.getByRole("switch", { name: /ai cleanup/i });
     expect(toggle).not.toBeDisabled();
   });
@@ -502,7 +505,9 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         model: "gemini-2.5-flash",
       },
     };
-    render(<EditorWrapper mode={googleMode} configuredProviders={["google"]} />);
+    render(
+      <EditorWrapper mode={googleMode} configuredProviders={["google"]} />,
+    );
     expect(screen.getByText("Gemini 2.5 Flash")).toBeInTheDocument();
   });
 
@@ -530,7 +535,9 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         model: "deepseek-chat",
       },
     };
-    render(<EditorWrapper mode={deepseekMode} configuredProviders={["deepseek"]} />);
+    render(
+      <EditorWrapper mode={deepseekMode} configuredProviders={["deepseek"]} />,
+    );
     expect(screen.getByText("DeepSeek Chat")).toBeInTheDocument();
   });
 
@@ -544,7 +551,9 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         model: "llama-3.3-70b",
       },
     };
-    render(<EditorWrapper mode={cerebrasMode} configuredProviders={["cerebras"]} />);
+    render(
+      <EditorWrapper mode={cerebrasMode} configuredProviders={["cerebras"]} />,
+    );
     expect(screen.getByText("Llama 3.3 70B")).toBeInTheDocument();
   });
 
@@ -558,7 +567,12 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         model: "anthropic/claude-haiku-4.5",
       },
     };
-    render(<EditorWrapper mode={openrouterMode} configuredProviders={["openrouter"]} />);
+    render(
+      <EditorWrapper
+        mode={openrouterMode}
+        configuredProviders={["openrouter"]}
+      />,
+    );
     expect(screen.getByText("Claude Haiku 4.5")).toBeInTheDocument();
   });
 
@@ -599,7 +613,9 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         customProviderModel=""
       />,
     );
-    expect(screen.getByText("(blank — single-model server)")).toBeInTheDocument();
+    expect(
+      screen.getByText("(blank — single-model server)"),
+    ).toBeInTheDocument();
   });
 
   it("shows Custom as selected cleanup provider label when provider is custom", () => {

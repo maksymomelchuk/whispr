@@ -11,7 +11,7 @@ separate path.
 provider goes through one shared OpenAI-compatible `/chat/completions` client.**
 
 The cleanup ruleset (`effective_prompt()` — safety preamble + rules) is the single shared
-source of truth across all providers. Only the request *envelope* differs per transport:
+source of truth across all providers. Only the request _envelope_ differs per transport:
 
 - **Native (Anthropic):** system prompt as a `system` block array with
   `cache_control: ephemeral`; the OAuth auth mode additionally injects the "Claude Code"
@@ -22,7 +22,7 @@ source of truth across all providers. Only the request *envelope* differs per tr
 
 ## Why not route Anthropic through the OpenAI-compatible path too
 
-Anthropic *does* publish an OpenAI-compatible endpoint
+Anthropic _does_ publish an OpenAI-compatible endpoint
 (`https://api.anthropic.com/v1/chat/completions`), so unifying Anthropic-with-API-key onto
 the shared client looks tempting. Two facts kill it:
 
@@ -30,12 +30,12 @@ the shared client looks tempting. Two facts kill it:
    (`sk-ant-oat…`) authenticates only against `/v1/messages` (Bearer + OAuth beta header +
    identity assertion). The compat endpoint accepts an API key, not an OAuth token. So the
    native transport must exist no matter what — routing the API-key case through compat
-   would *split* Anthropic across two transports by auth mode, which is more branching, not
+   would _split_ Anthropic across two transports by auth mode, which is more branching, not
    less.
 
 2. **The compat endpoint drops prompt caching.** Anthropic's docs state prompt caching is
    available only on `/v1/messages`; the OpenAI compatibility layer does not support it and
-   is positioned for "testing and comparison," not production. Cleanup runs on *every*
+   is positioned for "testing and comparison," not production. Cleanup runs on _every_
    qualifying dictation with a ~1,600-line system prompt, mostly within the 5-minute cache
    window. Native caching means paying full price for that prefix once, then ~10% per
    subsequent cleanup; the compat path would pay full input price for the whole ruleset on

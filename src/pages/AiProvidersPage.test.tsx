@@ -177,7 +177,9 @@ describe("AiProvidersPage – OpenAI card", () => {
 
   it("marks OpenAI as configured when it appears in configured_providers", () => {
     render(
-      <Wrapper settings={{ ...BASE_SETTINGS, configured_providers: ["openai"] }} />,
+      <Wrapper
+        settings={{ ...BASE_SETTINGS, configured_providers: ["openai"] }}
+      />,
     );
     expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
     expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(7);
@@ -204,7 +206,11 @@ describe("AiProvidersPage – Custom provider card", () => {
   });
 
   it("marks Custom as needing setup when custom_provider_configured is false", () => {
-    render(<Wrapper settings={{ ...BASE_SETTINGS, custom_provider_configured: false }} />);
+    render(
+      <Wrapper
+        settings={{ ...BASE_SETTINGS, custom_provider_configured: false }}
+      />,
+    );
     const cards = screen.getAllByRole("img", { name: "Set up" });
     expect(cards.length).toBeGreaterThanOrEqual(1);
   });
@@ -253,7 +259,9 @@ describe("AiProvidersPage – new provider cards", () => {
 
   it("marks Google as configured when it appears in configured_providers", () => {
     render(
-      <Wrapper settings={{ ...BASE_SETTINGS, configured_providers: ["google"] }} />,
+      <Wrapper
+        settings={{ ...BASE_SETTINGS, configured_providers: ["google"] }}
+      />,
     );
     expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
     expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(7);
@@ -261,21 +269,27 @@ describe("AiProvidersPage – new provider cards", () => {
 
   it("marks DeepSeek as configured when it appears in configured_providers", () => {
     render(
-      <Wrapper settings={{ ...BASE_SETTINGS, configured_providers: ["deepseek"] }} />,
+      <Wrapper
+        settings={{ ...BASE_SETTINGS, configured_providers: ["deepseek"] }}
+      />,
     );
     expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
   });
 
   it("marks Cerebras as configured when it appears in configured_providers", () => {
     render(
-      <Wrapper settings={{ ...BASE_SETTINGS, configured_providers: ["cerebras"] }} />,
+      <Wrapper
+        settings={{ ...BASE_SETTINGS, configured_providers: ["cerebras"] }}
+      />,
     );
     expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
   });
 
   it("marks OpenRouter as configured when it appears in configured_providers", () => {
     render(
-      <Wrapper settings={{ ...BASE_SETTINGS, configured_providers: ["openrouter"] }} />,
+      <Wrapper
+        settings={{ ...BASE_SETTINGS, configured_providers: ["openrouter"] }}
+      />,
     );
     expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
   });

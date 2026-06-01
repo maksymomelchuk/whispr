@@ -145,7 +145,12 @@ const COMMANDS: Array<{
         icon: null,
         language: { kind: "auto" },
 
-        ai_cleanup: { enabled: false, prompt_override: null, provider: "anthropic", model: "claude-haiku-4-5" },
+        ai_cleanup: {
+          enabled: false,
+          prompt_override: null,
+          provider: "anthropic",
+          model: "claude-haiku-4-5",
+        },
         term_set_ids: [],
         correction_set_ids: [],
         use_snippets: true,
@@ -159,7 +164,12 @@ const COMMANDS: Array<{
         icon: null,
         language: { kind: "auto" },
 
-        ai_cleanup: { enabled: false, prompt_override: null, provider: "anthropic", model: "claude-haiku-4-5" },
+        ai_cleanup: {
+          enabled: false,
+          prompt_override: null,
+          provider: "anthropic",
+          model: "claude-haiku-4-5",
+        },
         term_set_ids: [],
         correction_set_ids: [],
         use_snippets: true,
@@ -175,7 +185,12 @@ const COMMANDS: Array<{
         icon: null,
         language: { kind: "auto" },
 
-        ai_cleanup: { enabled: false, prompt_override: null, provider: "anthropic", model: "claude-haiku-4-5" },
+        ai_cleanup: {
+          enabled: false,
+          prompt_override: null,
+          provider: "anthropic",
+          model: "claude-haiku-4-5",
+        },
         term_set_ids: [],
         correction_set_ids: [],
         use_snippets: true,
@@ -189,7 +204,12 @@ const COMMANDS: Array<{
         icon: null,
         language: { kind: "auto" },
 
-        ai_cleanup: { enabled: false, prompt_override: null, provider: "anthropic", model: "claude-haiku-4-5" },
+        ai_cleanup: {
+          enabled: false,
+          prompt_override: null,
+          provider: "anthropic",
+          model: "claude-haiku-4-5",
+        },
         term_set_ids: [],
         correction_set_ids: [],
         use_snippets: true,

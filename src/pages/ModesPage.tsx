@@ -506,7 +506,9 @@ export function ModeEditor({
     setDraft((d) => ({ ...d, ai_cleanup: { ...d.ai_cleanup, model } }));
 
   const cleanupProvider = draft.ai_cleanup.provider;
-  const cleanupProviderConfigured = (configuredProviders ?? []).includes(cleanupProvider);
+  const cleanupProviderConfigured = (configuredProviders ?? []).includes(
+    cleanupProvider,
+  );
 
   const normalized = useMemo<Mode>(
     () => ({
@@ -995,7 +997,12 @@ export function ModesPage() {
       name: "",
       icon: null,
       language: { kind: "exact", code: "en" },
-      ai_cleanup: { enabled: false, prompt_override: null, provider: "anthropic", model: "claude-haiku-4-5" },
+      ai_cleanup: {
+        enabled: false,
+        prompt_override: null,
+        provider: "anthropic",
+        model: "claude-haiku-4-5",
+      },
       term_set_ids: [],
       correction_set_ids: [],
       use_snippets: true,
@@ -1101,7 +1108,9 @@ export function ModesPage() {
                   !settings.configured_providers.includes("anthropic")
                     ? (["anthropic"] as AiProviderId[])
                     : []),
-                  ...(settings.custom_provider_configured ? (["custom"] as AiProviderId[]) : []),
+                  ...(settings.custom_provider_configured
+                    ? (["custom"] as AiProviderId[])
+                    : []),
                 ];
               })()}
               customProviderModel={settings.custom_provider_model}

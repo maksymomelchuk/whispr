@@ -9,9 +9,9 @@ import { AnthropicLogo } from "@/assets/AnthropicLogo";
 import { CerebrasLogo } from "@/assets/CerebrasLogo";
 import { DeepSeekLogo } from "@/assets/DeepSeekLogo";
 import { GoogleGeminiLogo } from "@/assets/GoogleGeminiLogo";
+import { GroqLogo } from "@/assets/GroqLogo";
 import { OpenAiLogo } from "@/assets/OpenAiLogo";
 import { OpenRouterLogo } from "@/assets/OpenRouterLogo";
-import { GroqLogo } from "@/assets/GroqLogo";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -38,13 +38,13 @@ import { ProviderSetupDialog } from "../components/ProviderSetupDialog";
 import { SectionCard } from "../components/SectionCard";
 import { useSettings } from "../context/SettingsContext";
 import {
+  clearCustomProvider,
   setAnthropicApiKey as persistApiKey,
   setCleanupAuthMode as persistAuthMode,
   setAnthropicOauthToken as persistOauthToken,
   setCleanupThresholds as persistThresholds,
-  setProviderKey,
   setCustomProvider,
-  clearCustomProvider,
+  setProviderKey,
 } from "../lib/api";
 import type { EngineDescriptor } from "../lib/speechModelCatalog";
 import type { AiProviderId, Settings } from "../lib/types";
@@ -84,7 +84,8 @@ const OPENAI_COMPAT_DESCRIPTORS: EngineDescriptor[] = [
     metadata: { languages: "100+ languages", streaming: "—", diarization: "—" },
     keyPlaceholder: "sk-…",
     helpUrl: "https://platform.openai.com/api-keys",
-    selectConfigured: (s: Settings) => s.configured_providers.includes("openai"),
+    selectConfigured: (s: Settings) =>
+      s.configured_providers.includes("openai"),
     persist: (key: string) => setProviderKey("openai", key),
     validate: async () => ({ kind: "valid" as const }),
   },
@@ -96,7 +97,8 @@ const OPENAI_COMPAT_DESCRIPTORS: EngineDescriptor[] = [
     metadata: { languages: "100+ languages", streaming: "—", diarization: "—" },
     keyPlaceholder: "AIza…",
     helpUrl: "https://aistudio.google.com/apikey",
-    selectConfigured: (s: Settings) => s.configured_providers.includes("google"),
+    selectConfigured: (s: Settings) =>
+      s.configured_providers.includes("google"),
     persist: (key: string) => setProviderKey("google", key),
     validate: async () => ({ kind: "valid" as const }),
   },
@@ -120,7 +122,8 @@ const OPENAI_COMPAT_DESCRIPTORS: EngineDescriptor[] = [
     metadata: { languages: "100+ languages", streaming: "—", diarization: "—" },
     keyPlaceholder: "sk-…",
     helpUrl: "https://platform.deepseek.com/api_keys",
-    selectConfigured: (s: Settings) => s.configured_providers.includes("deepseek"),
+    selectConfigured: (s: Settings) =>
+      s.configured_providers.includes("deepseek"),
     persist: (key: string) => setProviderKey("deepseek", key),
     validate: async () => ({ kind: "valid" as const }),
   },
@@ -128,11 +131,13 @@ const OPENAI_COMPAT_DESCRIPTORS: EngineDescriptor[] = [
     id: "cerebras",
     name: "Cerebras",
     logo: CerebrasLogo,
-    description: "Llama models on Cerebras hardware for AI-powered transcription cleanup.",
+    description:
+      "Llama models on Cerebras hardware for AI-powered transcription cleanup.",
     metadata: { languages: "100+ languages", streaming: "—", diarization: "—" },
     keyPlaceholder: "csk-…",
     helpUrl: "https://cloud.cerebras.ai/",
-    selectConfigured: (s: Settings) => s.configured_providers.includes("cerebras"),
+    selectConfigured: (s: Settings) =>
+      s.configured_providers.includes("cerebras"),
     persist: (key: string) => setProviderKey("cerebras", key),
     validate: async () => ({ kind: "valid" as const }),
   },
@@ -140,11 +145,13 @@ const OPENAI_COMPAT_DESCRIPTORS: EngineDescriptor[] = [
     id: "openrouter",
     name: "OpenRouter",
     logo: OpenRouterLogo,
-    description: "Access 200+ models via OpenRouter for AI-powered transcription cleanup.",
+    description:
+      "Access 200+ models via OpenRouter for AI-powered transcription cleanup.",
     metadata: { languages: "100+ languages", streaming: "—", diarization: "—" },
     keyPlaceholder: "sk-or-…",
     helpUrl: "https://openrouter.ai/keys",
-    selectConfigured: (s: Settings) => s.configured_providers.includes("openrouter"),
+    selectConfigured: (s: Settings) =>
+      s.configured_providers.includes("openrouter"),
     persist: (key: string) => setProviderKey("openrouter", key),
     validate: async () => ({ kind: "valid" as const }),
   },
@@ -469,7 +476,10 @@ export function AiProvidersPage() {
     setSettings((s) => ({ ...s, [key]: configured }));
   };
 
-  const handleProviderKeyConfiguredChange = (id: AiProviderId, configured: boolean) => {
+  const handleProviderKeyConfiguredChange = (
+    id: AiProviderId,
+    configured: boolean,
+  ) => {
     setSettings((s) => ({
       ...s,
       configured_providers: configured
@@ -608,7 +618,10 @@ export function AiProvidersPage() {
           descriptor={descriptor}
           isConfigured={descriptor.selectConfigured(settings)}
           onConfiguredChange={(configured) =>
-            handleProviderKeyConfiguredChange(descriptor.id as AiProviderId, configured)
+            handleProviderKeyConfiguredChange(
+              descriptor.id as AiProviderId,
+              configured,
+            )
           }
           open={openDialog === descriptor.id}
           onOpenChange={(open) => setOpenDialog(open ? descriptor.id : null)}
