@@ -6429,7 +6429,7 @@ dependencies = [
 
 [[package]]
 name = "whispr"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "claxon",
  "core-foundation 0.10.1",
