@@ -48,11 +48,23 @@ pub enum Event {
     /// Time advanced; if `>= next_poll_at` and no poll is in flight, the
     /// reducer dispatches a poll. Called from either a 3 s timer or a buffer
     /// observation in the host session.
-    Tick { elapsed: Duration },
-    PollSucceeded { id: u64, text: String },
-    PollFailed { id: u64, kind: PollFailure },
-    PttReleased { elapsed: Duration },
-    FinalSucceeded { text: String },
+    Tick {
+        elapsed: Duration,
+    },
+    PollSucceeded {
+        id: u64,
+        text: String,
+    },
+    PollFailed {
+        id: u64,
+        kind: PollFailure,
+    },
+    PttReleased {
+        elapsed: Duration,
+    },
+    FinalSucceeded {
+        text: String,
+    },
     FinalFailed,
 }
 
@@ -201,9 +213,7 @@ impl State {
                 if self.phase == Phase::AwaitingFinalPost {
                     self.phase = Phase::Done;
                     if self.successful_polls > 0 {
-                        actions.push(Action::PasteFallbackWithWarning(
-                            self.last_partial.clone(),
-                        ));
+                        actions.push(Action::PasteFallbackWithWarning(self.last_partial.clone()));
                     } else {
                         actions.push(Action::HardError);
                     }

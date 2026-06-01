@@ -40,8 +40,16 @@ fn legacy_dictionary_splits_into_term_sets_and_corrections() {
         .iter()
         .find(|cs| cs.id == DEFAULT_CORRECTION_SET_ID)
         .expect("default correction set must exist after migration");
-    assert_eq!(default_set.entries.len(), 2, "only from!=to entries become corrections");
-    let dot = default_set.entries.iter().find(|c| c.from == "dot").expect("dot correction");
+    assert_eq!(
+        default_set.entries.len(),
+        2,
+        "only from!=to entries become corrections"
+    );
+    let dot = default_set
+        .entries
+        .iter()
+        .find(|c| c.from == "dot")
+        .expect("dot correction");
     assert_eq!(dot.to, ".");
     let fix = default_set
         .entries
@@ -58,10 +66,22 @@ fn legacy_dictionary_fields_absent_from_reserialized_output() {
     let reserialized = serde_json::to_string(&s).unwrap();
     let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
 
-    assert!(v.get("dictionary").is_none(), "legacy field must not appear after migration");
-    assert!(v.get("replacements").is_none(), "legacy field must not appear after migration");
-    assert!(v.get("terms").is_none(), "terms is skip_serializing — absorbed into term_sets");
-    assert!(v.get("term_sets").is_some(), "term_sets must appear in output");
+    assert!(
+        v.get("dictionary").is_none(),
+        "legacy field must not appear after migration"
+    );
+    assert!(
+        v.get("replacements").is_none(),
+        "legacy field must not appear after migration"
+    );
+    assert!(
+        v.get("terms").is_none(),
+        "terms is skip_serializing — absorbed into term_sets"
+    );
+    assert!(
+        v.get("term_sets").is_some(),
+        "term_sets must appear in output"
+    );
 }
 
 // ── Legacy use_dictionary → use_terms + use_corrections ────────────────────
@@ -91,8 +111,14 @@ fn legacy_use_dictionary_false_disables_corrections_and_leaves_term_set_ids_empt
         .find(|m| m.id == "mode-default-en")
         .expect("mode must be present after migration");
 
-    assert!(!mode.use_corrections, "use_corrections must be false when use_dictionary was false");
-    assert!(mode.term_set_ids.is_empty(), "no legacy terms → no term_set_ids assigned");
+    assert!(
+        !mode.use_corrections,
+        "use_corrections must be false when use_dictionary was false"
+    );
+    assert!(
+        mode.term_set_ids.is_empty(),
+        "no legacy terms → no term_set_ids assigned"
+    );
     assert!(
         mode.correction_set_ids.is_empty(),
         "correction_set_ids must be empty when use_corrections was false"
@@ -121,11 +147,18 @@ fn legacy_use_dictionary_true_preserves_corrections_flag() {
         .find(|m| m.id == "mode-default-en")
         .expect("mode must be present after migration");
 
-    assert!(mode.use_corrections, "use_corrections must remain true when use_dictionary was true");
-    // No legacy terms in this JSON, so no Default Terms set is created.
-    assert!(mode.term_set_ids.is_empty(), "no legacy terms → no term_set_ids assigned");
     assert!(
-        mode.correction_set_ids.contains(&DEFAULT_CORRECTION_SET_ID.to_string()),
+        mode.use_corrections,
+        "use_corrections must remain true when use_dictionary was true"
+    );
+    // No legacy terms in this JSON, so no Default Terms set is created.
+    assert!(
+        mode.term_set_ids.is_empty(),
+        "no legacy terms → no term_set_ids assigned"
+    );
+    assert!(
+        mode.correction_set_ids
+            .contains(&DEFAULT_CORRECTION_SET_ID.to_string()),
         "correction_set_ids must contain the default set when use_corrections was true"
     );
 }
@@ -149,8 +182,14 @@ fn legacy_corrections_field_seeds_default_correction_set() {
         .find(|cs| cs.id == DEFAULT_CORRECTION_SET_ID)
         .expect("default correction set must exist after migration");
     assert_eq!(default_set.entries.len(), 2);
-    assert!(default_set.entries.iter().any(|e| e.from == "mongo" && e.to == "MongoDB"));
-    assert!(default_set.entries.iter().any(|e| e.from == "js" && e.to == "JavaScript"));
+    assert!(default_set
+        .entries
+        .iter()
+        .any(|e| e.from == "mongo" && e.to == "MongoDB"));
+    assert!(default_set
+        .entries
+        .iter()
+        .any(|e| e.from == "js" && e.to == "JavaScript"));
 }
 
 #[test]
@@ -160,8 +199,14 @@ fn corrections_field_absent_from_reserialized_output() {
     let reserialized = serde_json::to_string(&s).unwrap();
     let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
 
-    assert!(v.get("corrections").is_none(), "legacy corrections field must not appear after migration");
-    assert!(v.get("correction_sets").is_some(), "correction_sets must appear in output");
+    assert!(
+        v.get("corrections").is_none(),
+        "legacy corrections field must not appear after migration"
+    );
+    assert!(
+        v.get("correction_sets").is_some(),
+        "correction_sets must appear in output"
+    );
 }
 
 // ── Combined pre-umbrella-73 migration ──────────────────────────────────────
@@ -196,11 +241,17 @@ fn full_pre_issue_73_migration_preserves_behavior() {
     }"#;
 
     let s = config::from_json(json).unwrap();
-    let mode = s.modes.iter().find(|m| m.id == "mode-default-en").expect("mode must be present");
+    let mode = s
+        .modes
+        .iter()
+        .find(|m| m.id == "mode-default-en")
+        .expect("mode must be present");
 
     assert_eq!(
         mode.provider_model,
-        ProviderModel::Groq { model: GroqModel::WhisperLargeV3 },
+        ProviderModel::Groq {
+            model: GroqModel::WhisperLargeV3
+        },
         "mode must carry groq+whisper-large-v3 after migration"
     );
 
@@ -212,7 +263,8 @@ fn full_pre_issue_73_migration_preserves_behavior() {
     assert!(term_set.entries.contains(&"MongoDB".to_string()));
     assert!(term_set.entries.contains(&"Kubernetes".to_string()));
     assert!(
-        mode.term_set_ids.contains(&SEED_TERM_SET_DEFAULT_ID.to_string()),
+        mode.term_set_ids
+            .contains(&SEED_TERM_SET_DEFAULT_ID.to_string()),
         "mode must reference the default term set"
     );
 
@@ -221,23 +273,50 @@ fn full_pre_issue_73_migration_preserves_behavior() {
         .iter()
         .find(|cs| cs.id == DEFAULT_CORRECTION_SET_ID)
         .expect("Default Corrections set must exist");
-    assert!(correction_set.entries.iter().any(|e| e.from == "anthropik" && e.to == "Anthropic"));
-    assert!(correction_set.entries.iter().any(|e| e.from == "dot" && e.to == "."));
+    assert!(correction_set
+        .entries
+        .iter()
+        .any(|e| e.from == "anthropik" && e.to == "Anthropic"));
+    assert!(correction_set
+        .entries
+        .iter()
+        .any(|e| e.from == "dot" && e.to == "."));
     assert!(
-        mode.correction_set_ids.contains(&DEFAULT_CORRECTION_SET_ID.to_string()),
+        mode.correction_set_ids
+            .contains(&DEFAULT_CORRECTION_SET_ID.to_string()),
         "mode must reference the default correction set"
     );
 
     let reserialized = serde_json::to_string(&s).unwrap();
     let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
-    assert!(v.get("transcription_provider").is_none(), "transcription_provider must not appear");
+    assert!(
+        v.get("transcription_provider").is_none(),
+        "transcription_provider must not appear"
+    );
     assert!(v.get("terms").is_none(), "legacy terms must not appear");
-    assert!(v.get("corrections").is_none(), "legacy corrections must not appear");
+    assert!(
+        v.get("corrections").is_none(),
+        "legacy corrections must not appear"
+    );
 
-    let mode_v = v["modes"].as_array().unwrap().iter().find(|m| m["id"] == "mode-default-en").unwrap();
-    assert!(mode_v.get("use_terms").is_none(), "use_terms must not appear on mode");
-    assert!(mode_v.get("use_corrections").is_none(), "use_corrections must not appear on mode");
-    assert_eq!(mode_v["provider_model"]["provider"], "groq", "provider_model must serialize to groq on mode");
+    let mode_v = v["modes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["id"] == "mode-default-en")
+        .unwrap();
+    assert!(
+        mode_v.get("use_terms").is_none(),
+        "use_terms must not appear on mode"
+    );
+    assert!(
+        mode_v.get("use_corrections").is_none(),
+        "use_corrections must not appear on mode"
+    );
+    assert_eq!(
+        mode_v["provider_model"]["provider"], "groq",
+        "provider_model must serialize to groq on mode"
+    );
 }
 
 // ── UA→EN translation prompt backfill ──────────────────────────────────────
@@ -261,11 +340,20 @@ fn old_ua_en_with_no_prompt_override_gets_translation_prompt_on_migration() {
     }"#;
 
     let s = config::from_json(json).unwrap();
-    let ua_en = s.modes.iter().find(|m| m.id == "mode-ua-en").expect("mode must survive migration");
+    let ua_en = s
+        .modes
+        .iter()
+        .find(|m| m.id == "mode-ua-en")
+        .expect("mode must survive migration");
 
     assert!(ua_en.ai_cleanup.enabled);
     assert!(
-        ua_en.ai_cleanup.prompt_override.as_deref().unwrap_or("").contains("Ukrainian"),
+        ua_en
+            .ai_cleanup
+            .prompt_override
+            .as_deref()
+            .unwrap_or("")
+            .contains("Ukrainian"),
         "migration must set the translation prompt on an old mode-ua-en"
     );
 }
@@ -284,7 +372,11 @@ fn old_ua_en_with_custom_prompt_is_not_overwritten_on_migration() {
     }"#;
 
     let s = config::from_json(json).unwrap();
-    let ua_en = s.modes.iter().find(|m| m.id == "mode-ua-en").expect("mode must survive migration");
+    let ua_en = s
+        .modes
+        .iter()
+        .find(|m| m.id == "mode-ua-en")
+        .expect("mode must survive migration");
 
     assert_eq!(
         ua_en.ai_cleanup.prompt_override.as_deref(),

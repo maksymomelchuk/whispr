@@ -86,9 +86,7 @@ fn read_from_disk(app: &tauri::AppHandle) -> CleanupStats {
     };
     match fs::read_to_string(&path) {
         Ok(contents) => serde_json::from_str(&contents).unwrap_or_else(|e| {
-            eprintln!(
-                "[cleanup_stats] parse error on {path:?}, starting fresh: {e}"
-            );
+            eprintln!("[cleanup_stats] parse error on {path:?}, starting fresh: {e}");
             CleanupStats::default()
         }),
         Err(_) => CleanupStats::default(),

@@ -1,25 +1,25 @@
 mod api_key_validation;
 mod commands;
 pub mod config;
+mod corrections;
 pub mod download;
+mod groq_audio;
+pub mod groq_session_state;
+mod groq_stabilizer;
 pub mod history;
 pub(crate) mod hotkey;
 pub(crate) mod keysym;
 pub mod mode;
-pub mod provider;
-pub mod pipeline;
-mod corrections;
-pub mod terms;
-mod groq_audio;
-pub mod groq_session_state;
-mod groq_stabilizer;
 mod permissions;
+pub mod pipeline;
+#[cfg(target_os = "linux")]
+pub(crate) mod platform;
+pub mod provider;
 mod snippets;
 mod state;
 mod stats;
+pub mod terms;
 mod tray;
-#[cfg(target_os = "linux")]
-pub(crate) mod platform;
 
 // cleanup_stats is pure Rust (file I/O + token counters, no OS APIs) and
 // is therefore compiled on all platforms.
@@ -27,19 +27,19 @@ mod cleanup_stats;
 
 // Session modules depend only on tokio-tungstenite, reqwest, and cpal —
 // all cross-platform. Un-gated so cloud transcription compiles everywhere.
-mod deepgram_session;
 mod assemblyai_session;
+mod deepgram_session;
 mod groq_session;
-pub(crate) mod transcription_session;
 pub(crate) mod recorder;
+pub(crate) mod transcription_session;
 
 // cleanup is cross-platform HTTP (reqwest + serde_json, no OS APIs).
 mod cleanup;
 
 // local_session uses transcribe-rs (cross-platform: Metal on macOS, Vulkan on
 // Windows/Linux, CPU fallback). Gating is removed — the module compiles everywhere.
-pub mod model_catalog;
 mod local_session;
+pub mod model_catalog;
 
 // media, overlay, and target_app expose platform-neutral public APIs and
 // select their OS implementation internally via cfg.
@@ -127,8 +127,7 @@ pub fn run() {
             let app_state = AppState::default();
             *app_state.hotkey_bindings.lock().unwrap() = settings.hotkey_bindings;
             *app_state.input_device.lock().unwrap() = settings.input_device;
-            *app_state.pause_media_on_record.lock().unwrap() =
-                settings.pause_media_on_record;
+            *app_state.pause_media_on_record.lock().unwrap() = settings.pause_media_on_record;
 
             // Spawn the audio capture thread on all platforms — cpal is
             // cross-platform and cloud engine sessions need it on Windows/Linux.
@@ -167,15 +166,16 @@ pub fn run() {
             {
                 let eviction_cache = app_state.model_cache.clone();
                 let eviction_app = app.handle().clone();
-                std::thread::spawn(move || {
-                    loop {
-                        std::thread::sleep(std::time::Duration::from_secs(60));
-                        let idle_timeout = config::load(&eviction_app).local_whisper.idle_timeout;
-                        let Some(threshold) = idle_timeout.as_duration() else {
-                            continue;
-                        };
-                        eviction_cache.lock().unwrap().retain(|_, m| m.last_used.elapsed() < threshold);
-                    }
+                std::thread::spawn(move || loop {
+                    std::thread::sleep(std::time::Duration::from_secs(60));
+                    let idle_timeout = config::load(&eviction_app).local_whisper.idle_timeout;
+                    let Some(threshold) = idle_timeout.as_duration() else {
+                        continue;
+                    };
+                    eviction_cache
+                        .lock()
+                        .unwrap()
+                        .retain(|_, m| m.last_used.elapsed() < threshold);
                 });
             }
 

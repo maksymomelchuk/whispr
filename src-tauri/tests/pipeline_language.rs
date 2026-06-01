@@ -8,7 +8,7 @@
 mod common;
 
 use common::{run_under_deadline, PipelineHarness};
-use whispr_lib::mode::{ModeCleanup, ModeLanguage, Mode};
+use whispr_lib::mode::{Mode, ModeCleanup, ModeLanguage};
 use whispr_lib::pipeline::{merge_notices, Notice};
 use whispr_lib::provider::ProviderModel;
 
@@ -28,7 +28,9 @@ async fn hints_language_passes_text_through() {
         codes: vec!["en".to_string(), "uk".to_string()],
     });
     let outcome = run_under_deadline(|| {
-        PipelineHarness::new().with_mode(mode).run("hello hints language")
+        PipelineHarness::new()
+            .with_mode(mode)
+            .run("hello hints language")
     })
     .await;
 
@@ -40,7 +42,9 @@ async fn hints_language_passes_text_through() {
 async fn auto_language_passes_text_through() {
     let mode = mode_with_language(ModeLanguage::Auto);
     let outcome = run_under_deadline(|| {
-        PipelineHarness::new().with_mode(mode).run("hello auto language")
+        PipelineHarness::new()
+            .with_mode(mode)
+            .run("hello auto language")
     })
     .await;
 

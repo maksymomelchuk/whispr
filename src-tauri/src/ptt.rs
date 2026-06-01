@@ -1,23 +1,23 @@
+use crate::assemblyai_session::AssemblyAiSession;
 use crate::config::{HotkeyAction, HotkeyBinding, Shortcut};
+use crate::deepgram_session::DeepgramSession;
+use crate::groq_session::GroqSession;
+use crate::history::{self, CleanupStatus, HISTORY_UPDATED_EVENT};
 use crate::hotkey::{
     advance_tap_state, coex_advance_down, coex_timer_should_fire, is_cancel_event,
     key_has_both_kinds, shortcut_is_relevant, shortcut_matches, tap_state_key, CoexDown, Dispatch,
     TapEvent, TapState, DOUBLE_TAP_THRESHOLD,
 };
-use crate::provider::{LocalWhisperModel, ProviderModel, TranscriptionProvider};
-use crate::assemblyai_session::AssemblyAiSession;
-use crate::deepgram_session::DeepgramSession;
-use crate::groq_session::GroqSession;
-use crate::history::{self, CleanupStatus, HISTORY_UPDATED_EVENT};
 use crate::pipeline::{self, CleanupOutput, Notice};
+use crate::provider::{LocalWhisperModel, ProviderModel, TranscriptionProvider};
 use crate::recorder::Recorder;
 use crate::state::{AppState, ModifierState};
 use crate::transcription_session::TranscriptionSession;
 use crate::{cleanup, cleanup_stats, config, model_catalog, stats};
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::Ordering;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 
 #[cfg(target_os = "macos")]
@@ -187,14 +187,38 @@ struct ModKeyState {
 #[cfg(not(target_os = "macos"))]
 fn update_modifier_state(state: &AppState, code: &str, is_press: bool, sides: &mut ModKeyState) {
     let changed = match code {
-        "AltLeft" => { sides.l_alt = is_press; true }
-        "AltRight" => { sides.r_alt = is_press; true }
-        "MetaLeft" => { sides.l_meta = is_press; true }
-        "MetaRight" => { sides.r_meta = is_press; true }
-        "ControlLeft" => { sides.l_control = is_press; true }
-        "ControlRight" => { sides.r_control = is_press; true }
-        "ShiftLeft" => { sides.l_shift = is_press; true }
-        "ShiftRight" => { sides.r_shift = is_press; true }
+        "AltLeft" => {
+            sides.l_alt = is_press;
+            true
+        }
+        "AltRight" => {
+            sides.r_alt = is_press;
+            true
+        }
+        "MetaLeft" => {
+            sides.l_meta = is_press;
+            true
+        }
+        "MetaRight" => {
+            sides.r_meta = is_press;
+            true
+        }
+        "ControlLeft" => {
+            sides.l_control = is_press;
+            true
+        }
+        "ControlRight" => {
+            sides.r_control = is_press;
+            true
+        }
+        "ShiftLeft" => {
+            sides.l_shift = is_press;
+            true
+        }
+        "ShiftRight" => {
+            sides.r_shift = is_press;
+            true
+        }
         _ => false,
     };
     if changed {
@@ -244,7 +268,10 @@ fn maybe_resume_media(state: &AppState) {
     tauri::async_runtime::spawn_blocking(media::unmute_output);
 }
 
-fn local_model_readiness(data_dir: &std::path::Path, model: LocalWhisperModel) -> Result<(), String> {
+fn local_model_readiness(
+    data_dir: &std::path::Path,
+    model: LocalWhisperModel,
+) -> Result<(), String> {
     let catalog = model_catalog::catalog_for(model);
     let models_dir = data_dir.join("models");
     if model_catalog::all_files_present(&catalog, &models_dir) {
@@ -345,31 +372,61 @@ async fn run_session(
     let session_result = match &active_mode.provider_model {
         ProviderModel::Deepgram => {
             DeepgramSession
-                .run(app.clone(), format, chunk_rx, mode_language, session_terms, active_mode)
+                .run(
+                    app.clone(),
+                    format,
+                    chunk_rx,
+                    mode_language,
+                    session_terms,
+                    active_mode,
+                )
                 .await
         }
         ProviderModel::Groq { model } => {
             GroqSession { model: *model }
-                .run(app.clone(), format, chunk_rx, mode_language, session_terms, active_mode)
+                .run(
+                    app.clone(),
+                    format,
+                    chunk_rx,
+                    mode_language,
+                    session_terms,
+                    active_mode,
+                )
                 .await
         }
         ProviderModel::AssemblyAi { model } => {
             AssemblyAiSession { model: *model }
-                .run(app.clone(), format, chunk_rx, mode_language, session_terms, active_mode)
+                .run(
+                    app.clone(),
+                    format,
+                    chunk_rx,
+                    mode_language,
+                    session_terms,
+                    active_mode,
+                )
                 .await
         }
         ProviderModel::Local { model } => {
             #[cfg(target_os = "macos")]
             {
                 LocalSession { model: *model }
-                    .run(app.clone(), format, chunk_rx, mode_language, session_terms, active_mode)
+                    .run(
+                        app.clone(),
+                        format,
+                        chunk_rx,
+                        mode_language,
+                        session_terms,
+                        active_mode,
+                    )
                     .await
             }
             #[cfg(not(target_os = "macos"))]
             {
                 let _ = (model, format, chunk_rx, mode_language, session_terms);
                 recorder.stop();
-                return Err("Local transcription is not yet supported on this platform.".to_string());
+                return Err(
+                    "Local transcription is not yet supported on this platform.".to_string()
+                );
             }
         }
     };
@@ -411,12 +468,19 @@ async fn run_session(
     )
     .await;
 
-    let pipeline::Outcome { pasted_text, mut history_entry, .. } = pipeline::run_stages(
+    let pipeline::Outcome {
+        pasted_text,
+        mut history_entry,
+        ..
+    } = pipeline::run_stages(
         &raw_text,
         speak_duration,
         active_mode,
         &settings,
-        CleanupOutput { replaced_text, status: cleanup_status },
+        CleanupOutput {
+            replaced_text,
+            status: cleanup_status,
+        },
     );
 
     #[cfg(target_os = "macos")]
@@ -447,7 +511,13 @@ async fn run_session(
 
     let words = history_entry.final_text.split_whitespace().count() as u64;
     let seconds = speak_duration.as_secs() as u32;
-    stats::record(app, words, seconds, history_entry.bundle_id.as_deref(), history_entry.app_name.as_deref());
+    stats::record(
+        app,
+        words,
+        seconds,
+        history_entry.bundle_id.as_deref(),
+        history_entry.app_name.as_deref(),
+    );
 
     match history::append(app, history_entry) {
         Ok(_) => {
@@ -486,7 +556,11 @@ async fn maybe_cleanup(
     let cleanup_settings = &settings.ai_cleanup;
 
     if !mode_cleanup_enabled {
-        return (transcript.to_string(), CleanupStatus::Disabled, Notice::None);
+        return (
+            transcript.to_string(),
+            CleanupStatus::Disabled,
+            Notice::None,
+        );
     }
 
     let words = transcript.split_whitespace().count();
@@ -514,7 +588,11 @@ async fn maybe_cleanup(
         AiProviderId::Anthropic => {
             let credential = match cleanup_settings.auth_mode {
                 config::CleanupAuthMode::ApiKey => {
-                    match cleanup_settings.provider_keys.get("anthropic").filter(|k| !k.is_empty()) {
+                    match cleanup_settings
+                        .provider_keys
+                        .get("anthropic")
+                        .filter(|k| !k.is_empty())
+                    {
                         Some(k) => cleanup::Credential::ApiKey(k),
                         None => {
                             return (
@@ -811,8 +889,7 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                     let mut tap_states_guard = tap_states.lock().unwrap();
                     for b in bindings.iter().filter(|b| b.shortcut.is_double_tap) {
                         if !shortcut_matches(code, &b.shortcut, modifiers_val) {
-                            if let Some(ts) =
-                                tap_states_guard.get_mut(&tap_state_key(&b.shortcut))
+                            if let Some(ts) = tap_states_guard.get_mut(&tap_state_key(&b.shortcut))
                             {
                                 advance_tap_state(ts, TapEvent::OtherKey, now);
                             }
@@ -832,7 +909,9 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                         .map(|sc| shortcut_is_relevant(code, sc))
                         .unwrap_or(false)
                 } else {
-                    bindings.iter().any(|b| shortcut_is_relevant(code, &b.shortcut))
+                    bindings
+                        .iter()
+                        .any(|b| shortcut_is_relevant(code, &b.shortcut))
                 };
                 if !relevant {
                     return None;
@@ -862,7 +941,9 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                                 CoexDown::FireDoubleTap => {
                                     dispatch_binding(&app, &state, &recorder, dt_b);
                                 }
-                                CoexDown::ScheduleSinglePress { captured_generation } => {
+                                CoexDown::ScheduleSinglePress {
+                                    captured_generation,
+                                } => {
                                     let tap_states_for_timer = tap_states.clone();
                                     let app_for_timer = app.clone();
                                     let state_for_timer = state.clone();
@@ -871,13 +952,11 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                                     tauri::async_runtime::spawn(async move {
                                         tokio::time::sleep(DOUBLE_TAP_THRESHOLD).await;
                                         let should_fire = {
-                                            let mut guard =
-                                                tap_states_for_timer.lock().unwrap();
+                                            let mut guard = tap_states_for_timer.lock().unwrap();
                                             let Some(ts) = guard.get_mut(&key) else {
                                                 return;
                                             };
-                                            if !coex_timer_should_fire(ts, captured_generation)
-                                            {
+                                            if !coex_timer_should_fire(ts, captured_generation) {
                                                 return;
                                             }
                                             ts.generation = ts.generation.wrapping_add(1);
@@ -919,8 +998,7 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                         let should_stop = match sc_opt {
                             Some(ref sc) if sc.is_double_tap => {
                                 let mut tap_states_guard = tap_states.lock().unwrap();
-                                let ts =
-                                    tap_states_guard.entry(tap_state_key(sc)).or_default();
+                                let ts = tap_states_guard.entry(tap_state_key(sc)).or_default();
                                 advance_tap_state(ts, TapEvent::Up, now) == Dispatch::StopPtt
                             }
                             _ => true,
@@ -1010,8 +1088,7 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
             Arc::new(Mutex::new(HashMap::new()));
         // Tracks currently-held keys so OS key-repeat events (successive
         // KeyPress without an intervening KeyRelease) are ignored.
-        let pressed_keys: Arc<Mutex<HashSet<String>>> =
-            Arc::new(Mutex::new(HashSet::new()));
+        let pressed_keys: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
         // L/R per-side modifier tracking; the aggregated ModifierState is
         // written into state.modifiers after each modifier event.
         let mod_sides = Arc::new(Mutex::new(ModKeyState::default()));
@@ -1069,8 +1146,7 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                     let mut tap_states_guard = tap_states.lock().unwrap();
                     for b in bindings.iter().filter(|b| b.shortcut.is_double_tap) {
                         if !shortcut_matches(code, &b.shortcut, modifiers_val) {
-                            if let Some(ts) =
-                                tap_states_guard.get_mut(&tap_state_key(&b.shortcut))
+                            if let Some(ts) = tap_states_guard.get_mut(&tap_state_key(&b.shortcut))
                             {
                                 advance_tap_state(ts, TapEvent::OtherKey, now);
                             }
@@ -1087,7 +1163,9 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                         .map(|sc| shortcut_is_relevant(code, sc))
                         .unwrap_or(false)
                 } else {
-                    bindings.iter().any(|b| shortcut_is_relevant(code, &b.shortcut))
+                    bindings
+                        .iter()
+                        .any(|b| shortcut_is_relevant(code, &b.shortcut))
                 };
                 if !relevant {
                     return;
@@ -1117,7 +1195,9 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                                 CoexDown::FireDoubleTap => {
                                     dispatch_binding(&app, &state, &recorder, dt_b);
                                 }
-                                CoexDown::ScheduleSinglePress { captured_generation } => {
+                                CoexDown::ScheduleSinglePress {
+                                    captured_generation,
+                                } => {
                                     let tap_states_for_timer = tap_states.clone();
                                     let app_for_timer = app.clone();
                                     let state_for_timer = state.clone();
@@ -1126,8 +1206,7 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                                     tauri::async_runtime::spawn(async move {
                                         tokio::time::sleep(DOUBLE_TAP_THRESHOLD).await;
                                         let should_fire = {
-                                            let mut guard =
-                                                tap_states_for_timer.lock().unwrap();
+                                            let mut guard = tap_states_for_timer.lock().unwrap();
                                             let Some(ts) = guard.get_mut(&key) else {
                                                 return;
                                             };
@@ -1171,8 +1250,7 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                         let should_stop = match sc_opt {
                             Some(ref sc) if sc.is_double_tap => {
                                 let mut tap_states_guard = tap_states.lock().unwrap();
-                                let ts =
-                                    tap_states_guard.entry(tap_state_key(sc)).or_default();
+                                let ts = tap_states_guard.entry(tap_state_key(sc)).or_default();
                                 advance_tap_state(ts, TapEvent::Up, now) == Dispatch::StopPtt
                             }
                             _ => true,
@@ -1219,7 +1297,10 @@ mod tests {
         let result = local_model_readiness(dir.path(), LocalWhisperModel::LargeV3);
         assert!(result.is_err());
         let msg = result.unwrap_err();
-        assert!(msg.contains("Settings → Local Models"), "message was: {msg}");
+        assert!(
+            msg.contains("Settings → Local Models"),
+            "message was: {msg}"
+        );
     }
 
     #[test]

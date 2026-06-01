@@ -15,10 +15,8 @@ use whispr_lib::groq_session_state::{Action, Event, State as GroqState};
 
 #[tokio::test]
 async fn deepgram_preset_transcript_produces_pasted_text() {
-    let outcome = run_under_deadline(|| {
-        PipelineHarness::new().run("transcribed by Deepgram")
-    })
-    .await;
+    let outcome =
+        run_under_deadline(|| PipelineHarness::new().run("transcribed by Deepgram")).await;
 
     assert_eq!(outcome.pasted_text, "transcribed by Deepgram ");
     assert_eq!(outcome.history_entry.raw_text, "transcribed by Deepgram");
@@ -39,10 +37,7 @@ async fn deepgram_preset_with_corrections_applied() {
 
 #[tokio::test]
 async fn groq_basic_preset_transcript_produces_pasted_text() {
-    let outcome = run_under_deadline(|| {
-        PipelineHarness::new().run("transcribed by Groq")
-    })
-    .await;
+    let outcome = run_under_deadline(|| PipelineHarness::new().run("transcribed by Groq")).await;
 
     assert_eq!(outcome.pasted_text, "transcribed by Groq ");
     assert_eq!(outcome.history_entry.raw_text, "transcribed by Groq");
@@ -55,10 +50,14 @@ async fn groq_basic_preset_transcript_produces_pasted_text() {
 #[tokio::test]
 async fn groq_covering_poll_produces_final_transcript_via_state_machine() {
     let mut state = GroqState::new();
-    state.step(Event::Tick { elapsed: Duration::from_secs(3) });
+    state.step(Event::Tick {
+        elapsed: Duration::from_secs(3),
+    });
     // PTT released at the same instant as the poll: the in-flight poll covers
     // the whole recording, so its result IS the final.
-    state.step(Event::PttReleased { elapsed: Duration::from_secs(3) });
+    state.step(Event::PttReleased {
+        elapsed: Duration::from_secs(3),
+    });
     let actions = state.step(Event::PollSucceeded {
         id: 1,
         text: "covering poll final transcript".into(),
@@ -75,7 +74,10 @@ async fn groq_covering_poll_produces_final_transcript_via_state_machine() {
     let outcome = run_under_deadline(move || PipelineHarness::new().run(&final_text)).await;
 
     assert_eq!(outcome.pasted_text, "covering poll final transcript ");
-    assert_eq!(outcome.history_entry.raw_text, "covering poll final transcript");
+    assert_eq!(
+        outcome.history_entry.raw_text,
+        "covering poll final transcript"
+    );
 }
 
 /// Simulates the Groq scenario where PTT is released before any poll fires,

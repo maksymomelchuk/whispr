@@ -65,7 +65,10 @@ async fn history_append_failure_does_not_prevent_session_completion() {
     .await;
 
     assert_eq!(outcome.pasted_text, "Cleaned transcript result ");
-    assert_eq!(outcome.history_entry.final_text, "Cleaned transcript result");
+    assert_eq!(
+        outcome.history_entry.final_text,
+        "Cleaned transcript result"
+    );
     assert_eq!(outcome.history_entry.raw_text, "raw transcript input");
     assert!(
         matches!(outcome.history_entry.cleanup_status, CleanupStatus::Ran),

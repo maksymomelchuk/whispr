@@ -16,13 +16,19 @@ async fn cleanup_disabled_raw_transcript_is_pasted() {
     .await;
 
     assert!(
-        matches!(outcome.history_entry.cleanup_status, CleanupStatus::Disabled),
+        matches!(
+            outcome.history_entry.cleanup_status,
+            CleanupStatus::Disabled
+        ),
         "expected Disabled, got {:?}",
         outcome.history_entry.cleanup_status,
     );
     assert_eq!(outcome.pasted_text, "this is the raw transcript ");
     assert_eq!(outcome.history_entry.raw_text, "this is the raw transcript");
-    assert_eq!(outcome.history_entry.replaced_text, "this is the raw transcript");
+    assert_eq!(
+        outcome.history_entry.replaced_text,
+        "this is the raw transcript"
+    );
 }
 
 /// When cleanup succeeds the pasted text comes from the cleaned output, not
@@ -43,8 +49,14 @@ async fn cleanup_success_cleaned_text_is_pasted() {
         outcome.history_entry.cleanup_status,
     );
     assert_eq!(outcome.pasted_text, "The cleaned and polished version. ");
-    assert_eq!(outcome.history_entry.raw_text, "uh this is like the raw transcript");
-    assert_eq!(outcome.history_entry.replaced_text, "The cleaned and polished version.");
+    assert_eq!(
+        outcome.history_entry.raw_text,
+        "uh this is like the raw transcript"
+    );
+    assert_eq!(
+        outcome.history_entry.replaced_text,
+        "The cleaned and polished version."
+    );
 }
 
 /// On a transient cleanup error the pipeline falls back to the raw
@@ -60,7 +72,10 @@ async fn cleanup_transient_error_falls_back_to_raw_transcript() {
     .await;
 
     assert!(
-        matches!(outcome.history_entry.cleanup_status, CleanupStatus::FailedTransient(_)),
+        matches!(
+            outcome.history_entry.cleanup_status,
+            CleanupStatus::FailedTransient(_)
+        ),
         "expected FailedTransient, got {:?}",
         outcome.history_entry.cleanup_status,
     );
@@ -81,7 +96,10 @@ async fn cleanup_timeout_falls_back_to_raw_transcript() {
     .await;
 
     assert!(
-        matches!(outcome.history_entry.cleanup_status, CleanupStatus::FailedTimeout),
+        matches!(
+            outcome.history_entry.cleanup_status,
+            CleanupStatus::FailedTimeout
+        ),
         "expected FailedTimeout, got {:?}",
         outcome.history_entry.cleanup_status,
     );
@@ -101,7 +119,13 @@ async fn cleanup_success_corrections_apply_on_cleaned_text() {
     })
     .await;
 
-    assert_eq!(outcome.history_entry.final_text, "I prefer MongoDB for storage");
-    assert_eq!(outcome.history_entry.replaced_text, "I prefer mongo for storage");
+    assert_eq!(
+        outcome.history_entry.final_text,
+        "I prefer MongoDB for storage"
+    );
+    assert_eq!(
+        outcome.history_entry.replaced_text,
+        "I prefer mongo for storage"
+    );
     assert_eq!(outcome.history_entry.raw_text, "uh I like mongo");
 }

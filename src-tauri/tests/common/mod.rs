@@ -160,7 +160,10 @@ impl PipelineHarness {
     }
 
     fn active_mode_mut(&mut self) -> Option<&mut Mode> {
-        self.settings.modes.iter_mut().find(|m| m.id == self.mode_id)
+        self.settings
+            .modes
+            .iter_mut()
+            .find(|m| m.id == self.mode_id)
     }
 
     /// Override the active `Mode` used by `run_stages`. Use this to test
@@ -203,7 +206,12 @@ impl PipelineHarness {
             },
         };
 
-        pipeline::run_stages(raw_text, Duration::from_secs(1), &mode, &self.settings, cleanup_output)
+        pipeline::run_stages(
+            raw_text,
+            Duration::from_secs(1),
+            &mode,
+            &self.settings,
+            cleanup_output,
+        )
     }
 }
-

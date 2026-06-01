@@ -390,7 +390,11 @@ pub struct Settings {
     pub term_sets: Vec<NamedTermSet>,
     /// Legacy flat corrections list; seeded into the "Default Corrections" set on
     /// first migration, then dropped from subsequent saves.
-    #[serde(rename = "corrections", default = "default_corrections", skip_serializing)]
+    #[serde(
+        rename = "corrections",
+        default = "default_corrections",
+        skip_serializing
+    )]
     pub legacy_corrections: Vec<CorrectionEntry>,
     #[serde(default)]
     pub correction_sets: Vec<NamedCorrectionSet>,
@@ -497,10 +501,7 @@ fn migrate(s: &mut Settings) -> bool {
 
     // ── Legacy api_key → deepgram_api_key ────────────────────────────────
     if let Some(legacy) = s.api_key.take() {
-        let deepgram_already_set = s
-            .deepgram_api_key
-            .as_deref()
-            .is_some_and(|k| !k.is_empty());
+        let deepgram_already_set = s.deepgram_api_key.as_deref().is_some_and(|k| !k.is_empty());
         if !legacy.is_empty() && !deepgram_already_set {
             s.deepgram_api_key = Some(legacy);
         }
@@ -511,7 +512,9 @@ fn migrate(s: &mut Settings) -> bool {
     if let Some(key) = s.ai_cleanup.anthropic_api_key.take() {
         changed = true;
         if !key.is_empty() && !s.ai_cleanup.provider_keys.contains_key("anthropic") {
-            s.ai_cleanup.provider_keys.insert("anthropic".to_string(), key);
+            s.ai_cleanup
+                .provider_keys
+                .insert("anthropic".to_string(), key);
         }
     }
 
@@ -645,7 +648,11 @@ fn migrate(s: &mut Settings) -> bool {
     // and wire each mode that had use_terms=true to reference it.
     if !s.terms.is_empty() {
         let entries: Vec<String> = std::mem::take(&mut s.terms);
-        if !s.term_sets.iter().any(|ts| ts.id == SEED_TERM_SET_DEFAULT_ID) {
+        if !s
+            .term_sets
+            .iter()
+            .any(|ts| ts.id == SEED_TERM_SET_DEFAULT_ID)
+        {
             s.term_sets.push(NamedTermSet {
                 id: SEED_TERM_SET_DEFAULT_ID.to_string(),
                 name: "Default Terms".to_string(),
@@ -798,10 +805,7 @@ pub fn load(app: &tauri::AppHandle) -> Settings {
 }
 
 /// Convenience for the many `load → mutate → save` setter commands.
-pub fn update<F: FnOnce(&mut Settings)>(
-    app: &tauri::AppHandle,
-    f: F,
-) -> Result<(), String> {
+pub fn update<F: FnOnce(&mut Settings)>(app: &tauri::AppHandle, f: F) -> Result<(), String> {
     let mut settings = load(app);
     f(&mut settings);
     save(app, &settings)
@@ -932,7 +936,11 @@ mod tests {
         let changed = migrate(&mut s);
         assert!(changed);
         assert_eq!(s.modes.len(), 4);
-        let default = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        let default = s
+            .modes
+            .iter()
+            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
+            .unwrap();
         assert_eq!(default.language, ModeLanguage::exact("fr"));
     }
 
@@ -946,7 +954,11 @@ mod tests {
         let changed = migrate(&mut s);
         assert!(changed);
         assert_eq!(s.modes.len(), 4);
-        let default = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        let default = s
+            .modes
+            .iter()
+            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
+            .unwrap();
         assert_eq!(default.language, ModeLanguage::exact("uk"));
     }
 
@@ -955,7 +967,11 @@ mod tests {
         let json = r#"{}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
-        let default = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        let default = s
+            .modes
+            .iter()
+            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
+            .unwrap();
         assert_eq!(default.language, ModeLanguage::exact("en"));
     }
 
@@ -964,7 +980,11 @@ mod tests {
         let json = r#"{"ai_cleanup_enabled": true}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
-        let default = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        let default = s
+            .modes
+            .iter()
+            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
+            .unwrap();
         assert!(default.ai_cleanup.enabled);
         // The flat field must be gone from subsequent saves.
         let reserialized = serde_json::to_string(&s).unwrap();
@@ -997,12 +1017,20 @@ mod tests {
         let json = r#"{"ai_cleanup": {"enabled": true}}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
-        let cleaned = s.modes.iter().find(|m| m.id == SEED_MODE_CLEANED_EN).unwrap();
+        let cleaned = s
+            .modes
+            .iter()
+            .find(|m| m.id == SEED_MODE_CLEANED_EN)
+            .unwrap();
         assert!(
             cleaned.ai_cleanup.enabled,
             "global-on must not stomp seed-mode defaults"
         );
-        let default = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        let default = s
+            .modes
+            .iter()
+            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
+            .unwrap();
         assert!(
             !default.ai_cleanup.enabled,
             "global-on must not enable modes that were off by default"
@@ -1029,9 +1057,15 @@ mod tests {
         let reserialized = serde_json::to_string(&s).unwrap();
         let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
         assert!(v.get("replacements").is_none());
-        assert!(v.get("dictionary").is_none(), "dictionary must not be written back");
+        assert!(
+            v.get("dictionary").is_none(),
+            "dictionary must not be written back"
+        );
         assert!(v.get("terms").is_none(), "terms is skip_serializing");
-        assert!(v.get("corrections").is_none(), "legacy corrections must not be written back");
+        assert!(
+            v.get("corrections").is_none(),
+            "legacy corrections must not be written back"
+        );
         assert!(v.get("correction_sets").is_some());
     }
 
@@ -1064,7 +1098,10 @@ mod tests {
         let changed = migrate(&mut s);
         assert!(changed);
         assert!(s.terms.is_empty());
-        assert!(s.term_sets.is_empty(), "no terms to seed a Default Terms set");
+        assert!(
+            s.term_sets.is_empty(),
+            "no terms to seed a Default Terms set"
+        );
         assert_eq!(s.legacy_corrections.len(), 1);
         assert_eq!(s.legacy_corrections[0].from, "anthropik");
         assert_eq!(s.legacy_corrections[0].to, "Anthropic");
@@ -1125,10 +1162,17 @@ mod tests {
         let mut s: Settings = serde_json::from_str(json).unwrap();
         // Absorb the seed-mode migrations too.
         migrate(&mut s);
-        let mode = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        let mode = s
+            .modes
+            .iter()
+            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
+            .unwrap();
         assert!(!mode.use_corrections, "use_corrections must be false");
         // use_terms=false means term_set_ids is empty (no Default Terms set created — no legacy terms)
-        assert!(mode.term_set_ids.is_empty(), "term_set_ids must be empty when use_dictionary was false");
+        assert!(
+            mode.term_set_ids.is_empty(),
+            "term_set_ids must be empty when use_dictionary was false"
+        );
     }
 
     #[test]
@@ -1140,7 +1184,11 @@ mod tests {
         ], "default_mode_id": "mode-default-en"}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
-        let mode = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        let mode = s
+            .modes
+            .iter()
+            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
+            .unwrap();
         assert!(mode.use_corrections, "use_corrections must remain true");
         // No legacy terms in this JSON so no Default Terms set is created
         assert!(mode.term_set_ids.is_empty(), "no legacy terms to migrate");
@@ -1153,8 +1201,15 @@ mod tests {
         let json = r#"{}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
-        assert!(s.term_sets.is_empty(), "no legacy terms → no Default Terms set");
-        let default_mode = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        assert!(
+            s.term_sets.is_empty(),
+            "no legacy terms → no Default Terms set"
+        );
+        let default_mode = s
+            .modes
+            .iter()
+            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
+            .unwrap();
         assert!(default_mode.term_set_ids.is_empty());
     }
 
@@ -1182,7 +1237,8 @@ mod tests {
         migrate(&mut s);
         for mode in &s.modes {
             assert!(
-                mode.term_set_ids.contains(&SEED_TERM_SET_DEFAULT_ID.to_string()),
+                mode.term_set_ids
+                    .contains(&SEED_TERM_SET_DEFAULT_ID.to_string()),
                 "mode '{}' must reference Default Terms set",
                 mode.id
             );
@@ -1202,9 +1258,15 @@ mod tests {
         }"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
-        let mode = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        let mode = s
+            .modes
+            .iter()
+            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
+            .unwrap();
         assert!(
-            !mode.term_set_ids.contains(&SEED_TERM_SET_DEFAULT_ID.to_string()),
+            !mode
+                .term_set_ids
+                .contains(&SEED_TERM_SET_DEFAULT_ID.to_string()),
             "mode with use_terms=false must not reference the Default Terms set"
         );
     }
@@ -1234,8 +1296,16 @@ mod tests {
         }"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
-        let mode = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
-        assert_eq!(mode.term_set_ids, vec!["ts-1"], "term_set_ids must be unchanged");
+        let mode = s
+            .modes
+            .iter()
+            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
+            .unwrap();
+        assert_eq!(
+            mode.term_set_ids,
+            vec!["ts-1"],
+            "term_set_ids must be unchanged"
+        );
         assert_eq!(s.term_sets.len(), 1, "no extra sets added");
     }
 
@@ -1261,7 +1331,11 @@ mod tests {
         assert_eq!(s.modes.len(), 4);
         // Running migration on already-seeded settings must be a no-op.
         migrate(&mut s);
-        assert_eq!(s.modes.len(), 4, "second migration must not duplicate modes");
+        assert_eq!(
+            s.modes.len(),
+            4,
+            "second migration must not duplicate modes"
+        );
     }
 
     #[test]
@@ -1295,7 +1369,11 @@ mod tests {
         assert_eq!(s.modes.len(), 4);
 
         // User-edited name is preserved, not overwritten.
-        let default = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        let default = s
+            .modes
+            .iter()
+            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
+            .unwrap();
         assert_eq!(default.name, "My Custom Name");
     }
 
@@ -1305,7 +1383,10 @@ mod tests {
         assert_eq!(s.modes.len(), 4);
 
         let changed = migrate(&mut s);
-        assert!(!changed, "migrate on fully-seeded settings must return false");
+        assert!(
+            !changed,
+            "migrate on fully-seeded settings must return false"
+        );
         assert_eq!(s.modes.len(), 4);
     }
 
@@ -1385,7 +1466,11 @@ mod tests {
         let mut s: Settings = serde_json::from_str(legacy).unwrap();
         migrate(&mut s);
         // Language moved to the default mode; old option knobs silently ignored.
-        let default = s.modes.iter().find(|m| m.id == SEED_MODE_DEFAULT_EN).unwrap();
+        let default = s
+            .modes
+            .iter()
+            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
+            .unwrap();
         assert_eq!(default.language, ModeLanguage::exact("fr"));
         assert_eq!(s.deepgram_api_key.as_deref(), Some("dg-key"));
         // Serialized form must not contain deepgram.language.
@@ -1424,7 +1509,10 @@ mod tests {
         let mut s = Settings::default();
         assert_eq!(s.hotkey_bindings.len(), 1);
         let changed = migrate(&mut s);
-        assert!(!changed, "migrate on already-migrated settings must return false");
+        assert!(
+            !changed,
+            "migrate on already-migrated settings must return false"
+        );
         assert_eq!(s.hotkey_bindings.len(), 1);
     }
 
@@ -1468,11 +1556,19 @@ mod tests {
     fn check_hotkey_conflicts_allows_distinct_shortcuts() {
         let bindings = vec![
             HotkeyBinding::ptt(
-                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                Shortcut {
+                    key: "AltRight".to_string(),
+                    modifiers: vec![],
+                    is_double_tap: false,
+                },
                 "mode-default-en".to_string(),
             ),
             HotkeyBinding::ptt(
-                Shortcut { key: "MetaRight".to_string(), modifiers: vec![], is_double_tap: false },
+                Shortcut {
+                    key: "MetaRight".to_string(),
+                    modifiers: vec![],
+                    is_double_tap: false,
+                },
                 "mode-cleaned-en".to_string(),
             ),
         ];
@@ -1483,11 +1579,19 @@ mod tests {
     fn check_hotkey_conflicts_rejects_duplicate_shortcuts() {
         let bindings = vec![
             HotkeyBinding::ptt(
-                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                Shortcut {
+                    key: "AltRight".to_string(),
+                    modifiers: vec![],
+                    is_double_tap: false,
+                },
                 "mode-default-en".to_string(),
             ),
             HotkeyBinding::ptt(
-                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                Shortcut {
+                    key: "AltRight".to_string(),
+                    modifiers: vec![],
+                    is_double_tap: false,
+                },
                 "mode-cleaned-en".to_string(),
             ),
         ];
@@ -1506,11 +1610,19 @@ mod tests {
     fn check_hotkey_conflicts_allows_single_press_and_double_tap_same_key() {
         let bindings = vec![
             HotkeyBinding::ptt(
-                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                Shortcut {
+                    key: "AltRight".to_string(),
+                    modifiers: vec![],
+                    is_double_tap: false,
+                },
                 "mode-default-en".to_string(),
             ),
             HotkeyBinding::ptt(
-                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
+                Shortcut {
+                    key: "AltRight".to_string(),
+                    modifiers: vec![],
+                    is_double_tap: true,
+                },
                 "mode-cleaned-en".to_string(),
             ),
         ];
@@ -1521,11 +1633,19 @@ mod tests {
     fn check_action_constraints_allows_distinct_modes() {
         let bindings = vec![
             HotkeyBinding::ptt(
-                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                Shortcut {
+                    key: "AltRight".to_string(),
+                    modifiers: vec![],
+                    is_double_tap: false,
+                },
                 "mode-default-en".to_string(),
             ),
             HotkeyBinding::ptt(
-                Shortcut { key: "MetaRight".to_string(), modifiers: vec![], is_double_tap: false },
+                Shortcut {
+                    key: "MetaRight".to_string(),
+                    modifiers: vec![],
+                    is_double_tap: false,
+                },
                 "mode-cleaned-en".to_string(),
             ),
         ];
@@ -1536,11 +1656,19 @@ mod tests {
     fn check_action_constraints_rejects_duplicate_mode() {
         let bindings = vec![
             HotkeyBinding::ptt(
-                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                Shortcut {
+                    key: "AltRight".to_string(),
+                    modifiers: vec![],
+                    is_double_tap: false,
+                },
                 "mode-default-en".to_string(),
             ),
             HotkeyBinding::ptt(
-                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
+                Shortcut {
+                    key: "AltRight".to_string(),
+                    modifiers: vec![],
+                    is_double_tap: true,
+                },
                 "mode-default-en".to_string(),
             ),
         ];
@@ -1568,7 +1696,11 @@ mod tests {
     fn check_action_constraints_allows_ptt_and_paste_latest_together() {
         let bindings = vec![
             HotkeyBinding::ptt(
-                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                Shortcut {
+                    key: "AltRight".to_string(),
+                    modifiers: vec![],
+                    is_double_tap: false,
+                },
                 "mode-default-en".to_string(),
             ),
             HotkeyBinding::paste_latest(Shortcut {
@@ -1585,11 +1717,19 @@ mod tests {
         let mut s = Settings::default();
         s.hotkey_bindings = vec![
             HotkeyBinding::ptt(
-                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: false },
+                Shortcut {
+                    key: "AltRight".to_string(),
+                    modifiers: vec![],
+                    is_double_tap: false,
+                },
                 SEED_MODE_DEFAULT_EN.to_string(),
             ),
             HotkeyBinding::ptt(
-                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
+                Shortcut {
+                    key: "AltRight".to_string(),
+                    modifiers: vec![],
+                    is_double_tap: true,
+                },
                 SEED_MODE_DEFAULT_EN.to_string(),
             ),
         ];
@@ -1603,16 +1743,18 @@ mod tests {
     #[test]
     fn migration_collapses_duplicate_paste_latest_bindings_to_first() {
         let mut s = Settings::default();
-        s.hotkey_bindings.push(HotkeyBinding::paste_latest(Shortcut {
-            key: "F1".to_string(),
-            modifiers: vec![],
-            is_double_tap: false,
-        }));
-        s.hotkey_bindings.push(HotkeyBinding::paste_latest(Shortcut {
-            key: "F2".to_string(),
-            modifiers: vec![],
-            is_double_tap: false,
-        }));
+        s.hotkey_bindings
+            .push(HotkeyBinding::paste_latest(Shortcut {
+                key: "F1".to_string(),
+                modifiers: vec![],
+                is_double_tap: false,
+            }));
+        s.hotkey_bindings
+            .push(HotkeyBinding::paste_latest(Shortcut {
+                key: "F2".to_string(),
+                modifiers: vec![],
+                is_double_tap: false,
+            }));
         let changed = migrate(&mut s);
         assert!(changed);
         let paste_latest_count = s
@@ -1625,7 +1767,8 @@ mod tests {
 
     #[test]
     fn legacy_hotkey_binding_with_mode_id_deserializes_as_ptt_action() {
-        let json = r#"{"shortcut": {"key": "AltRight", "modifiers": []}, "mode_id": "mode-default-en"}"#;
+        let json =
+            r#"{"shortcut": {"key": "AltRight", "modifiers": []}, "mode_id": "mode-default-en"}"#;
         let binding: HotkeyBinding = serde_json::from_str(json).unwrap();
         assert_eq!(
             binding.action,
@@ -1676,11 +1819,19 @@ mod tests {
     fn check_hotkey_conflicts_rejects_two_double_tap_same_key() {
         let bindings = vec![
             HotkeyBinding::ptt(
-                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
+                Shortcut {
+                    key: "AltRight".to_string(),
+                    modifiers: vec![],
+                    is_double_tap: true,
+                },
                 "mode-default-en".to_string(),
             ),
             HotkeyBinding::ptt(
-                Shortcut { key: "AltRight".to_string(), modifiers: vec![], is_double_tap: true },
+                Shortcut {
+                    key: "AltRight".to_string(),
+                    modifiers: vec![],
+                    is_double_tap: true,
+                },
                 "mode-cleaned-en".to_string(),
             ),
         ];
@@ -1691,7 +1842,11 @@ mod tests {
     fn check_hotkey_conflicts_rejects_ptt_and_paste_latest_sharing_shortcut() {
         let bindings = vec![
             HotkeyBinding::ptt(
-                Shortcut { key: "F1".to_string(), modifiers: vec![], is_double_tap: false },
+                Shortcut {
+                    key: "F1".to_string(),
+                    modifiers: vec![],
+                    is_double_tap: false,
+                },
                 "mode-default-en".to_string(),
             ),
             HotkeyBinding::paste_latest(Shortcut {
@@ -1709,7 +1864,9 @@ mod tests {
         let mut s: Settings = serde_json::from_str(json).unwrap();
         let changed = migrate(&mut s);
         assert!(changed);
-        let expected = ProviderModel::Groq { model: GroqModel::WhisperLargeV3 };
+        let expected = ProviderModel::Groq {
+            model: GroqModel::WhisperLargeV3,
+        };
         for mode in &s.modes {
             assert_eq!(
                 mode.provider_model, expected,
@@ -1725,7 +1882,9 @@ mod tests {
         let mut s: Settings = serde_json::from_str(json).unwrap();
         let changed = migrate(&mut s);
         assert!(changed);
-        let expected = ProviderModel::AssemblyAi { model: AssemblyAiModel::WhisperStreaming };
+        let expected = ProviderModel::AssemblyAi {
+            model: AssemblyAiModel::WhisperStreaming,
+        };
         for mode in &s.modes {
             assert_eq!(
                 mode.provider_model, expected,
@@ -1741,13 +1900,17 @@ mod tests {
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
         // Customise one mode to AssemblyAI after first migration.
-        s.modes[0].provider_model = ProviderModel::AssemblyAi { model: AssemblyAiModel::default() };
+        s.modes[0].provider_model = ProviderModel::AssemblyAi {
+            model: AssemblyAiModel::default(),
+        };
         // A second migrate (e.g. transcription_provider still Groq after reload)
         // must not overwrite the already-customised mode.
         migrate(&mut s);
         assert_eq!(
             s.modes[0].provider_model,
-            ProviderModel::AssemblyAi { model: AssemblyAiModel::default() },
+            ProviderModel::AssemblyAi {
+                model: AssemblyAiModel::default()
+            },
             "already-customised mode must not be overwritten"
         );
     }
@@ -1781,23 +1944,43 @@ mod tests {
 
     #[test]
     fn local_whisper_idle_timeout_default_is_fifteen_minutes() {
-        assert_eq!(LocalWhisperIdleTimeout::default(), LocalWhisperIdleTimeout::FifteenMinutes);
-        assert_eq!(LocalWhisperSettings::default().idle_timeout, LocalWhisperIdleTimeout::FifteenMinutes);
+        assert_eq!(
+            LocalWhisperIdleTimeout::default(),
+            LocalWhisperIdleTimeout::FifteenMinutes
+        );
+        assert_eq!(
+            LocalWhisperSettings::default().idle_timeout,
+            LocalWhisperIdleTimeout::FifteenMinutes
+        );
     }
 
     #[test]
     fn local_whisper_idle_timeout_as_duration_returns_correct_values() {
         use std::time::Duration;
-        assert_eq!(LocalWhisperIdleTimeout::FiveMinutes.as_duration(), Some(Duration::from_secs(300)));
-        assert_eq!(LocalWhisperIdleTimeout::FifteenMinutes.as_duration(), Some(Duration::from_secs(900)));
-        assert_eq!(LocalWhisperIdleTimeout::ThirtyMinutes.as_duration(), Some(Duration::from_secs(1800)));
-        assert_eq!(LocalWhisperIdleTimeout::OneHour.as_duration(), Some(Duration::from_secs(3600)));
+        assert_eq!(
+            LocalWhisperIdleTimeout::FiveMinutes.as_duration(),
+            Some(Duration::from_secs(300))
+        );
+        assert_eq!(
+            LocalWhisperIdleTimeout::FifteenMinutes.as_duration(),
+            Some(Duration::from_secs(900))
+        );
+        assert_eq!(
+            LocalWhisperIdleTimeout::ThirtyMinutes.as_duration(),
+            Some(Duration::from_secs(1800))
+        );
+        assert_eq!(
+            LocalWhisperIdleTimeout::OneHour.as_duration(),
+            Some(Duration::from_secs(3600))
+        );
         assert_eq!(LocalWhisperIdleTimeout::Never.as_duration(), None);
     }
 
     #[test]
     fn local_whisper_settings_round_trips_through_json() {
-        let settings = LocalWhisperSettings { idle_timeout: LocalWhisperIdleTimeout::ThirtyMinutes };
+        let settings = LocalWhisperSettings {
+            idle_timeout: LocalWhisperIdleTimeout::ThirtyMinutes,
+        };
         let json = serde_json::to_string(&settings).unwrap();
         let decoded: LocalWhisperSettings = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded, settings);
@@ -1816,7 +1999,10 @@ mod tests {
     #[test]
     fn settings_default_has_fifteen_minute_local_whisper_idle_timeout() {
         let s = Settings::default();
-        assert_eq!(s.local_whisper.idle_timeout, LocalWhisperIdleTimeout::FifteenMinutes);
+        assert_eq!(
+            s.local_whisper.idle_timeout,
+            LocalWhisperIdleTimeout::FifteenMinutes
+        );
     }
 
     #[test]
@@ -1825,13 +2011,19 @@ mod tests {
         s.local_whisper.idle_timeout = LocalWhisperIdleTimeout::OneHour;
         let json = serde_json::to_string(&s).unwrap();
         let decoded: Settings = serde_json::from_str(&json).unwrap();
-        assert_eq!(decoded.local_whisper.idle_timeout, LocalWhisperIdleTimeout::OneHour);
+        assert_eq!(
+            decoded.local_whisper.idle_timeout,
+            LocalWhisperIdleTimeout::OneHour
+        );
     }
 
     #[test]
     fn settings_without_local_whisper_field_defaults_to_fifteen_minutes() {
         let json = r#"{}"#;
         let s: Settings = serde_json::from_str(json).unwrap();
-        assert_eq!(s.local_whisper.idle_timeout, LocalWhisperIdleTimeout::FifteenMinutes);
+        assert_eq!(
+            s.local_whisper.idle_timeout,
+            LocalWhisperIdleTimeout::FifteenMinutes
+        );
     }
 }

@@ -17,7 +17,10 @@ async fn no_term_sets_raw_transcript_passes_through_unchanged() {
     .await;
 
     assert_eq!(outcome.pasted_text, "I use mongodb for storage ");
-    assert_eq!(outcome.history_entry.final_text, "I use mongodb for storage");
+    assert_eq!(
+        outcome.history_entry.final_text,
+        "I use mongodb for storage"
+    );
     assert_eq!(outcome.history_entry.raw_text, "I use mongodb for storage");
 }
 
@@ -35,7 +38,10 @@ async fn correct_spelling_from_stt_preserved_through_pipeline() {
     .await;
 
     assert_eq!(outcome.pasted_text, "I use MongoDB for storage ");
-    assert_eq!(outcome.history_entry.final_text, "I use MongoDB for storage");
+    assert_eq!(
+        outcome.history_entry.final_text,
+        "I use MongoDB for storage"
+    );
 }
 
 /// Term sets do not suppress corrections — those are independent toggles.
@@ -51,15 +57,18 @@ async fn no_term_sets_does_not_suppress_corrections() {
     })
     .await;
 
-    assert_eq!(outcome.history_entry.final_text, "I use MongoDB for storage");
+    assert_eq!(
+        outcome.history_entry.final_text,
+        "I use MongoDB for storage"
+    );
 }
 
 /// compose_term_hints deduplication: entries appearing in multiple sets are
 /// only forwarded to the provider once, preserving first-seen order.
 #[tokio::test]
 async fn multi_set_dedup_preserves_first_seen_order() {
-    use whispr_lib::terms::compose_term_hints;
     use whispr_lib::config::NamedTermSet;
+    use whispr_lib::terms::compose_term_hints;
 
     let sets = vec![
         NamedTermSet {

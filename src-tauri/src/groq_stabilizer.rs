@@ -32,10 +32,7 @@ impl Stabilizer {
     /// prefix and returns the partial that should be emitted to the
     /// overlay for this poll.
     pub fn ingest(&mut self, poll_result: &str) -> String {
-        let new_words: Vec<String> = poll_result
-            .split_whitespace()
-            .map(str::to_string)
-            .collect();
+        let new_words: Vec<String> = poll_result.split_whitespace().map(str::to_string).collect();
 
         let common = self
             .stable_prefix

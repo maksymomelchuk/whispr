@@ -1,9 +1,12 @@
 use crate::api_key_validation::{self, ApiKeyValidation};
 use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
 use crate::config::{
-    self, CleanupAuthMode, HotkeyAction, HotkeyBinding, LocalWhisperIdleTimeout, NamedCorrectionSet, NamedTermSet, Settings, SnippetEntry,
+    self, CleanupAuthMode, HotkeyAction, HotkeyBinding, LocalWhisperIdleTimeout,
+    NamedCorrectionSet, NamedTermSet, Settings, SnippetEntry,
 };
-use crate::download::{self, LocalModelStatus, MODEL_DOWNLOAD_COMPLETE_EVENT, MODEL_DOWNLOAD_ERROR_EVENT};
+use crate::download::{
+    self, LocalModelStatus, MODEL_DOWNLOAD_COMPLETE_EVENT, MODEL_DOWNLOAD_ERROR_EVENT,
+};
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
 use crate::mode::{Mode, ModeId, SetId};
 use crate::model_catalog;
@@ -73,11 +76,13 @@ impl From<Settings> for SettingsView {
             .custom_provider
             .as_ref()
             .is_some_and(|cp| !cp.base_url.is_empty());
-        let custom_provider_base_url = s
-            .ai_cleanup
-            .custom_provider
-            .as_ref()
-            .and_then(|cp| if cp.base_url.is_empty() { None } else { Some(cp.base_url.clone()) });
+        let custom_provider_base_url = s.ai_cleanup.custom_provider.as_ref().and_then(|cp| {
+            if cp.base_url.is_empty() {
+                None
+            } else {
+                Some(cp.base_url.clone())
+            }
+        });
         let custom_provider_model = s
             .ai_cleanup
             .custom_provider
@@ -254,10 +259,7 @@ pub fn delete_correction_set(app: AppHandle, set_id: String) -> Result<(), Strin
 }
 
 #[tauri::command]
-pub fn set_snippets(
-    app: AppHandle,
-    snippets: Vec<SnippetEntry>,
-) -> Result<(), String> {
+pub fn set_snippets(app: AppHandle, snippets: Vec<SnippetEntry>) -> Result<(), String> {
     config::update(&app, |s| s.snippets = snippets)
 }
 
@@ -277,15 +279,12 @@ pub fn update_mode(app: AppHandle, mode: Mode) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn delete_mode(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    id: ModeId,
-) -> Result<(), String> {
+pub fn delete_mode(app: AppHandle, state: State<'_, AppState>, id: ModeId) -> Result<(), String> {
     config::update_fallible(&app, |s| {
         config::check_delete_mode(s, &id)?;
         s.modes.retain(|m| m.id != id);
-        s.hotkey_bindings.retain(|b| !is_ptt_for_mode(&b.action, &id));
+        s.hotkey_bindings
+            .retain(|b| !is_ptt_for_mode(&b.action, &id));
         Ok(())
     })?;
     // Live-update the PTT listener.
@@ -331,14 +330,14 @@ pub fn set_default_mode(app: AppHandle, id: ModeId) -> Result<(), String> {
 
 #[tauri::command]
 pub fn set_anthropic_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
-    config::update(&app, |s| {
-        match config::non_empty(api_key) {
-            Some(k) => {
-                s.ai_cleanup.provider_keys.insert("anthropic".to_string(), k);
-            }
-            None => {
-                s.ai_cleanup.provider_keys.remove("anthropic");
-            }
+    config::update(&app, |s| match config::non_empty(api_key) {
+        Some(k) => {
+            s.ai_cleanup
+                .provider_keys
+                .insert("anthropic".to_string(), k);
+        }
+        None => {
+            s.ai_cleanup.provider_keys.remove("anthropic");
         }
     })
 }
@@ -351,15 +350,17 @@ pub fn set_anthropic_oauth_token(app: AppHandle, token: String) -> Result<(), St
 }
 
 #[tauri::command]
-pub fn set_provider_key(app: AppHandle, provider_id: String, api_key: String) -> Result<(), String> {
-    config::update(&app, |s| {
-        match config::non_empty(api_key) {
-            Some(k) => {
-                s.ai_cleanup.provider_keys.insert(provider_id, k);
-            }
-            None => {
-                s.ai_cleanup.provider_keys.remove(&provider_id);
-            }
+pub fn set_provider_key(
+    app: AppHandle,
+    provider_id: String,
+    api_key: String,
+) -> Result<(), String> {
+    config::update(&app, |s| match config::non_empty(api_key) {
+        Some(k) => {
+            s.ai_cleanup.provider_keys.insert(provider_id, k);
+        }
+        None => {
+            s.ai_cleanup.provider_keys.remove(&provider_id);
         }
     })
 }
@@ -380,8 +381,7 @@ pub fn set_custom_provider(
 ) -> Result<(), String> {
     let trimmed_url = base_url.trim().trim_end_matches('/').to_string();
     if !trimmed_url.is_empty() {
-        url::Url::parse(&trimmed_url)
-            .map_err(|_| format!("Invalid base URL: {trimmed_url}"))?;
+        url::Url::parse(&trimmed_url).map_err(|_| format!("Invalid base URL: {trimmed_url}"))?;
     }
     config::update(&app, |s| {
         s.ai_cleanup.custom_provider = if trimmed_url.is_empty() {
@@ -441,9 +441,13 @@ pub fn set_start_at_login(app: AppHandle, enabled: bool) -> Result<(), String> {
     use tauri_plugin_autostart::ManagerExt;
     let manager = app.autolaunch();
     if enabled {
-        manager.enable().map_err(|e| format!("Failed to enable autostart: {e}"))?;
+        manager
+            .enable()
+            .map_err(|e| format!("Failed to enable autostart: {e}"))?;
     } else {
-        manager.disable().map_err(|e| format!("Failed to disable autostart: {e}"))?;
+        manager
+            .disable()
+            .map_err(|e| format!("Failed to disable autostart: {e}"))?;
     }
     config::update(&app, |s| s.start_at_login = enabled)
 }
@@ -516,10 +520,12 @@ pub fn clear_stats(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub async fn get_app_icon(bundle_id: String) -> Option<String> {
     #[cfg(target_os = "macos")]
-    return tauri::async_runtime::spawn_blocking(move || crate::target_app::resolve_icon(&bundle_id))
-        .await
-        .ok()
-        .flatten();
+    return tauri::async_runtime::spawn_blocking(move || {
+        crate::target_app::resolve_icon(&bundle_id)
+    })
+    .await
+    .ok()
+    .flatten();
     #[cfg(not(target_os = "macos"))]
     {
         let _ = bundle_id;
@@ -588,18 +594,22 @@ pub fn get_local_model_statuses(
     };
     let flags = state.download_cancel_flags.lock().unwrap();
     let models_dir = data_dir.join("models");
-    [LocalWhisperModel::LargeV3, LocalWhisperModel::LargeV3Turbo, LocalWhisperModel::Parakeet]
-        .iter()
-        .map(|&model| {
-            let catalog = model_catalog::catalog_for(model);
-            LocalModelStatus {
-                model,
-                downloaded: model_catalog::all_files_present(&catalog, &models_dir),
-                downloading: flags.contains_key(&model),
-                size_bytes: download::model_size_bytes(model),
-            }
-        })
-        .collect()
+    [
+        LocalWhisperModel::LargeV3,
+        LocalWhisperModel::LargeV3Turbo,
+        LocalWhisperModel::Parakeet,
+    ]
+    .iter()
+    .map(|&model| {
+        let catalog = model_catalog::catalog_for(model);
+        LocalModelStatus {
+            model,
+            downloaded: model_catalog::all_files_present(&catalog, &models_dir),
+            downloading: flags.contains_key(&model),
+            size_bytes: download::model_size_bytes(model),
+        }
+    })
+    .collect()
 }
 
 #[tauri::command]
@@ -678,7 +688,10 @@ pub fn get_local_model_path(app: AppHandle, model: LocalWhisperModel) -> Result<
 }
 
 #[tauri::command]
-pub fn set_local_whisper_idle_timeout(app: AppHandle, timeout: LocalWhisperIdleTimeout) -> Result<(), String> {
+pub fn set_local_whisper_idle_timeout(
+    app: AppHandle,
+    timeout: LocalWhisperIdleTimeout,
+) -> Result<(), String> {
     config::update(&app, |s| {
         s.local_whisper.idle_timeout = timeout;
     })
@@ -703,7 +716,10 @@ mod tests {
     #[test]
     fn settings_view_exposes_local_whisper_idle_timeout_with_fifteen_minute_default() {
         let view: SettingsView = Settings::default().into();
-        assert_eq!(view.local_whisper_idle_timeout, LocalWhisperIdleTimeout::FifteenMinutes);
+        assert_eq!(
+            view.local_whisper_idle_timeout,
+            LocalWhisperIdleTimeout::FifteenMinutes
+        );
     }
 
     #[test]
@@ -711,7 +727,11 @@ mod tests {
         let view: SettingsView = Settings::default().into();
         assert_eq!(view.modes.len(), 4);
         assert_eq!(view.default_mode_id, crate::mode::SEED_MODE_DEFAULT_EN);
-        let default = view.modes.iter().find(|m| m.id == crate::mode::SEED_MODE_DEFAULT_EN).unwrap();
+        let default = view
+            .modes
+            .iter()
+            .find(|m| m.id == crate::mode::SEED_MODE_DEFAULT_EN)
+            .unwrap();
         assert_eq!(default.language, ModeLanguage::exact("en"));
     }
 
@@ -787,7 +807,9 @@ mod tests {
         let view: SettingsView = settings.into();
         assert_eq!(
             view.modes[0].provider_model,
-            ProviderModel::Groq { model: GroqModel::WhisperLargeV3 }
+            ProviderModel::Groq {
+                model: GroqModel::WhisperLargeV3
+            }
         );
         // Remaining modes unchanged.
         assert_eq!(view.modes[1].provider_model, ProviderModel::Deepgram);

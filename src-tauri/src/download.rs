@@ -46,7 +46,10 @@ struct DownloadCleanup {
 
 impl DownloadCleanup {
     fn new(path: PathBuf) -> Self {
-        Self { path, committed: false }
+        Self {
+            path,
+            committed: false,
+        }
     }
 
     fn commit(&mut self) {
@@ -100,7 +103,9 @@ pub async fn download_to_dir(
     let mut cleanup = DownloadCleanup::new(part_path.clone());
 
     let existing_bytes = if part_path.exists() {
-        std::fs::metadata(&part_path).map_err(|e| e.to_string())?.len()
+        std::fs::metadata(&part_path)
+            .map_err(|e| e.to_string())?
+            .len()
     } else {
         0
     };
@@ -119,7 +124,11 @@ pub async fn download_to_dir(
 
     // 206 Partial Content means the server honoured the Range header.
     // 200 means it returned the full file — discard any existing .part data.
-    let actual_existing = if status.as_u16() == 206 { existing_bytes } else { 0 };
+    let actual_existing = if status.as_u16() == 206 {
+        existing_bytes
+    } else {
+        0
+    };
     let content_length = response.content_length().unwrap_or(0);
     let total_bytes = actual_existing + content_length;
 
@@ -154,7 +163,10 @@ pub async fn download_to_dir(
 
     let computed = hex_encode(&hasher.finalize());
     if computed != spec.expected_sha256 {
-        return Err(format!("SHA256 mismatch: expected {}, got {computed}", spec.expected_sha256));
+        return Err(format!(
+            "SHA256 mismatch: expected {}, got {computed}",
+            spec.expected_sha256
+        ));
     }
 
     std::fs::rename(&part_path, &final_path).map_err(|e| e.to_string())?;
@@ -187,26 +199,23 @@ pub async fn download_model(
         };
         let app_clone = app.clone();
         let total_size = model_catalog::total_size_bytes(&catalog);
-        download_to_dir(
-            &spec,
-            move |downloaded, total| {
-                let report_total = if total > 0 { total } else { total_size };
-                let percentage = if report_total > 0 {
-                    ((downloaded as f64 / report_total as f64) * 100.0).min(100.0) as u8
-                } else {
-                    0
-                };
-                let _ = app_clone.emit(
-                    MODEL_DOWNLOAD_PROGRESS_EVENT,
-                    DownloadProgress {
-                        model,
-                        bytes_downloaded: downloaded,
-                        total_bytes: report_total,
-                        percentage,
-                    },
-                );
-            },
-        )
+        download_to_dir(&spec, move |downloaded, total| {
+            let report_total = if total > 0 { total } else { total_size };
+            let percentage = if report_total > 0 {
+                ((downloaded as f64 / report_total as f64) * 100.0).min(100.0) as u8
+            } else {
+                0
+            };
+            let _ = app_clone.emit(
+                MODEL_DOWNLOAD_PROGRESS_EVENT,
+                DownloadProgress {
+                    model,
+                    bytes_downloaded: downloaded,
+                    total_bytes: report_total,
+                    percentage,
+                },
+            );
+        })
         .await?;
     }
     Ok(())
@@ -246,8 +255,14 @@ mod tests {
         };
         download_to_dir(&spec, |_, _| {}).await.unwrap();
 
-        assert!(dir.path().join("model.bin").exists(), ".bin file must exist after success");
-        assert!(!dir.path().join("model.bin.part").exists(), ".part file must be removed after success");
+        assert!(
+            dir.path().join("model.bin").exists(),
+            ".bin file must exist after success"
+        );
+        assert!(
+            !dir.path().join("model.bin.part").exists(),
+            ".part file must be removed after success"
+        );
         mock.assert_async().await;
     }
 
@@ -276,8 +291,14 @@ mod tests {
 
         assert!(result.is_err(), "should return an error on SHA256 mismatch");
         assert!(result.unwrap_err().contains("SHA256 mismatch"));
-        assert!(!dir.path().join("model.bin").exists(), ".bin must not exist after mismatch");
-        assert!(!dir.path().join("model.bin.part").exists(), ".part must be cleaned up after mismatch");
+        assert!(
+            !dir.path().join("model.bin").exists(),
+            ".bin must not exist after mismatch"
+        );
+        assert!(
+            !dir.path().join("model.bin.part").exists(),
+            ".part must be cleaned up after mismatch"
+        );
     }
 
     #[tokio::test]
@@ -304,8 +325,14 @@ mod tests {
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Cancelled");
-        assert!(!dir.path().join("model.bin").exists(), ".bin must not exist after cancellation");
-        assert!(!dir.path().join("model.bin.part").exists(), ".part must be cleaned up after cancellation");
+        assert!(
+            !dir.path().join("model.bin").exists(),
+            ".bin must not exist after cancellation"
+        );
+        assert!(
+            !dir.path().join("model.bin.part").exists(),
+            ".part must be cleaned up after cancellation"
+        );
     }
 
     #[tokio::test]

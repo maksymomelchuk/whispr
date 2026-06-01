@@ -1,7 +1,7 @@
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
 #[cfg(target_os = "macos")]
 use tauri::Manager;
+use tauri::{AppHandle, Emitter};
 
 const TARGET_APP_EVENT: &str = "target-app";
 
@@ -73,7 +73,12 @@ fn platform_capture(app: AppHandle) {
 
         let _ = tx.send(Some(frontmost.clone()));
 
-        if let Some(cached) = icon_cache().lock().unwrap().get(&frontmost.bundle_id).cloned() {
+        if let Some(cached) = icon_cache()
+            .lock()
+            .unwrap()
+            .get(&frontmost.bundle_id)
+            .cloned()
+        {
             let _ = app.emit(TARGET_APP_EVENT, &cached);
             return;
         }
@@ -84,7 +89,10 @@ fn platform_capture(app: AppHandle) {
             name: frontmost.name,
             icon_data_url,
         };
-        icon_cache().lock().unwrap().insert(frontmost.bundle_id, target.clone());
+        icon_cache()
+            .lock()
+            .unwrap()
+            .insert(frontmost.bundle_id, target.clone());
         let _ = app.emit(TARGET_APP_EVENT, &target);
     });
 }
@@ -128,7 +136,10 @@ pub fn resolve_icon(bundle_id: &str) -> Option<String> {
             0, 0,
         )?;
 
-        let size = NSSize { width: 64.0, height: 64.0 };
+        let size = NSSize {
+            width: 64.0,
+            height: 64.0,
+        };
         bitmap_rep.setSize(size);
 
         let ctx = NSGraphicsContext::graphicsContextWithBitmapImageRep(&bitmap_rep)?;
@@ -144,10 +155,8 @@ pub fn resolve_icon(bundle_id: &str) -> Option<String> {
         NSGraphicsContext::restoreGraphicsState_class();
 
         let props = NSDictionary::<NSString, AnyObject>::new();
-        let png_data = bitmap_rep.representationUsingType_properties(
-            NSBitmapImageFileType::PNG,
-            &props,
-        )?;
+        let png_data =
+            bitmap_rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &props)?;
 
         let b64 = png_data.base64EncodedStringWithOptions(NSDataBase64EncodingOptions(0));
         Some(format!("data:image/png;base64,{b64}"))

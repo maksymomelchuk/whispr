@@ -42,8 +42,7 @@ pub fn deepgram_keyterms(terms: &[String], remaining_budget: usize) -> Vec<Strin
         if trimmed.is_empty() {
             continue;
         }
-        let encoded: String =
-            url::form_urlencoded::byte_serialize(trimmed.as_bytes()).collect();
+        let encoded: String = url::form_urlencoded::byte_serialize(trimmed.as_bytes()).collect();
         let needed = KEY_PREFIX_BYTES + encoded.len();
         if used + needed > remaining_budget {
             break;
@@ -77,7 +76,11 @@ pub fn groq_prompt_hint(terms: &[String]) -> Option<String> {
         if trimmed.is_empty() {
             continue;
         }
-        let sep = if result.len() == PREFIX.len() { "" } else { ", " };
+        let sep = if result.len() == PREFIX.len() {
+            ""
+        } else {
+            ", "
+        };
         if result.len() + sep.len() + trimmed.len() > GROQ_PROMPT_BUDGET_CHARS {
             break;
         }
@@ -218,8 +221,7 @@ mod tests {
 
     #[test]
     fn prompt_hint_formats_correctly() {
-        let terms: Vec<String> =
-            vec!["MongoDB".into(), "TypeScript".into(), "Kubernetes".into()];
+        let terms: Vec<String> = vec!["MongoDB".into(), "TypeScript".into(), "Kubernetes".into()];
         assert_eq!(
             groq_prompt_hint(&terms).unwrap(),
             "Vocabulary: MongoDB, TypeScript, Kubernetes"
@@ -257,19 +259,13 @@ mod tests {
     #[test]
     fn prompt_hint_single_term_no_comma() {
         let terms: Vec<String> = vec!["MongoDB".into()];
-        assert_eq!(
-            groq_prompt_hint(&terms).unwrap(),
-            "Vocabulary: MongoDB"
-        );
+        assert_eq!(groq_prompt_hint(&terms).unwrap(), "Vocabulary: MongoDB");
     }
 
     #[test]
     fn prompt_hint_skips_blank_terms() {
         let terms: Vec<String> = vec!["  ".into(), "MongoDB".into(), "\t".into()];
-        assert_eq!(
-            groq_prompt_hint(&terms).unwrap(),
-            "Vocabulary: MongoDB"
-        );
+        assert_eq!(groq_prompt_hint(&terms).unwrap(), "Vocabulary: MongoDB");
     }
 
     #[test]
@@ -282,9 +278,6 @@ mod tests {
     fn prompt_hint_unicode_term_fits_within_budget() {
         // "caf\u{e9}" is 5 UTF-8 bytes; "Vocabulary: " (12) + 5 = 17 ≤ 800.
         let terms: Vec<String> = vec!["caf\u{e9}".into()];
-        assert_eq!(
-            groq_prompt_hint(&terms).unwrap(),
-            "Vocabulary: café"
-        );
+        assert_eq!(groq_prompt_hint(&terms).unwrap(), "Vocabulary: café");
     }
 }

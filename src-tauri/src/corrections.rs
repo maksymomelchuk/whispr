@@ -11,9 +11,13 @@ const CLING_LEFT: &[char] = &[',', ';', ':', '?', '!'];
 /// order. On `from` collision (case-insensitive), later-set entries win.
 /// The first-occurrence position is preserved for each key so the output order
 /// is deterministic and matches the order entries appear across all sets.
-pub fn compose_corrections(set_ids: &[String], correction_sets: &[NamedCorrectionSet]) -> Vec<CorrectionEntry> {
+pub fn compose_corrections(
+    set_ids: &[String],
+    correction_sets: &[NamedCorrectionSet],
+) -> Vec<CorrectionEntry> {
     let mut keys: Vec<String> = Vec::new();
-    let mut map: std::collections::HashMap<String, CorrectionEntry> = std::collections::HashMap::new();
+    let mut map: std::collections::HashMap<String, CorrectionEntry> =
+        std::collections::HashMap::new();
     for id in set_ids {
         if let Some(set) = correction_sets.iter().find(|s| &s.id == id) {
             for entry in &set.entries {
@@ -184,10 +188,7 @@ mod tests {
 
     #[test]
     fn space_after_sentence_period_preserved() {
-        let out = apply_corrections(
-            "They should be same in size. Check and fix this.",
-            &[],
-        );
+        let out = apply_corrections("They should be same in size. Check and fix this.", &[]);
         assert_eq!(out, "They should be same in size. Check and fix this.");
     }
 
@@ -212,10 +213,7 @@ mod tests {
             "I rely on my design skill, every day.",
             &[entry("design skill", "/emil-design-engineering")],
         );
-        assert_eq!(
-            out,
-            "I rely on my /emil-design-engineering, every day."
-        );
+        assert_eq!(out, "I rely on my /emil-design-engineering, every day.");
     }
 
     #[test]
@@ -262,28 +260,19 @@ mod tests {
 
     #[test]
     fn case_only_rule_applies_and_terminates() {
-        let out = apply_corrections(
-            "I love Getmany.",
-            &[entry("getmany", "Getmany")],
-        );
+        let out = apply_corrections("I love Getmany.", &[entry("getmany", "Getmany")]);
         assert_eq!(out, "I love Getmany.");
     }
 
     #[test]
     fn case_only_rule_capitalizes_lowercase_input() {
-        let out = apply_corrections(
-            "hello from ukraine",
-            &[entry("ukraine", "Ukraine")],
-        );
+        let out = apply_corrections("hello from ukraine", &[entry("ukraine", "Ukraine")]);
         assert_eq!(out, "hello from Ukraine");
     }
 
     #[test]
     fn case_only_rule_applies_to_every_occurrence() {
-        let out = apply_corrections(
-            "from ukraine to ukraine",
-            &[entry("ukraine", "Ukraine")],
-        );
+        let out = apply_corrections("from ukraine to ukraine", &[entry("ukraine", "Ukraine")]);
         assert_eq!(out, "from Ukraine to Ukraine");
     }
 
@@ -293,15 +282,15 @@ mod tests {
         // whole word, so naive re-scan loops forever. MAX_PASSES caps it;
         // here we just need termination with a sensible result.
         let out = apply_corrections("hello abc world", &[entry("abc", "abc def")]);
-        assert!(out.contains("def"), "replacement should apply at least once: {out}");
+        assert!(
+            out.contains("def"),
+            "replacement should apply at least once: {out}"
+        );
     }
 
     #[test]
     fn chained_corrections_resolve() {
-        let out = apply_corrections(
-            "dash dash help",
-            &[entry("dash", "-")],
-        );
+        let out = apply_corrections("dash dash help", &[entry("dash", "-")]);
         assert_eq!(out, "--help");
     }
 

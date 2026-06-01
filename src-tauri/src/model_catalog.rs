@@ -5,8 +5,7 @@ const LARGE_V3_URL: &str =
     "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin";
 const LARGE_V3_TURBO_URL: &str =
     "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin";
-const LARGE_V3_SHA256: &str =
-    "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2";
+const LARGE_V3_SHA256: &str = "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2";
 const LARGE_V3_TURBO_SHA256: &str =
     "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69";
 const LARGE_V3_SIZE_BYTES: u64 = 3_095_033_483;
@@ -96,7 +95,9 @@ pub fn is_placeholder_hash(hash: &str) -> bool {
 }
 
 pub fn all_files_present(spec: &ModelSpec, models_dir: &Path) -> bool {
-    spec.files.iter().all(|f| models_dir.join(&f.filename).exists())
+    spec.files
+        .iter()
+        .all(|f| models_dir.join(&f.filename).exists())
 }
 
 pub fn files_to_delete(spec: &ModelSpec, models_dir: &Path) -> Vec<PathBuf> {
@@ -265,5 +266,4 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         assert!(!all_files_present(&two_file_spec(), dir.path()));
     }
-
 }

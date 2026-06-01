@@ -17,30 +17,25 @@ pub fn create(app: &AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    let builder = WebviewWindowBuilder::new(
-        app,
-        OVERLAY_LABEL,
-        WebviewUrl::App("index.html".into()),
-    )
-    .title("Whispr Overlay")
-    .inner_size(OVERLAY_WIDTH, OVERLAY_HEIGHT)
-    .resizable(false)
-    .decorations(false)
-    .transparent(true)
-    .always_on_top(true)
-    .skip_taskbar(true)
-    .focused(false)
-    .visible(false)
-    .shadow(false);
+    let builder =
+        WebviewWindowBuilder::new(app, OVERLAY_LABEL, WebviewUrl::App("index.html".into()))
+            .title("Whispr Overlay")
+            .inner_size(OVERLAY_WIDTH, OVERLAY_HEIGHT)
+            .resizable(false)
+            .decorations(false)
+            .transparent(true)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .focused(false)
+            .visible(false)
+            .shadow(false);
 
     #[cfg(target_os = "macos")]
     let builder = builder
         .accept_first_mouse(false)
         .visible_on_all_workspaces(true);
 
-    let window = builder
-        .build()
-        .map_err(|e| format!("overlay build: {e}"))?;
+    let window = builder.build().map_err(|e| format!("overlay build: {e}"))?;
 
     // Click-through — events pass to whatever app is underneath, and we never
     // steal focus when shown.

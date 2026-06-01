@@ -99,9 +99,15 @@ pub fn local_model_path(data_dir: &Path, model: LocalWhisperModel) -> PathBuf {
 pub enum ProviderModel {
     #[default]
     Deepgram,
-    Groq { model: GroqModel },
-    AssemblyAi { model: AssemblyAiModel },
-    Local { model: LocalWhisperModel },
+    Groq {
+        model: GroqModel,
+    },
+    AssemblyAi {
+        model: AssemblyAiModel,
+    },
+    Local {
+        model: LocalWhisperModel,
+    },
 }
 
 impl ProviderModel {
@@ -122,8 +128,12 @@ impl ProviderModel {
         match provider {
             TranscriptionProvider::Deepgram => Self::Deepgram,
             TranscriptionProvider::Groq => Self::Groq { model: groq_model },
-            TranscriptionProvider::AssemblyAi => Self::AssemblyAi { model: assemblyai_model },
-            TranscriptionProvider::Local => Self::Local { model: LocalWhisperModel::default() },
+            TranscriptionProvider::AssemblyAi => Self::AssemblyAi {
+                model: assemblyai_model,
+            },
+            TranscriptionProvider::Local => Self::Local {
+                model: LocalWhisperModel::default(),
+            },
         }
     }
 }
@@ -142,7 +152,9 @@ mod tests {
 
     #[test]
     fn provider_model_groq_serializes_with_provider_and_model() {
-        let m = ProviderModel::Groq { model: GroqModel::WhisperLargeV3Turbo };
+        let m = ProviderModel::Groq {
+            model: GroqModel::WhisperLargeV3Turbo,
+        };
         let v: serde_json::Value = serde_json::to_value(&m).unwrap();
         assert_eq!(v["provider"], "groq");
         assert_eq!(v["model"], "whisper_large_v3_turbo");
@@ -150,7 +162,9 @@ mod tests {
 
     #[test]
     fn provider_model_assemblyai_serializes_with_provider_and_model() {
-        let m = ProviderModel::AssemblyAi { model: AssemblyAiModel::UniversalProStreaming };
+        let m = ProviderModel::AssemblyAi {
+            model: AssemblyAiModel::UniversalProStreaming,
+        };
         let v: serde_json::Value = serde_json::to_value(&m).unwrap();
         assert_eq!(v["provider"], "assembly_ai");
         assert_eq!(v["model"], "universal_pro_streaming");
@@ -160,10 +174,18 @@ mod tests {
     fn provider_model_round_trips() {
         let cases = vec![
             ProviderModel::Deepgram,
-            ProviderModel::Groq { model: GroqModel::WhisperLargeV3 },
-            ProviderModel::Groq { model: GroqModel::WhisperLargeV3Turbo },
-            ProviderModel::AssemblyAi { model: AssemblyAiModel::UniversalProStreaming },
-            ProviderModel::AssemblyAi { model: AssemblyAiModel::WhisperStreaming },
+            ProviderModel::Groq {
+                model: GroqModel::WhisperLargeV3,
+            },
+            ProviderModel::Groq {
+                model: GroqModel::WhisperLargeV3Turbo,
+            },
+            ProviderModel::AssemblyAi {
+                model: AssemblyAiModel::UniversalProStreaming,
+            },
+            ProviderModel::AssemblyAi {
+                model: AssemblyAiModel::WhisperStreaming,
+            },
         ];
         for case in cases {
             let json = serde_json::to_string(&case).unwrap();
@@ -184,7 +206,12 @@ mod tests {
             GroqModel::WhisperLargeV3,
             AssemblyAiModel::default(),
         );
-        assert_eq!(pm, ProviderModel::Groq { model: GroqModel::WhisperLargeV3 });
+        assert_eq!(
+            pm,
+            ProviderModel::Groq {
+                model: GroqModel::WhisperLargeV3
+            }
+        );
     }
 
     #[test]
@@ -194,7 +221,12 @@ mod tests {
             GroqModel::default(),
             AssemblyAiModel::UniversalStreamingEnglish,
         );
-        assert_eq!(pm, ProviderModel::AssemblyAi { model: AssemblyAiModel::UniversalStreamingEnglish });
+        assert_eq!(
+            pm,
+            ProviderModel::AssemblyAi {
+                model: AssemblyAiModel::UniversalStreamingEnglish
+            }
+        );
     }
 
     #[test]
@@ -207,13 +239,18 @@ mod tests {
     fn assemblyai_model_whisper_supports_all_languages() {
         assert!(AssemblyAiModel::WhisperStreaming.supports_language("uk"));
         assert!(AssemblyAiModel::WhisperStreaming.supports_language("zh"));
-        assert!(AssemblyAiModel::WhisperStreaming.supported_language_codes().is_none());
+        assert!(AssemblyAiModel::WhisperStreaming
+            .supported_language_codes()
+            .is_none());
     }
 
     #[test]
     fn groq_model_api_id_correct() {
         assert_eq!(GroqModel::WhisperLargeV3.api_id(), "whisper-large-v3");
-        assert_eq!(GroqModel::WhisperLargeV3Turbo.api_id(), "whisper-large-v3-turbo");
+        assert_eq!(
+            GroqModel::WhisperLargeV3Turbo.api_id(),
+            "whisper-large-v3-turbo"
+        );
     }
 
     #[test]
@@ -230,7 +267,11 @@ mod tests {
 
     #[test]
     fn local_whisper_model_round_trips() {
-        for model in [LocalWhisperModel::LargeV3, LocalWhisperModel::LargeV3Turbo, LocalWhisperModel::Parakeet] {
+        for model in [
+            LocalWhisperModel::LargeV3,
+            LocalWhisperModel::LargeV3Turbo,
+            LocalWhisperModel::Parakeet,
+        ] {
             let json = serde_json::to_string(&model).unwrap();
             let decoded: LocalWhisperModel = serde_json::from_str(&json).unwrap();
             assert_eq!(decoded, model);
@@ -245,7 +286,9 @@ mod tests {
 
     #[test]
     fn provider_model_local_parakeet_round_trips() {
-        let pm = ProviderModel::Local { model: LocalWhisperModel::Parakeet };
+        let pm = ProviderModel::Local {
+            model: LocalWhisperModel::Parakeet,
+        };
         let json = serde_json::to_string(&pm).unwrap();
         let decoded: ProviderModel = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded, pm);
@@ -253,7 +296,9 @@ mod tests {
 
     #[test]
     fn provider_model_local_parakeet_serializes_with_provider_and_model() {
-        let m = ProviderModel::Local { model: LocalWhisperModel::Parakeet };
+        let m = ProviderModel::Local {
+            model: LocalWhisperModel::Parakeet,
+        };
         let v: serde_json::Value = serde_json::to_value(&m).unwrap();
         assert_eq!(v["provider"], "local");
         assert_eq!(v["model"], "parakeet");
@@ -263,12 +308,17 @@ mod tests {
     fn local_model_path_parakeet_primary_file_under_models_subdir() {
         let data_dir = Path::new("/app/data");
         let path = local_model_path(data_dir, LocalWhisperModel::Parakeet);
-        assert_eq!(path, PathBuf::from("/app/data/models/encoder-model.int8.onnx"));
+        assert_eq!(
+            path,
+            PathBuf::from("/app/data/models/encoder-model.int8.onnx")
+        );
     }
 
     #[test]
     fn provider_model_local_serializes_with_provider_and_model() {
-        let m = ProviderModel::Local { model: LocalWhisperModel::LargeV3 };
+        let m = ProviderModel::Local {
+            model: LocalWhisperModel::LargeV3,
+        };
         let v: serde_json::Value = serde_json::to_value(&m).unwrap();
         assert_eq!(v["provider"], "local");
         assert_eq!(v["model"], "large_v3");
@@ -276,7 +326,9 @@ mod tests {
 
     #[test]
     fn provider_model_local_turbo_serializes() {
-        let m = ProviderModel::Local { model: LocalWhisperModel::LargeV3Turbo };
+        let m = ProviderModel::Local {
+            model: LocalWhisperModel::LargeV3Turbo,
+        };
         let v: serde_json::Value = serde_json::to_value(&m).unwrap();
         assert_eq!(v["provider"], "local");
         assert_eq!(v["model"], "large_v3_turbo");
@@ -303,6 +355,9 @@ mod tests {
     fn local_model_path_large_v3_turbo_under_models_subdir() {
         let data_dir = Path::new("/app/data");
         let path = local_model_path(data_dir, LocalWhisperModel::LargeV3Turbo);
-        assert_eq!(path, PathBuf::from("/app/data/models/ggml-large-v3-turbo.bin"));
+        assert_eq!(
+            path,
+            PathBuf::from("/app/data/models/ggml-large-v3-turbo.bin")
+        );
     }
 }

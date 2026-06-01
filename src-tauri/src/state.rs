@@ -1,14 +1,14 @@
 use crate::config::{HotkeyBinding, Shortcut};
 use crate::provider::LocalWhisperModel;
 use crate::recorder::Recorder;
+#[cfg(target_os = "macos")]
+use crate::target_app::FrontmostApp;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 #[cfg(target_os = "macos")]
 use tokio::sync::oneshot;
-#[cfg(target_os = "macos")]
-use crate::target_app::FrontmostApp;
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct ModifierState {

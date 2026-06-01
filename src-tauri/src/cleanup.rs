@@ -223,17 +223,10 @@ impl Transport for ReqwestTransport {
             for (k, v) in headers {
                 req = req.header(k.as_str(), v.as_str());
             }
-            let resp = req
-                .json(body)
-                .send()
-                .await
-                .map_err(|e| e.to_string())?;
+            let resp = req.json(body).send().await.map_err(|e| e.to_string())?;
             let status = resp.status().as_u16();
             let text = resp.text().await.map_err(|e| e.to_string())?;
-            Ok(TransportResponse {
-                status,
-                body: text,
-            })
+            Ok(TransportResponse { status, body: text })
         })
     }
 }
@@ -248,7 +241,15 @@ pub async fn run(
     model: &str,
     prompt: &str,
 ) -> Result<(String, Usage), CleanupError> {
-    run_with_transport(transcript, credential, model, prompt, &ReqwestTransport, TIMEOUT).await
+    run_with_transport(
+        transcript,
+        credential,
+        model,
+        prompt,
+        &ReqwestTransport,
+        TIMEOUT,
+    )
+    .await
 }
 
 /// Testable variant of `run` with injectable transport and configurable timeout.
@@ -562,9 +563,7 @@ mod tests {
             _headers: &'a [(String, String)],
             _body: &'a serde_json::Value,
         ) -> std::pin::Pin<
-            Box<
-                dyn std::future::Future<Output = Result<TransportResponse, String>> + Send + 'a,
-            >,
+            Box<dyn std::future::Future<Output = Result<TransportResponse, String>> + Send + 'a>,
         > {
             self.call_count.fetch_add(1, Ordering::SeqCst);
             let result = (self.response)();
@@ -582,9 +581,7 @@ mod tests {
             _headers: &'a [(String, String)],
             _body: &'a serde_json::Value,
         ) -> std::pin::Pin<
-            Box<
-                dyn std::future::Future<Output = Result<TransportResponse, String>> + Send + 'a,
-            >,
+            Box<dyn std::future::Future<Output = Result<TransportResponse, String>> + Send + 'a>,
         > {
             Box::pin(std::future::pending())
         }
@@ -703,8 +700,7 @@ mod tests {
 
     #[tokio::test]
     async fn credential_error_on_401() {
-        let transport =
-            MockTransport::returning(401, error_body("invalid x-api-key"));
+        let transport = MockTransport::returning(401, error_body("invalid x-api-key"));
         let result = run_with_transport(
             "some text here",
             api_key_cred(),
@@ -1000,14 +996,20 @@ mod tests {
         let has_auth = headers
             .iter()
             .any(|(k, v)| k == "authorization" && v == "Bearer my-secret-key");
-        assert!(has_auth, "expected Authorization header when key is non-empty");
+        assert!(
+            has_auth,
+            "expected Authorization header when key is non-empty"
+        );
     }
 
     #[test]
     fn build_openai_headers_without_key_omits_authorization() {
         let headers = build_openai_headers("");
         let has_auth = headers.iter().any(|(k, _)| k == "authorization");
-        assert!(!has_auth, "expected no Authorization header when key is empty");
+        assert!(
+            !has_auth,
+            "expected no Authorization header when key is empty"
+        );
     }
 
     #[test]
@@ -1017,6 +1019,9 @@ mod tests {
         assert_eq!(AiProviderId::Groq.openai_chat_url(), GROQ_CHAT_URL);
         assert_eq!(AiProviderId::DeepSeek.openai_chat_url(), DEEPSEEK_CHAT_URL);
         assert_eq!(AiProviderId::Cerebras.openai_chat_url(), CEREBRAS_CHAT_URL);
-        assert_eq!(AiProviderId::OpenRouter.openai_chat_url(), OPENROUTER_CHAT_URL);
+        assert_eq!(
+            AiProviderId::OpenRouter.openai_chat_url(),
+            OPENROUTER_CHAT_URL
+        );
     }
 }

@@ -1,6 +1,6 @@
 use crate::config::Settings;
 use crate::corrections::{apply_corrections, compose_corrections};
-use crate::history::{CleanupStatus, HistoryEntry, now_unix_seconds};
+use crate::history::{now_unix_seconds, CleanupStatus, HistoryEntry};
 use crate::mode::Mode;
 use crate::snippets::expand_snippets;
 use std::time::{Duration, Instant};

@@ -87,9 +87,7 @@ pub fn coex_advance_down(state: &mut TapState, now: Instant) -> CoexDown {
 }
 
 pub fn coex_timer_should_fire(state: &TapState, captured: u64) -> bool {
-    state.generation == captured
-        && state.tap_count == 1
-        && state.last_tap_up_time.is_none()
+    state.generation == captured && state.tap_count == 1 && state.last_tap_up_time.is_none()
 }
 
 /// True iff `bindings` contains both a single-press and a double-tap binding
@@ -128,8 +126,7 @@ pub fn shortcut_is_relevant(code: &str, shortcut: &Shortcut) -> bool {
 /// held. Modifier-only shortcuts (key is itself a modifier) skip the modifier
 /// check because the FlagsChanged that fires the key also mutates the bitmask.
 pub fn shortcut_matches(code: &str, shortcut: &Shortcut, mods: ModifierState) -> bool {
-    code == shortcut.key
-        && (is_modifier_code(&shortcut.key) || mods.matches(&shortcut.modifiers))
+    code == shortcut.key && (is_modifier_code(&shortcut.key) || mods.matches(&shortcut.modifiers))
 }
 
 pub fn tap_state_key(shortcut: &Shortcut) -> (String, Vec<String>) {
@@ -166,19 +163,31 @@ mod tests {
         let base = Instant::now();
         let mut state = TapState::default();
 
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Down, base), Dispatch::Nothing);
+        assert_eq!(
+            advance_tap_state(&mut state, TapEvent::Down, base),
+            Dispatch::Nothing
+        );
         assert_eq!(state.tap_count, 1);
 
         let t1 = base + Duration::from_millis(50);
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Up, t1), Dispatch::Nothing);
+        assert_eq!(
+            advance_tap_state(&mut state, TapEvent::Up, t1),
+            Dispatch::Nothing
+        );
         assert!(state.last_tap_up_time.is_some());
 
         let t2 = base + Duration::from_millis(150);
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Down, t2), Dispatch::StartPtt);
+        assert_eq!(
+            advance_tap_state(&mut state, TapEvent::Down, t2),
+            Dispatch::StartPtt
+        );
         assert_eq!(state.tap_count, 2);
 
         let t3 = base + Duration::from_millis(300);
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Up, t3), Dispatch::StopPtt);
+        assert_eq!(
+            advance_tap_state(&mut state, TapEvent::Up, t3),
+            Dispatch::StopPtt
+        );
         assert_eq!(state.tap_count, 0);
         assert!(state.last_tap_up_time.is_none());
     }
@@ -188,12 +197,18 @@ mod tests {
         let base = Instant::now();
         let mut state = TapState::default();
 
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Down, base), Dispatch::Nothing);
+        assert_eq!(
+            advance_tap_state(&mut state, TapEvent::Down, base),
+            Dispatch::Nothing
+        );
         let t1 = base + Duration::from_millis(50);
         advance_tap_state(&mut state, TapEvent::Up, t1);
 
         let t2 = base + Duration::from_millis(500);
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Down, t2), Dispatch::Nothing);
+        assert_eq!(
+            advance_tap_state(&mut state, TapEvent::Down, t2),
+            Dispatch::Nothing
+        );
         assert_eq!(state.tap_count, 1);
         assert!(state.last_tap_up_time.is_none());
     }
@@ -209,19 +224,28 @@ mod tests {
         assert_eq!(state.tap_count, 1);
 
         let t2 = base + Duration::from_millis(100);
-        assert_eq!(advance_tap_state(&mut state, TapEvent::OtherKey, t2), Dispatch::Nothing);
+        assert_eq!(
+            advance_tap_state(&mut state, TapEvent::OtherKey, t2),
+            Dispatch::Nothing
+        );
         assert_eq!(state.tap_count, 0);
         assert!(state.last_tap_up_time.is_none());
 
         let t3 = base + Duration::from_millis(150);
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Down, t3), Dispatch::Nothing);
+        assert_eq!(
+            advance_tap_state(&mut state, TapEvent::Down, t3),
+            Dispatch::Nothing
+        );
         assert_eq!(state.tap_count, 1);
     }
 
     #[test]
     fn fresh_state_up_event_is_noop() {
         let mut state = TapState::default();
-        assert_eq!(advance_tap_state(&mut state, TapEvent::Up, Instant::now()), Dispatch::Nothing);
+        assert_eq!(
+            advance_tap_state(&mut state, TapEvent::Up, Instant::now()),
+            Dispatch::Nothing
+        );
         assert_eq!(state.tap_count, 0);
         assert!(state.last_tap_up_time.is_none());
     }
@@ -296,7 +320,11 @@ mod tests {
         let g2 = state.generation;
         assert_ne!(g1, g2, "Up must bump generation");
 
-        advance_tap_state(&mut state, TapEvent::OtherKey, base + Duration::from_millis(100));
+        advance_tap_state(
+            &mut state,
+            TapEvent::OtherKey,
+            base + Duration::from_millis(100),
+        );
         let g3 = state.generation;
         assert_ne!(g2, g3, "OtherKey must bump generation");
     }
@@ -307,7 +335,10 @@ mod tests {
         let mut state = TapState::default();
 
         let outcome = coex_advance_down(&mut state, base);
-        let CoexDown::ScheduleSinglePress { captured_generation } = outcome else {
+        let CoexDown::ScheduleSinglePress {
+            captured_generation,
+        } = outcome
+        else {
             panic!("first down should schedule single-press timer");
         };
         assert!(coex_timer_should_fire(&state, captured_generation));
@@ -318,8 +349,9 @@ mod tests {
         let base = Instant::now();
         let mut state = TapState::default();
 
-        let CoexDown::ScheduleSinglePress { captured_generation: g1 } =
-            coex_advance_down(&mut state, base)
+        let CoexDown::ScheduleSinglePress {
+            captured_generation: g1,
+        } = coex_advance_down(&mut state, base)
         else {
             panic!();
         };
@@ -339,8 +371,9 @@ mod tests {
         let base = Instant::now();
         let mut state = TapState::default();
 
-        let CoexDown::ScheduleSinglePress { captured_generation } =
-            coex_advance_down(&mut state, base)
+        let CoexDown::ScheduleSinglePress {
+            captured_generation,
+        } = coex_advance_down(&mut state, base)
         else {
             panic!();
         };
@@ -353,8 +386,9 @@ mod tests {
         let base = Instant::now();
         let mut state = TapState::default();
 
-        let CoexDown::ScheduleSinglePress { captured_generation: g1 } =
-            coex_advance_down(&mut state, base)
+        let CoexDown::ScheduleSinglePress {
+            captured_generation: g1,
+        } = coex_advance_down(&mut state, base)
         else {
             panic!();
         };
@@ -362,7 +396,10 @@ mod tests {
         assert!(!coex_timer_should_fire(&state, g1));
 
         let outcome2 = coex_advance_down(&mut state, base + Duration::from_millis(1100));
-        let CoexDown::ScheduleSinglePress { captured_generation: g2 } = outcome2 else {
+        let CoexDown::ScheduleSinglePress {
+            captured_generation: g2,
+        } = outcome2
+        else {
             panic!("gap > window should schedule a fresh SP timer, not fire DT");
         };
         advance_tap_state(&mut state, TapEvent::Up, base + Duration::from_millis(1200));
@@ -394,8 +431,9 @@ mod tests {
         let base = Instant::now();
         let mut state = TapState::default();
 
-        let CoexDown::ScheduleSinglePress { captured_generation } =
-            coex_advance_down(&mut state, base)
+        let CoexDown::ScheduleSinglePress {
+            captured_generation,
+        } = coex_advance_down(&mut state, base)
         else {
             panic!();
         };
@@ -432,13 +470,18 @@ mod tests {
     fn coex_timer_with_stale_generation_does_not_fire() {
         let base = Instant::now();
         let mut state = TapState::default();
-        let CoexDown::ScheduleSinglePress { captured_generation } =
-            coex_advance_down(&mut state, base)
+        let CoexDown::ScheduleSinglePress {
+            captured_generation,
+        } = coex_advance_down(&mut state, base)
         else {
             panic!();
         };
 
-        advance_tap_state(&mut state, TapEvent::OtherKey, base + Duration::from_millis(10));
+        advance_tap_state(
+            &mut state,
+            TapEvent::OtherKey,
+            base + Duration::from_millis(10),
+        );
         assert!(!coex_timer_should_fire(&state, captured_generation));
     }
 
@@ -499,7 +542,12 @@ mod tests {
             modifiers: vec!["Meta".to_string()],
             is_double_tap: false,
         };
-        let mods_with_meta = ModifierState { meta: true, control: false, alt: false, shift: false };
+        let mods_with_meta = ModifierState {
+            meta: true,
+            control: false,
+            alt: false,
+            shift: false,
+        };
         let mods_bare = ModifierState::default();
 
         assert!(shortcut_matches("KeyA", &sc, mods_with_meta));

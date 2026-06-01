@@ -85,7 +85,10 @@ async fn cleanup_output_flows_through_pipeline() {
 
     // raw_text is the original, replaced_text is from cleanup, final_text
     // has corrections applied on top.
-    assert_eq!(outcome.history_entry.raw_text, "raw transcript that cleanup replaced");
+    assert_eq!(
+        outcome.history_entry.raw_text,
+        "raw transcript that cleanup replaced"
+    );
     assert_eq!(outcome.history_entry.replaced_text, "I prefer Mongo");
     assert_eq!(outcome.history_entry.final_text, "I prefer MongoDB");
 }

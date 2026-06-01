@@ -27,7 +27,10 @@ async fn use_corrections_on_rule_applies() {
     })
     .await;
 
-    assert_eq!(outcome.history_entry.final_text, "I use MongoDB for storage");
+    assert_eq!(
+        outcome.history_entry.final_text,
+        "I use MongoDB for storage"
+    );
     assert_eq!(outcome.pasted_text, "I use MongoDB for storage ");
 }
 
@@ -58,7 +61,10 @@ async fn use_corrections_on_multiple_rules_all_fire() {
     })
     .await;
 
-    assert_eq!(outcome.history_entry.final_text, "I use MongoDB and JavaScript");
+    assert_eq!(
+        outcome.history_entry.final_text,
+        "I use MongoDB and JavaScript"
+    );
 }
 
 /// When use_corrections is off the raw_text and final_text are identical
@@ -73,7 +79,10 @@ async fn use_corrections_off_raw_and_final_text_are_identical() {
     })
     .await;
 
-    assert_eq!(outcome.history_entry.raw_text, outcome.history_entry.final_text);
+    assert_eq!(
+        outcome.history_entry.raw_text,
+        outcome.history_entry.final_text
+    );
 }
 
 /// Rules from multiple named sets are all applied when the mode references them.
@@ -87,7 +96,10 @@ async fn multiple_correction_sets_all_rules_fire() {
     })
     .await;
 
-    assert_eq!(outcome.history_entry.final_text, "I use MongoDB and JavaScript");
+    assert_eq!(
+        outcome.history_entry.final_text,
+        "I use MongoDB and JavaScript"
+    );
 }
 
 /// When two sets define a rule for the same `from` term, the later set wins.

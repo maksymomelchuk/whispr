@@ -15,11 +15,15 @@ pub const SEED_MODE_UA_EN: &str = "mode-ua-en";
 pub enum ModeLanguage {
     Auto,
     #[serde(rename = "exact")]
-    Exact { code: String },
+    Exact {
+        code: String,
+    },
     // Two or more language codes the user expects to speak; providers treat
     // this as a multi-language hint rather than a hard constraint.
     #[serde(rename = "hints")]
-    Hints { codes: Vec<String> },
+    Hints {
+        codes: Vec<String>,
+    },
 }
 
 impl Default for ModeLanguage {
@@ -303,9 +307,15 @@ mod tests {
     fn seed_mode_does_not_serialize_legacy_fields() {
         let mode = Mode::seed_default_en(false);
         let json = serde_json::to_string(&mode).unwrap();
-        assert!(!json.contains("use_dictionary"), "use_dictionary must not appear");
+        assert!(
+            !json.contains("use_dictionary"),
+            "use_dictionary must not appear"
+        );
         assert!(!json.contains("use_terms"), "use_terms is skip_serializing");
-        assert!(!json.contains("use_corrections"), "use_corrections is skip_serializing");
+        assert!(
+            !json.contains("use_corrections"),
+            "use_corrections is skip_serializing"
+        );
         assert!(json.contains("term_set_ids"));
         assert!(json.contains("correction_set_ids"));
     }

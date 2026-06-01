@@ -1,7 +1,7 @@
 use crate::config;
-use crate::provider::AssemblyAiModel;
 use crate::groq_audio::{self, to_pcm_16k_mono_bytes, AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
 use crate::mode::{Mode, ModeLanguage};
+use crate::provider::AssemblyAiModel;
 use crate::recorder::AudioFormat;
 use crate::terms;
 use crate::transcription_session::TranscriptionSession;
@@ -186,7 +186,11 @@ impl TranscriptionSession for AssemblyAiSession {
     }
 }
 
-fn build_ws_url(model: AssemblyAiModel, language: &ModeLanguage, terms: &[String]) -> Result<Url, String> {
+fn build_ws_url(
+    model: AssemblyAiModel,
+    language: &ModeLanguage,
+    terms: &[String],
+) -> Result<Url, String> {
     let mut url = Url::parse(ASSEMBLYAI_WS_BASE).map_err(|e| format!("base URL parse: {e}"))?;
     {
         let mut q = url.query_pairs_mut();
@@ -203,7 +207,9 @@ fn build_ws_url(model: AssemblyAiModel, language: &ModeLanguage, terms: &[String
 }
 
 fn handle_turn(msg: &Message, completed: &mut Vec<String>, partial: &mut String) {
-    let Some((transcript, end_of_turn)) = parse_turn(msg) else { return };
+    let Some((transcript, end_of_turn)) = parse_turn(msg) else {
+        return;
+    };
     if end_of_turn {
         if !transcript.is_empty() {
             completed.push(transcript);
@@ -245,7 +251,9 @@ fn compose_preview(completed: &[String], partial: &str) -> String {
 }
 
 fn parse_turn(msg: &Message) -> Option<(String, bool)> {
-    let Message::Text(text) = msg else { return None };
+    let Message::Text(text) = msg else {
+        return None;
+    };
     let v: Value = serde_json::from_str(text.as_str()).ok()?;
     if v.get("type").and_then(|x| x.as_str()) != Some("Turn") {
         return None;
@@ -256,7 +264,9 @@ fn parse_turn(msg: &Message) -> Option<(String, bool)> {
 }
 
 fn is_termination(msg: &Message) -> bool {
-    let Message::Text(text) = msg else { return false };
+    let Message::Text(text) = msg else {
+        return false;
+    };
     serde_json::from_str::<Value>(text.as_str())
         .ok()
         .and_then(|v| {
@@ -266,5 +276,3 @@ fn is_termination(msg: &Message) -> bool {
         })
         .unwrap_or(false)
 }
-
-

@@ -2,7 +2,7 @@ use crate::groq_audio::{self, AUDIO_LEVEL_EVENT};
 use crate::mode::{Mode, ModeLanguage};
 use crate::provider::{self, LocalWhisperModel};
 use crate::recorder::AudioFormat;
-use crate::state::{AppState, LocalEngine, LoadedModel};
+use crate::state::{AppState, LoadedModel, LocalEngine};
 use crate::terms;
 use crate::transcription_session::TranscriptionSession;
 use std::collections::HashMap;
@@ -42,7 +42,11 @@ impl TranscriptionSession for LocalSession {
         let mut last_level_emit: Option<Instant> = None;
         while let Some(chunk) = chunks.recv().await {
             let raw = groq_audio::compute_level(&chunk);
-            let k = if raw > smoothed_level { LEVEL_SMOOTH_RISE } else { LEVEL_SMOOTH_FALL };
+            let k = if raw > smoothed_level {
+                LEVEL_SMOOTH_RISE
+            } else {
+                LEVEL_SMOOTH_FALL
+            };
             smoothed_level += (raw - smoothed_level) * k;
             let now = Instant::now();
             if last_level_emit.map_or(true, |t| now.duration_since(t) >= LEVEL_THROTTLE) {
@@ -53,11 +57,8 @@ impl TranscriptionSession for LocalSession {
         }
         let _ = app.emit(AUDIO_LEVEL_EVENT, 0.0f32);
         let speak_duration = speak_start.elapsed();
-        let audio_f32 = groq_audio::to_pcm_16k_mono_f32(
-            &all_samples,
-            format.sample_rate,
-            format.channels,
-        )?;
+        let audio_f32 =
+            groq_audio::to_pcm_16k_mono_f32(&all_samples, format.sample_rate, format.channels)?;
         let data_dir = app
             .path()
             .app_data_dir()
@@ -87,7 +88,9 @@ impl TranscriptionSession for LocalSession {
 fn load_engine(model: LocalWhisperModel, model_path: &Path) -> Result<LocalEngine, String> {
     match model {
         LocalWhisperModel::Parakeet => {
-            let models_dir = model_path.parent().ok_or("Cannot resolve models directory")?;
+            let models_dir = model_path
+                .parent()
+                .ok_or("Cannot resolve models directory")?;
             let engine = ParakeetModel::load(models_dir, &Quantization::Int8)
                 .map_err(|e| format!("Failed to load Parakeet model: {e}"))?;
             Ok(LocalEngine::Parakeet(engine))
@@ -112,7 +115,13 @@ fn run_local_cached(
 
     if !guard.contains_key(&model) {
         let engine = load_engine(model, model_path)?;
-        guard.insert(model, LoadedModel { engine, last_used: Instant::now() });
+        guard.insert(
+            model,
+            LoadedModel {
+                engine,
+                last_used: Instant::now(),
+            },
+        );
     }
 
     let loaded = guard.get_mut(&model).unwrap();

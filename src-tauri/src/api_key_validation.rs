@@ -87,11 +87,7 @@ pub async fn validate_deepgram(api_key: &str) -> ApiKeyValidation {
     }
 }
 
-pub async fn validate_groq(
-    api_key: &str,
-    model: GroqModel,
-    language: &str,
-) -> ApiKeyValidation {
+pub async fn validate_groq(api_key: &str, model: GroqModel, language: &str) -> ApiKeyValidation {
     if api_key.is_empty() {
         return ApiKeyValidation::Invalid;
     }

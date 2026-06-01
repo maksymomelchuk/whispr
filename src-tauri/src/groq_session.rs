@@ -12,13 +12,13 @@
 //! owns the buffer, the timer, and the HTTP requests.
 
 use crate::config;
-use crate::provider::GroqModel;
-use crate::groq_audio::{self, AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
-use crate::terms;
 use crate::groq_audio::encode_to_flac_16k_mono;
+use crate::groq_audio::{self, AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
 use crate::groq_session_state::{self, Action, Event, Phase, PollFailure, State};
 use crate::mode::{Mode, ModeLanguage};
+use crate::provider::GroqModel;
 use crate::recorder::AudioFormat;
+use crate::terms;
 use crate::transcription_session::TranscriptionSession;
 use serde_json::Value;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -289,11 +289,9 @@ fn spawn_poll(
             });
             return;
         }
-        let result = match encode_to_flac_16k_mono(&snapshot, format.sample_rate, format.channels)
-        {
+        let result = match encode_to_flac_16k_mono(&snapshot, format.sample_rate, format.channels) {
             Ok(flac) => {
-                match post_to_groq(&key, model, language.as_deref(), prompt.as_deref(), flac)
-                    .await
+                match post_to_groq(&key, model, language.as_deref(), prompt.as_deref(), flac).await
                 {
                     Ok(text) => Ok(text),
                     Err(GroqHttpError::RateLimited) => Err(PollFailure::RateLimited),
@@ -327,11 +325,9 @@ fn spawn_final_post(
             let _ = outcome_tx.send(Outcome::Final(Ok(String::new())));
             return;
         }
-        let result = match encode_to_flac_16k_mono(&snapshot, format.sample_rate, format.channels)
-        {
+        let result = match encode_to_flac_16k_mono(&snapshot, format.sample_rate, format.channels) {
             Ok(flac) => {
-                match post_to_groq(&key, model, language.as_deref(), prompt.as_deref(), flac)
-                    .await
+                match post_to_groq(&key, model, language.as_deref(), prompt.as_deref(), flac).await
                 {
                     Ok(text) => Ok(text),
                     Err(GroqHttpError::RateLimited) => {

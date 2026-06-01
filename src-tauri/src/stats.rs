@@ -73,7 +73,13 @@ fn local_now() -> OffsetDateTime {
     OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc())
 }
 
-pub fn record(app: &tauri::AppHandle, words: u64, seconds: u32, bundle_id: Option<&str>, app_name: Option<&str>) {
+pub fn record(
+    app: &tauri::AppHandle,
+    words: u64,
+    seconds: u32,
+    bundle_id: Option<&str>,
+    app_name: Option<&str>,
+) {
     let today = local_now().date();
     let today_str = today.to_string();
     let cutoff_str = (today - time::Duration::days(RETENTION_DAYS)).to_string();
@@ -85,16 +91,25 @@ pub fn record(app: &tauri::AppHandle, words: u64, seconds: u32, bundle_id: Optio
         row.dictations = row.dictations.saturating_add(1);
         row.total_seconds = row.total_seconds.saturating_add(seconds);
         if let (Some(id), Some(name)) = (bundle_id, app_name) {
-            let entry = row.app_counts.entry(id.to_string()).or_insert_with(|| AppUsage {
-                name: name.to_string(),
-                count: 0,
-            });
+            let entry = row
+                .app_counts
+                .entry(id.to_string())
+                .or_insert_with(|| AppUsage {
+                    name: name.to_string(),
+                    count: 0,
+                });
             entry.count = entry.count.saturating_add(1);
         }
     } else {
         let mut app_counts = HashMap::new();
         if let (Some(id), Some(name)) = (bundle_id, app_name) {
-            app_counts.insert(id.to_string(), AppUsage { name: name.to_string(), count: 1 });
+            app_counts.insert(
+                id.to_string(),
+                AppUsage {
+                    name: name.to_string(),
+                    count: 1,
+                },
+            );
         }
         rows.push(StatsRow {
             date: today_str,

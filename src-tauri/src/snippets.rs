@@ -52,7 +52,12 @@ fn now_local_or_utc() -> OffsetDateTime {
 
 fn current_date() -> String {
     let now = now_local_or_utc();
-    format!("{:04}-{:02}-{:02}", now.year(), now.month() as u8, now.day())
+    format!(
+        "{:04}-{:02}-{:02}",
+        now.year(),
+        now.month() as u8,
+        now.day()
+    )
 }
 
 fn current_time() -> String {
@@ -149,16 +154,31 @@ mod tests {
     #[test]
     fn trigger_matches_standalone_word_case_insensitively() {
         let entries = [entry("1", "sig", "John Smith")];
-        assert_eq!(expand_snippets("please send sig", &entries), "please send John Smith");
-        assert_eq!(expand_snippets("please send Sig", &entries), "please send John Smith");
-        assert_eq!(expand_snippets("please send SIG", &entries), "please send John Smith");
+        assert_eq!(
+            expand_snippets("please send sig", &entries),
+            "please send John Smith"
+        );
+        assert_eq!(
+            expand_snippets("please send Sig", &entries),
+            "please send John Smith"
+        );
+        assert_eq!(
+            expand_snippets("please send SIG", &entries),
+            "please send John Smith"
+        );
     }
 
     #[test]
     fn trigger_matches_adjacent_to_punctuation() {
         let entries = [entry("1", "my email", "user@example.com")];
-        assert_eq!(expand_snippets("send to my email.", &entries), "send to user@example.com.");
-        assert_eq!(expand_snippets("my email, please", &entries), "user@example.com, please");
+        assert_eq!(
+            expand_snippets("send to my email.", &entries),
+            "send to user@example.com."
+        );
+        assert_eq!(
+            expand_snippets("my email, please", &entries),
+            "user@example.com, please"
+        );
         assert_eq!(expand_snippets("my email", &entries), "user@example.com");
     }
 
@@ -220,7 +240,11 @@ mod tests {
         assert!(!result.contains("{{DATE}}"));
         assert!(!result.contains("{{TIME}}"));
         // Result should be "YYYY-MM-DD HH:MM"
-        assert_eq!(result.len(), 16, "expected 16 chars (date + space + time), got: {result}");
+        assert_eq!(
+            result.len(),
+            16,
+            "expected 16 chars (date + space + time), got: {result}"
+        );
     }
 
     proptest! {

@@ -10,9 +10,7 @@ pub fn ensure_accessibility_trust() {
     // already trusted. Safe to call on every launch — it returns the current
     // trust state and only prompts once per (binary, decision) pair.
     if !accessibility::application_is_trusted_with_prompt() {
-        eprintln!(
-            "Accessibility: NOT granted. The PTT listener will run but receive no keys."
-        );
+        eprintln!("Accessibility: NOT granted. The PTT listener will run but receive no keys.");
         eprintln!(
             "Go to System Settings → Privacy & Security → Accessibility and enable this binary."
         );
@@ -43,7 +41,8 @@ pub fn check_microphone_permission() -> bool {
         return false;
     };
     // AVMediaTypeAudio = "soun"; AVAuthorizationStatusAuthorized = 3
-    let status: isize = unsafe { msg_send![cls, authorizationStatusForMediaType: ns_string!("soun")] };
+    let status: isize =
+        unsafe { msg_send![cls, authorizationStatusForMediaType: ns_string!("soun")] };
     status == 3
 }
 

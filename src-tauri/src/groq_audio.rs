@@ -62,7 +62,10 @@ pub fn to_pcm_16k_mono_f32(
     }
     let mono = downmix_to_mono(samples, input_channels);
     let resampled = resample_linear(&mono, input_sample_rate, TARGET_SAMPLE_RATE);
-    Ok(resampled.iter().map(|&s| s as f32 / I16_NORM_DIVISOR).collect())
+    Ok(resampled
+        .iter()
+        .map(|&s| s as f32 / I16_NORM_DIVISOR)
+        .collect())
 }
 
 const I16_NORM_DIVISOR: f32 = 32_768.0;
@@ -142,12 +145,8 @@ fn encode_mono_16k(samples: &[i16]) -> Result<Vec<u8>, String> {
         .into_verified()
         .map_err(|(_, e)| format!("flacenc config: {e:?}"))?;
 
-    let source = flacenc::source::MemSource::from_samples(
-        &samples_i32,
-        1,
-        16,
-        TARGET_SAMPLE_RATE as usize,
-    );
+    let source =
+        flacenc::source::MemSource::from_samples(&samples_i32, 1, 16, TARGET_SAMPLE_RATE as usize);
 
     let stream = flacenc::encode_with_fixed_block_size(&config, source, config.block_size)
         .map_err(|e| format!("flacenc encode: {e:?}"))?;
@@ -184,8 +183,8 @@ mod tests {
         let duration_secs = 1.0;
         let input = synth_sine(440.0, input_rate, input_channels, duration_secs);
 
-        let bytes = encode_to_flac_16k_mono(&input, input_rate, input_channels)
-            .expect("encode succeeds");
+        let bytes =
+            encode_to_flac_16k_mono(&input, input_rate, input_channels).expect("encode succeeds");
 
         let mut reader = claxon::FlacReader::new(&bytes[..]).expect("FlacReader::new");
         let info = reader.streaminfo();
@@ -263,7 +262,11 @@ mod tests {
         let out = to_pcm_16k_mono_f32(&input, 48_000, 1).unwrap();
         let expected_len = 16_000usize;
         let diff = out.len().abs_diff(expected_len);
-        assert!(diff <= 1, "expected ~{expected_len} samples, got {}", out.len());
+        assert!(
+            diff <= 1,
+            "expected ~{expected_len} samples, got {}",
+            out.len()
+        );
     }
 
     #[test]

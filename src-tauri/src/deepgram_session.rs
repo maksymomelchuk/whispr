@@ -1,10 +1,10 @@
 use crate::config::{self, CorrectionEntry};
 use crate::corrections::{apply_corrections, compose_corrections};
+use crate::groq_audio::{self, AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
 use crate::mode::{Mode, ModeLanguage};
 use crate::recorder::AudioFormat;
-use crate::transcription_session::TranscriptionSession;
-use crate::groq_audio::{self, AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
 use crate::terms;
+use crate::transcription_session::TranscriptionSession;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 use std::time::{Duration, Instant};
@@ -196,11 +196,7 @@ impl TranscriptionSession for DeepgramSession {
     }
 }
 
-fn compose_preview(
-    finals: &[String],
-    interim: &str,
-    corrections: &[CorrectionEntry],
-) -> String {
+fn compose_preview(finals: &[String], interim: &str, corrections: &[CorrectionEntry]) -> String {
     let mut preview = finals.join(" ");
     if !interim.is_empty() {
         if !preview.is_empty() {
@@ -239,8 +235,7 @@ fn build_ws_url(
     }
     // Append terms as keyterms, staying within the 4 KB total-URL ceiling.
     // Budget is computed after all static params.
-    let remaining =
-        terms::DEEPGRAM_KEYTERM_BUDGET_BYTES.saturating_sub(url.as_str().len());
+    let remaining = terms::DEEPGRAM_KEYTERM_BUDGET_BYTES.saturating_sub(url.as_str().len());
     {
         let mut q = url.query_pairs_mut();
         for term in terms::deepgram_keyterms(terms, remaining) {
@@ -261,7 +256,6 @@ fn extract_transcript_message(text: &str) -> Option<(bool, String)> {
         .trim();
     Some((is_final, t.to_string()))
 }
-
 
 fn pcm_bytes(samples: &[i16]) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(samples.len() * 2);
@@ -287,9 +281,18 @@ mod tests {
     fn build_ws_url_hardcodes_smart_format_and_numerals() {
         let url = build_ws_url(&ModeLanguage::Auto, fmt(), &[]).unwrap();
         let query = url.query().unwrap_or("");
-        assert!(query.contains("smart_format=true"), "URL must contain smart_format=true");
-        assert!(query.contains("numerals=true"), "URL must contain numerals=true");
-        assert!(!query.contains("dictation"), "URL must not contain dictation");
+        assert!(
+            query.contains("smart_format=true"),
+            "URL must contain smart_format=true"
+        );
+        assert!(
+            query.contains("numerals=true"),
+            "URL must contain numerals=true"
+        );
+        assert!(
+            !query.contains("dictation"),
+            "URL must not contain dictation"
+        );
         assert!(!query.contains("keyterm"), "URL must not contain keyterm");
     }
 
@@ -297,14 +300,20 @@ mod tests {
     fn url_omits_language_for_auto() {
         let url = build_ws_url(&ModeLanguage::Auto, fmt(), &[]).unwrap();
         let q = url.query().unwrap_or("");
-        assert!(!q.contains("language="), "Auto must not send language param: {q}");
+        assert!(
+            !q.contains("language="),
+            "Auto must not send language param: {q}"
+        );
     }
 
     #[test]
     fn url_sends_exact_language_code() {
         let url = build_ws_url(&ModeLanguage::exact("uk"), fmt(), &[]).unwrap();
         let q = url.query().unwrap_or("");
-        assert!(q.contains("language=uk"), "Exact must send language=uk: {q}");
+        assert!(
+            q.contains("language=uk"),
+            "Exact must send language=uk: {q}"
+        );
     }
 
     #[test]
@@ -312,7 +321,10 @@ mod tests {
         let lang = ModeLanguage::hints(vec!["en".to_string(), "uk".to_string()]);
         let url = build_ws_url(&lang, fmt(), &[]).unwrap();
         let q = url.query().unwrap_or("");
-        assert!(q.contains("language=multi"), "Hints must send language=multi: {q}");
+        assert!(
+            q.contains("language=multi"),
+            "Hints must send language=multi: {q}"
+        );
     }
 
     #[test]
@@ -337,8 +349,14 @@ mod tests {
         let terms: Vec<String> = vec!["MongoDB".into()];
         let url = build_ws_url(&lang, fmt(), &terms).unwrap();
         let q = url.query().unwrap_or("");
-        assert!(q.contains("language=multi"), "Hints must send language=multi: {q}");
-        assert!(q.contains("keyterm=MongoDB"), "keyterm missing for Hints: {q}");
+        assert!(
+            q.contains("language=multi"),
+            "Hints must send language=multi: {q}"
+        );
+        assert!(
+            q.contains("keyterm=MongoDB"),
+            "keyterm missing for Hints: {q}"
+        );
     }
 
     #[test]
@@ -346,15 +364,19 @@ mod tests {
         let terms: Vec<String> = vec!["Kubernetes".into()];
         let url = build_ws_url(&ModeLanguage::Auto, fmt(), &terms).unwrap();
         let q = url.query().unwrap_or("");
-        assert!(!q.contains("language="), "Auto must not send language param: {q}");
-        assert!(q.contains("keyterm=Kubernetes"), "keyterm missing for Auto: {q}");
+        assert!(
+            !q.contains("language="),
+            "Auto must not send language param: {q}"
+        );
+        assert!(
+            q.contains("keyterm=Kubernetes"),
+            "keyterm missing for Auto: {q}"
+        );
     }
 
     #[test]
     fn url_respects_keyterm_budget() {
-        let terms: Vec<String> = (0..200)
-            .map(|i| format!("term{i:05}"))
-            .collect();
+        let terms: Vec<String> = (0..200).map(|i| format!("term{i:05}")).collect();
         let url = build_ws_url(&ModeLanguage::exact("en"), fmt(), &terms).unwrap();
         assert!(
             url.as_str().len() <= terms::DEEPGRAM_KEYTERM_BUDGET_BYTES,
