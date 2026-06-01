@@ -143,7 +143,9 @@ fn probe_available_tools() -> AvailableTools {
 #[cfg(target_os = "linux")]
 fn inject_wtype(text: &str) -> Result<(), String> {
     let status = std::process::Command::new("wtype")
-        .arg(text)
+        // -- terminates option parsing so text starting with '-' is typed
+        // literally instead of being misread as a flag.
+        .args(["--", text])
         .status()
         .map_err(|e| format!("wtype failed: {e}"))?;
     if !status.success() {
@@ -159,11 +161,20 @@ fn inject_dotool(text: &str) -> Result<(), String> {
         .stdin(std::process::Stdio::piped())
         .spawn()
         .map_err(|e| format!("dotool failed: {e}"))?;
-    let stdin = child.stdin.as_mut().ok_or_else(|| "dotool: no stdin".to_string())?;
-    stdin
-        .write_all(format!("type {text}\n").as_bytes())
-        .map_err(|e| format!("dotool write failed: {e}"))?;
-    let status = child.wait().map_err(|e| format!("dotool wait failed: {e}"))?;
+    {
+        // Drop stdin before wait() — dotool reads until EOF, so leaving the
+        // pipe open would hang the process indefinitely.
+        let mut stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| "dotool: no stdin".to_string())?;
+        stdin
+            .write_all(format!("type {text}\n").as_bytes())
+            .map_err(|e| format!("dotool write failed: {e}"))?;
+    }
+    let status = child
+        .wait()
+        .map_err(|e| format!("dotool wait failed: {e}"))?;
     if !status.success() {
         return Err(format!("dotool exited with {status}"));
     }
@@ -185,9 +196,10 @@ fn inject_ydotool(text: &str) -> Result<(), String> {
 #[cfg(target_os = "linux")]
 fn inject_xdotool(text: &str) -> Result<(), String> {
     // --clearmodifiers releases held PTT modifier keys before typing so they
-    // don't corrupt the injected text.
+    // don't corrupt the injected text. -- terminates option parsing so text
+    // starting with '-' is typed literally instead of being misread as a flag.
     let status = std::process::Command::new("xdotool")
-        .args(["type", "--clearmodifiers", text])
+        .args(["type", "--clearmodifiers", "--", text])
         .status()
         .map_err(|e| format!("xdotool failed: {e}"))?;
     if !status.success() {
@@ -201,14 +213,16 @@ fn inject_xdotool(text: &str) -> Result<(), String> {
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 fn inject_enigo(text: &str) -> Result<(), String> {
     use enigo::{Direction, Enigo, Key, Keyboard, Settings};
-    let mut enigo = Enigo::new(&Settings::default())
-        .map_err(|e| format!("enigo init failed: {e}"))?;
+    let mut enigo =
+        Enigo::new(&Settings::default()).map_err(|e| format!("enigo init failed: {e}"))?;
     // Release held PTT modifier keys before typing so they don't corrupt
     // the injected text.
     for key in [Key::Shift, Key::Control, Key::Alt, Key::Meta] {
         let _ = enigo.key(key, Direction::Release);
     }
-    enigo.text(text).map_err(|e| format!("enigo text failed: {e}"))
+    enigo
+        .text(text)
+        .map_err(|e| format!("enigo text failed: {e}"))
 }
 
 // ── Pure chunk boundary logic ─────────────────────────────────────────────────
@@ -355,12 +369,20 @@ mod tests {
         use crate::platform::LinuxDisplayServer;
 
         fn no_tools() -> AvailableTools {
-            AvailableTools { wtype: false, dotool: false, ydotool: false, xdotool: false }
+            AvailableTools {
+                wtype: false,
+                dotool: false,
+                ydotool: false,
+                xdotool: false,
+            }
         }
 
         #[test]
         fn wayland_prefers_wtype() {
-            let tools = AvailableTools { wtype: true, ..no_tools() };
+            let tools = AvailableTools {
+                wtype: true,
+                ..no_tools()
+            };
             assert_eq!(
                 select_linux_injector(LinuxDisplayServer::Wayland, &tools),
                 LinuxInjector::Wtype
@@ -369,7 +391,10 @@ mod tests {
 
         #[test]
         fn wayland_falls_back_to_dotool_when_wtype_absent() {
-            let tools = AvailableTools { dotool: true, ..no_tools() };
+            let tools = AvailableTools {
+                dotool: true,
+                ..no_tools()
+            };
             assert_eq!(
                 select_linux_injector(LinuxDisplayServer::Wayland, &tools),
                 LinuxInjector::Dotool
@@ -378,7 +403,10 @@ mod tests {
 
         #[test]
         fn wayland_falls_back_to_ydotool_when_wtype_and_dotool_absent() {
-            let tools = AvailableTools { ydotool: true, ..no_tools() };
+            let tools = AvailableTools {
+                ydotool: true,
+                ..no_tools()
+            };
             assert_eq!(
                 select_linux_injector(LinuxDisplayServer::Wayland, &tools),
                 LinuxInjector::Ydotool
@@ -396,7 +424,10 @@ mod tests {
         #[test]
         fn wayland_xdotool_present_does_not_select_xdotool() {
             // xdotool is an X11 tool; on Wayland it should not be chosen
-            let tools = AvailableTools { xdotool: true, ..no_tools() };
+            let tools = AvailableTools {
+                xdotool: true,
+                ..no_tools()
+            };
             assert_eq!(
                 select_linux_injector(LinuxDisplayServer::Wayland, &tools),
                 LinuxInjector::Enigo
@@ -405,7 +436,12 @@ mod tests {
 
         #[test]
         fn wayland_prefers_wtype_when_all_tools_present() {
-            let tools = AvailableTools { wtype: true, dotool: true, ydotool: true, xdotool: true };
+            let tools = AvailableTools {
+                wtype: true,
+                dotool: true,
+                ydotool: true,
+                xdotool: true,
+            };
             assert_eq!(
                 select_linux_injector(LinuxDisplayServer::Wayland, &tools),
                 LinuxInjector::Wtype
@@ -414,7 +450,10 @@ mod tests {
 
         #[test]
         fn x11_prefers_xdotool() {
-            let tools = AvailableTools { xdotool: true, ..no_tools() };
+            let tools = AvailableTools {
+                xdotool: true,
+                ..no_tools()
+            };
             assert_eq!(
                 select_linux_injector(LinuxDisplayServer::X11, &tools),
                 LinuxInjector::Xdotool
@@ -431,7 +470,11 @@ mod tests {
 
         #[test]
         fn unknown_server_always_uses_enigo() {
-            let tools = AvailableTools { wtype: true, xdotool: true, ..no_tools() };
+            let tools = AvailableTools {
+                wtype: true,
+                xdotool: true,
+                ..no_tools()
+            };
             assert_eq!(
                 select_linux_injector(LinuxDisplayServer::Unknown, &tools),
                 LinuxInjector::Enigo
