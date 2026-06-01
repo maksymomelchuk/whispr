@@ -8,16 +8,13 @@ use tauri::{
 };
 
 const MAIN_LABEL: &str = "main";
-const TRAY_ICON_BYTES: &[u8] =
-    include_bytes!("../icons/tray-icon@2x.png");
+const TRAY_ICON_BYTES: &[u8] = include_bytes!("../icons/tray-icon@2x.png");
 
 pub fn setup(app: &AppHandle) -> tauri::Result<()> {
     let icon = Image::from_bytes(TRAY_ICON_BYTES)?;
 
-    let open_item =
-        MenuItemBuilder::with_id("open_settings", "Open Settings").build(app)?;
-    let quit_item =
-        MenuItemBuilder::with_id("quit", "Quit Whispr").build(app)?;
+    let open_item = MenuItemBuilder::with_id("open_settings", "Open Settings").build(app)?;
+    let quit_item = MenuItemBuilder::with_id("quit", "Quit Whispr").build(app)?;
     let menu = MenuBuilder::new(app)
         .items(&[&open_item, &quit_item])
         .build()?;
@@ -30,7 +27,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
         .tooltip("Whispr")
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open_settings" => show_main(app),
-            "quit" => quit(),
+            "quit" => quit(app),
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
@@ -75,14 +72,17 @@ fn toggle_main(app: &AppHandle) {
     }
 }
 
-fn quit() {
+#[cfg_attr(target_os = "macos", allow(unused_variables))]
+fn quit(app: &AppHandle) {
     // ggml's Metal device destructor (ggml_metal_rsets_free) aborts when run
     // via std::process::exit's C++ static-destructor pass. _exit(0) terminates
     // immediately with a clean exit code, bypassing those destructors entirely.
+    // This is macOS-only; elsewhere app.exit(0) runs Tauri's normal shutdown
+    // lifecycle (RunEvent::ExitRequested / Exit).
     #[cfg(target_os = "macos")]
     unsafe {
         libc::_exit(0);
     }
     #[cfg(not(target_os = "macos"))]
-    std::process::exit(0);
+    app.exit(0);
 }
