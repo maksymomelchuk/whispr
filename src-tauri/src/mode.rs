@@ -1,3 +1,4 @@
+use crate::cleanup::AiProviderId;
 use crate::provider::ProviderModel;
 use serde::{Deserialize, Serialize};
 
@@ -49,10 +50,6 @@ impl ModeLanguage {
     }
 }
 
-fn default_cleanup_provider() -> String {
-    "anthropic".to_string()
-}
-
 fn default_cleanup_model() -> String {
     "claude-haiku-4-5".to_string()
 }
@@ -61,8 +58,8 @@ fn default_cleanup_model() -> String {
 pub struct ModeCleanup {
     pub enabled: bool,
     pub prompt_override: Option<String>,
-    #[serde(default = "default_cleanup_provider")]
-    pub provider: String,
+    #[serde(default)]
+    pub provider: AiProviderId,
     #[serde(default = "default_cleanup_model")]
     pub model: String,
 }
@@ -72,7 +69,7 @@ impl Default for ModeCleanup {
         ModeCleanup {
             enabled: false,
             prompt_override: None,
-            provider: default_cleanup_provider(),
+            provider: AiProviderId::default(),
             model: default_cleanup_model(),
         }
     }
@@ -350,6 +347,7 @@ mod tests {
         let c = ModeCleanup {
             enabled: false,
             prompt_override: Some("custom prompt".to_string()),
+            ..ModeCleanup::default()
         };
         assert!(!c.enabled);
         assert_eq!(c.prompt_override.as_deref(), Some("custom prompt"));
@@ -360,6 +358,7 @@ mod tests {
         let c = ModeCleanup {
             enabled: true,
             prompt_override: None,
+            ..ModeCleanup::default()
         };
         assert!(c.prompt_override.is_none());
     }
@@ -367,7 +366,7 @@ mod tests {
     #[test]
     fn mode_cleanup_defaults_to_anthropic_and_haiku() {
         let c = ModeCleanup::default();
-        assert_eq!(c.provider, "anthropic");
+        assert_eq!(c.provider, AiProviderId::Anthropic);
         assert_eq!(c.model, "claude-haiku-4-5");
     }
 
@@ -375,7 +374,7 @@ mod tests {
     fn mode_cleanup_missing_provider_and_model_deserialize_with_defaults() {
         let json = r#"{"enabled":false,"prompt_override":null}"#;
         let c: ModeCleanup = serde_json::from_str(json).unwrap();
-        assert_eq!(c.provider, "anthropic");
+        assert_eq!(c.provider, AiProviderId::Anthropic);
         assert_eq!(c.model, "claude-haiku-4-5");
     }
 
@@ -384,12 +383,12 @@ mod tests {
         let c = ModeCleanup {
             enabled: true,
             prompt_override: None,
-            provider: "openai".to_string(),
+            provider: AiProviderId::OpenAi,
             model: "gpt-4o-mini".to_string(),
         };
         let json = serde_json::to_string(&c).unwrap();
         let decoded: ModeCleanup = serde_json::from_str(&json).unwrap();
-        assert_eq!(decoded.provider, "openai");
+        assert_eq!(decoded.provider, AiProviderId::OpenAi);
         assert_eq!(decoded.model, "gpt-4o-mini");
     }
 

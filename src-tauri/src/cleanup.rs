@@ -3,9 +3,10 @@ use serde_json::Value;
 use std::sync::OnceLock;
 use std::time::Duration;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AiProviderId {
+    #[default]
     Anthropic,
     OpenAi,
     Google,
@@ -16,9 +17,36 @@ pub enum AiProviderId {
     Custom,
 }
 
-impl Default for AiProviderId {
-    fn default() -> Self {
-        AiProviderId::Anthropic
+impl AiProviderId {
+    /// Canonical wire string. Must stay identical to the serde representation
+    /// because `provider_keys` is keyed by these strings.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AiProviderId::Anthropic => "anthropic",
+            AiProviderId::OpenAi => "openai",
+            AiProviderId::Google => "google",
+            AiProviderId::Groq => "groq",
+            AiProviderId::DeepSeek => "deepseek",
+            AiProviderId::Cerebras => "cerebras",
+            AiProviderId::OpenRouter => "openrouter",
+            AiProviderId::Custom => "custom",
+        }
+    }
+
+    /// `/chat/completions` endpoint for the built-in OpenAI-compatible providers.
+    /// Anthropic uses its native Messages API and Custom uses a user-supplied
+    /// base URL, so both are routed before reaching here; they map to the OpenAI
+    /// endpoint only as a defensive default.
+    pub fn openai_chat_url(self) -> &'static str {
+        match self {
+            AiProviderId::OpenAi => OPENAI_CHAT_URL,
+            AiProviderId::Google => GOOGLE_CHAT_URL,
+            AiProviderId::Groq => GROQ_CHAT_URL,
+            AiProviderId::DeepSeek => DEEPSEEK_CHAT_URL,
+            AiProviderId::Cerebras => CEREBRAS_CHAT_URL,
+            AiProviderId::OpenRouter => OPENROUTER_CHAT_URL,
+            AiProviderId::Anthropic | AiProviderId::Custom => OPENAI_CHAT_URL,
+        }
     }
 }
 
@@ -35,6 +63,7 @@ const ANTHROPIC_VERSION: &str = "2023-06-01";
 /// Beta header required when authenticating with a Claude Code OAuth token.
 /// Without it the Messages endpoint rejects bearer auth.
 const OAUTH_BETA: &str = "oauth-2025-04-20";
+#[cfg(test)]
 const ANTHROPIC_DEFAULT_MODEL: &str = "claude-haiku-4-5";
 const MAX_TOKENS: u32 = 1024;
 /// First system block when authenticating via OAuth. The OAuth surface is
@@ -43,59 +72,14 @@ const MAX_TOKENS: u32 = 1024;
 const CLAUDE_CODE_IDENTITY: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
 
 const OPENAI_CHAT_URL: &str = "https://api.openai.com/v1/chat/completions";
-pub const OPENAI_DEFAULT_MODEL: &str = "gpt-4o-mini";
-pub const OPENAI_CURATED_MODELS: &[(&str, &str)] = &[
-    ("gpt-4o-mini", "GPT-4o mini"),
-    ("gpt-4o", "GPT-4o"),
-];
-
+#[cfg(test)]
+const OPENAI_DEFAULT_MODEL: &str = "gpt-4o-mini";
 const GOOGLE_CHAT_URL: &str =
     "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-pub const GOOGLE_DEFAULT_MODEL: &str = "gemini-2.5-flash";
-pub const GOOGLE_CURATED_MODELS: &[(&str, &str)] = &[
-    ("gemini-2.5-flash", "Gemini 2.5 Flash"),
-    ("gemini-2.0-flash", "Gemini 2.0 Flash"),
-];
-
 const GROQ_CHAT_URL: &str = "https://api.groq.com/openai/v1/chat/completions";
-pub const GROQ_DEFAULT_MODEL: &str = "llama-3.1-8b-instant";
-pub const GROQ_CURATED_MODELS: &[(&str, &str)] = &[
-    ("llama-3.1-8b-instant", "Llama 3.1 8B"),
-    ("llama-3.3-70b-versatile", "Llama 3.3 70B"),
-];
-
 const DEEPSEEK_CHAT_URL: &str = "https://api.deepseek.com/chat/completions";
-pub const DEEPSEEK_DEFAULT_MODEL: &str = "deepseek-chat";
-pub const DEEPSEEK_CURATED_MODELS: &[(&str, &str)] = &[
-    ("deepseek-chat", "DeepSeek Chat"),
-    ("deepseek-reasoner", "DeepSeek Reasoner"),
-];
-
 const CEREBRAS_CHAT_URL: &str = "https://api.cerebras.ai/v1/chat/completions";
-pub const CEREBRAS_DEFAULT_MODEL: &str = "llama-3.3-70b";
-pub const CEREBRAS_CURATED_MODELS: &[(&str, &str)] = &[
-    ("llama-3.3-70b", "Llama 3.3 70B"),
-    ("llama3.1-8b", "Llama 3.1 8B"),
-];
-
 const OPENROUTER_CHAT_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
-pub const OPENROUTER_DEFAULT_MODEL: &str = "anthropic/claude-haiku-4.5";
-pub const OPENROUTER_CURATED_MODELS: &[(&str, &str)] = &[
-    ("anthropic/claude-haiku-4.5", "Claude Haiku 4.5"),
-    ("google/gemini-2.0-flash-001", "Gemini 2.0 Flash"),
-];
-
-/// Returns the `/chat/completions` endpoint URL for any OpenAI-compatible provider.
-pub fn chat_url_for(provider: &str) -> &'static str {
-    match provider {
-        "google" => GOOGLE_CHAT_URL,
-        "groq" => GROQ_CHAT_URL,
-        "deepseek" => DEEPSEEK_CHAT_URL,
-        "cerebras" => CEREBRAS_CHAT_URL,
-        "openrouter" => OPENROUTER_CHAT_URL,
-        _ => OPENAI_CHAT_URL,
-    }
-}
 
 /// Which credential the user has chosen to authenticate cleanup calls with.
 pub enum Credential<'a> {
@@ -968,66 +952,42 @@ mod tests {
         );
     }
 
-    #[test]
-    fn ai_provider_id_anthropic_serializes_as_lowercase_string() {
-        let v = serde_json::to_value(AiProviderId::Anthropic).unwrap();
-        assert_eq!(v, serde_json::json!("anthropic"));
-    }
+    const ALL_PROVIDER_IDS: [AiProviderId; 8] = [
+        AiProviderId::Anthropic,
+        AiProviderId::OpenAi,
+        AiProviderId::Google,
+        AiProviderId::Groq,
+        AiProviderId::DeepSeek,
+        AiProviderId::Cerebras,
+        AiProviderId::OpenRouter,
+        AiProviderId::Custom,
+    ];
 
     #[test]
-    fn ai_provider_id_openai_serializes_as_lowercase_string() {
-        let v = serde_json::to_value(AiProviderId::OpenAi).unwrap();
-        assert_eq!(v, serde_json::json!("openai"));
-    }
-
-    #[test]
-    fn ai_provider_id_google_serializes_as_lowercase_string() {
-        let v = serde_json::to_value(AiProviderId::Google).unwrap();
-        assert_eq!(v, serde_json::json!("google"));
-    }
-
-    #[test]
-    fn ai_provider_id_groq_serializes_as_lowercase_string() {
-        let v = serde_json::to_value(AiProviderId::Groq).unwrap();
-        assert_eq!(v, serde_json::json!("groq"));
-    }
-
-    #[test]
-    fn ai_provider_id_deepseek_serializes_as_lowercase_string() {
-        let v = serde_json::to_value(AiProviderId::DeepSeek).unwrap();
-        assert_eq!(v, serde_json::json!("deepseek"));
-    }
-
-    #[test]
-    fn ai_provider_id_cerebras_serializes_as_lowercase_string() {
-        let v = serde_json::to_value(AiProviderId::Cerebras).unwrap();
-        assert_eq!(v, serde_json::json!("cerebras"));
-    }
-
-    #[test]
-    fn ai_provider_id_openrouter_serializes_as_lowercase_string() {
-        let v = serde_json::to_value(AiProviderId::OpenRouter).unwrap();
-        assert_eq!(v, serde_json::json!("openrouter"));
-    }
-
-    #[test]
-    fn ai_provider_id_custom_serializes_as_lowercase_string() {
-        let v = serde_json::to_value(AiProviderId::Custom).unwrap();
-        assert_eq!(v, serde_json::json!("custom"));
+    fn ai_provider_id_wire_strings_are_stable_and_match_as_str() {
+        let expected = [
+            (AiProviderId::Anthropic, "anthropic"),
+            (AiProviderId::OpenAi, "openai"),
+            (AiProviderId::Google, "google"),
+            (AiProviderId::Groq, "groq"),
+            (AiProviderId::DeepSeek, "deepseek"),
+            (AiProviderId::Cerebras, "cerebras"),
+            (AiProviderId::OpenRouter, "openrouter"),
+            (AiProviderId::Custom, "custom"),
+        ];
+        for (id, wire) in expected {
+            assert_eq!(id.as_str(), wire);
+            assert_eq!(
+                serde_json::to_value(id).unwrap(),
+                serde_json::json!(wire),
+                "serde wire format must match as_str() for {id:?}, else provider_keys lookups break"
+            );
+        }
     }
 
     #[test]
     fn ai_provider_id_round_trips() {
-        for id in [
-            AiProviderId::Anthropic,
-            AiProviderId::OpenAi,
-            AiProviderId::Google,
-            AiProviderId::Groq,
-            AiProviderId::DeepSeek,
-            AiProviderId::Cerebras,
-            AiProviderId::OpenRouter,
-            AiProviderId::Custom,
-        ] {
+        for id in ALL_PROVIDER_IDS {
             let json = serde_json::to_string(&id).unwrap();
             let decoded: AiProviderId = serde_json::from_str(&json).unwrap();
             assert_eq!(decoded, id);
@@ -1051,17 +1011,12 @@ mod tests {
     }
 
     #[test]
-    fn chat_url_for_returns_correct_urls() {
-        assert_eq!(chat_url_for("openai"), OPENAI_CHAT_URL);
-        assert_eq!(chat_url_for("google"), GOOGLE_CHAT_URL);
-        assert_eq!(chat_url_for("groq"), GROQ_CHAT_URL);
-        assert_eq!(chat_url_for("deepseek"), DEEPSEEK_CHAT_URL);
-        assert_eq!(chat_url_for("cerebras"), CEREBRAS_CHAT_URL);
-        assert_eq!(chat_url_for("openrouter"), OPENROUTER_CHAT_URL);
-    }
-
-    #[test]
-    fn chat_url_for_unknown_falls_back_to_openai() {
-        assert_eq!(chat_url_for("unknown-provider"), OPENAI_CHAT_URL);
+    fn openai_chat_url_maps_each_compatible_provider() {
+        assert_eq!(AiProviderId::OpenAi.openai_chat_url(), OPENAI_CHAT_URL);
+        assert_eq!(AiProviderId::Google.openai_chat_url(), GOOGLE_CHAT_URL);
+        assert_eq!(AiProviderId::Groq.openai_chat_url(), GROQ_CHAT_URL);
+        assert_eq!(AiProviderId::DeepSeek.openai_chat_url(), DEEPSEEK_CHAT_URL);
+        assert_eq!(AiProviderId::Cerebras.openai_chat_url(), CEREBRAS_CHAT_URL);
+        assert_eq!(AiProviderId::OpenRouter.openai_chat_url(), OPENROUTER_CHAT_URL);
     }
 }

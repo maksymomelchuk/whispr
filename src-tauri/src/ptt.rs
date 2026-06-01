@@ -299,7 +299,7 @@ async fn run_session(
     let mode_cleanup_enabled = active_mode.ai_cleanup.enabled;
     let mode_language = active_mode.language.clone();
     let mode_prompt_override = active_mode.ai_cleanup.prompt_override.clone();
-    let cleanup_provider = active_mode.ai_cleanup.provider.clone();
+    let cleanup_provider = active_mode.ai_cleanup.provider;
     let cleanup_model = active_mode.ai_cleanup.model.clone();
     let session_terms =
         crate::terms::compose_term_hints(&settings.term_sets, &active_mode.term_set_ids);
@@ -406,7 +406,7 @@ async fn run_session(
         &raw_text,
         speak_duration,
         mode_prompt_override.as_deref(),
-        &cleanup_provider,
+        cleanup_provider,
         &cleanup_model,
     )
     .await;
@@ -480,7 +480,7 @@ async fn maybe_cleanup(
     transcript: &str,
     speak_duration: Duration,
     prompt_override: Option<&str>,
-    cleanup_provider: &str,
+    cleanup_provider: cleanup::AiProviderId,
     cleanup_model: &str,
 ) -> (String, CleanupStatus, Notice) {
     let cleanup_settings = &settings.ai_cleanup;
@@ -509,77 +509,87 @@ async fn maybe_cleanup(
     let _ = app.emit(PTT_THINKING_EVENT, ());
     let prompt = cleanup::effective_prompt(prompt_override);
 
-    let result = if cleanup_provider == "anthropic" {
-        let credential = match cleanup_settings.auth_mode {
-            config::CleanupAuthMode::ApiKey => {
-                match cleanup_settings.provider_keys.get("anthropic").filter(|k| !k.is_empty()) {
-                    Some(k) => cleanup::Credential::ApiKey(k),
-                    None => {
-                        return (
-                            transcript.to_string(),
-                            CleanupStatus::NoCredential,
-                            Notice::Focus(
-                                "AI cleanup is enabled but Anthropic API key is not set."
-                                    .to_string(),
-                            ),
-                        );
+    use cleanup::AiProviderId;
+    let result = match cleanup_provider {
+        AiProviderId::Anthropic => {
+            let credential = match cleanup_settings.auth_mode {
+                config::CleanupAuthMode::ApiKey => {
+                    match cleanup_settings.provider_keys.get("anthropic").filter(|k| !k.is_empty()) {
+                        Some(k) => cleanup::Credential::ApiKey(k),
+                        None => {
+                            return (
+                                transcript.to_string(),
+                                CleanupStatus::NoCredential,
+                                Notice::Focus(
+                                    "AI cleanup is enabled but Anthropic API key is not set."
+                                        .to_string(),
+                                ),
+                            );
+                        }
                     }
                 }
-            }
-            config::CleanupAuthMode::Oauth => {
-                match cleanup_settings.anthropic_oauth_token.as_deref() {
-                    Some(t) if !t.is_empty() => cleanup::Credential::OauthToken(t),
-                    _ => {
-                        return (
-                            transcript.to_string(),
-                            CleanupStatus::NoCredential,
-                            Notice::Focus(
-                                "AI cleanup is set to OAuth but no Claude Code token is configured."
-                                    .to_string(),
-                            ),
-                        );
+                config::CleanupAuthMode::Oauth => {
+                    match cleanup_settings.anthropic_oauth_token.as_deref() {
+                        Some(t) if !t.is_empty() => cleanup::Credential::OauthToken(t),
+                        _ => {
+                            return (
+                                transcript.to_string(),
+                                CleanupStatus::NoCredential,
+                                Notice::Focus(
+                                    "AI cleanup is set to OAuth but no Claude Code token is configured."
+                                        .to_string(),
+                                ),
+                            );
+                        }
                     }
                 }
-            }
-        };
-        cleanup::run(transcript, credential, cleanup_model, &prompt).await
-    } else if cleanup_provider == "custom" {
-        let custom = match &cleanup_settings.custom_provider {
-            Some(cp) if !cp.base_url.is_empty() => cp.clone(),
-            _ => {
-                return (
-                    transcript.to_string(),
-                    CleanupStatus::NoCredential,
-                    Notice::Focus(
-                        "AI cleanup is enabled but the Custom provider is not configured."
-                            .to_string(),
-                    ),
-                );
-            }
-        };
-        let chat_url = format!("{}/chat/completions", custom.base_url.trim_end_matches('/'));
-        let api_key = custom.api_key.as_deref().unwrap_or("");
-        cleanup::run_openai(transcript, api_key, &chat_url, &custom.model, &prompt).await
-    } else {
-        let api_key = match cleanup_settings
-            .provider_keys
-            .get(cleanup_provider)
-            .filter(|k| !k.is_empty())
-        {
-            Some(k) => k.clone(),
-            None => {
-                return (
-                    transcript.to_string(),
-                    CleanupStatus::NoCredential,
-                    Notice::Focus(format!(
-                        "AI cleanup is enabled but the {} API key is not set.",
-                        cleanup_provider
-                    )),
-                );
-            }
-        };
-        let chat_url = cleanup::chat_url_for(cleanup_provider);
-        cleanup::run_openai(transcript, &api_key, chat_url, cleanup_model, &prompt).await
+            };
+            cleanup::run(transcript, credential, cleanup_model, &prompt).await
+        }
+        AiProviderId::Custom => {
+            let custom = match &cleanup_settings.custom_provider {
+                Some(cp) if !cp.base_url.is_empty() => cp.clone(),
+                _ => {
+                    return (
+                        transcript.to_string(),
+                        CleanupStatus::NoCredential,
+                        Notice::Focus(
+                            "AI cleanup is enabled but the Custom provider is not configured."
+                                .to_string(),
+                        ),
+                    );
+                }
+            };
+            let chat_url = format!("{}/chat/completions", custom.base_url.trim_end_matches('/'));
+            let api_key = custom.api_key.as_deref().unwrap_or("");
+            cleanup::run_openai(transcript, api_key, &chat_url, &custom.model, &prompt).await
+        }
+        AiProviderId::OpenAi
+        | AiProviderId::Google
+        | AiProviderId::Groq
+        | AiProviderId::DeepSeek
+        | AiProviderId::Cerebras
+        | AiProviderId::OpenRouter => {
+            let api_key = match cleanup_settings
+                .provider_keys
+                .get(cleanup_provider.as_str())
+                .filter(|k| !k.is_empty())
+            {
+                Some(k) => k.clone(),
+                None => {
+                    return (
+                        transcript.to_string(),
+                        CleanupStatus::NoCredential,
+                        Notice::Focus(format!(
+                            "AI cleanup is enabled but the {} API key is not set.",
+                            cleanup_provider.as_str()
+                        )),
+                    );
+                }
+            };
+            let chat_url = cleanup_provider.openai_chat_url();
+            cleanup::run_openai(transcript, &api_key, chat_url, cleanup_model, &prompt).await
+        }
     };
 
     match result {
