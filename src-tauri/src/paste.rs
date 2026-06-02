@@ -87,8 +87,7 @@ fn send_cmd_v() -> Result<(), String> {
 
 #[cfg(target_os = "macos")]
 fn clipboard_paste(text: &str) -> Result<(), String> {
-    let mut clipboard =
-        arboard::Clipboard::new().map_err(|e| format!("clipboard init: {e}"))?;
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("clipboard init: {e}"))?;
     let saved = clipboard.get_text().ok();
     clipboard
         .set_text(text)
@@ -256,8 +255,7 @@ fn inject_enigo(text: &str) -> Result<(), String> {
 #[cfg(target_os = "windows")]
 fn send_ctrl_v() -> Result<(), String> {
     use enigo::{Direction, Enigo, Key, Keyboard, Settings};
-    let mut enigo =
-        Enigo::new(&Settings::default()).map_err(|e| format!("enigo init: {e}"))?;
+    let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("enigo init: {e}"))?;
     enigo
         .key(Key::Control, Direction::Press)
         .map_err(|e| format!("Ctrl press: {e}"))?;
@@ -268,8 +266,7 @@ fn send_ctrl_v() -> Result<(), String> {
 
 #[cfg(target_os = "windows")]
 fn clipboard_paste(text: &str) -> Result<(), String> {
-    let mut clipboard =
-        arboard::Clipboard::new().map_err(|e| format!("clipboard init: {e}"))?;
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("clipboard init: {e}"))?;
     let saved = clipboard.get_text().ok();
     clipboard
         .set_text(text)
@@ -336,13 +333,11 @@ pub fn paste_text(text: String) -> JoinHandle<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     // ── Linux injector selection ──────────────────────────────────────────────
 
     #[cfg(target_os = "linux")]
     mod linux_injector {
-        use super::*;
+        use super::super::*;
         use crate::platform::LinuxDisplayServer;
 
         fn no_tools() -> AvailableTools {
