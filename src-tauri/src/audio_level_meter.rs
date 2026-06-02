@@ -80,11 +80,9 @@ mod tests {
         let chunk: Vec<i16> = vec![16384i16; 160];
         let expected_raw = groq_audio::compute_level(&chunk);
 
-        let mut meter = AudioLevelMeter::new(); // smoothed starts at 0
+        let mut meter = AudioLevelMeter::new();
         let level = meter.observe(Instant::now(), &chunk).unwrap();
 
-        // raw > 0 = smoothed, so k = LEVEL_SMOOTH_RISE = 0.6
-        // level = 0 + (expected_raw - 0) * 0.6
         let expected = expected_raw * LEVEL_SMOOTH_RISE;
         assert!(
             (level - expected).abs() < 0.001,
@@ -100,8 +98,6 @@ mod tests {
         let mut meter = AudioLevelMeter::new();
         let initial = meter.observe(t0, &loud).unwrap();
 
-        // Silence: raw = 0 <= initial, so k = LEVEL_SMOOTH_FALL = 0.25
-        // new = initial + (0 - initial) * 0.25 = initial * 0.75
         let after = meter.observe(t0 + millis(34), &[0i16; 160]).unwrap();
         let expected = initial * (1.0 - LEVEL_SMOOTH_FALL);
         assert!(

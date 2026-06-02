@@ -117,9 +117,7 @@ mod tests {
         let mut t = PreviewThrottle::new();
         let t0 = Instant::now();
         let corrections = vec![entry("mongo", "MongoDB")];
-        // Emits "I use MongoDB" (corrected)
         t.offer(t0, "I use mongo", &corrections);
-        // Same corrected output — suppressed even though raw input matches
         assert_eq!(t.offer(t0 + millis(200), "I use mongo", &corrections), None);
     }
 
@@ -137,9 +135,7 @@ mod tests {
         let mut t = PreviewThrottle::new();
         let t0 = Instant::now();
         t.offer(t0, "hello", &[]);
-        // Within throttle — not emitted, timer not reset
         t.offer(t0 + millis(50), "hello world", &[]);
-        // Past throttle from t0 — now emits
         assert_eq!(
             t.offer(t0 + millis(101), "hello world", &[]),
             Some("hello world".to_string())
