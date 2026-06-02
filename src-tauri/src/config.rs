@@ -109,7 +109,6 @@ pub fn default_hotkey_bindings() -> Vec<HotkeyBinding> {
     )]
 }
 
-/// Returns `Err` if any two bindings share the same (key, modifiers, is_double_tap) triple.
 /// Same key+modifiers with different is_double_tap are distinct shortcuts and allowed.
 pub fn check_hotkey_conflicts(bindings: &[HotkeyBinding]) -> Result<(), String> {
     let mut seen: HashSet<(&str, Vec<&str>, bool)> = HashSet::new();
@@ -291,7 +290,6 @@ pub struct AiCleanupSettings {
     /// raw to preserve snappiness for short utterances.
     #[serde(default = "default_cleanup_min_words")]
     pub min_words: usize,
-    /// Minimum spoken duration (ms) at which cleanup runs.
     #[serde(default = "default_cleanup_min_duration_ms")]
     pub min_duration_ms: u64,
 }
@@ -499,7 +497,6 @@ pub fn get_default_mode(settings: &Settings) -> &Mode {
 fn migrate(s: &mut Settings) -> bool {
     let mut changed = false;
 
-    // ── Legacy api_key → deepgram_api_key ────────────────────────────────
     if let Some(legacy) = s.api_key.take() {
         let deepgram_already_set = s.deepgram_api_key.as_deref().is_some_and(|k| !k.is_empty());
         if !legacy.is_empty() && !deepgram_already_set {
@@ -508,7 +505,6 @@ fn migrate(s: &mut Settings) -> bool {
         changed = true;
     }
 
-    // ── anthropic_api_key → provider_keys["anthropic"] ───────────────────────
     if let Some(key) = s.ai_cleanup.anthropic_api_key.take() {
         changed = true;
         if !key.is_empty() && !s.ai_cleanup.provider_keys.contains_key("anthropic") {
@@ -518,9 +514,7 @@ fn migrate(s: &mut Settings) -> bool {
         }
     }
 
-    // ── Seed predefined modes ─────────────────────────────────────────────
     if s.modes.is_empty() {
-        // Prefer the active provider's language, then the other provider's.
         // An empty/whitespace value is treated as missing.
         let non_empty = |opt: &Option<String>| -> Option<String> {
             opt.clone().filter(|l| !l.trim().is_empty())
@@ -556,15 +550,13 @@ fn migrate(s: &mut Settings) -> bool {
         }
     }
 
-    // Drop the legacy flat cleanup toggle; it's now in the mode.
     if s.ai_cleanup_enabled.take().is_some() {
         changed = true;
     }
 
-    // Drop the legacy global ai_cleanup.enabled switch. If the user had
-    // explicitly turned it off, preserve that intent by forcing every mode's
-    // per-mode cleanup toggle off — otherwise modes that defaulted to enabled
-    // would silently start running cleanup after the migration.
+    // If the user had explicitly turned it off, preserve that intent by forcing
+    // every mode's per-mode cleanup toggle off — otherwise modes that defaulted
+    // to enabled would silently start running cleanup after the migration.
     match s.ai_cleanup.legacy_enabled.take() {
         Some(false) => {
             for mode in s.modes.iter_mut() {
@@ -576,7 +568,6 @@ fn migrate(s: &mut Settings) -> bool {
         None => {}
     }
 
-    // ── UA→EN mode: backfill translation prompt_override ─────────────────
     // Configs saved before issue #90 carried translation via a dedicated Apple
     // Translate stage (now removed). Those modes serialised as
     // `ai_cleanup:{enabled:true, prompt_override:null}`. On upgrade the unknown
@@ -591,14 +582,11 @@ fn migrate(s: &mut Settings) -> bool {
         }
     }
 
-    // ── Legacy replacements → dictionary (now terms + corrections) ───────
     if let Some(legacy) = s.legacy_replacements.take() {
         s.legacy_dictionary = legacy;
         changed = true;
     }
 
-    // ── Legacy dictionary → terms + corrections ───────────────────────────
-    // Each entry where from == to becomes a Term; all others become Corrections.
     if !s.legacy_dictionary.is_empty() {
         let mut terms = Vec::new();
         let mut corrections = Vec::new();
@@ -617,7 +605,6 @@ fn migrate(s: &mut Settings) -> bool {
         changed = true;
     }
 
-    // ── Mode migration: use_dictionary → use_terms + use_corrections ──────
     for mode in s.modes.iter_mut() {
         if let Some(use_dict) = mode.legacy_use_dictionary {
             if !use_dict {
@@ -643,9 +630,6 @@ fn migrate(s: &mut Settings) -> bool {
         }
     }
 
-    // ── Term sets migration: flat terms → NamedTermSet ───────────────────
-    // If legacy flat terms remain, fold them into the Default Terms set
-    // and wire each mode that had use_terms=true to reference it.
     if !s.terms.is_empty() {
         let entries: Vec<String> = std::mem::take(&mut s.terms);
         if !s
@@ -671,11 +655,6 @@ fn migrate(s: &mut Settings) -> bool {
         changed = true;
     }
 
-    // ── Correction sets: seed "Default Corrections" from legacy flat list ──
-    // Runs exactly once: when correction_sets is empty, the legacy corrections
-    // (user's existing list or the seeded defaults) become a named set. Every
-    // mode whose use_corrections flag was true gets the set ID appended to
-    // correction_set_ids. Idempotent: skipped on all subsequent loads.
     if s.correction_sets.is_empty() {
         let default_set = NamedCorrectionSet {
             id: DEFAULT_CORRECTION_SET_ID.to_string(),
@@ -692,7 +671,6 @@ fn migrate(s: &mut Settings) -> bool {
         changed = true;
     }
 
-    // ── Legacy shortcut → hotkey_bindings ────────────────────────────────
     // On first load after this upgrade the bindings list will be empty
     // (the old JSON only has "shortcut"). Seed it from the legacy field.
     if s.hotkey_bindings.is_empty() {
@@ -703,7 +681,6 @@ fn migrate(s: &mut Settings) -> bool {
         changed = true;
     }
 
-    // Drop PTT bindings that reference a mode that no longer exists.
     // PasteLatest bindings are independent of modes and always retained.
     {
         let mode_ids: HashSet<&str> = s.modes.iter().map(|m| m.id.as_str()).collect();
@@ -717,8 +694,7 @@ fn migrate(s: &mut Settings) -> bool {
         }
     }
 
-    // Collapse duplicates per action. Older settings (pre one-binding-per-action)
-    // could carry duplicates; keep the first occurrence and drop the rest.
+    // Older settings (pre one-binding-per-action) could carry duplicates.
     {
         let before = s.hotkey_bindings.len();
         let mut seen_modes: HashSet<String> = HashSet::new();
@@ -751,7 +727,6 @@ pub fn from_json(json: &str) -> Result<Settings, serde_json::Error> {
     Ok(s)
 }
 
-/// Returns `Err` if deleting `id` would violate an invariant.
 pub fn check_delete_mode(s: &Settings, id: &str) -> Result<(), String> {
     if s.modes.len() <= 1 {
         return Err("Cannot delete the last mode.".to_string());
@@ -804,7 +779,6 @@ pub fn load(app: &tauri::AppHandle) -> Settings {
     settings
 }
 
-/// Convenience for the many `load → mutate → save` setter commands.
 pub fn update<F: FnOnce(&mut Settings)>(app: &tauri::AppHandle, f: F) -> Result<(), String> {
     let mut settings = load(app);
     f(&mut settings);
@@ -986,7 +960,6 @@ mod tests {
             .find(|m| m.id == SEED_MODE_DEFAULT_EN)
             .unwrap();
         assert!(default.ai_cleanup.enabled);
-        // The flat field must be gone from subsequent saves.
         let reserialized = serde_json::to_string(&s).unwrap();
         let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
         assert!(v.get("ai_cleanup_enabled").is_none());
@@ -1039,7 +1012,6 @@ mod tests {
 
     #[test]
     fn migration_renames_legacy_replacements_then_splits_to_corrections() {
-        // "dot → ." is from != to, so it becomes a Correction entry in the default set.
         let json = r#"{"replacements": [{"from": "dot", "to": "."}]}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         assert_eq!(s.legacy_replacements.as_ref().map(|v| v.len()), Some(1));
@@ -1048,10 +1020,8 @@ mod tests {
         assert_eq!(s.legacy_corrections.len(), 1);
         assert_eq!(s.legacy_corrections[0].from, "dot");
         assert_eq!(s.legacy_corrections[0].to, ".");
-        // terms is drained into term_sets; nothing terms-side here.
         assert!(s.terms.is_empty());
         assert!(s.legacy_replacements.is_none());
-        // Entries end up in the seeded correction set.
         assert_eq!(s.correction_sets.len(), 1);
         assert_eq!(s.correction_sets[0].entries.len(), 1);
         let reserialized = serde_json::to_string(&s).unwrap();
@@ -1071,12 +1041,10 @@ mod tests {
 
     #[test]
     fn migration_splits_dictionary_from_eq_to_as_term() {
-        // "MongoDB → MongoDB" (from == to) becomes a term entry in the Default Terms set.
         let json = r#"{"dictionary": [{"from": "MongoDB", "to": "MongoDB"}]}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         let changed = migrate(&mut s);
         assert!(changed);
-        // terms is drained into the Default Terms set.
         assert!(s.terms.is_empty());
         let default_set = s
             .term_sets
@@ -1092,7 +1060,6 @@ mod tests {
 
     #[test]
     fn migration_splits_dictionary_from_ne_to_as_correction() {
-        // "anthropik → Anthropic" becomes a Correction entry in the default set; no term set is created.
         let json = r#"{"dictionary": [{"from": "anthropik", "to": "Anthropic"}]}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         let changed = migrate(&mut s);
@@ -1118,7 +1085,6 @@ mod tests {
         ]}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
-        // MongoDB ends up in the Default Terms set.
         assert!(s.terms.is_empty());
         let default_set = s
             .term_sets
@@ -1126,7 +1092,6 @@ mod tests {
             .find(|ts| ts.id == SEED_TERM_SET_DEFAULT_ID)
             .expect("Default Terms set must exist");
         assert_eq!(default_set.entries, vec!["MongoDB"]);
-        // The two corrections end up in the seeded Default Corrections set.
         assert_eq!(s.legacy_corrections.len(), 2);
         assert_eq!(s.legacy_corrections[0].from, "dot");
         assert_eq!(s.legacy_corrections[1].from, "anthropik");
@@ -1135,11 +1100,9 @@ mod tests {
 
     #[test]
     fn migration_dictionary_is_idempotent() {
-        // After migration, re-running migrate() must not change anything.
         let json = r#"{"dictionary": [{"from": "MongoDB", "to": "MongoDB"}]}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
-        // Second run: legacy_dictionary and terms are drained; term_sets and correction_sets already seeded.
         let changed2 = migrate(&mut s);
         assert!(!changed2, "second migrate must be a no-op");
         assert!(s.terms.is_empty());
@@ -1160,7 +1123,6 @@ mod tests {
              "use_dictionary":false,"use_snippets":true}
         ], "default_mode_id": "mode-default-en"}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
-        // Absorb the seed-mode migrations too.
         migrate(&mut s);
         let mode = s
             .modes
@@ -1168,7 +1130,6 @@ mod tests {
             .find(|m| m.id == SEED_MODE_DEFAULT_EN)
             .unwrap();
         assert!(!mode.use_corrections, "use_corrections must be false");
-        // use_terms=false means term_set_ids is empty (no Default Terms set created — no legacy terms)
         assert!(
             mode.term_set_ids.is_empty(),
             "term_set_ids must be empty when use_dictionary was false"
@@ -1190,11 +1151,8 @@ mod tests {
             .find(|m| m.id == SEED_MODE_DEFAULT_EN)
             .unwrap();
         assert!(mode.use_corrections, "use_corrections must remain true");
-        // No legacy terms in this JSON so no Default Terms set is created
         assert!(mode.term_set_ids.is_empty(), "no legacy terms to migrate");
     }
-
-    // ── Term sets migration tests ─────────────────────────────────────────
 
     #[test]
     fn migration_empty_legacy_terms_creates_no_term_set() {
@@ -1230,8 +1188,6 @@ mod tests {
 
     #[test]
     fn migration_modes_with_use_terms_true_reference_default_set() {
-        // All seed modes default use_terms=true; with legacy terms present they should
-        // all reference the Default Terms set.
         let json = r#"{"terms": ["MongoDB"]}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
@@ -1284,7 +1240,6 @@ mod tests {
 
     #[test]
     fn migration_modes_already_in_new_shape_are_unchanged() {
-        // Modes with term_set_ids already set and no legacy terms → idempotent.
         let json = r#"{
             "term_sets": [{"id":"ts-1","name":"My Set","entries":["Rust"]}],
             "modes": [
@@ -1329,7 +1284,6 @@ mod tests {
     fn migration_is_idempotent_when_all_four_modes_already_present() {
         let mut s = Settings::default();
         assert_eq!(s.modes.len(), 4);
-        // Running migration on already-seeded settings must be a no-op.
         migrate(&mut s);
         assert_eq!(
             s.modes.len(),
@@ -1424,7 +1378,6 @@ mod tests {
         let mut s = Settings::default();
         s.default_mode_id = "nonexistent".to_string();
         let mode = get_default_mode(&s);
-        // Falls back to the first (and only) mode.
         assert_eq!(mode.id, SEED_MODE_DEFAULT_EN);
     }
 
@@ -1465,7 +1418,6 @@ mod tests {
         }"#;
         let mut s: Settings = serde_json::from_str(legacy).unwrap();
         migrate(&mut s);
-        // Language moved to the default mode; old option knobs silently ignored.
         let default = s
             .modes
             .iter()
@@ -1473,7 +1425,6 @@ mod tests {
             .unwrap();
         assert_eq!(default.language, ModeLanguage::exact("fr"));
         assert_eq!(s.deepgram_api_key.as_deref(), Some("dg-key"));
-        // Serialized form must not contain deepgram.language.
         let json = serde_json::to_string(&s).unwrap();
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(v["deepgram"].get("language").is_none());
@@ -1494,7 +1445,6 @@ mod tests {
                 mode_id: SEED_MODE_DEFAULT_EN.to_string()
             }
         );
-        // Serialized form must not contain legacy "shortcut" key.
         let reserialized = serde_json::to_string(&s).unwrap();
         let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
         assert!(
@@ -1736,7 +1686,6 @@ mod tests {
         let changed = migrate(&mut s);
         assert!(changed);
         assert_eq!(s.hotkey_bindings.len(), 1);
-        // First binding (the single-press variant) is preserved.
         assert!(!s.hotkey_bindings[0].shortcut.is_double_tap);
     }
 
@@ -1899,12 +1848,9 @@ mod tests {
         let json = r#"{"transcription_provider": "groq"}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
-        // Customise one mode to AssemblyAI after first migration.
         s.modes[0].provider_model = ProviderModel::AssemblyAi {
             model: AssemblyAiModel::default(),
         };
-        // A second migrate (e.g. transcription_provider still Groq after reload)
-        // must not overwrite the already-customised mode.
         migrate(&mut s);
         assert_eq!(
             s.modes[0].provider_model,

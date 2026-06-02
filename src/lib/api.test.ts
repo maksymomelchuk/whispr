@@ -41,7 +41,6 @@ import {
   validateGroqApiKey,
 } from "./api";
 
-// Fixture: maps each Tauri command to its expected argument keys.
 // A rename in Rust or a payload shape change will cause the matching test to fail.
 const COMMANDS: Array<{
   call: () => void;

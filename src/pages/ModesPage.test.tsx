@@ -111,7 +111,6 @@ describe("ModeEditor – autosave", () => {
     // Enable fake timers after render so React's initial setup isn't affected.
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 
-    // Two rapid changes — each cancels the previous debounce and schedules a new one.
     fireEvent.change(nameInput, { target: { value: "First" } });
     fireEvent.change(nameInput, { target: { value: "Renamed" } });
 
@@ -138,7 +137,6 @@ describe("ModeEditor – autosave", () => {
 
     unmount();
 
-    // Cleanup effect must have called updateMode synchronously on unmount.
     expect(vi.mocked(mockUpdateMode)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(mockUpdateMode)).toHaveBeenCalledWith(
       expect.objectContaining({ name: "Flushed" }),
@@ -163,7 +161,6 @@ describe("ModeEditor – autosave", () => {
       "Couldn't save profile",
       expect.anything(),
     );
-    // Local state must not revert.
     expect(nameInput).toHaveValue("Broken");
   });
 

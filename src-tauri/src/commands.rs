@@ -36,7 +36,6 @@ pub struct SettingsView {
     pub ai_cleanup_auth_mode: CleanupAuthMode,
     pub ai_cleanup_key_configured: bool,
     pub ai_cleanup_oauth_token_configured: bool,
-    /// Provider IDs that have a non-empty API key in `provider_keys`.
     pub configured_providers: Vec<String>,
     pub custom_provider_configured: bool,
     pub custom_provider_base_url: Option<String>,
@@ -287,7 +286,6 @@ pub fn delete_mode(app: AppHandle, state: State<'_, AppState>, id: ModeId) -> Re
             .retain(|b| !is_ptt_for_mode(&b.action, &id));
         Ok(())
     })?;
-    // Live-update the PTT listener.
     state
         .hotkey_bindings
         .lock()

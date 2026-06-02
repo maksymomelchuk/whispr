@@ -93,9 +93,6 @@ pub struct AvailableTools {
     pub xdotool: bool,
 }
 
-/// Selects the Linux injector from the detected display server and which tools
-/// are present on PATH. Wayland prefers native Wayland tools; X11 prefers
-/// xdotool; both fall back to enigo when no native tool is available.
 #[cfg(target_os = "linux")]
 pub fn select_linux_injector(server: LinuxDisplayServer, tools: &AvailableTools) -> LinuxInjector {
     match server {
@@ -208,8 +205,6 @@ fn inject_xdotool(text: &str) -> Result<(), String> {
     Ok(())
 }
 
-// Enigo is the fallback injector on Windows and Linux. It uses platform
-// SendInput (Windows) / XSendEvent (Linux/X11) under the hood.
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 fn inject_enigo(text: &str) -> Result<(), String> {
     use enigo::{Direction, Enigo, Key, Keyboard, Settings};

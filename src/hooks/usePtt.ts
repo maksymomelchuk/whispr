@@ -8,14 +8,8 @@ interface UsePttOptions {
   onReleased?: () => void;
 }
 
-/**
- * Subscribes to global PTT events emitted by the Rust keyboard listener.
- * Exposes a simple held/not-held state for the UI and forwards callbacks
- * for components that need to start/stop side effects on edges.
- *
- * Callbacks are held in refs so passing fresh (un-memoized) functions
- * doesn't reinstall the underlying Tauri listeners on every render.
- */
+// Callbacks are held in refs so passing fresh (un-memoized) functions
+// doesn't reinstall the underlying Tauri listeners on every render.
 export function usePtt({ onPressed, onReleased }: UsePttOptions = {}) {
   const onPressedRef = useRef(onPressed);
   const onReleasedRef = useRef(onReleased);

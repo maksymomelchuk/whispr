@@ -99,11 +99,10 @@ impl TranscriptionSession for GroqSession {
 
         let mut smoothed_level: f32 = 0.0;
         let mut last_level_emit: Option<Instant> = None;
-        // First poll fires `POLL_INTERVAL` after PTT-down, then every
-        // `POLL_INTERVAL`. `Skip` so a stalled await never produces a burst of
-        // make-up ticks once it resumes. When live preview is off there is
-        // nothing to render between polls, so we skip the timer entirely and
-        // let Phase 2's final POST carry the only Groq request.
+        // `Skip` so a stalled await never produces a burst of make-up ticks once
+        // it resumes. When live preview is off there is nothing to render between
+        // polls, so we skip the timer entirely and let the final POST carry the
+        // only Groq request.
         let mut poll_timer = if show_live_preview {
             let mut t = tokio::time::interval_at(
                 tokio::time::Instant::now() + groq_session_state::POLL_INTERVAL,
@@ -115,7 +114,6 @@ impl TranscriptionSession for GroqSession {
             None
         };
 
-        // Phase 1: PTT held — capture audio, poll on cadence, surface partials.
         loop {
             tokio::select! {
                 maybe_chunk = chunks.recv() => match maybe_chunk {
@@ -132,7 +130,7 @@ impl TranscriptionSession for GroqSession {
                             last_level_emit = Some(now);
                         }
                     }
-                    None => break, // PTT released
+                    None => break,
                 },
                 _ = async { poll_timer.as_mut().unwrap().tick().await }, if poll_timer.is_some() => {
                     runner.step(Event::Tick { elapsed: speak_start.elapsed() });
@@ -146,14 +144,12 @@ impl TranscriptionSession for GroqSession {
         // Settle the wave to flat — the pill stays up through the final POST.
         let _ = app.emit(AUDIO_LEVEL_EVENT, 0.0f32);
 
-        // Phase 2: PTT released. Reducer picks covering-poll vs final POST.
         runner.step(Event::PttReleased {
             elapsed: speak_duration,
         });
 
-        // Phase 3: drive to Done via in-flight outcomes (covering poll or
-        // final POST). Every spawned task ends with an outcome send, so each
-        // recv() resolves to Some(...) until state advances to Done.
+        // Every spawned task ends with an outcome send, so each recv() resolves
+        // to Some(...) until state advances to Done.
         while runner.state.phase() != Phase::Done {
             let Some(outcome) = outcome_rx.recv().await else {
                 break;

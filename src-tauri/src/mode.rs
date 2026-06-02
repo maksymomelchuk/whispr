@@ -111,8 +111,8 @@ pub struct Mode {
 }
 
 impl Mode {
-    /// Creates the seeded default-English mode. `cleanup_enabled` is carried
-    /// over from the legacy flat toggle during migration; fresh installs pass false.
+    /// `cleanup_enabled` is carried over from the legacy flat toggle during migration;
+    /// fresh installs pass false.
     pub fn seed_default_en(cleanup_enabled: bool) -> Self {
         Mode {
             id: SEED_MODE_DEFAULT_EN.to_string(),

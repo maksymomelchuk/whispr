@@ -17,7 +17,6 @@ export function Toaster() {
         classNames: {
           toast: [
             "group toast font-sans",
-            // Default neutral toast: pad generously, soft shadow, subtle border.
             "rounded-xl border border-border/70 bg-background text-foreground",
             "shadow-[0_10px_30px_-15px_rgba(0,0,0,0.25)]",
             "p-4 gap-3 items-start",
@@ -36,7 +35,6 @@ export function Toaster() {
           ].join(" "),
           cancelButton:
             "h-7 px-2 rounded-md text-[12px] text-muted-foreground hover:text-foreground",
-          // Destructive variant: tinted bg + matching action button.
           error: [
             "bg-destructive/[0.08] border-destructive/30",
             "[&_[data-title]]:text-destructive",

@@ -143,8 +143,6 @@ export type ApiKeyValidation =
   | { kind: "invalid" }
   | { kind: "error"; message: string };
 
-// ── Mode types ────────────────────────────────────────────────────────────────
-
 export type ModeLanguage =
   | { kind: "auto" }
   | { kind: "exact"; code: string }
@@ -175,8 +173,6 @@ export interface Mode {
   provider_model: ProviderModel;
 }
 
-// ── Settings ──────────────────────────────────────────────────────────────────
-
 export interface Settings {
   deepgram_api_key_configured: boolean;
   groq_api_key_configured: boolean;
@@ -205,8 +201,6 @@ export interface Settings {
   show_live_preview: boolean;
   local_whisper_idle_timeout: LocalWhisperIdleTimeout;
 }
-
-// ── Local model download types ─────────────────────────────────────────────
 
 export interface LocalModelStatus {
   model: LocalWhisperModel;
