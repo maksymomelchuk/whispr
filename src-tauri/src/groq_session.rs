@@ -1,3 +1,16 @@
+//! Polling Groq transcription session.
+//!
+//! Captured audio is buffered in memory; every `POLL_INTERVAL` seconds the
+//! trailing window is sent to Groq for a live-preview transcription. A
+//! longest-stable-prefix stabilizer (see `groq_stabilizer`) keeps the overlay
+//! text from flickering. On PTT release, the authoritative final transcript
+//! comes from either (a) the in-flight poll if its window already covers the
+//! full recording or (b) a fresh full-recording POST. Polling partials are
+//! never stitched into the final.
+//!
+//! State-machine corner cases live in `groq_session_state::State`: this module
+//! owns the buffer, the timer, and the HTTP requests.
+
 use crate::engine::{Engine, EngineContext, EngineOutcome, Warning};
 use crate::groq_audio::encode_to_flac_16k_mono;
 use crate::groq_session_state::{self, Action, Event, Phase, PollFailure, State};
