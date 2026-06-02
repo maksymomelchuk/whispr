@@ -1,6 +1,8 @@
 use crate::assemblyai_session::AssemblyAiEngine;
 use crate::config::{HotkeyAction, HotkeyBinding, Shortcut};
+use crate::corrections::compose_corrections;
 use crate::deepgram_session::DeepgramEngine;
+use crate::engine::EngineContext;
 use crate::groq_session::GroqEngine;
 use crate::history::{self, CleanupStatus, HISTORY_UPDATED_EVENT};
 use crate::hotkey::{
@@ -8,14 +10,12 @@ use crate::hotkey::{
     key_has_both_kinds, shortcut_is_relevant, shortcut_matches, tap_state_key, CoexDown, Dispatch,
     TapEvent, TapState, DOUBLE_TAP_THRESHOLD,
 };
+use crate::local_engine::LocalWhisperEngine;
 use crate::pipeline::{self, CleanupOutput, Notice};
 use crate::provider::{self, LocalWhisperModel, ProviderModel, TranscriptionProvider};
 use crate::recorder::Recorder;
-use crate::state::{AppState, ModifierState};
-use crate::corrections::compose_corrections;
-use crate::engine::EngineContext;
-use crate::local_engine::LocalWhisperEngine;
 use crate::session::{Session, PTT_ERROR_EVENT, TRANSCRIPTION_ERROR_EVENT};
+use crate::state::{AppState, ModifierState};
 use crate::{cleanup, cleanup_stats, config, model_catalog, stats};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -364,10 +364,8 @@ async fn run_session(
                 .or_else(|| settings.api_key.clone())
                 .filter(|k| !k.is_empty())
                 .ok_or_else(|| "API key not configured".to_string())?;
-            let corrections = compose_corrections(
-                &active_mode.correction_set_ids,
-                &settings.correction_sets,
-            );
+            let corrections =
+                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
             let ctx = EngineContext {
                 format,
                 language: mode_language,
@@ -388,10 +386,8 @@ async fn run_session(
                 .clone()
                 .filter(|k| !k.is_empty())
                 .ok_or_else(|| "API key not configured".to_string())?;
-            let corrections = compose_corrections(
-                &active_mode.correction_set_ids,
-                &settings.correction_sets,
-            );
+            let corrections =
+                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
             let ctx = EngineContext {
                 format,
                 language: mode_language,
@@ -408,10 +404,8 @@ async fn run_session(
         }
         ProviderModel::AssemblyAi { model } => {
             let key = settings.assemblyai_api_key.clone().unwrap_or_default();
-            let corrections = compose_corrections(
-                &active_mode.correction_set_ids,
-                &settings.correction_sets,
-            );
+            let corrections =
+                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
             let ctx = EngineContext {
                 format,
                 language: mode_language,
@@ -433,10 +427,8 @@ async fn run_session(
                 .app_data_dir()
                 .map_err(|e| format!("Cannot resolve app data directory: {e}"))?;
             let model_path = provider::local_model_path(&data_dir, *model);
-            let corrections = compose_corrections(
-                &active_mode.correction_set_ids,
-                &settings.correction_sets,
-            );
+            let corrections =
+                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
             let ctx = EngineContext {
                 format,
                 language: mode_language,

@@ -59,8 +59,7 @@ impl Engine for GroqEngine {
         let model = self.model.api_id();
         let language = ctx.language.as_code().map(str::to_string);
         let prompt = terms::groq_prompt_hint(&ctx.terms);
-        let samples_per_second: u64 =
-            ctx.format.sample_rate as u64 * ctx.format.channels as u64;
+        let samples_per_second: u64 = ctx.format.sample_rate as u64 * ctx.format.channels as u64;
 
         let buffered: Arc<Mutex<Vec<i16>>> = Arc::new(Mutex::new(Vec::new()));
         let (outcome_tx, mut outcome_rx) = tokio::sync::mpsc::unbounded_channel::<Outcome>();

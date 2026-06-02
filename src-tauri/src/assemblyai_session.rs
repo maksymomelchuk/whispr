@@ -247,10 +247,13 @@ mod tests {
 
     #[test]
     fn build_ws_url_sets_speech_model_and_sample_rate() {
-        let url = build_ws_url(AssemblyAiModel::WhisperStreaming, &ModeLanguage::Auto, &[])
-            .unwrap();
+        let url =
+            build_ws_url(AssemblyAiModel::WhisperStreaming, &ModeLanguage::Auto, &[]).unwrap();
         let query = url.query().unwrap_or("");
-        assert!(query.contains("speech_model=whisper-rt"), "query was: {query}");
+        assert!(
+            query.contains("speech_model=whisper-rt"),
+            "query was: {query}"
+        );
         assert!(query.contains("sample_rate=16000"), "query was: {query}");
     }
 
@@ -268,8 +271,8 @@ mod tests {
 
     #[test]
     fn build_ws_url_omits_language_code_when_auto() {
-        let url = build_ws_url(AssemblyAiModel::WhisperStreaming, &ModeLanguage::Auto, &[])
-            .unwrap();
+        let url =
+            build_ws_url(AssemblyAiModel::WhisperStreaming, &ModeLanguage::Auto, &[]).unwrap();
         let query = url.query().unwrap_or("");
         assert!(!query.contains("language_code"), "query was: {query}");
     }
@@ -277,16 +280,20 @@ mod tests {
     #[test]
     fn build_ws_url_includes_keyterms_prompt_when_terms_present() {
         let terms = vec!["foo".to_string(), "bar".to_string()];
-        let url =
-            build_ws_url(AssemblyAiModel::WhisperStreaming, &ModeLanguage::Auto, &terms).unwrap();
+        let url = build_ws_url(
+            AssemblyAiModel::WhisperStreaming,
+            &ModeLanguage::Auto,
+            &terms,
+        )
+        .unwrap();
         let query = url.query().unwrap_or("");
         assert!(query.contains("keyterms_prompt"), "query was: {query}");
     }
 
     #[test]
     fn build_ws_url_omits_keyterms_prompt_when_no_terms() {
-        let url = build_ws_url(AssemblyAiModel::WhisperStreaming, &ModeLanguage::Auto, &[])
-            .unwrap();
+        let url =
+            build_ws_url(AssemblyAiModel::WhisperStreaming, &ModeLanguage::Auto, &[]).unwrap();
         let query = url.query().unwrap_or("");
         assert!(!query.contains("keyterms_prompt"), "query was: {query}");
     }

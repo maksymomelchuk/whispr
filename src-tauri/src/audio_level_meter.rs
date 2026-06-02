@@ -30,7 +30,10 @@ impl AudioLevelMeter {
             LEVEL_SMOOTH_FALL
         };
         self.smoothed += (raw - self.smoothed) * k;
-        if self.last_emit.map_or(true, |t| now.duration_since(t) >= LEVEL_THROTTLE) {
+        if self
+            .last_emit
+            .map_or(true, |t| now.duration_since(t) >= LEVEL_THROTTLE)
+        {
             self.last_emit = Some(now);
             Some(self.smoothed)
         } else {
