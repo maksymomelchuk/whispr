@@ -1,17 +1,11 @@
-use crate::audio_level_meter::AudioLevelMeter;
-use crate::config::{self};
-use crate::corrections::compose_corrections;
-use crate::groq_audio::{AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
-use crate::mode::{Mode, ModeLanguage};
-use crate::preview_throttle::PreviewThrottle;
+use crate::engine::{Engine, EngineContext, EngineOutcome};
+use crate::mode::ModeLanguage;
 use crate::recorder::AudioFormat;
 use crate::terms;
-use crate::transcription_session::TranscriptionSession;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
-use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter};
-use tokio::sync::mpsc::UnboundedReceiver;
+use std::time::Duration;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::protocol::Message;
 use url::Url;
@@ -23,43 +17,31 @@ const DEEPGRAM_WS_BASE: &str = "wss://api.deepgram.com/v1/listen";
 /// ms; we cap it so a hung WS never blocks the paste indefinitely.
 const FINAL_RESULTS_TIMEOUT: Duration = Duration::from_secs(3);
 
-pub struct DeepgramSession;
+pub struct DeepgramEngine {
+    pub key: String,
+}
 
-impl TranscriptionSession for DeepgramSession {
+impl DeepgramEngine {
+    pub fn new(key: String) -> Self {
+        Self { key }
+    }
+}
+
+impl Engine for DeepgramEngine {
     async fn run(
         self,
-        app: AppHandle,
-        format: AudioFormat,
         mut chunks: UnboundedReceiver<Vec<i16>>,
-        language: ModeLanguage,
-        terms: Vec<String>,
-        mode: &Mode,
-    ) -> Result<(String, Duration), String> {
-        let speak_start = Instant::now();
-        let settings = config::load(&app);
-        // Prefer the new per-provider key; fall back to the legacy single-key
-        // field for the brief window before `load`'s migration has re-saved.
-        let key = settings
-            .deepgram_api_key
-            .clone()
-            .or_else(|| settings.api_key.clone())
-            .filter(|k| !k.is_empty())
-            .ok_or_else(|| "API key not configured".to_string())?;
-        let show_live_preview = settings.show_live_preview;
-        let corrections = if mode.use_corrections {
-            compose_corrections(&mode.correction_set_ids, &settings.correction_sets)
-        } else {
-            Vec::new()
-        };
-
-        let url = build_ws_url(&language, format, &terms)?;
+        previews: UnboundedSender<String>,
+        ctx: EngineContext,
+    ) -> Result<EngineOutcome, String> {
+        let url = build_ws_url(&ctx.language, ctx.format, &ctx.terms)?;
         let mut req = url
             .as_str()
             .into_client_request()
             .map_err(|e| format!("bad WS URL: {e}"))?;
         req.headers_mut().insert(
             "Authorization",
-            format!("Token {key}")
+            format!("Token {}", self.key)
                 .parse()
                 .map_err(|e| format!("bad auth header: {e}"))?,
         );
@@ -71,10 +53,7 @@ impl TranscriptionSession for DeepgramSession {
 
         let mut transcript_pieces: Vec<String> = Vec::new();
         let mut current_interim: String = String::new();
-        let mut level_meter = AudioLevelMeter::new();
-        let mut preview_throttle = PreviewThrottle::new();
 
-        // Process server messages opportunistically so the WS receive buffer doesn't pile up.
         loop {
             tokio::select! {
                 maybe_chunk = chunks.recv() => {
@@ -82,10 +61,6 @@ impl TranscriptionSession for DeepgramSession {
                         Some(chunk) => {
                             if let Err(e) = sink.send(Message::Binary(pcm_bytes(&chunk))).await {
                                 return Err(format!("Deepgram WS send failed: {e}"));
-                            }
-                            let now = Instant::now();
-                            if let Some(level) = level_meter.observe(now, &chunk) {
-                                let _ = app.emit(AUDIO_LEVEL_EVENT, level);
                             }
                         }
                         None => break,
@@ -105,13 +80,8 @@ impl TranscriptionSession for DeepgramSession {
                                 } else {
                                     current_interim = piece;
                                 }
-                                if show_live_preview {
-                                    let now = Instant::now();
-                                    let raw = raw_preview(&transcript_pieces, &current_interim);
-                                    if let Some(corrected) = preview_throttle.offer(now, &raw, &corrections) {
-                                        let _ = app.emit(TRANSCRIPT_PARTIAL_EVENT, &corrected);
-                                    }
-                                }
+                                let raw = raw_preview(&transcript_pieces, &current_interim);
+                                let _ = previews.send(raw);
                             }
                         }
                         Message::Close(_) => return Err("Deepgram WS closed mid-stream".into()),
@@ -120,19 +90,15 @@ impl TranscriptionSession for DeepgramSession {
                 }
             }
         }
-        let speak_duration = speak_start.elapsed();
-        // Settle the wave to flat — the pill stays up through "thinking" and
-        // we don't want it dancing on the last cached level.
-        let _ = app.emit(AUDIO_LEVEL_EVENT, 0.0f32);
 
-        // Drain remaining finals with a bounded timeout so a stuck server can't
-        // block the paste. Partial emission is deliberately skipped — the overlay
-        // holds the last preview until we have the final.
         let close_msg = serde_json::json!({"type": "CloseStream"}).to_string();
         if let Err(e) = sink.send(Message::Text(close_msg)).await {
             eprintln!("[stream] CloseStream send failed: {e}");
         }
 
+        // Drain remaining finals with a bounded timeout so a stuck server can't
+        // block the paste. Preview emission is skipped here — the overlay holds
+        // the last preview until the final transcript is ready.
         let _ = tokio::time::timeout(FINAL_RESULTS_TIMEOUT, async {
             while let Some(msg) = stream.next().await {
                 match msg {
@@ -154,17 +120,16 @@ impl TranscriptionSession for DeepgramSession {
         })
         .await;
 
-        let raw = transcript_pieces.join(" ");
-        let raw = raw.trim().to_string();
+        let transcript = transcript_pieces.join(" ").trim().to_string();
 
-        if show_live_preview && !raw.is_empty() {
-            let now = Instant::now();
-            if let Some(corrected) = preview_throttle.offer(now, &raw, &corrections) {
-                let _ = app.emit(TRANSCRIPT_PARTIAL_EVENT, &corrected);
-            }
+        if !transcript.is_empty() {
+            let _ = previews.send(transcript.clone());
         }
 
-        Ok((raw, speak_duration))
+        Ok(EngineOutcome {
+            transcript,
+            warning: None,
+        })
     }
 }
 
@@ -246,6 +211,12 @@ mod tests {
             sample_rate: 16000,
             channels: 1,
         }
+    }
+
+    #[test]
+    fn deepgram_engine_new_stores_key() {
+        let engine = DeepgramEngine::new("my-api-key".to_string());
+        assert_eq!(engine.key, "my-api-key");
     }
 
     #[test]

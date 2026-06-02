@@ -1,6 +1,6 @@
 use crate::assemblyai_session::AssemblyAiSession;
 use crate::config::{HotkeyAction, HotkeyBinding, Shortcut};
-use crate::deepgram_session::DeepgramSession;
+use crate::deepgram_session::DeepgramEngine;
 use crate::groq_session::GroqSession;
 use crate::history::{self, CleanupStatus, HISTORY_UPDATED_EVENT};
 use crate::hotkey::{
@@ -359,16 +359,31 @@ async fn run_session(
 
     let session_result = match &active_mode.provider_model {
         ProviderModel::Deepgram => {
-            DeepgramSession
-                .run(
-                    app.clone(),
-                    format,
-                    chunk_rx,
-                    mode_language,
-                    session_terms,
-                    active_mode,
-                )
-                .await
+            // Prefer the new per-provider key; fall back to the legacy single-key
+            // field for the brief window before `load`'s migration has re-saved.
+            let key = settings
+                .deepgram_api_key
+                .clone()
+                .or_else(|| settings.api_key.clone())
+                .filter(|k| !k.is_empty())
+                .ok_or_else(|| "API key not configured".to_string())?;
+            let corrections = compose_corrections(
+                &active_mode.correction_set_ids,
+                &settings.correction_sets,
+            );
+            let ctx = EngineContext {
+                format,
+                language: mode_language,
+                terms: session_terms,
+            };
+            Session::new(
+                DeepgramEngine::new(key),
+                app.clone(),
+                settings.show_live_preview,
+                corrections,
+            )
+            .run(chunk_rx, ctx)
+            .await
         }
         ProviderModel::Groq { model } => {
             GroqSession { model: *model }
