@@ -1,4 +1,4 @@
-use crate::assemblyai_session::AssemblyAiSession;
+use crate::assemblyai_session::AssemblyAiEngine;
 use crate::config::{HotkeyAction, HotkeyBinding, Shortcut};
 use crate::deepgram_session::DeepgramSession;
 use crate::groq_session::GroqSession;
@@ -383,16 +383,24 @@ async fn run_session(
                 .await
         }
         ProviderModel::AssemblyAi { model } => {
-            AssemblyAiSession { model: *model }
-                .run(
-                    app.clone(),
-                    format,
-                    chunk_rx,
-                    mode_language,
-                    session_terms,
-                    active_mode,
-                )
-                .await
+            let key = settings.assemblyai_api_key.clone().unwrap_or_default();
+            let corrections = compose_corrections(
+                &active_mode.correction_set_ids,
+                &settings.correction_sets,
+            );
+            let ctx = EngineContext {
+                format,
+                language: mode_language,
+                terms: session_terms,
+            };
+            Session::new(
+                AssemblyAiEngine::new(*model, key),
+                app.clone(),
+                settings.show_live_preview,
+                corrections,
+            )
+            .run(chunk_rx, ctx)
+            .await
         }
         ProviderModel::Local { model } => {
             let cache = app.state::<AppState>().model_cache.clone();
