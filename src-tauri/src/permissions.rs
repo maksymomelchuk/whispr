@@ -79,8 +79,6 @@ pub fn check_microphone_permission() -> bool {
     true
 }
 
-/// Opens the Accessibility pane of System Settings. Useful as a fallback
-/// action in the UI if the user dismissed the initial prompt.
 #[cfg(target_os = "macos")]
 pub fn open_accessibility_settings() {
     let _ = std::process::Command::new("open")

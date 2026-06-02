@@ -83,8 +83,6 @@ impl Recorder {
         }
     }
 
-    /// Enumerate current input devices by name. Called from the UI thread
-    /// on demand.
     pub fn list_input_devices() -> Vec<String> {
         let host = cpal::default_host();
         match host.input_devices() {
