@@ -85,24 +85,53 @@ fn send_cmd_v() -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+enum SavedClipboard {
+    Text(String),
+    Image(arboard::ImageData<'static>),
+    // The original content is a format arboard can't read (file list, RTF,
+    // custom UTI). We can't put it back, so restore clears instead — leaving
+    // our injected transcription would let a clipboard-history manager capture
+    // it, which is the bug this whole save/restore dance exists to prevent.
+    Unsupported,
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn save_clipboard(clipboard: &mut arboard::Clipboard) -> SavedClipboard {
+    if let Ok(text) = clipboard.get_text() {
+        return SavedClipboard::Text(text);
+    }
+    if let Ok(image) = clipboard.get_image() {
+        return SavedClipboard::Image(image);
+    }
+    SavedClipboard::Unsupported
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn restore_clipboard(clipboard: &mut arboard::Clipboard, saved: SavedClipboard) {
+    let _ = match saved {
+        SavedClipboard::Text(text) => clipboard.set_text(text),
+        SavedClipboard::Image(image) => clipboard.set_image(image),
+        SavedClipboard::Unsupported => clipboard.clear(),
+    };
+}
+
 #[cfg(target_os = "macos")]
 fn clipboard_paste(text: &str) -> Result<(), String> {
     let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("clipboard init: {e}"))?;
-    let saved = clipboard.get_text().ok();
+    let saved = save_clipboard(&mut clipboard);
     clipboard
         .set_text(text)
         .map_err(|e| format!("clipboard set: {e}"))?;
     // CGEvent::post queues asynchronously at the HID layer; settle before
     // firing ⌘V so the pasteboard update lands before the keystroke reads it.
     thread::sleep(CLIPBOARD_SETTLE_DELAY);
-    send_cmd_v()?;
+    let paste_result = send_cmd_v();
     // Hold off restore long enough for the target app to read the clipboard
     // before we overwrite it with the saved contents.
     thread::sleep(POST_PASTE_DELAY);
-    if let Some(saved_text) = saved {
-        let _ = clipboard.set_text(saved_text);
-    }
-    Ok(())
+    restore_clipboard(&mut clipboard, saved);
+    paste_result
 }
 
 // ── Linux injector selection (pure) ──────────────────────────────────────────
@@ -267,17 +296,15 @@ fn send_ctrl_v() -> Result<(), String> {
 #[cfg(target_os = "windows")]
 fn clipboard_paste(text: &str) -> Result<(), String> {
     let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("clipboard init: {e}"))?;
-    let saved = clipboard.get_text().ok();
+    let saved = save_clipboard(&mut clipboard);
     clipboard
         .set_text(text)
         .map_err(|e| format!("clipboard set: {e}"))?;
     thread::sleep(CLIPBOARD_SETTLE_DELAY);
-    send_ctrl_v()?;
+    let paste_result = send_ctrl_v();
     thread::sleep(POST_PASTE_DELAY);
-    if let Some(saved_text) = saved {
-        let _ = clipboard.set_text(saved_text);
-    }
-    Ok(())
+    restore_clipboard(&mut clipboard, saved);
+    paste_result
 }
 
 // ── OS injection entry points ─────────────────────────────────────────────────
