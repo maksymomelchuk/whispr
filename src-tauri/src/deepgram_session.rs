@@ -81,8 +81,7 @@ impl TranscriptionSession for DeepgramSession {
         let mut smoothed_level: f32 = 0.0;
         let mut last_level_emit: Option<Instant> = None;
 
-        // Phase 1: forward audio while it's still flowing. Process server
-        // messages opportunistically so the WS receive buffer doesn't pile up.
+        // Process server messages opportunistically so the WS receive buffer doesn't pile up.
         loop {
             tokio::select! {
                 maybe_chunk = chunks.recv() => {
@@ -105,7 +104,7 @@ impl TranscriptionSession for DeepgramSession {
                                 last_level_emit = Some(now);
                             }
                         }
-                        None => break, // recorder torn down → end of audio
+                        None => break,
                     }
                 }
                 msg = stream.next() => {
@@ -152,10 +151,9 @@ impl TranscriptionSession for DeepgramSession {
         // we don't want it dancing on the last cached level.
         let _ = app.emit(AUDIO_LEVEL_EVENT, 0.0f32);
 
-        // Phase 2: ask Deepgram to flush, then drain remaining finals with a
-        // bounded timeout so a stuck server can't block the paste. Partial
-        // emission is deliberately skipped — the overlay holds the last
-        // preview until we have the final.
+        // Drain remaining finals with a bounded timeout so a stuck server can't
+        // block the paste. Partial emission is deliberately skipped — the overlay
+        // holds the last preview until we have the final.
         let close_msg = serde_json::json!({"type": "CloseStream"}).to_string();
         if let Err(e) = sink.send(Message::Text(close_msg)).await {
             eprintln!("[stream] CloseStream send failed: {e}");
@@ -233,8 +231,7 @@ fn build_ws_url(
         q.append_pair("smart_format", "true");
         q.append_pair("numerals", "true");
     }
-    // Append terms as keyterms, staying within the 4 KB total-URL ceiling.
-    // Budget is computed after all static params.
+    // Budget computed after static params to stay within the 4 KB total-URL ceiling.
     let remaining = terms::DEEPGRAM_KEYTERM_BUDGET_BYTES.saturating_sub(url.as_str().len());
     {
         let mut q = url.query_pairs_mut();

@@ -323,7 +323,6 @@ mod tests {
     fn stale_poll_result_is_ignored() {
         let mut s = State::new();
         s.step(Event::Tick { elapsed: secs(3) });
-        // Pretend a result from a never-dispatched id 99 arrived.
         let actions = s.step(Event::PollSucceeded {
             id: 99,
             text: "ghost".into(),
@@ -414,7 +413,6 @@ mod tests {
         );
         assert!(s.in_flight.is_none());
 
-        // Next tick at 6 s should dispatch poll 2 unchanged.
         let actions = s.step(Event::Tick { elapsed: secs(6) });
         assert!(matches!(
             &actions[0],
@@ -492,7 +490,6 @@ mod tests {
     fn second_poll_is_not_dispatched_while_first_is_in_flight() {
         let mut s = State::new();
         s.step(Event::Tick { elapsed: secs(3) });
-        // 6 s tick while poll 1 is still in-flight — no new dispatch.
         let actions = s.step(Event::Tick { elapsed: secs(6) });
         assert!(actions.is_empty());
         // Once poll 1 returns, the next tick (at 9 s) catches up on the
