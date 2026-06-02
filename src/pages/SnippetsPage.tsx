@@ -178,7 +178,7 @@ function EditorRow({
           spellCheck={false}
           autoComplete="off"
           rows={2}
-          className="flex-1 resize-none font-mono text-xs min-h-[36px] py-1.5"
+          className="flex-1 font-mono text-xs min-h-[36px]"
         />
       </div>
       <div className="flex items-center gap-1.5 flex-wrap pl-0.5">
