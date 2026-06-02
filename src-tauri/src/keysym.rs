@@ -90,10 +90,6 @@ pub fn keycode_to_code(kc: u16) -> Option<&'static str> {
     KEYSYM_MAP.iter().find(|(k, _)| *k == kc).map(|(_, c)| *c)
 }
 
-/// Maps an rdev Key variant to the web KeyboardEvent.code string used
-/// throughout Whispr's hotkey logic. Returns None for Unknown keys and for
-/// keys that have no standard KeyboardEvent.code equivalent.
-///
 /// rdev's Key::Alt is the left Alt key on most platforms; Key::AltGr is the
 /// right Alt / AltGr key. Neither variant distinguishes hardware side the way
 /// macOS keycodes do, so the mapping is best-effort on keyboards with two

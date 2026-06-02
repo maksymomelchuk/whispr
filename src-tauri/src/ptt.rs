@@ -106,7 +106,6 @@ struct ModKeyState {
     r_shift: bool,
 }
 
-/// The CGEventFlags family bit that a given modifier keycode belongs to.
 #[cfg(target_os = "macos")]
 fn modifier_family(keycode: u16) -> Option<CGEventFlags> {
     Some(match keycode {
@@ -118,7 +117,6 @@ fn modifier_family(keycode: u16) -> Option<CGEventFlags> {
     })
 }
 
-/// Clear both sides of the modifier family a given keycode belongs to.
 #[cfg(target_os = "macos")]
 fn clear_family(state: &mut ModKeyState, keycode: u16) {
     match keycode {
@@ -167,7 +165,6 @@ fn modifier_state_from_flags(flags: CGEventFlags) -> ModifierState {
     }
 }
 
-// Non-macOS: L/R modifier tracking fed from rdev key events.
 #[cfg(not(target_os = "macos"))]
 #[derive(Default)]
 struct ModKeyState {
@@ -181,9 +178,7 @@ struct ModKeyState {
     r_shift: bool,
 }
 
-// Updates both the L/R side tracker and the shared ModifierState for a
-// non-macOS key event. rdev reports each modifier side directly, so there
-// is no FlagsChanged reconciliation step.
+// rdev reports each modifier side directly, so there is no FlagsChanged reconciliation step.
 #[cfg(not(target_os = "macos"))]
 fn update_modifier_state(state: &AppState, code: &str, is_press: bool, sides: &mut ModKeyState) {
     let changed = match code {
@@ -231,8 +226,6 @@ fn update_modifier_state(state: &AppState, code: &str, is_press: bool, sides: &m
     }
 }
 
-/// Tear down the recording side of a Session: mark cancelled, drop the active
-/// shortcut, stop the recorder, resume muted media, emit the cancel event.
 /// The downstream short-circuit in run_session is what skips paste / history /
 /// stats / cleanup — this function only handles the immediate
 /// mic-and-overlay teardown that mirrors a normal release.
@@ -245,8 +238,6 @@ fn cancel_session(app: &AppHandle, state: &AppState, recorder: &Recorder) {
     let _ = app.emit(PTT_CANCELLED_EVENT, ());
 }
 
-/// Mute system audio output when the user starts dictating. No-op on
-/// non-macOS platforms where media control is not yet implemented.
 fn maybe_pause_media(state: &AppState) {
     *state.did_pause_media.lock().unwrap() = false;
     #[cfg(target_os = "macos")]
@@ -256,8 +247,7 @@ fn maybe_pause_media(state: &AppState) {
     }
 }
 
-/// Mirror of maybe_pause_media. Unmutes only if this session was the one
-/// that applied the mute.
+/// Unmutes only if this session was the one that applied the mute.
 fn maybe_resume_media(state: &AppState) {
     let mut flag = state.did_pause_media.lock().unwrap();
     if !*flag {
@@ -281,10 +271,6 @@ fn local_model_readiness(
     }
 }
 
-/// Spawned synchronously on PTT press so the Deepgram WS handshake overlaps
-/// with the user's first words. Release closes the chunk channel; this task
-/// drains STT, runs optional LLM cleanup, pastes, and only then hides the
-/// overlay so it bridges the post-release processing.
 fn spawn_session(app: AppHandle, recorder: Recorder, device: Option<String>, mode_id: String) {
     tauri::async_runtime::spawn(async move {
         let result = run_session(&app, recorder, device, &mode_id).await;
@@ -695,10 +681,6 @@ async fn maybe_cleanup(
     }
 }
 
-/// Acquires `ptt_active`, double-checks it's still false, then drives the full
-/// PTT-start sequence: mark active, capture the target app (macOS only), spawn
-/// the STT session, show the overlay (macOS only), notify the UI, and
-/// (optionally) pause media.
 fn start_ptt(
     app: &AppHandle,
     state: &AppState,
@@ -742,11 +724,8 @@ fn fire_paste_latest(app: &AppHandle) {
     });
 }
 
-/// Dispatches a matched binding on KeyDown. PTT bindings flip into recording
-/// state and wait for the matching KeyUp; PasteLatest bindings fire-and-forget
-/// against the latest history entry. PasteLatest is suppressed while a PTT
-/// session is active so a stray double-tap during recording can't fire a
-/// stale paste at the same target.
+/// PasteLatest is suppressed while a PTT session is active so a stray
+/// double-tap during recording can't fire a stale paste at the same target.
 fn dispatch_binding(
     app: &AppHandle,
     state: &AppState,
@@ -769,20 +748,14 @@ fn dispatch_binding(
 // ── macOS event source: CGEventTap ───────────────────────────────────────────
 
 /// Caller must set `state.ptt_running` to true (via CAS) before invoking.
-/// This function only clears it on `CGEventTap::new` failure.
 #[cfg(target_os = "macos")]
 pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
     std::thread::spawn(move || {
         let ptt_running = state.ptt_running.clone();
 
         let mod_state = Mutex::new(ModKeyState::default());
-        // Shared handle to the tap's mach port so the callback can re-enable
-        // itself. Populated after CGEventTap::new returns.
         let tap_port: Arc<AtomicPtr<c_void>> = Arc::new(AtomicPtr::new(std::ptr::null_mut()));
         let tap_port_cb = tap_port.clone();
-        // Per-shortcut tap state, keyed by (key, modifiers). Shared with
-        // spawned coexistence timer tasks via Arc; single-press-only keys with
-        // no double-tap sibling never touch this map.
         let tap_states: Arc<Mutex<HashMap<(String, Vec<String>), TapState>>> =
             Arc::new(Mutex::new(HashMap::new()));
 
@@ -852,8 +825,6 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                             clear_family(&mut mods, keycode);
                             false
                         } else {
-                            // Family is still on after this event, so this
-                            // specific side toggled. Flip our tracked bit.
                             let side = side_mut(&mut mods, keycode)?;
                             *side = !*side;
                             *side
@@ -881,10 +852,6 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                 let bindings = state.hotkey_bindings.lock().unwrap().clone();
                 let modifiers_val = *state.modifiers.lock().unwrap();
 
-                // Reset pending tap-state for any shortcut whose key this event
-                // doesn't match — "other key" cancels the gesture. Touches the
-                // shared map: covers both bare double-tap bindings and the
-                // coexistence pair (which keys on the same dt shortcut).
                 if is_press && !ptt_active_now {
                     let mut tap_states_guard = tap_states.lock().unwrap();
                     for b in bindings.iter().filter(|b| b.shortcut.is_double_tap) {
@@ -975,7 +942,6 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                             }
                         }
                         (_, Some(dt_b)) => {
-                            // Double-tap only: existing #40 behavior.
                             let dispatch = {
                                 let mut guard = tap_states.lock().unwrap();
                                 let ts = guard.entry(tap_state_key(&dt_b.shortcut)).or_default();
@@ -986,7 +952,6 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                             }
                         }
                         (Some(sp_b), None) => {
-                            // Single-press only: fire immediately, no regression.
                             dispatch_binding(&app, &state, &recorder, sp_b);
                         }
                         (None, None) => {}
@@ -1014,8 +979,6 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                             recorder.stop();
                         }
                     } else {
-                        // Key-up while idle: record first-tap-up time for any
-                        // double-tap (or coexistence) shortcut on this key.
                         let mut tap_states_guard = tap_states.lock().unwrap();
                         for b in bindings.iter().filter(|b| b.shortcut.is_double_tap) {
                             if shortcut_matches(code, &b.shortcut, modifiers_val) {
@@ -1073,24 +1036,16 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
 // ── Non-macOS event source: rdev ─────────────────────────────────────────────
 
 /// Caller must set `state.ptt_running` to true (via CAS) before invoking.
-/// Spawns a dedicated thread that runs rdev::listen; the callback translates
-/// rdev events into (code, is_press) pairs and drives the same hotkey state
-/// machine used by the macOS CGEventTap source.
-///
 // Keyboard-capture pattern adapted from the MIT-licensed Handy project
 // (https://github.com/cjpais/Handy). Copyright (c) cjpais.
 #[cfg(not(target_os = "macos"))]
 pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
     std::thread::spawn(move || {
-        // Per-shortcut tap state, keyed by (key, modifiers). Shared with
-        // spawned coexistence timer tasks via Arc.
         let tap_states: Arc<Mutex<HashMap<(String, Vec<String>), TapState>>> =
             Arc::new(Mutex::new(HashMap::new()));
         // Tracks currently-held keys so OS key-repeat events (successive
         // KeyPress without an intervening KeyRelease) are ignored.
         let pressed_keys: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
-        // L/R per-side modifier tracking; the aggregated ModifierState is
-        // written into state.modifiers after each modifier event.
         let mod_sides = Arc::new(Mutex::new(ModKeyState::default()));
 
         let callback = {
