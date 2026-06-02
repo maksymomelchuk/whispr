@@ -63,9 +63,11 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = [
     "NSBitmapImageRep", "NSGraphics", "NSGraphicsContext",
     "NSImage", "NSImageRep", "NSWorkspace",
 ] }
+arboard = "3"
 transcribe-rs = { version = "0.3", features = ["whisper-metal", "ort-coreml"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
+arboard = "3"
 transcribe-rs = { version = "0.3", features = ["ort-directml"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]

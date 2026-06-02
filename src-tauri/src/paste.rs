@@ -10,14 +10,19 @@ use core_graphics::event::{CGEvent, CGEventFlags, CGEventTapLocation};
 #[cfg(target_os = "macos")]
 use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 
-const CHUNK_SIZE: usize = 20;
-const INTER_CHUNK_DELAY: Duration = Duration::from_millis(2);
-const DRAIN_DELAY: Duration = Duration::from_millis(20);
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+const CLIPBOARD_SETTLE_DELAY: Duration = Duration::from_millis(60);
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+const POST_PASTE_DELAY: Duration = Duration::from_millis(50);
 
 #[cfg(target_os = "macos")]
 const MODIFIER_SETTLE_TIMEOUT: Duration = Duration::from_millis(250);
 #[cfg(target_os = "macos")]
 const MODIFIER_POLL_INTERVAL: Duration = Duration::from_millis(5);
+
+// kVK_ANSI_V = 0x09 per Apple HID usage tables
+#[cfg(target_os = "macos")]
+const V_KEY_CODE: u16 = 0x09;
 
 // core-graphics doesn't expose CGEventSourceFlagsState. Redeclare the symbol
 // against the framework the crate already links — used to wait out any
@@ -29,9 +34,6 @@ extern "C" {
     fn CGEventSourceFlagsState(state_id: CGEventSourceStateID) -> u64;
 }
 
-/// CGEvent::post queues asynchronously at the HID layer; hold long enough
-/// for queued events to land in the target app before the caller raises a
-/// window.
 #[cfg(target_os = "macos")]
 fn wait_for_modifier_release() {
     let mask = (CGEventFlags::CGEventFlagCommand
@@ -47,7 +49,7 @@ fn wait_for_modifier_release() {
         }
         if start.elapsed() >= MODIFIER_SETTLE_TIMEOUT {
             eprintln!(
-                "paste: modifiers still held after {:?} (flags=0x{:x}); typing anyway",
+                "paste: modifiers still held after {:?} (flags=0x{:x}); pasting anyway",
                 MODIFIER_SETTLE_TIMEOUT, flags
             );
             return;
@@ -56,19 +58,50 @@ fn wait_for_modifier_release() {
     }
 }
 
-/// CGEventKeyboardSetUnicodeString quietly drops or mangles long strings in
-/// some targets (Electron apps in particular). Splitting into small chunks
-/// keeps delivery reliable across Slack, VS Code, Safari, etc.
 #[cfg(target_os = "macos")]
-fn post_unicode(chunk: &str) -> Result<(), String> {
+fn post_unicode(text: &str) -> Result<(), String> {
     for keydown in [true, false] {
         let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)
             .map_err(|_| "CGEventSource::new failed".to_string())?;
         let event = CGEvent::new_keyboard_event(source, 0, keydown)
             .map_err(|_| format!("new_keyboard_event(down={keydown}) failed"))?;
         event.set_flags(CGEventFlags::empty());
-        event.set_string(chunk);
+        event.set_string(text);
         event.post(CGEventTapLocation::HID);
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn send_cmd_v() -> Result<(), String> {
+    for keydown in [true, false] {
+        let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)
+            .map_err(|_| "CGEventSource::new failed".to_string())?;
+        let event = CGEvent::new_keyboard_event(source, V_KEY_CODE, keydown)
+            .map_err(|_| format!("cmd_v new_keyboard_event(down={keydown}) failed"))?;
+        event.set_flags(CGEventFlags::CGEventFlagCommand);
+        event.post(CGEventTapLocation::HID);
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn clipboard_paste(text: &str) -> Result<(), String> {
+    let mut clipboard =
+        arboard::Clipboard::new().map_err(|e| format!("clipboard init: {e}"))?;
+    let saved = clipboard.get_text().ok();
+    clipboard
+        .set_text(text)
+        .map_err(|e| format!("clipboard set: {e}"))?;
+    // CGEvent::post queues asynchronously at the HID layer; settle before
+    // firing ⌘V so the pasteboard update lands before the keystroke reads it.
+    thread::sleep(CLIPBOARD_SETTLE_DELAY);
+    send_cmd_v()?;
+    // Hold off restore long enough for the target app to read the clipboard
+    // before we overwrite it with the saved contents.
+    thread::sleep(POST_PASTE_DELAY);
+    if let Some(saved_text) = saved {
+        let _ = clipboard.set_text(saved_text);
     }
     Ok(())
 }
@@ -220,24 +253,38 @@ fn inject_enigo(text: &str) -> Result<(), String> {
         .map_err(|e| format!("enigo text failed: {e}"))
 }
 
-// ── Pure chunk boundary logic ─────────────────────────────────────────────────
+#[cfg(target_os = "windows")]
+fn send_ctrl_v() -> Result<(), String> {
+    use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+    let mut enigo =
+        Enigo::new(&Settings::default()).map_err(|e| format!("enigo init: {e}"))?;
+    enigo
+        .key(Key::Control, Direction::Press)
+        .map_err(|e| format!("Ctrl press: {e}"))?;
+    enigo
+        .key(Key::Unicode('v'), Direction::Click)
+        .map_err(|e| format!("V click: {e}"))?;
+    enigo
+        .key(Key::Control, Direction::Release)
+        .map_err(|e| format!("Ctrl release: {e}"))?;
+    Ok(())
+}
 
-/// Pick the chunk end: hard cap at CHUNK_SIZE, but back up to the last
-/// whitespace within the chunk so boundaries land between words. Receivers
-/// that occasionally inject a space at the boundary then drop it where a
-/// space already belongs. Only a chunk containing no whitespace at all
-/// (e.g. a long URL) falls back to the hard split.
-fn next_chunk_end(chars: &[char], start: usize) -> usize {
-    let hard_end = (start + CHUNK_SIZE).min(chars.len());
-    if hard_end == chars.len() {
-        return hard_end;
+#[cfg(target_os = "windows")]
+fn clipboard_paste(text: &str) -> Result<(), String> {
+    let mut clipboard =
+        arboard::Clipboard::new().map_err(|e| format!("clipboard init: {e}"))?;
+    let saved = clipboard.get_text().ok();
+    clipboard
+        .set_text(text)
+        .map_err(|e| format!("clipboard set: {e}"))?;
+    thread::sleep(CLIPBOARD_SETTLE_DELAY);
+    send_ctrl_v()?;
+    thread::sleep(POST_PASTE_DELAY);
+    if let Some(saved_text) = saved {
+        let _ = clipboard.set_text(saved_text);
     }
-    for i in ((start + 1)..hard_end).rev() {
-        if chars[i - 1].is_whitespace() {
-            return i;
-        }
-    }
-    hard_end
+    Ok(())
 }
 
 // ── OS injection entry points ─────────────────────────────────────────────────
@@ -245,38 +292,18 @@ fn next_chunk_end(chars: &[char], start: usize) -> usize {
 #[cfg(target_os = "macos")]
 fn inject_text(text: &str) -> Result<(), String> {
     wait_for_modifier_release();
-    // chunk by characters, not bytes — arbitrary UTF-8 byte splits would
-    // corrupt multi-byte sequences when converted to UTF-16 downstream.
-    let chars: Vec<char> = text.chars().collect();
-    let mut start = 0;
-    while start < chars.len() {
-        let end = next_chunk_end(&chars, start);
-        let chunk: String = chars[start..end].iter().collect();
-        post_unicode(&chunk)?;
-        start = end;
-        thread::sleep(INTER_CHUNK_DELAY);
-    }
-    thread::sleep(DRAIN_DELAY);
-    Ok(())
+    clipboard_paste(text).or_else(|e| {
+        eprintln!("[paste] clipboard paste failed: {e}; falling back to direct injection");
+        post_unicode(text)
+    })
 }
 
 #[cfg(target_os = "windows")]
 fn inject_text(text: &str) -> Result<(), String> {
-    // chunk by characters, not bytes — arbitrary UTF-8 byte splits would
-    // corrupt multi-byte sequences when converted to UTF-16 downstream.
-    // Chunking prevents dropped characters in Electron and browser targets
-    // that coalesce rapid SendInput events.
-    let chars: Vec<char> = text.chars().collect();
-    let mut start = 0;
-    while start < chars.len() {
-        let end = next_chunk_end(&chars, start);
-        let chunk: String = chars[start..end].iter().collect();
-        inject_enigo(&chunk)?;
-        start = end;
-        thread::sleep(INTER_CHUNK_DELAY);
-    }
-    thread::sleep(DRAIN_DELAY);
-    Ok(())
+    clipboard_paste(text).or_else(|e| {
+        eprintln!("[paste] clipboard paste failed: {e}; falling back to direct injection");
+        inject_enigo(text)
+    })
 }
 
 #[cfg(target_os = "linux")]
@@ -288,21 +315,7 @@ fn inject_text(text: &str) -> Result<(), String> {
         LinuxInjector::Dotool => inject_dotool(text),
         LinuxInjector::Ydotool => inject_ydotool(text),
         LinuxInjector::Xdotool => inject_xdotool(text),
-        // Enigo on Linux uses the same chunked path as Windows to avoid
-        // dropped characters in Electron and browser targets.
-        LinuxInjector::Enigo => {
-            let chars: Vec<char> = text.chars().collect();
-            let mut start = 0;
-            while start < chars.len() {
-                let end = next_chunk_end(&chars, start);
-                let chunk: String = chars[start..end].iter().collect();
-                inject_enigo(&chunk)?;
-                start = end;
-                thread::sleep(INTER_CHUNK_DELAY);
-            }
-            thread::sleep(DRAIN_DELAY);
-            Ok(())
-        }
+        LinuxInjector::Enigo => inject_enigo(text),
     }
 }
 
@@ -312,8 +325,8 @@ fn inject_text(_text: &str) -> Result<(), String> {
 }
 
 /// Caller must await before raising any window — modifier-release logic during
-/// injection can take up to 250ms on macOS (and on Windows/Linux the injection
-/// itself may take measurable time for long texts).
+/// injection can take up to 250ms on macOS, and clipboard settle/restore adds
+/// another ~110ms on macOS and Windows.
 pub fn paste_text(text: String) -> JoinHandle<()> {
     async_runtime::spawn_blocking(move || {
         if text.is_empty() {
@@ -329,31 +342,23 @@ pub fn paste_text(text: String) -> JoinHandle<()> {
 mod tests {
     use super::*;
 
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     #[test]
-    fn chunk_end_returns_full_length_when_text_fits_in_one_chunk() {
-        let chars: Vec<char> = "hello world".chars().collect();
-        assert_eq!(next_chunk_end(&chars, 0), 11);
+    fn clipboard_settle_delay_is_at_least_60ms() {
+        assert!(CLIPBOARD_SETTLE_DELAY >= Duration::from_millis(60));
     }
 
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     #[test]
-    fn chunk_end_backs_up_to_last_word_boundary() {
-        // "hello world foo bar baz quux" (28 chars)
-        // hard_end = 20; chars[15]=' ' is the last space before position 20
-        let chars: Vec<char> = "hello world foo bar baz quux".chars().collect();
-        assert_eq!(next_chunk_end(&chars, 0), 16);
+    fn post_paste_delay_is_at_least_50ms() {
+        assert!(POST_PASTE_DELAY >= Duration::from_millis(50));
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
-    fn chunk_end_falls_back_to_hard_cap_when_no_whitespace() {
-        let chars: Vec<char> = "a".repeat(30).chars().collect();
-        assert_eq!(next_chunk_end(&chars, 0), CHUNK_SIZE);
-    }
-
-    #[test]
-    fn chunk_end_advances_from_mid_string() {
-        let chars: Vec<char> = "hello world foo bar".chars().collect();
-        // start=6: "world foo bar" (13 chars, fits in 20) → returns len
-        assert_eq!(next_chunk_end(&chars, 6), chars.len());
+    fn v_key_code_matches_apple_ansi_v_constant() {
+        // kVK_ANSI_V = 0x09
+        assert_eq!(V_KEY_CODE, 0x09u16);
     }
 
     // ── Linux injector selection ──────────────────────────────────────────────
