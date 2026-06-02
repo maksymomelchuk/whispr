@@ -31,13 +31,13 @@ impl ModifierState {
     }
 }
 
-pub enum LocalEngine {
+pub enum InferenceBackend {
     Whisper(transcribe_rs::whisper_cpp::WhisperEngine),
     Parakeet(transcribe_rs::onnx::parakeet::ParakeetModel),
 }
 
 pub struct LoadedModel {
-    pub engine: LocalEngine,
+    pub engine: InferenceBackend,
     pub last_used: Instant,
 }
 

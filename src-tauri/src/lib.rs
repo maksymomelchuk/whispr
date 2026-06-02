@@ -30,17 +30,16 @@ mod cleanup_stats;
 mod assemblyai_session;
 mod audio_level_meter;
 mod deepgram_session;
+mod engine;
 mod groq_session;
+mod local_engine;
 mod preview_throttle;
 pub(crate) mod recorder;
+mod session;
 pub(crate) mod transcription_session;
 
 // cleanup is cross-platform HTTP (reqwest + serde_json, no OS APIs).
 mod cleanup;
-
-// local_session uses transcribe-rs (cross-platform: Metal on macOS, Vulkan on
-// Windows/Linux, CPU fallback). Gating is removed — the module compiles everywhere.
-mod local_session;
 pub mod model_catalog;
 
 // media, overlay, and target_app expose platform-neutral public APIs and

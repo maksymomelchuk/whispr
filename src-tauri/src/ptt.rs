@@ -9,9 +9,13 @@ use crate::hotkey::{
     TapEvent, TapState, DOUBLE_TAP_THRESHOLD,
 };
 use crate::pipeline::{self, CleanupOutput, Notice};
-use crate::provider::{LocalWhisperModel, ProviderModel, TranscriptionProvider};
+use crate::provider::{self, LocalWhisperModel, ProviderModel, TranscriptionProvider};
 use crate::recorder::Recorder;
 use crate::state::{AppState, ModifierState};
+use crate::corrections::compose_corrections;
+use crate::engine::EngineContext;
+use crate::local_engine::LocalWhisperEngine;
+use crate::session::Session;
 use crate::transcription_session::TranscriptionSession;
 use crate::{cleanup, cleanup_stats, config, model_catalog, stats};
 use std::collections::HashMap;
@@ -25,8 +29,6 @@ use crate::keysym::{
     keycode_to_code, KC_ALT_LEFT, KC_ALT_RIGHT, KC_CONTROL_LEFT, KC_CONTROL_RIGHT, KC_META_LEFT,
     KC_META_RIGHT, KC_SHIFT_LEFT, KC_SHIFT_RIGHT,
 };
-#[cfg(target_os = "macos")]
-use crate::local_session::LocalSession;
 use crate::paste;
 #[cfg(target_os = "macos")]
 use crate::{media, overlay, target_app};
@@ -393,27 +395,29 @@ async fn run_session(
                 .await
         }
         ProviderModel::Local { model } => {
-            #[cfg(target_os = "macos")]
-            {
-                LocalSession { model: *model }
-                    .run(
-                        app.clone(),
-                        format,
-                        chunk_rx,
-                        mode_language,
-                        session_terms,
-                        active_mode,
-                    )
-                    .await
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
-                let _ = (model, format, chunk_rx, mode_language, session_terms);
-                recorder.stop();
-                return Err(
-                    "Local transcription is not yet supported on this platform.".to_string()
-                );
-            }
+            let cache = app.state::<AppState>().model_cache.clone();
+            let data_dir = app
+                .path()
+                .app_data_dir()
+                .map_err(|e| format!("Cannot resolve app data directory: {e}"))?;
+            let model_path = provider::local_model_path(&data_dir, *model);
+            let corrections = compose_corrections(
+                &active_mode.correction_set_ids,
+                &settings.correction_sets,
+            );
+            let ctx = EngineContext {
+                format,
+                language: mode_language,
+                terms: session_terms,
+            };
+            Session::new(
+                LocalWhisperEngine::new(*model, cache, model_path),
+                app.clone(),
+                settings.show_live_preview,
+                corrections,
+            )
+            .run(chunk_rx, ctx)
+            .await
         }
     };
 
