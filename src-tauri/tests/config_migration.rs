@@ -156,10 +156,10 @@ fn legacy_use_dictionary_true_preserves_corrections_flag() {
         mode.term_set_ids.is_empty(),
         "no legacy terms → no term_set_ids assigned"
     );
+    // No legacy corrections in this JSON, so no Default Corrections set is created.
     assert!(
-        mode.correction_set_ids
-            .contains(&DEFAULT_CORRECTION_SET_ID.to_string()),
-        "correction_set_ids must contain the default set when use_corrections was true"
+        mode.correction_set_ids.is_empty(),
+        "no legacy corrections → no correction_set_ids assigned"
     );
 }
 
