@@ -182,27 +182,6 @@ pub struct SnippetEntry {
     pub expansion: String,
 }
 
-pub fn default_corrections() -> Vec<CorrectionEntry> {
-    [
-        ("dot", "."),
-        ("slash", "/"),
-        ("dash", "-"),
-        ("underscore", "_"),
-        ("at sign", "@"),
-        ("comma", ","),
-        ("colon", ":"),
-        ("semicolon", ";"),
-        ("question mark", "?"),
-        ("exclamation mark", "!"),
-    ]
-    .into_iter()
-    .map(|(from, to)| CorrectionEntry {
-        from: from.to_string(),
-        to: to.to_string(),
-    })
-    .collect()
-}
-
 /// Language is now owned by Mode; this field is read from legacy JSON during
 /// migration and never written back (skip_serializing).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -388,11 +367,7 @@ pub struct Settings {
     pub term_sets: Vec<NamedTermSet>,
     /// Legacy flat corrections list; seeded into the "Default Corrections" set on
     /// first migration, then dropped from subsequent saves.
-    #[serde(
-        rename = "corrections",
-        default = "default_corrections",
-        skip_serializing
-    )]
+    #[serde(rename = "corrections", default, skip_serializing)]
     pub legacy_corrections: Vec<CorrectionEntry>,
     #[serde(default)]
     pub correction_sets: Vec<NamedCorrectionSet>,
@@ -428,20 +403,10 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        let default_set = NamedCorrectionSet {
-            id: DEFAULT_CORRECTION_SET_ID.to_string(),
-            name: "Default Corrections".to_string(),
-            entries: default_corrections(),
-        };
-        let default_set_id = DEFAULT_CORRECTION_SET_ID.to_string();
-        let mut mode_default_en = Mode::seed_default_en(false);
-        let mut mode_cleaned_en = Mode::seed_cleaned_en();
-        let mut mode_ukrainian = Mode::seed_ukrainian();
-        let mut mode_ua_en = Mode::seed_ua_en();
-        mode_default_en.correction_set_ids = vec![default_set_id.clone()];
-        mode_cleaned_en.correction_set_ids = vec![default_set_id.clone()];
-        mode_ukrainian.correction_set_ids = vec![default_set_id.clone()];
-        mode_ua_en.correction_set_ids = vec![default_set_id.clone()];
+        let mode_default_en = Mode::seed_default_en(false);
+        let mode_cleaned_en = Mode::seed_cleaned_en();
+        let mode_ukrainian = Mode::seed_ukrainian();
+        let mode_ua_en = Mode::seed_ua_en();
         Self {
             api_key: None,
             ai_cleanup_enabled: None,
@@ -455,8 +420,8 @@ impl Default for Settings {
             legacy_dictionary: vec![],
             terms: vec![],
             term_sets: vec![],
-            legacy_corrections: default_corrections(),
-            correction_sets: vec![default_set],
+            legacy_corrections: vec![],
+            correction_sets: vec![],
             snippets: vec![],
             deepgram: DeepgramSettings::default(),
             groq: GroqSettings::default(),
@@ -655,7 +620,7 @@ fn migrate(s: &mut Settings) -> bool {
         changed = true;
     }
 
-    if s.correction_sets.is_empty() {
+    if s.correction_sets.is_empty() && !s.legacy_corrections.is_empty() {
         let default_set = NamedCorrectionSet {
             id: DEFAULT_CORRECTION_SET_ID.to_string(),
             name: "Default Corrections".to_string(),
@@ -1052,10 +1017,9 @@ mod tests {
             .find(|ts| ts.id == SEED_TERM_SET_DEFAULT_ID)
             .expect("Default Terms set must be created");
         assert_eq!(default_set.entries, vec!["MongoDB"]);
-        // No corrections — but the empty Default Corrections set is still seeded.
+        // No corrections in the dictionary → no Default Corrections set is seeded.
         assert!(s.legacy_corrections.is_empty());
-        assert_eq!(s.correction_sets.len(), 1);
-        assert!(s.correction_sets[0].entries.is_empty());
+        assert!(s.correction_sets.is_empty());
     }
 
     #[test]
@@ -1112,7 +1076,7 @@ mod tests {
             .find(|ts| ts.id == SEED_TERM_SET_DEFAULT_ID)
             .expect("Default Terms set must exist");
         assert_eq!(default_set.entries, vec!["MongoDB"]);
-        assert_eq!(s.correction_sets.len(), 1);
+        assert!(s.correction_sets.is_empty());
     }
 
     #[test]

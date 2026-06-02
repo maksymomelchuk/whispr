@@ -1,18 +1,21 @@
-use crate::assemblyai_session::AssemblyAiSession;
+use crate::assemblyai_session::AssemblyAiEngine;
 use crate::config::{HotkeyAction, HotkeyBinding, Shortcut};
-use crate::deepgram_session::DeepgramSession;
-use crate::groq_session::GroqSession;
+use crate::corrections::compose_corrections;
+use crate::deepgram_session::DeepgramEngine;
+use crate::engine::EngineContext;
+use crate::groq_session::GroqEngine;
 use crate::history::{self, CleanupStatus, HISTORY_UPDATED_EVENT};
 use crate::hotkey::{
     advance_tap_state, coex_advance_down, coex_timer_should_fire, is_cancel_event,
     key_has_both_kinds, shortcut_is_relevant, shortcut_matches, tap_state_key, CoexDown, Dispatch,
     TapEvent, TapState, DOUBLE_TAP_THRESHOLD,
 };
+use crate::local_engine::LocalWhisperEngine;
 use crate::pipeline::{self, CleanupOutput, Notice};
-use crate::provider::{LocalWhisperModel, ProviderModel, TranscriptionProvider};
+use crate::provider::{self, LocalWhisperModel, ProviderModel, TranscriptionProvider};
 use crate::recorder::Recorder;
+use crate::session::{Session, PTT_ERROR_EVENT, TRANSCRIPTION_ERROR_EVENT};
 use crate::state::{AppState, ModifierState};
-use crate::transcription_session::TranscriptionSession;
 use crate::{cleanup, cleanup_stats, config, model_catalog, stats};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -25,8 +28,6 @@ use crate::keysym::{
     keycode_to_code, KC_ALT_LEFT, KC_ALT_RIGHT, KC_CONTROL_LEFT, KC_CONTROL_RIGHT, KC_META_LEFT,
     KC_META_RIGHT, KC_SHIFT_LEFT, KC_SHIFT_RIGHT,
 };
-#[cfg(target_os = "macos")]
-use crate::local_session::LocalSession;
 use crate::paste;
 #[cfg(target_os = "macos")]
 use crate::{media, overlay, target_app};
@@ -49,11 +50,9 @@ use crate::keysym::rdev_key_to_code;
 #[cfg(not(target_os = "macos"))]
 use std::collections::HashSet;
 
-const TRANSCRIPTION_ERROR_EVENT: &str = "transcription-error";
 const PTT_PRESSED_EVENT: &str = "ptt-pressed";
 const PTT_RELEASED_EVENT: &str = "ptt-released";
 const PTT_THINKING_EVENT: &str = "ptt-thinking";
-const PTT_ERROR_EVENT: &str = "ptt-error";
 const PTT_CANCELLED_EVENT: &str = "ptt-cancelled";
 
 const ERROR_FLASH: Duration = Duration::from_millis(800);
@@ -357,63 +356,92 @@ async fn run_session(
 
     let session_result = match &active_mode.provider_model {
         ProviderModel::Deepgram => {
-            DeepgramSession
-                .run(
-                    app.clone(),
-                    format,
-                    chunk_rx,
-                    mode_language,
-                    session_terms,
-                    active_mode,
-                )
-                .await
+            // Prefer the new per-provider key; fall back to the legacy single-key
+            // field for the brief window before `load`'s migration has re-saved.
+            let key = settings
+                .deepgram_api_key
+                .clone()
+                .or_else(|| settings.api_key.clone())
+                .filter(|k| !k.is_empty())
+                .ok_or_else(|| "API key not configured".to_string())?;
+            let corrections =
+                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
+            let ctx = EngineContext {
+                format,
+                language: mode_language,
+                terms: session_terms,
+            };
+            Session::new(
+                DeepgramEngine::new(key),
+                app.clone(),
+                settings.show_live_preview,
+                corrections,
+            )
+            .run(chunk_rx, ctx)
+            .await
         }
         ProviderModel::Groq { model } => {
-            GroqSession { model: *model }
-                .run(
-                    app.clone(),
-                    format,
-                    chunk_rx,
-                    mode_language,
-                    session_terms,
-                    active_mode,
-                )
-                .await
+            let key = settings
+                .groq_api_key
+                .clone()
+                .filter(|k| !k.is_empty())
+                .ok_or_else(|| "API key not configured".to_string())?;
+            let corrections =
+                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
+            let ctx = EngineContext {
+                format,
+                language: mode_language,
+                terms: session_terms,
+            };
+            Session::new(
+                GroqEngine::new(*model, key),
+                app.clone(),
+                settings.show_live_preview,
+                corrections,
+            )
+            .run(chunk_rx, ctx)
+            .await
         }
         ProviderModel::AssemblyAi { model } => {
-            AssemblyAiSession { model: *model }
-                .run(
-                    app.clone(),
-                    format,
-                    chunk_rx,
-                    mode_language,
-                    session_terms,
-                    active_mode,
-                )
-                .await
+            let key = settings.assemblyai_api_key.clone().unwrap_or_default();
+            let corrections =
+                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
+            let ctx = EngineContext {
+                format,
+                language: mode_language,
+                terms: session_terms,
+            };
+            Session::new(
+                AssemblyAiEngine::new(*model, key),
+                app.clone(),
+                settings.show_live_preview,
+                corrections,
+            )
+            .run(chunk_rx, ctx)
+            .await
         }
         ProviderModel::Local { model } => {
-            #[cfg(target_os = "macos")]
-            {
-                LocalSession { model: *model }
-                    .run(
-                        app.clone(),
-                        format,
-                        chunk_rx,
-                        mode_language,
-                        session_terms,
-                        active_mode,
-                    )
-                    .await
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
-                let _ = (model, format, chunk_rx, mode_language, session_terms);
-                recorder.stop();
-                return Err(
-                    "Local transcription is not yet supported on this platform.".to_string()
-                );
-            }
+            let cache = app.state::<AppState>().model_cache.clone();
+            let data_dir = app
+                .path()
+                .app_data_dir()
+                .map_err(|e| format!("Cannot resolve app data directory: {e}"))?;
+            let model_path = provider::local_model_path(&data_dir, *model);
+            let corrections =
+                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
+            let ctx = EngineContext {
+                format,
+                language: mode_language,
+                terms: session_terms,
+            };
+            Session::new(
+                LocalWhisperEngine::new(*model, cache, model_path),
+                app.clone(),
+                settings.show_live_preview,
+                corrections,
+            )
+            .run(chunk_rx, ctx)
+            .await
         }
     };
 
