@@ -104,8 +104,7 @@ pub fn clear(app: &tauri::AppHandle) -> Result<(), String> {
     save(app, &[])
 }
 
-/// Returns the most recent history entry, or `None` if history is empty or
-/// disabled. History is stored newest-first, so this is just the head.
+/// History is stored newest-first, so this is just the head.
 pub fn latest(app: &tauri::AppHandle) -> Option<HistoryEntry> {
     load(app).into_iter().next()
 }

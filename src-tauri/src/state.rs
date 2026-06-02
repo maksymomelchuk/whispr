@@ -19,7 +19,6 @@ pub struct ModifierState {
 }
 
 impl ModifierState {
-    /// True when the set of held modifiers matches the required set exactly.
     pub fn matches(&self, required: &[String]) -> bool {
         let meta_req = required.iter().any(|m| m == "Meta");
         let control_req = required.iter().any(|m| m == "Control");
@@ -42,7 +41,7 @@ pub struct LoadedModel {
     pub last_used: Instant,
 }
 
-/// Tauri-managed state. All fields are Arcs so cloning is cheap and the
+/// All fields are Arcs so cloning is cheap and the
 /// CGEventTap listener thread and the command handlers share the same data.
 #[derive(Clone, Default)]
 pub struct AppState {
@@ -57,7 +56,6 @@ pub struct AppState {
     /// paste / history / stats. Cleared at start_ptt.
     pub session_cancelled: Arc<AtomicBool>,
     pub input_device: Arc<Mutex<Option<String>>>,
-    /// User preference: pause the Now Playing app while dictating.
     pub pause_media_on_record: Arc<Mutex<bool>>,
     /// Transient: did we actually pause media at the start of the current
     /// recording? If so, release should resume; otherwise leave it alone.
