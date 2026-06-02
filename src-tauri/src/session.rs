@@ -68,7 +68,7 @@ impl<E: Engine> Session<E> {
                 }
                 let now = Instant::now();
                 if let Some(text) = throttle.offer(now, &raw, &corrections) {
-                    let _ = app_preview.emit(TRANSCRIPT_PARTIAL_EVENT, text);
+                    let _ = app_preview.emit(TRANSCRIPT_PARTIAL_EVENT, &text);
                 }
             }
         });
