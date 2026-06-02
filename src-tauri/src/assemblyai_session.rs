@@ -1,4 +1,4 @@
-use crate::engine::{Engine, EngineContext, EngineOutcome};
+use crate::engine::{Engine, EngineContext};
 use crate::groq_audio::to_pcm_16k_mono_bytes;
 use crate::mode::ModeLanguage;
 use crate::provider::AssemblyAiModel;
@@ -36,7 +36,7 @@ impl Engine for AssemblyAiEngine {
         mut chunks: UnboundedReceiver<Vec<i16>>,
         previews: UnboundedSender<String>,
         ctx: EngineContext,
-    ) -> Result<EngineOutcome, String> {
+    ) -> Result<String, String> {
         if let ModeLanguage::Exact { code } = &ctx.language {
             if !self.model.supports_language(code) {
                 return Err(format!(
@@ -156,10 +156,7 @@ impl Engine for AssemblyAiEngine {
             completed_turns.push(std::mem::take(&mut current_partial));
         }
 
-        Ok(EngineOutcome {
-            transcript: completed_turns.join(" "),
-            warning: None,
-        })
+        Ok(completed_turns.join(" "))
     }
 }
 
