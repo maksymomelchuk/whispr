@@ -70,6 +70,8 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec![]),
         ))
+        .menu(tray::build_app_menu)
+        .on_menu_event(tray::on_app_menu_event)
         .on_window_event(|window, event| {
             if window.label() != MAIN_LABEL {
                 return;
