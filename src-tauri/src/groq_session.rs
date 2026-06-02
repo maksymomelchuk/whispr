@@ -1,44 +1,25 @@
-//! Polling Groq transcription session.
-//!
-//! Captured audio is buffered in memory; every `POLL_INTERVAL` seconds the
-//! trailing window is sent to Groq for a live-preview transcription. A
-//! longest-stable-prefix stabilizer (see `groq_stabilizer`) keeps the overlay
-//! text from flickering. On PTT release, the authoritative final transcript
-//! comes from either (a) the in-flight poll if its window already covers the
-//! full recording or (b) a fresh full-recording POST. Polling partials are
-//! never stitched into the final.
-//!
-//! State-machine corner cases live in `groq_session_state::State`: this module
-//! owns the buffer, the timer, and the HTTP requests.
-
-use crate::audio_level_meter::AudioLevelMeter;
-use crate::config::{self, CorrectionEntry};
-use crate::corrections::compose_corrections;
-use crate::groq_audio::{encode_to_flac_16k_mono, AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
+use crate::engine::{Engine, EngineContext, EngineOutcome, Warning};
+use crate::groq_audio::encode_to_flac_16k_mono;
 use crate::groq_session_state::{self, Action, Event, Phase, PollFailure, State};
-use crate::mode::{Mode, ModeLanguage};
-use crate::preview_throttle::PreviewThrottle;
 use crate::provider::GroqModel;
 use crate::recorder::AudioFormat;
 use crate::terms;
-use crate::transcription_session::TranscriptionSession;
 use serde_json::Value;
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter};
+use std::time::Instant;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 const GROQ_URL: &str = "https://api.groq.com/openai/v1/audio/transcriptions";
 
-const TRANSCRIPTION_ERROR_EVENT: &str = "transcription-error";
-const PTT_ERROR_EVENT: &str = "ptt-error";
-/// Hold the overlay's red error icon for this long when surfacing the
-/// "final POST failed → pasted last preview" soft warning — same value
-/// `ptt::ERROR_FLASH` uses for cleanup failures.
-const SOFT_WARNING_FLASH: Duration = Duration::from_millis(800);
-
-pub struct GroqSession {
+pub struct GroqEngine {
     pub model: GroqModel,
+    pub key: String,
+}
+
+impl GroqEngine {
+    pub fn new(model: GroqModel, key: String) -> Self {
+        Self { model, key }
+    }
 }
 
 enum Outcome {
@@ -54,35 +35,21 @@ enum GroqHttpError {
     Other(String),
 }
 
-impl TranscriptionSession for GroqSession {
+impl Engine for GroqEngine {
     async fn run(
         self,
-        app: AppHandle,
-        format: AudioFormat,
         mut chunks: UnboundedReceiver<Vec<i16>>,
-        language: ModeLanguage,
-        terms: Vec<String>,
-        mode: &Mode,
-    ) -> Result<(String, Duration), String> {
+        previews: UnboundedSender<String>,
+        ctx: EngineContext,
+    ) -> Result<EngineOutcome, String> {
         let speak_start = Instant::now();
-        let settings = config::load(&app);
-        let key = settings
-            .groq_api_key
-            .clone()
-            .filter(|k| !k.is_empty())
-            .ok_or_else(|| "API key missing for Groq".to_string())?;
         let model = self.model.api_id();
-        let language = language.as_code().map(str::to_string);
-        let prompt = terms::groq_prompt_hint(&terms);
-        let show_live_preview = settings.show_live_preview;
-        let corrections = if mode.use_corrections {
-            compose_corrections(&mode.correction_set_ids, &settings.correction_sets)
-        } else {
-            Vec::new()
-        };
+        let language = ctx.language.as_code().map(str::to_string);
+        let prompt = terms::groq_prompt_hint(&ctx.terms);
+        let samples_per_second: u64 =
+            ctx.format.sample_rate as u64 * ctx.format.channels as u64;
 
         let buffered: Arc<Mutex<Vec<i16>>> = Arc::new(Mutex::new(Vec::new()));
-        let samples_per_second: u64 = format.sample_rate as u64 * format.channels as u64;
         let (outcome_tx, mut outcome_rx) = tokio::sync::mpsc::unbounded_channel::<Outcome>();
 
         let mut runner = Runner {
@@ -90,34 +57,25 @@ impl TranscriptionSession for GroqSession {
             final_text: None,
             fallback_text: None,
             hard_error: false,
-            app: app.clone(),
             buffered: buffered.clone(),
             samples_per_second,
-            format,
-            key,
+            format: ctx.format,
+            key: self.key,
             model,
             language,
             prompt,
-            show_live_preview,
-            corrections,
-            preview_throttle: PreviewThrottle::new(),
+            previews,
             outcome_tx: outcome_tx.clone(),
         };
 
-        let mut level_meter = AudioLevelMeter::new();
-        // `Skip` so a stalled await never produces a burst of make-up ticks once
-        // it resumes. When live preview is off there is nothing to render between
-        // polls, so we skip the timer entirely and let the final POST carry the
-        // only Groq request.
-        let mut poll_timer = if show_live_preview {
+        // Skip so a paused await doesn't trigger catch-up polls.
+        let mut poll_timer = {
             let mut t = tokio::time::interval_at(
                 tokio::time::Instant::now() + groq_session_state::POLL_INTERVAL,
                 groq_session_state::POLL_INTERVAL,
             );
             t.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-            Some(t)
-        } else {
-            None
+            t
         };
 
         loop {
@@ -125,14 +83,10 @@ impl TranscriptionSession for GroqSession {
                 maybe_chunk = chunks.recv() => match maybe_chunk {
                     Some(chunk) => {
                         buffered.lock().unwrap().extend_from_slice(&chunk);
-                        let now = Instant::now();
-                        if let Some(level) = level_meter.observe(now, &chunk) {
-                            let _ = app.emit(AUDIO_LEVEL_EVENT, level);
-                        }
                     }
                     None => break,
                 },
-                _ = async { poll_timer.as_mut().unwrap().tick().await }, if poll_timer.is_some() => {
+                _ = poll_timer.tick() => {
                     runner.step(Event::Tick { elapsed: speak_start.elapsed() });
                 }
                 Some(outcome) = outcome_rx.recv() => {
@@ -140,16 +94,11 @@ impl TranscriptionSession for GroqSession {
                 }
             }
         }
-        let speak_duration = speak_start.elapsed();
-        // Settle the wave to flat — the pill stays up through the final POST.
-        let _ = app.emit(AUDIO_LEVEL_EVENT, 0.0f32);
 
         runner.step(Event::PttReleased {
-            elapsed: speak_duration,
+            elapsed: speak_start.elapsed(),
         });
 
-        // Every spawned task ends with an outcome send, so each recv() resolves
-        // to Some(...) until state advances to Done.
         while runner.state.phase() != Phase::Done {
             let Some(outcome) = outcome_rx.recv().await else {
                 break;
@@ -161,15 +110,15 @@ impl TranscriptionSession for GroqSession {
             return Err("Groq transcription failed".into());
         }
         if let Some(text) = runner.fallback_text {
-            let _ = app.emit(PTT_ERROR_EVENT, ());
-            let _ = app.emit(
-                TRANSCRIPTION_ERROR_EVENT,
-                "Final Groq transcription failed; pasting last live preview".to_string(),
-            );
-            tokio::time::sleep(SOFT_WARNING_FLASH).await;
-            return Ok((text, speak_duration));
+            return Ok(EngineOutcome {
+                transcript: text,
+                warning: Some(Warning::FinalFailedUsedPreview),
+            });
         }
-        Ok((runner.final_text.unwrap_or_default(), speak_duration))
+        Ok(EngineOutcome {
+            transcript: runner.final_text.unwrap_or_default(),
+            warning: None,
+        })
     }
 }
 
@@ -178,7 +127,6 @@ struct Runner {
     final_text: Option<String>,
     fallback_text: Option<String>,
     hard_error: bool,
-    app: AppHandle,
     buffered: Arc<Mutex<Vec<i16>>>,
     samples_per_second: u64,
     format: AudioFormat,
@@ -186,9 +134,7 @@ struct Runner {
     model: &'static str,
     language: Option<String>,
     prompt: Option<String>,
-    show_live_preview: bool,
-    corrections: Vec<CorrectionEntry>,
-    preview_throttle: PreviewThrottle,
+    previews: UnboundedSender<String>,
     outcome_tx: UnboundedSender<Outcome>,
 }
 
@@ -218,12 +164,7 @@ impl Runner {
                 );
             }
             Action::EmitPartial(text) => {
-                if self.show_live_preview {
-                    let now = Instant::now();
-                    if let Some(corrected) = self.preview_throttle.offer(now, &text, &self.corrections) {
-                        let _ = self.app.emit(TRANSCRIPT_PARTIAL_EVENT, &corrected);
-                    }
-                }
+                let _ = self.previews.send(text);
             }
             Action::DispatchFinal => {
                 spawn_final_post(
@@ -431,6 +372,12 @@ fn parse_transcript(body: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn groq_engine_new_stores_model_and_key() {
+        let engine = GroqEngine::new(GroqModel::WhisperLargeV3Turbo, "sk-test".to_string());
+        assert_eq!(engine.key, "sk-test");
+    }
 
     #[test]
     fn parses_transcript_text() {

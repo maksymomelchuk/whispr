@@ -1,7 +1,7 @@
 use crate::assemblyai_session::AssemblyAiEngine;
 use crate::config::{HotkeyAction, HotkeyBinding, Shortcut};
 use crate::deepgram_session::DeepgramEngine;
-use crate::groq_session::GroqSession;
+use crate::groq_session::GroqEngine;
 use crate::history::{self, CleanupStatus, HISTORY_UPDATED_EVENT};
 use crate::hotkey::{
     advance_tap_state, coex_advance_down, coex_timer_should_fire, is_cancel_event,
@@ -15,8 +15,7 @@ use crate::state::{AppState, ModifierState};
 use crate::corrections::compose_corrections;
 use crate::engine::EngineContext;
 use crate::local_engine::LocalWhisperEngine;
-use crate::session::Session;
-use crate::transcription_session::TranscriptionSession;
+use crate::session::{Session, PTT_ERROR_EVENT, TRANSCRIPTION_ERROR_EVENT};
 use crate::{cleanup, cleanup_stats, config, model_catalog, stats};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -51,11 +50,9 @@ use crate::keysym::rdev_key_to_code;
 #[cfg(not(target_os = "macos"))]
 use std::collections::HashSet;
 
-const TRANSCRIPTION_ERROR_EVENT: &str = "transcription-error";
 const PTT_PRESSED_EVENT: &str = "ptt-pressed";
 const PTT_RELEASED_EVENT: &str = "ptt-released";
 const PTT_THINKING_EVENT: &str = "ptt-thinking";
-const PTT_ERROR_EVENT: &str = "ptt-error";
 const PTT_CANCELLED_EVENT: &str = "ptt-cancelled";
 
 const ERROR_FLASH: Duration = Duration::from_millis(800);
@@ -386,16 +383,28 @@ async fn run_session(
             .await
         }
         ProviderModel::Groq { model } => {
-            GroqSession { model: *model }
-                .run(
-                    app.clone(),
-                    format,
-                    chunk_rx,
-                    mode_language,
-                    session_terms,
-                    active_mode,
-                )
-                .await
+            let key = settings
+                .groq_api_key
+                .clone()
+                .filter(|k| !k.is_empty())
+                .ok_or_else(|| "API key not configured".to_string())?;
+            let corrections = compose_corrections(
+                &active_mode.correction_set_ids,
+                &settings.correction_sets,
+            );
+            let ctx = EngineContext {
+                format,
+                language: mode_language,
+                terms: session_terms,
+            };
+            Session::new(
+                GroqEngine::new(*model, key),
+                app.clone(),
+                settings.show_live_preview,
+                corrections,
+            )
+            .run(chunk_rx, ctx)
+            .await
         }
         ProviderModel::AssemblyAi { model } => {
             let key = settings.assemblyai_api_key.clone().unwrap_or_default();

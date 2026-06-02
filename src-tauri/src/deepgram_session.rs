@@ -1,4 +1,4 @@
-use crate::engine::{Engine, EngineContext};
+use crate::engine::{Engine, EngineContext, EngineOutcome};
 use crate::mode::ModeLanguage;
 use crate::recorder::AudioFormat;
 use crate::terms;
@@ -33,7 +33,7 @@ impl Engine for DeepgramEngine {
         mut chunks: UnboundedReceiver<Vec<i16>>,
         previews: UnboundedSender<String>,
         ctx: EngineContext,
-    ) -> Result<String, String> {
+    ) -> Result<EngineOutcome, String> {
         let url = build_ws_url(&ctx.language, ctx.format, &ctx.terms)?;
         let mut req = url
             .as_str()
@@ -126,7 +126,10 @@ impl Engine for DeepgramEngine {
             let _ = previews.send(transcript.clone());
         }
 
-        Ok(transcript)
+        Ok(EngineOutcome {
+            transcript,
+            warning: None,
+        })
     }
 }
 

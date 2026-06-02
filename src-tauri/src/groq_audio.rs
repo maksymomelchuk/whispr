@@ -8,9 +8,6 @@
 use flacenc::component::BitRepr;
 use flacenc::error::Verify;
 
-pub const AUDIO_LEVEL_EVENT: &str = "audio-level";
-pub const TRANSCRIPT_PARTIAL_EVENT: &str = "transcript-partial";
-
 const TARGET_SAMPLE_RATE: u32 = 16_000;
 
 pub fn compute_level(chunk: &[i16]) -> f32 {

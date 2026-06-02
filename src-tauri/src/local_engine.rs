@@ -1,4 +1,4 @@
-use crate::engine::{Engine, EngineContext};
+use crate::engine::{Engine, EngineContext, EngineOutcome};
 use crate::groq_audio;
 use crate::provider::LocalWhisperModel;
 use crate::state::{InferenceBackend, LoadedModel};
@@ -39,7 +39,7 @@ impl Engine for LocalWhisperEngine {
         mut chunks: UnboundedReceiver<Vec<i16>>,
         _previews: UnboundedSender<String>,
         ctx: EngineContext,
-    ) -> Result<String, String> {
+    ) -> Result<EngineOutcome, String> {
         let mut all_samples: Vec<i16> = Vec::new();
         while let Some(chunk) = chunks.recv().await {
             all_samples.extend_from_slice(&chunk);
@@ -67,7 +67,10 @@ impl Engine for LocalWhisperEngine {
         .await
         .map_err(|e| format!("Local inference thread panicked: {e}"))??;
 
-        Ok(transcript)
+        Ok(EngineOutcome {
+            transcript,
+            warning: None,
+        })
     }
 }
 

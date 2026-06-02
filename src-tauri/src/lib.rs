@@ -36,7 +36,6 @@ mod local_engine;
 mod preview_throttle;
 pub(crate) mod recorder;
 mod session;
-pub(crate) mod transcription_session;
 
 // cleanup is cross-platform HTTP (reqwest + serde_json, no OS APIs).
 mod cleanup;

@@ -1,11 +1,16 @@
 use crate::audio_level_meter::AudioLevelMeter;
 use crate::config::CorrectionEntry;
-use crate::engine::{Engine, EngineContext};
-use crate::groq_audio::{AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
+use crate::engine::{Engine, EngineContext, Warning};
 use crate::preview_throttle::PreviewThrottle;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc::UnboundedReceiver;
+
+pub(crate) const AUDIO_LEVEL_EVENT: &str = "audio-level";
+pub(crate) const TRANSCRIPT_PARTIAL_EVENT: &str = "transcript-partial";
+pub(crate) const PTT_ERROR_EVENT: &str = "ptt-error";
+pub(crate) const TRANSCRIPTION_ERROR_EVENT: &str = "transcription-error";
+const SOFT_WARNING_FLASH: Duration = Duration::from_millis(800);
 
 pub struct Session<E: Engine> {
     engine: E,
@@ -70,7 +75,7 @@ impl<E: Engine> Session<E> {
             }
         });
 
-        let transcript = self.engine.run(engine_chunk_rx, preview_tx, ctx).await?;
+        let outcome = self.engine.run(engine_chunk_rx, preview_tx, ctx).await?;
 
         let _ = meter_handle.await;
         let _ = preview_handle.await;
@@ -78,6 +83,15 @@ impl<E: Engine> Session<E> {
         let chunks_closed_at = close_rx.await.unwrap_or_else(|_| Instant::now());
         let speak_duration = chunks_closed_at.duration_since(speak_start);
 
-        Ok((transcript, speak_duration))
+        if let Some(Warning::FinalFailedUsedPreview) = outcome.warning {
+            let _ = self.app.emit(PTT_ERROR_EVENT, ());
+            let _ = self.app.emit(
+                TRANSCRIPTION_ERROR_EVENT,
+                "Final Groq transcription failed; pasting last live preview",
+            );
+            tokio::time::sleep(SOFT_WARNING_FLASH).await;
+        }
+
+        Ok((outcome.transcript, speak_duration))
     }
 }
