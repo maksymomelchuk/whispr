@@ -90,8 +90,6 @@ pub fn coex_timer_should_fire(state: &TapState, captured: u64) -> bool {
     state.generation == captured && state.tap_count == 1 && state.last_tap_up_time.is_none()
 }
 
-/// True iff `bindings` contains both a single-press and a double-tap binding
-/// for the same `(key, modifiers)` as `shortcut`.
 pub fn key_has_both_kinds(bindings: &[HotkeyBinding], shortcut: &Shortcut) -> bool {
     let mut has_single = false;
     let mut has_double = false;
@@ -107,8 +105,6 @@ pub fn key_has_both_kinds(bindings: &[HotkeyBinding], shortcut: &Shortcut) -> bo
     has_single && has_double
 }
 
-/// True if `code` is the shortcut's key or one of its required modifiers.
-/// Used to decide whether an event is worth processing for PTT.
 pub fn shortcut_is_relevant(code: &str, shortcut: &Shortcut) -> bool {
     if code == shortcut.key {
         return true;
@@ -122,8 +118,7 @@ pub fn shortcut_is_relevant(code: &str, shortcut: &Shortcut) -> bool {
     })
 }
 
-/// True if this event triggers `shortcut`: same key, and required modifiers
-/// held. Modifier-only shortcuts (key is itself a modifier) skip the modifier
+/// Modifier-only shortcuts (key is itself a modifier) skip the modifier
 /// check because the FlagsChanged that fires the key also mutates the bitmask.
 pub fn shortcut_matches(code: &str, shortcut: &Shortcut, mods: ModifierState) -> bool {
     code == shortcut.key && (is_modifier_code(&shortcut.key) || mods.matches(&shortcut.modifiers))
@@ -147,9 +142,8 @@ pub fn is_modifier_code(code: &str) -> bool {
     )
 }
 
-/// True iff this event should cancel the in-flight Session. Escape press while
-/// recording — modifiers intentionally ignored so held-modifier PTT shortcuts
-/// (e.g. hold Right-Alt) still allow cancellation without releasing PTT first.
+/// Modifiers intentionally ignored so held-modifier PTT shortcuts (e.g. hold
+/// Right-Alt) still allow cancellation without releasing PTT first.
 pub fn is_cancel_event(code: &str, is_press: bool, ptt_active: bool) -> bool {
     code == "Escape" && is_press && ptt_active
 }
