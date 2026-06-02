@@ -8,15 +8,9 @@ type UpdateState =
   | { status: "downloading" }
   | { status: "error"; message: string };
 
-/**
- * Checks for a new app release once on mount. Keeps state minimal: idle
- * (no update / pre-check), available (prompt the user), downloading
- * (install in progress), or error (surfaced for diagnostics).
- *
- * Silent about "no update found" and transient network errors — the
- * updater runs in the background and shouldn't nag the user if GitHub is
- * unreachable.
- */
+// Silent about "no update found" and transient network errors — the
+// updater runs in the background and shouldn't nag the user if GitHub is
+// unreachable.
 export function useAppUpdate() {
   const [state, setState] = useState<UpdateState>({ status: "idle" });
 
@@ -29,8 +23,7 @@ export function useAppUpdate() {
           setState({ status: "available", update });
         }
       } catch (e) {
-        // Network failure, no release yet, malformed manifest — all land
-        // here. Don't prompt; only log so a dev can see it in a debug build.
+        // Don't prompt; only log so a dev can see it in a debug build.
         console.warn("updater: check failed", e);
       }
     })();
