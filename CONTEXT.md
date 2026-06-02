@@ -30,6 +30,8 @@ Provider-specific plumbing that turns audio into text — Deepgram's streaming W
 
 One push-to-talk dictation, from PTT-down to paste — or to [[Cancelled Session]], the alternate terminal state. The Session owns an [[Engine]] and everything around it: computing audio levels for the overlay, applying [[Correction]]s to the raw partials the Engine emits, throttling the preview event stream, and translating soft engine failures (e.g. Groq's final-POST fallback) into user-visible flashes. Engines are pluggable; the Session is the same regardless of which Engine is in use.
 
+The Session's output is the raw transcript plus the speak duration. The post-transcript stages (AI cleanup, [[Snippet]] expansion, [[Correction]]s on the final text, history, paste) form a separate pipeline, and mic teardown, media resume, and [[Cancelled Session]] handling belong to the PTT orchestration around the Session — not the Session itself. So "from PTT-down to paste" describes the user-facing dictation journey, not the Session module's boundary: the Session hands off a transcript and the orchestration carries it the rest of the way.
+
 ## Cancelled Session
 
 A [[Session]] the user aborted by pressing Escape while still recording. Cancellation tears down the mic and resumes any paused media, but skips every downstream stage — AI cleanup, history append, stats, and paste — so the focused app receives no text and the dictation leaves no trace beyond a brief "Cancelled" flash in the overlay pill. Only valid during the recording phase: once the user releases PTT, the Session is committed and Escape is inert.
