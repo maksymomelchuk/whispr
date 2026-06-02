@@ -1,3 +1,4 @@
+use crate::audio_level_meter::AudioLevelMeter;
 use crate::groq_audio::{self, AUDIO_LEVEL_EVENT};
 use crate::mode::{Mode, ModeLanguage};
 use crate::provider::{self, LocalWhisperModel};
@@ -16,12 +17,6 @@ use transcribe_rs::onnx::Quantization;
 use transcribe_rs::whisper_cpp::{WhisperEngine, WhisperInferenceParams};
 use transcribe_rs::{SpeechModel, TranscribeOptions};
 
-const LEVEL_THROTTLE: Duration = Duration::from_millis(33);
-// Exponential smoothing coefficients for audio level: faster rise (0.6) to catch
-// sudden loud sounds, slower decay (0.25) to avoid flickering on ambient noise.
-const LEVEL_SMOOTH_RISE: f32 = 0.6;
-const LEVEL_SMOOTH_FALL: f32 = 0.25;
-
 pub struct LocalSession {
     pub model: LocalWhisperModel,
 }
@@ -38,20 +33,11 @@ impl TranscriptionSession for LocalSession {
     ) -> Result<(String, Duration), String> {
         let speak_start = Instant::now();
         let mut all_samples: Vec<i16> = Vec::new();
-        let mut smoothed_level: f32 = 0.0;
-        let mut last_level_emit: Option<Instant> = None;
+        let mut level_meter = AudioLevelMeter::new();
         while let Some(chunk) = chunks.recv().await {
-            let raw = groq_audio::compute_level(&chunk);
-            let k = if raw > smoothed_level {
-                LEVEL_SMOOTH_RISE
-            } else {
-                LEVEL_SMOOTH_FALL
-            };
-            smoothed_level += (raw - smoothed_level) * k;
             let now = Instant::now();
-            if last_level_emit.map_or(true, |t| now.duration_since(t) >= LEVEL_THROTTLE) {
-                let _ = app.emit(AUDIO_LEVEL_EVENT, smoothed_level);
-                last_level_emit = Some(now);
+            if let Some(level) = level_meter.observe(now, &chunk) {
+                let _ = app.emit(AUDIO_LEVEL_EVENT, level);
             }
             all_samples.extend_from_slice(&chunk);
         }

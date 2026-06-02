@@ -11,11 +11,13 @@
 //! State-machine corner cases live in `groq_session_state::State`: this module
 //! owns the buffer, the timer, and the HTTP requests.
 
-use crate::config;
-use crate::groq_audio::encode_to_flac_16k_mono;
-use crate::groq_audio::{self, AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
+use crate::audio_level_meter::AudioLevelMeter;
+use crate::config::{self, CorrectionEntry};
+use crate::corrections::compose_corrections;
+use crate::groq_audio::{encode_to_flac_16k_mono, AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
 use crate::groq_session_state::{self, Action, Event, Phase, PollFailure, State};
 use crate::mode::{Mode, ModeLanguage};
+use crate::preview_throttle::PreviewThrottle;
 use crate::provider::GroqModel;
 use crate::recorder::AudioFormat;
 use crate::terms;
@@ -30,8 +32,6 @@ const GROQ_URL: &str = "https://api.groq.com/openai/v1/audio/transcriptions";
 
 const TRANSCRIPTION_ERROR_EVENT: &str = "transcription-error";
 const PTT_ERROR_EVENT: &str = "ptt-error";
-/// Match the Deepgram session's audio-level cadence.
-const LEVEL_THROTTLE: Duration = Duration::from_millis(33);
 /// Hold the overlay's red error icon for this long when surfacing the
 /// "final POST failed → pasted last preview" soft warning — same value
 /// `ptt::ERROR_FLASH` uses for cleanup failures.
@@ -62,7 +62,7 @@ impl TranscriptionSession for GroqSession {
         mut chunks: UnboundedReceiver<Vec<i16>>,
         language: ModeLanguage,
         terms: Vec<String>,
-        _mode: &Mode,
+        mode: &Mode,
     ) -> Result<(String, Duration), String> {
         let speak_start = Instant::now();
         let settings = config::load(&app);
@@ -75,6 +75,11 @@ impl TranscriptionSession for GroqSession {
         let language = language.as_code().map(str::to_string);
         let prompt = terms::groq_prompt_hint(&terms);
         let show_live_preview = settings.show_live_preview;
+        let corrections = if mode.use_corrections {
+            compose_corrections(&mode.correction_set_ids, &settings.correction_sets)
+        } else {
+            Vec::new()
+        };
 
         let buffered: Arc<Mutex<Vec<i16>>> = Arc::new(Mutex::new(Vec::new()));
         let samples_per_second: u64 = format.sample_rate as u64 * format.channels as u64;
@@ -94,11 +99,12 @@ impl TranscriptionSession for GroqSession {
             language,
             prompt,
             show_live_preview,
+            corrections,
+            preview_throttle: PreviewThrottle::new(),
             outcome_tx: outcome_tx.clone(),
         };
 
-        let mut smoothed_level: f32 = 0.0;
-        let mut last_level_emit: Option<Instant> = None;
+        let mut level_meter = AudioLevelMeter::new();
         // `Skip` so a stalled await never produces a burst of make-up ticks once
         // it resumes. When live preview is off there is nothing to render between
         // polls, so we skip the timer entirely and let the final POST carry the
@@ -118,16 +124,10 @@ impl TranscriptionSession for GroqSession {
             tokio::select! {
                 maybe_chunk = chunks.recv() => match maybe_chunk {
                     Some(chunk) => {
-                        let raw = groq_audio::compute_level(&chunk);
                         buffered.lock().unwrap().extend_from_slice(&chunk);
-                        let k = if raw > smoothed_level { 0.6 } else { 0.25 };
-                        smoothed_level += (raw - smoothed_level) * k;
                         let now = Instant::now();
-                        if last_level_emit
-                            .map_or(true, |t| now.duration_since(t) >= LEVEL_THROTTLE)
-                        {
-                            let _ = app.emit(AUDIO_LEVEL_EVENT, smoothed_level);
-                            last_level_emit = Some(now);
+                        if let Some(level) = level_meter.observe(now, &chunk) {
+                            let _ = app.emit(AUDIO_LEVEL_EVENT, level);
                         }
                     }
                     None => break,
@@ -187,6 +187,8 @@ struct Runner {
     language: Option<String>,
     prompt: Option<String>,
     show_live_preview: bool,
+    corrections: Vec<CorrectionEntry>,
+    preview_throttle: PreviewThrottle,
     outcome_tx: UnboundedSender<Outcome>,
 }
 
@@ -217,7 +219,10 @@ impl Runner {
             }
             Action::EmitPartial(text) => {
                 if self.show_live_preview {
-                    let _ = self.app.emit(TRANSCRIPT_PARTIAL_EVENT, &text);
+                    let now = Instant::now();
+                    if let Some(corrected) = self.preview_throttle.offer(now, &text, &self.corrections) {
+                        let _ = self.app.emit(TRANSCRIPT_PARTIAL_EVENT, &corrected);
+                    }
                 }
             }
             Action::DispatchFinal => {

@@ -1,7 +1,9 @@
-use crate::config::{self, CorrectionEntry};
-use crate::corrections::{apply_corrections, compose_corrections};
-use crate::groq_audio::{self, AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
+use crate::audio_level_meter::AudioLevelMeter;
+use crate::config::{self};
+use crate::corrections::compose_corrections;
+use crate::groq_audio::{AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
 use crate::mode::{Mode, ModeLanguage};
+use crate::preview_throttle::PreviewThrottle;
 use crate::recorder::AudioFormat;
 use crate::terms;
 use crate::transcription_session::TranscriptionSession;
@@ -20,13 +22,6 @@ const DEEPGRAM_WS_BASE: &str = "wss://api.deepgram.com/v1/listen";
 /// we send `CloseStream`. The server typically responds within a few hundred
 /// ms; we cap it so a hung WS never blocks the paste indefinitely.
 const FINAL_RESULTS_TIMEOUT: Duration = Duration::from_secs(3);
-
-/// Bounds the overlay rerender rate — Deepgram interims arrive faster than
-/// React can usefully repaint, and `compose_preview` is non-trivial.
-const PARTIAL_THROTTLE: Duration = Duration::from_millis(100);
-/// 30 Hz is smooth enough for the wave; cpal callbacks fire 2–4× faster on
-/// most input configs and would otherwise flood the IPC channel.
-const LEVEL_THROTTLE: Duration = Duration::from_millis(33);
 
 pub struct DeepgramSession;
 
@@ -76,10 +71,8 @@ impl TranscriptionSession for DeepgramSession {
 
         let mut transcript_pieces: Vec<String> = Vec::new();
         let mut current_interim: String = String::new();
-        let mut last_emitted: String = String::new();
-        let mut last_emit: Option<Instant> = None;
-        let mut smoothed_level: f32 = 0.0;
-        let mut last_level_emit: Option<Instant> = None;
+        let mut level_meter = AudioLevelMeter::new();
+        let mut preview_throttle = PreviewThrottle::new();
 
         // Process server messages opportunistically so the WS receive buffer doesn't pile up.
         loop {
@@ -87,21 +80,12 @@ impl TranscriptionSession for DeepgramSession {
                 maybe_chunk = chunks.recv() => {
                     match maybe_chunk {
                         Some(chunk) => {
-                            let raw_level = groq_audio::compute_level(&chunk);
                             if let Err(e) = sink.send(Message::Binary(pcm_bytes(&chunk))).await {
                                 return Err(format!("Deepgram WS send failed: {e}"));
                             }
-                            // Asymmetric EMA: fast attack so vowels punch, slow
-                            // decay so the wave doesn't snap to silent between
-                            // syllables.
-                            let k = if raw_level > smoothed_level { 0.6 } else { 0.25 };
-                            smoothed_level = smoothed_level + (raw_level - smoothed_level) * k;
                             let now = Instant::now();
-                            if last_level_emit
-                                .map_or(true, |t| now.duration_since(t) >= LEVEL_THROTTLE)
-                            {
-                                let _ = app.emit(AUDIO_LEVEL_EVENT, smoothed_level);
-                                last_level_emit = Some(now);
+                            if let Some(level) = level_meter.observe(now, &chunk) {
+                                let _ = app.emit(AUDIO_LEVEL_EVENT, level);
                             }
                         }
                         None => break,
@@ -123,19 +107,9 @@ impl TranscriptionSession for DeepgramSession {
                                 }
                                 if show_live_preview {
                                     let now = Instant::now();
-                                    let throttled = last_emit
-                                        .is_some_and(|prev| now.duration_since(prev) < PARTIAL_THROTTLE);
-                                    if !throttled {
-                                        let preview = compose_preview(
-                                            &transcript_pieces,
-                                            &current_interim,
-                                            &corrections,
-                                        );
-                                        if preview != last_emitted {
-                                            let _ = app.emit(TRANSCRIPT_PARTIAL_EVENT, &preview);
-                                            last_emit = Some(now);
-                                            last_emitted = preview;
-                                        }
+                                    let raw = raw_preview(&transcript_pieces, &current_interim);
+                                    if let Some(corrected) = preview_throttle.offer(now, &raw, &corrections) {
+                                        let _ = app.emit(TRANSCRIPT_PARTIAL_EVENT, &corrected);
                                     }
                                 }
                             }
@@ -184,9 +158,9 @@ impl TranscriptionSession for DeepgramSession {
         let raw = raw.trim().to_string();
 
         if show_live_preview && !raw.is_empty() {
-            let final_preview = apply_corrections(&raw, &corrections);
-            if final_preview != last_emitted {
-                let _ = app.emit(TRANSCRIPT_PARTIAL_EVENT, &final_preview);
+            let now = Instant::now();
+            if let Some(corrected) = preview_throttle.offer(now, &raw, &corrections) {
+                let _ = app.emit(TRANSCRIPT_PARTIAL_EVENT, &corrected);
             }
         }
 
@@ -194,7 +168,7 @@ impl TranscriptionSession for DeepgramSession {
     }
 }
 
-fn compose_preview(finals: &[String], interim: &str, corrections: &[CorrectionEntry]) -> String {
+fn raw_preview(finals: &[String], interim: &str) -> String {
     let mut preview = finals.join(" ");
     if !interim.is_empty() {
         if !preview.is_empty() {
@@ -202,7 +176,7 @@ fn compose_preview(finals: &[String], interim: &str, corrections: &[CorrectionEn
         }
         preview.push_str(interim);
     }
-    apply_corrections(&preview, corrections)
+    preview
 }
 
 fn build_ws_url(

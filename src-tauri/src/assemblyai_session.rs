@@ -1,6 +1,9 @@
+use crate::audio_level_meter::AudioLevelMeter;
 use crate::config;
-use crate::groq_audio::{self, to_pcm_16k_mono_bytes, AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
+use crate::corrections::compose_corrections;
+use crate::groq_audio::{to_pcm_16k_mono_bytes, AUDIO_LEVEL_EVENT, TRANSCRIPT_PARTIAL_EVENT};
 use crate::mode::{Mode, ModeLanguage};
+use crate::preview_throttle::PreviewThrottle;
 use crate::provider::AssemblyAiModel;
 use crate::recorder::AudioFormat;
 use crate::terms;
@@ -15,8 +18,6 @@ use tokio_tungstenite::tungstenite::protocol::Message;
 use url::Url;
 
 const ASSEMBLYAI_WS_BASE: &str = "wss://streaming.assemblyai.com/v3/ws";
-const LEVEL_THROTTLE: Duration = Duration::from_millis(33);
-const PARTIAL_THROTTLE: Duration = Duration::from_millis(100);
 /// Cap on how long to wait for AssemblyAI to flush remaining turns after
 /// Terminate is sent. The server typically responds within a few hundred ms.
 const TERMINATION_TIMEOUT: Duration = Duration::from_secs(3);
@@ -36,7 +37,7 @@ impl TranscriptionSession for AssemblyAiSession {
         mut chunks: UnboundedReceiver<Vec<i16>>,
         language: ModeLanguage,
         terms: Vec<String>,
-        _mode: &Mode,
+        mode: &Mode,
     ) -> Result<(String, Duration), String> {
         let speak_start = Instant::now();
         let settings = config::load(&app);
@@ -47,6 +48,11 @@ impl TranscriptionSession for AssemblyAiSession {
             .ok_or_else(|| "API key missing for AssemblyAI".to_string())?;
         let model = self.model;
         let show_live_preview = settings.show_live_preview;
+        let corrections = if mode.use_corrections {
+            compose_corrections(&mode.correction_set_ids, &settings.correction_sets)
+        } else {
+            Vec::new()
+        };
 
         if let ModeLanguage::Exact { code } = &language {
             if !model.supports_language(code) {
@@ -75,9 +81,8 @@ impl TranscriptionSession for AssemblyAiSession {
 
         let mut completed_turns: Vec<String> = Vec::new();
         let mut current_partial = String::new();
-        let mut preview_state = PreviewState::default();
-        let mut smoothed_level: f32 = 0.0;
-        let mut last_level_emit: Option<Instant> = None;
+        let mut level_meter = AudioLevelMeter::new();
+        let mut preview_throttle = PreviewThrottle::new();
         let mut close_reason: Option<String> = None;
         let mut ws_alive = true;
         let mut audio_buffer: Vec<u8> = Vec::with_capacity(MIN_SEND_BYTES * 2);
@@ -86,13 +91,9 @@ impl TranscriptionSession for AssemblyAiSession {
             tokio::select! {
                 maybe_chunk = chunks.recv() => match maybe_chunk {
                     Some(chunk) => {
-                        let raw = groq_audio::compute_level(&chunk);
-                        let k = if raw > smoothed_level { 0.6 } else { 0.25 };
-                        smoothed_level += (raw - smoothed_level) * k;
                         let now = Instant::now();
-                        if last_level_emit.map_or(true, |t| now.duration_since(t) >= LEVEL_THROTTLE) {
-                            let _ = app.emit(AUDIO_LEVEL_EVENT, smoothed_level);
-                            last_level_emit = Some(now);
+                        if let Some(level) = level_meter.observe(now, &chunk) {
+                            let _ = app.emit(AUDIO_LEVEL_EVENT, level);
                         }
                         if ws_alive {
                             match to_pcm_16k_mono_bytes(&chunk, format.sample_rate, format.channels) {
@@ -127,7 +128,11 @@ impl TranscriptionSession for AssemblyAiSession {
                     Some(Ok(msg)) => {
                         handle_turn(&msg, &mut completed_turns, &mut current_partial);
                         if show_live_preview {
-                            preview_state.maybe_emit(&app, &completed_turns, &current_partial);
+                            let now = Instant::now();
+                            let raw = compose_preview(&completed_turns, &current_partial);
+                            if let Some(corrected) = preview_throttle.offer(now, &raw, &corrections) {
+                                let _ = app.emit(TRANSCRIPT_PARTIAL_EVENT, &corrected);
+                            }
                         }
                     }
                     Some(Err(_)) => {
@@ -217,28 +222,6 @@ fn handle_turn(msg: &Message, completed: &mut Vec<String>, partial: &mut String)
         partial.clear();
     } else {
         *partial = transcript;
-    }
-}
-
-#[derive(Default)]
-struct PreviewState {
-    last_emitted: String,
-    last_emit: Option<Instant>,
-}
-
-impl PreviewState {
-    fn maybe_emit(&mut self, app: &AppHandle, completed: &[String], partial: &str) {
-        let preview = compose_preview(completed, partial);
-        let now = Instant::now();
-        if preview != self.last_emitted
-            && self
-                .last_emit
-                .map_or(true, |t| now.duration_since(t) >= PARTIAL_THROTTLE)
-        {
-            let _ = app.emit(TRANSCRIPT_PARTIAL_EVENT, &preview);
-            self.last_emitted = preview;
-            self.last_emit = Some(now);
-        }
     }
 }
 

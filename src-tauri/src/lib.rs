@@ -28,8 +28,10 @@ mod cleanup_stats;
 // Session modules depend only on tokio-tungstenite, reqwest, and cpal —
 // all cross-platform. Un-gated so cloud transcription compiles everywhere.
 mod assemblyai_session;
+mod audio_level_meter;
 mod deepgram_session;
 mod groq_session;
+mod preview_throttle;
 pub(crate) mod recorder;
 pub(crate) mod transcription_session;
 
