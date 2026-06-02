@@ -9,9 +9,6 @@ pub const DEEPGRAM_KEYTERM_BUDGET_BYTES: usize = 4096;
 /// stays well within that window for typical English vocabulary lists.
 pub const GROQ_PROMPT_BUDGET_CHARS: usize = 800;
 
-/// Collects the active term hints for a recording session. Iterates `set_ids`
-/// in order, appending each set's entries while skipping exact duplicates
-/// (first-seen wins). Blank entries are discarded.
 pub fn compose_term_hints(term_sets: &[NamedTermSet], set_ids: &[String]) -> Vec<String> {
     let mut result = Vec::new();
     let mut seen = std::collections::HashSet::new();
@@ -103,8 +100,6 @@ mod tests {
         }
     }
 
-    // ── compose_term_hints ───────────────────────────────────────────────
-
     #[test]
     fn compose_returns_empty_when_no_set_ids() {
         let sets = vec![make_set("s1", &["MongoDB"])];
@@ -154,8 +149,6 @@ mod tests {
         let sets = vec![make_set("s1", &["MongoDB"])];
         assert!(compose_term_hints(&sets, &[]).is_empty());
     }
-
-    // ── deepgram_keyterms ────────────────────────────────────────────────
 
     #[test]
     fn keyterms_returns_all_terms() {
@@ -216,8 +209,6 @@ mod tests {
         assert_eq!(deepgram_keyterms(&terms, 18), vec!["café"]);
         assert!(deepgram_keyterms(&terms, 17).is_empty());
     }
-
-    // ── groq_prompt_hint ────────────────────────────────────────────────
 
     #[test]
     fn prompt_hint_formats_correctly() {

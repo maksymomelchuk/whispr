@@ -186,7 +186,6 @@ mod tests {
     fn date_placeholder_resolves_to_iso_format() {
         let entries = [entry("1", "[d]", "{{DATE}}")];
         let result = expand_snippets("[d]", &entries);
-        // YYYY-MM-DD: 10 chars
         assert_eq!(result.len(), 10, "date should be 10 chars, got: {result}");
         let parts: Vec<&str> = result.split('-').collect();
         assert_eq!(parts.len(), 3);
@@ -199,7 +198,6 @@ mod tests {
     fn time_placeholder_resolves_to_hhmm_format() {
         let entries = [entry("1", "[t]", "{{TIME}}")];
         let result = expand_snippets("[t]", &entries);
-        // HH:MM: 5 chars
         assert_eq!(result.len(), 5, "time should be 5 chars, got: {result}");
         let parts: Vec<&str> = result.split(':').collect();
         assert_eq!(parts.len(), 2);
@@ -211,7 +209,6 @@ mod tests {
     fn clipboard_placeholder_is_replaced() {
         let entries = [entry("1", "[clip]", "{{CLIPBOARD}}")];
         let result = expand_snippets("[clip]", &entries);
-        // The trigger was expanded — {{CLIPBOARD}} should not appear literally.
         assert!(
             !result.contains("{{CLIPBOARD}}"),
             "{{CLIPBOARD}} should have been resolved, got: {result}"

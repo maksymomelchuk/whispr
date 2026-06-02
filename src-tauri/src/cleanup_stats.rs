@@ -1,6 +1,3 @@
-//! Rolling token counters for the LLM cleanup pass: this week, this
-//! calendar month, and all-time.
-
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -66,8 +63,6 @@ fn current_month_key(now: &OffsetDateTime) -> String {
     format!("{:04}-{:02}", now.year(), u8::from(now.month()))
 }
 
-/// Zero out a period counter (and stamp it with `current_key`) if its
-/// stored key no longer matches the current period.
 fn rollover(counter: &mut PeriodCounter, current_key: &str) {
     if counter.period != current_key {
         counter.period = current_key.to_string();

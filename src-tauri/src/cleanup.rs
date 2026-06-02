@@ -187,7 +187,6 @@ pub fn effective_prompt(override_prompt: Option<&str>) -> String {
     format!("{SAFETY_PREAMBLE}\n\n{rules}")
 }
 
-/// Raw HTTP response returned by a `Transport` implementation.
 pub(crate) struct TransportResponse {
     pub(crate) status: u16,
     pub(crate) body: String,
@@ -272,7 +271,6 @@ pub(crate) async fn run_with_transport<T: Transport>(
     }
 }
 
-/// Runs cleanup via any OpenAI-compatible `/chat/completions` endpoint.
 pub async fn run_openai(
     transcript: &str,
     api_key: &str,
@@ -522,8 +520,6 @@ mod tests {
         Arc,
     };
 
-    // --- Mock transport ---
-
     struct MockTransport {
         call_count: Arc<AtomicUsize>,
         response: Box<dyn Fn() -> Result<TransportResponse, String> + Send + Sync>,
@@ -616,8 +612,6 @@ mod tests {
         serde_json::json!({"error": {"message": message}}).to_string()
     }
 
-    // --- effective_prompt tests ---
-
     #[test]
     fn effective_prompt_none_includes_preamble_and_default_rules() {
         let result = effective_prompt(None);
@@ -676,8 +670,6 @@ mod tests {
     fn default_system_prompt_is_non_empty() {
         assert!(!DEFAULT_SYSTEM_PROMPT.is_empty());
     }
-
-    // --- Transport path tests ---
 
     #[tokio::test]
     async fn success_path_returns_cleaned_text() {
@@ -828,8 +820,6 @@ mod tests {
             other => panic!("expected Transient error, got {other:?}"),
         }
     }
-
-    // --- OpenAI-compatible transport tests ---
 
     #[tokio::test]
     async fn openai_compat_success_path_returns_cleaned_text() {

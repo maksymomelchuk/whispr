@@ -102,7 +102,6 @@ pub fn apply_corrections(text: &str, entries: &[CorrectionEntry]) -> String {
         }
     }
 
-    // Phase 2: compact / cling-left spacing for punctuation.
     for &c in COMPACT {
         let middle = format!(" {} ", c);
         let tail = format!(" {}", c);
@@ -133,7 +132,6 @@ pub fn apply_corrections(text: &str, entries: &[CorrectionEntry]) -> String {
         padded = padded.replace(&tail, &c.to_string());
     }
 
-    // Collapse any runs of spaces that survived the passes above.
     padded.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
