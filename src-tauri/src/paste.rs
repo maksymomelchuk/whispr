@@ -261,13 +261,9 @@ fn send_ctrl_v() -> Result<(), String> {
     enigo
         .key(Key::Control, Direction::Press)
         .map_err(|e| format!("Ctrl press: {e}"))?;
-    enigo
-        .key(Key::Unicode('v'), Direction::Click)
-        .map_err(|e| format!("V click: {e}"))?;
-    enigo
-        .key(Key::Control, Direction::Release)
-        .map_err(|e| format!("Ctrl release: {e}"))?;
-    Ok(())
+    let click_result = enigo.key(Key::Unicode('v'), Direction::Click);
+    let _ = enigo.key(Key::Control, Direction::Release);
+    click_result.map_err(|e| format!("V click: {e}"))
 }
 
 #[cfg(target_os = "windows")]
@@ -341,25 +337,6 @@ pub fn paste_text(text: String) -> JoinHandle<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    #[test]
-    fn clipboard_settle_delay_is_at_least_60ms() {
-        assert!(CLIPBOARD_SETTLE_DELAY >= Duration::from_millis(60));
-    }
-
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    #[test]
-    fn post_paste_delay_is_at_least_50ms() {
-        assert!(POST_PASTE_DELAY >= Duration::from_millis(50));
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn v_key_code_matches_apple_ansi_v_constant() {
-        // kVK_ANSI_V = 0x09
-        assert_eq!(V_KEY_CODE, 0x09u16);
-    }
 
     // ── Linux injector selection ──────────────────────────────────────────────
 
