@@ -51,7 +51,8 @@ export type TranscriptionProvider =
   | "groq"
   | "assembly_ai"
   | "local"
-  | "open_ai";
+  | "open_ai"
+  | "eleven_labs";
 
 export type GroqModel = "whisper_large_v3" | "whisper_large_v3_turbo";
 
@@ -89,7 +90,8 @@ export type ProviderModel =
   | { provider: "groq"; model: GroqModel }
   | { provider: "assembly_ai"; model: AssemblyAiModel }
   | { provider: "local"; model: LocalWhisperModel }
-  | { provider: "open_ai"; model: OpenAiTranscribeModel };
+  | { provider: "open_ai"; model: OpenAiTranscribeModel }
+  | { provider: "eleven_labs" };
 
 export function providerModelLanguageCodes(pm: ProviderModel): string[] | null {
   if (pm.provider !== "assembly_ai") return null;
@@ -133,6 +135,8 @@ export function providerModelLabel(pm: ProviderModel): string {
     }
     case "open_ai":
       return `OpenAI · ${OPENAI_TRANSCRIBE_MODEL_LABELS[pm.model]}`;
+    case "eleven_labs":
+      return "ElevenLabs";
   }
 }
 
@@ -191,6 +195,7 @@ export interface Settings {
   groq_api_key_configured: boolean;
   assemblyai_api_key_configured: boolean;
   openai_api_key_configured: boolean;
+  elevenlabs_api_key_configured: boolean;
   hotkey_bindings: HotkeyBinding[];
   term_sets: NamedTermSet[];
   correction_sets: NamedCorrectionSet[];

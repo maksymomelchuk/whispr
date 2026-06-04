@@ -354,6 +354,8 @@ pub struct Settings {
     pub assemblyai_api_key: Option<String>,
     #[serde(default)]
     pub openai_api_key: Option<String>,
+    #[serde(default)]
+    pub elevenlabs_api_key: Option<String>,
     /// Legacy single-shortcut field; converted to a HotkeyBinding on first load.
     #[serde(rename = "shortcut", default, skip_serializing)]
     pub legacy_shortcut: Shortcut,
@@ -418,6 +420,7 @@ impl Default for Settings {
             groq_api_key: None,
             assemblyai_api_key: None,
             openai_api_key: None,
+            elevenlabs_api_key: None,
             legacy_shortcut: Shortcut::default(),
             hotkey_bindings: default_hotkey_bindings(),
             legacy_dictionary: vec![],
@@ -789,6 +792,13 @@ mod tests {
         assert_eq!(s.groq.model, GroqModel::WhisperLargeV3Turbo);
         assert!(s.deepgram_api_key.is_none());
         assert!(s.groq_api_key.is_none());
+    }
+
+    #[test]
+    fn settings_without_elevenlabs_key_defaults_to_absent() {
+        let json = r#"{}"#;
+        let s: Settings = serde_json::from_str(json).unwrap();
+        assert!(s.elevenlabs_api_key.is_none());
     }
 
     #[test]

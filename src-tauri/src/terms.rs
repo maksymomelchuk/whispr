@@ -62,6 +62,29 @@ pub fn assemblyai_keyterms_prompt(terms: &[String]) -> Option<String> {
     serde_json::to_string(&filtered).ok()
 }
 
+const ELEVENLABS_MAX_KEYTERMS: usize = 1000;
+const ELEVENLABS_MAX_KEYTERM_CHARS: usize = 50;
+
+/// Returns a trimmed, deduped list of keyterms for ElevenLabs keyterm
+/// prompting, capped at 1000 terms with each term ≤50 characters.
+pub fn elevenlabs_keyterms(terms: &[String]) -> Vec<String> {
+    let mut result = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for term in terms {
+        if result.len() >= ELEVENLABS_MAX_KEYTERMS {
+            break;
+        }
+        let trimmed = term.trim().to_string();
+        if trimmed.is_empty() || trimmed.len() > ELEVENLABS_MAX_KEYTERM_CHARS {
+            continue;
+        }
+        if seen.insert(trimmed.clone()) {
+            result.push(trimmed);
+        }
+    }
+    result
+}
+
 /// Builds the Whisper prompt hint (`"Vocabulary: t1, t2, t3"`) from terms.
 /// Truncates at a comma boundary so the result stays within
 /// `GROQ_PROMPT_BUDGET_CHARS`. Returns `None` when no eligible terms exist.
@@ -270,5 +293,47 @@ mod tests {
         // "caf\u{e9}" is 5 UTF-8 bytes; "Vocabulary: " (12) + 5 = 17 ≤ 800.
         let terms: Vec<String> = vec!["caf\u{e9}".into()];
         assert_eq!(whisper_prompt_hint(&terms).unwrap(), "Vocabulary: café");
+    }
+
+    #[test]
+    fn elevenlabs_keyterms_dedupes_and_trims() {
+        let terms: Vec<String> = vec!["MongoDB".into(), " TypeScript ".into(), "MongoDB".into()];
+        let result = elevenlabs_keyterms(&terms);
+        assert_eq!(result, vec!["MongoDB", "TypeScript"]);
+    }
+
+    #[test]
+    fn elevenlabs_keyterms_drops_terms_over_50_chars() {
+        let long_term = "a".repeat(51);
+        let terms: Vec<String> = vec![long_term, "MongoDB".into()];
+        let result = elevenlabs_keyterms(&terms);
+        assert_eq!(result, vec!["MongoDB"]);
+    }
+
+    #[test]
+    fn elevenlabs_keyterms_accepts_exactly_50_char_term() {
+        let term = "a".repeat(50);
+        let terms: Vec<String> = vec![term.clone()];
+        let result = elevenlabs_keyterms(&terms);
+        assert_eq!(result, vec![term]);
+    }
+
+    #[test]
+    fn elevenlabs_keyterms_caps_at_1000() {
+        let terms: Vec<String> = (0..1100).map(|i| format!("term{i}")).collect();
+        let result = elevenlabs_keyterms(&terms);
+        assert_eq!(result.len(), 1000);
+    }
+
+    #[test]
+    fn elevenlabs_keyterms_empty_input() {
+        assert!(elevenlabs_keyterms(&[]).is_empty());
+    }
+
+    #[test]
+    fn elevenlabs_keyterms_skips_blank_terms() {
+        let terms: Vec<String> = vec!["  ".into(), "MongoDB".into(), "\t".into()];
+        let result = elevenlabs_keyterms(&terms);
+        assert_eq!(result, vec!["MongoDB"]);
     }
 }

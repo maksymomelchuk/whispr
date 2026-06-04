@@ -25,6 +25,7 @@ const CONFIGURED_KEY: Record<string, keyof Settings> = {
   groq: "groq_api_key_configured",
   assemblyai: "assemblyai_api_key_configured",
   openai: "openai_api_key_configured",
+  elevenlabs: "elevenlabs_api_key_configured",
 };
 
 const IDLE_TIMEOUT_OPTIONS: {

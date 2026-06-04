@@ -2,16 +2,19 @@ import type { ComponentType } from "react";
 
 import { AssemblyAiLogo } from "@/assets/AssemblyAiLogo";
 import { DeepgramLogo } from "@/assets/DeepgramLogo";
+import { ElevenLabsLogo } from "@/assets/ElevenLabsLogo";
 import { GroqLogo } from "@/assets/GroqLogo";
 import { OpenAiLogo } from "@/assets/OpenAiLogo";
 
 import {
   setAssemblyAiApiKey,
   setDeepgramApiKey,
+  setElevenLabsApiKey,
   setGroqApiKey,
   setOpenaiApiKey,
   validateAssemblyAiApiKey,
   validateDeepgramApiKey,
+  validateElevenLabsApiKey,
   validateGroqApiKey,
   validateOpenaiApiKey,
 } from "./api";
@@ -94,5 +97,21 @@ export const SPEECH_MODEL_CATALOG: EngineDescriptor[] = [
     selectConfigured: (s) => s.openai_api_key_configured,
     persist: setOpenaiApiKey,
     validate: validateOpenaiApiKey,
+  },
+  {
+    id: "elevenlabs",
+    name: "ElevenLabs",
+    logo: ElevenLabsLogo,
+    description: "Batch transcription with ElevenLabs Scribe v2.",
+    metadata: {
+      languages: "99+ languages",
+      streaming: "No",
+      diarization: "No",
+    },
+    keyPlaceholder: "xi_...",
+    helpUrl: "https://elevenlabs.io/app/settings/api-keys",
+    selectConfigured: (s) => s.elevenlabs_api_key_configured,
+    persist: setElevenLabsApiKey,
+    validate: validateElevenLabsApiKey,
   },
 ];

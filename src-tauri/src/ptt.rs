@@ -10,6 +10,7 @@ use crate::hotkey::{
     key_has_both_kinds, shortcut_is_relevant, shortcut_matches, tap_state_key, CoexDown, Dispatch,
     TapEvent, TapState, DOUBLE_TAP_THRESHOLD,
 };
+use crate::elevenlabs_session::ElevenLabsEngine;
 use crate::local_engine::LocalWhisperEngine;
 use crate::openai_transcribe_session::OpenAiTranscribeEngine;
 use crate::pipeline::{self, CleanupOutput, Notice};
@@ -334,6 +335,10 @@ async fn run_session(
             .openai_api_key
             .as_deref()
             .is_none_or(|k| k.is_empty()),
+        TranscriptionProvider::ElevenLabs => settings
+            .elevenlabs_api_key
+            .as_deref()
+            .is_none_or(|k| k.is_empty()),
         TranscriptionProvider::Local => false,
     };
     if missing_key {
@@ -343,6 +348,7 @@ async fn run_session(
             TranscriptionProvider::Groq => "Groq",
             TranscriptionProvider::AssemblyAi => "AssemblyAI",
             TranscriptionProvider::OpenAi => "OpenAI",
+            TranscriptionProvider::ElevenLabs => "ElevenLabs",
             TranscriptionProvider::Local => unreachable!(),
         };
         return Err(format!("API key missing for {name}"));
@@ -464,6 +470,28 @@ async fn run_session(
             };
             Session::new(
                 OpenAiTranscribeEngine::new(*model, key),
+                app.clone(),
+                settings.show_live_preview,
+                corrections,
+            )
+            .run(chunk_rx, ctx)
+            .await
+        }
+        ProviderModel::ElevenLabs => {
+            let key = settings
+                .elevenlabs_api_key
+                .clone()
+                .filter(|k| !k.is_empty())
+                .ok_or_else(|| "API key not configured".to_string())?;
+            let corrections =
+                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
+            let ctx = EngineContext {
+                format,
+                language: mode_language,
+                terms: session_terms,
+            };
+            Session::new(
+                ElevenLabsEngine::new(key),
                 app.clone(),
                 settings.show_live_preview,
                 corrections,

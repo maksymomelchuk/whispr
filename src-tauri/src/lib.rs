@@ -30,6 +30,7 @@ mod cleanup_stats;
 mod assemblyai_session;
 mod audio_level_meter;
 mod deepgram_session;
+mod elevenlabs_session;
 mod engine;
 mod groq_session;
 mod local_engine;
@@ -201,10 +202,12 @@ pub fn run() {
             commands::set_groq_api_key,
             commands::set_assemblyai_api_key,
             commands::set_openai_api_key,
+            commands::set_elevenlabs_api_key,
             commands::validate_deepgram_api_key,
             commands::validate_groq_api_key,
             commands::validate_assemblyai_api_key,
             commands::validate_openai_api_key,
+            commands::validate_elevenlabs_api_key,
             commands::set_hotkey_bindings,
             commands::set_shortcut_capture_paused,
             commands::create_term_set,

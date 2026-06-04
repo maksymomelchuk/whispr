@@ -10,6 +10,7 @@ pub enum TranscriptionProvider {
     AssemblyAi,
     Local,
     OpenAi,
+    ElevenLabs,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -129,6 +130,7 @@ pub enum ProviderModel {
     OpenAi {
         model: OpenAiTranscribeModel,
     },
+    ElevenLabs,
 }
 
 impl ProviderModel {
@@ -139,6 +141,7 @@ impl ProviderModel {
             Self::AssemblyAi { .. } => TranscriptionProvider::AssemblyAi,
             Self::Local { .. } => TranscriptionProvider::Local,
             Self::OpenAi { .. } => TranscriptionProvider::OpenAi,
+            Self::ElevenLabs => TranscriptionProvider::ElevenLabs,
         }
     }
 
@@ -159,6 +162,7 @@ impl ProviderModel {
             TranscriptionProvider::OpenAi => Self::OpenAi {
                 model: OpenAiTranscribeModel::default(),
             },
+            TranscriptionProvider::ElevenLabs => Self::ElevenLabs,
         }
     }
 }
@@ -217,12 +221,29 @@ mod tests {
             ProviderModel::OpenAi {
                 model: OpenAiTranscribeModel::Gpt4oMiniTranscribe,
             },
+            ProviderModel::ElevenLabs,
         ];
         for case in cases {
             let json = serde_json::to_string(&case).unwrap();
             let decoded: ProviderModel = serde_json::from_str(&json).unwrap();
             assert_eq!(decoded, case);
         }
+    }
+
+    #[test]
+    fn provider_model_eleven_labs_serializes_with_provider_tag() {
+        let m = ProviderModel::ElevenLabs;
+        let v: serde_json::Value = serde_json::to_value(&m).unwrap();
+        assert_eq!(v["provider"], "eleven_labs");
+        assert!(v.get("model").is_none());
+    }
+
+    #[test]
+    fn provider_model_eleven_labs_round_trips() {
+        let pm = ProviderModel::ElevenLabs;
+        let json = serde_json::to_string(&pm).unwrap();
+        let decoded: ProviderModel = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded, pm);
     }
 
     #[test]

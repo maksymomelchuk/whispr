@@ -79,6 +79,7 @@ const PROVIDER_OPTIONS: { value: ProviderModel["provider"]; label: string }[] =
     { value: "groq", label: "Groq" },
     { value: "assembly_ai", label: "AssemblyAI" },
     { value: "open_ai", label: "OpenAI" },
+    { value: "eleven_labs", label: "ElevenLabs" },
     { value: "local", label: "Local" },
   ];
 
@@ -120,6 +121,7 @@ function defaultProviderModel(
     return { provider: "assembly_ai", model: "universal_pro_streaming" };
   if (provider === "open_ai")
     return { provider: "open_ai", model: "gpt4o_transcribe" };
+  if (provider === "eleven_labs") return { provider: "eleven_labs" };
   if (provider === "local")
     return { provider: "local", model: "large_v3_turbo" };
   return { provider: "deepgram" };
@@ -1129,7 +1131,9 @@ export function ModesPage() {
             (provider === "groq" && !settings.groq_api_key_configured) ||
             (provider === "assembly_ai" &&
               !settings.assemblyai_api_key_configured) ||
-            (provider === "open_ai" && !settings.openai_api_key_configured);
+            (provider === "open_ai" && !settings.openai_api_key_configured) ||
+            (provider === "eleven_labs" &&
+              !settings.elevenlabs_api_key_configured);
           return (
             <ModeRow
               key={mode.id}

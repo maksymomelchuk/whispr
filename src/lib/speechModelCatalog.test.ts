@@ -8,6 +8,7 @@ const BASE_SETTINGS: Settings = {
   groq_api_key_configured: false,
   assemblyai_api_key_configured: false,
   openai_api_key_configured: false,
+  elevenlabs_api_key_configured: false,
   hotkey_bindings: [],
   term_sets: [],
   correction_sets: [],
@@ -33,8 +34,8 @@ const BASE_SETTINGS: Settings = {
 };
 
 describe("speechModelCatalog", () => {
-  it("contains exactly four engines", () => {
-    expect(SPEECH_MODEL_CATALOG).toHaveLength(4);
+  it("contains exactly five engines", () => {
+    expect(SPEECH_MODEL_CATALOG).toHaveLength(5);
   });
 
   it("every descriptor has a non-empty key placeholder and a help URL", () => {
@@ -105,6 +106,21 @@ describe("speechModelCatalog", () => {
       openai.selectConfigured({
         ...BASE_SETTINGS,
         openai_api_key_configured: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("elevenlabs selector returns false when not configured", () => {
+    const elevenlabs = SPEECH_MODEL_CATALOG.find((d) => d.id === "elevenlabs")!;
+    expect(elevenlabs.selectConfigured(BASE_SETTINGS)).toBe(false);
+  });
+
+  it("elevenlabs selector returns true when configured", () => {
+    const elevenlabs = SPEECH_MODEL_CATALOG.find((d) => d.id === "elevenlabs")!;
+    expect(
+      elevenlabs.selectConfigured({
+        ...BASE_SETTINGS,
+        elevenlabs_api_key_configured: true,
       }),
     ).toBe(true);
   });
