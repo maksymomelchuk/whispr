@@ -65,8 +65,6 @@ pub fn assemblyai_keyterms_prompt(terms: &[String]) -> Option<String> {
 const ELEVENLABS_MAX_KEYTERMS: usize = 1000;
 const ELEVENLABS_MAX_KEYTERM_CHARS: usize = 50;
 
-/// Returns a trimmed, deduped list of keyterms for ElevenLabs keyterm
-/// prompting, capped at 1000 terms with each term ≤50 characters.
 pub fn elevenlabs_keyterms(terms: &[String]) -> Vec<String> {
     let mut result = Vec::new();
     let mut seen = std::collections::HashSet::new();
@@ -75,7 +73,7 @@ pub fn elevenlabs_keyterms(terms: &[String]) -> Vec<String> {
             break;
         }
         let trimmed = term.trim().to_string();
-        if trimmed.is_empty() || trimmed.len() > ELEVENLABS_MAX_KEYTERM_CHARS {
+        if trimmed.is_empty() || trimmed.chars().count() > ELEVENLABS_MAX_KEYTERM_CHARS {
             continue;
         }
         if seen.insert(trimmed.clone()) {
@@ -335,5 +333,15 @@ mod tests {
         let terms: Vec<String> = vec!["  ".into(), "MongoDB".into(), "\t".into()];
         let result = elevenlabs_keyterms(&terms);
         assert_eq!(result, vec!["MongoDB"]);
+    }
+
+    #[test]
+    fn elevenlabs_keyterms_counts_by_codepoints_not_bytes() {
+        // 50 two-byte chars = 100 bytes but exactly 50 codepoints — must be kept.
+        let term: String = "é".repeat(50);
+        assert_eq!(term.len(), 100);
+        assert_eq!(term.chars().count(), 50);
+        let result = elevenlabs_keyterms(&[term.clone()]);
+        assert_eq!(result, vec![term]);
     }
 }
