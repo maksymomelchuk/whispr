@@ -33,6 +33,7 @@ mod deepgram_session;
 mod engine;
 mod groq_session;
 mod local_engine;
+mod openai_transcribe_session;
 mod preview_throttle;
 pub(crate) mod recorder;
 mod session;
@@ -199,9 +200,11 @@ pub fn run() {
             commands::set_deepgram_api_key,
             commands::set_groq_api_key,
             commands::set_assemblyai_api_key,
+            commands::set_openai_api_key,
             commands::validate_deepgram_api_key,
             commands::validate_groq_api_key,
             commands::validate_assemblyai_api_key,
+            commands::validate_openai_api_key,
             commands::set_hotkey_bindings,
             commands::set_shortcut_capture_paused,
             commands::create_term_set,

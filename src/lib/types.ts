@@ -50,9 +50,14 @@ export type TranscriptionProvider =
   | "deepgram"
   | "groq"
   | "assembly_ai"
-  | "local";
+  | "local"
+  | "open_ai";
 
 export type GroqModel = "whisper_large_v3" | "whisper_large_v3_turbo";
+
+export type OpenAiTranscribeModel =
+  | "gpt4o_transcribe"
+  | "gpt4o_mini_transcribe";
 
 export type AssemblyAiModel =
   | "universal_pro_streaming"
@@ -83,7 +88,8 @@ export type ProviderModel =
   | { provider: "deepgram" }
   | { provider: "groq"; model: GroqModel }
   | { provider: "assembly_ai"; model: AssemblyAiModel }
-  | { provider: "local"; model: LocalWhisperModel };
+  | { provider: "local"; model: LocalWhisperModel }
+  | { provider: "open_ai"; model: OpenAiTranscribeModel };
 
 export function providerModelLanguageCodes(pm: ProviderModel): string[] | null {
   if (pm.provider !== "assembly_ai") return null;
@@ -93,6 +99,11 @@ export function providerModelLanguageCodes(pm: ProviderModel): string[] | null {
 const GROQ_MODEL_LABELS: Record<GroqModel, string> = {
   whisper_large_v3: "Whisper Large v3",
   whisper_large_v3_turbo: "Whisper Large v3-turbo",
+};
+
+const OPENAI_TRANSCRIBE_MODEL_LABELS: Record<OpenAiTranscribeModel, string> = {
+  gpt4o_transcribe: "GPT-4o Transcribe",
+  gpt4o_mini_transcribe: "GPT-4o mini Transcribe",
 };
 
 const ASSEMBLYAI_MODEL_LABELS: Record<AssemblyAiModel, string> = {
@@ -120,6 +131,8 @@ export function providerModelLabel(pm: ProviderModel): string {
       const prefix = pm.model === "parakeet" ? "Local" : "Local Whisper";
       return `${prefix} · ${LOCAL_MODEL_LABELS[pm.model]}`;
     }
+    case "open_ai":
+      return `OpenAI · ${OPENAI_TRANSCRIBE_MODEL_LABELS[pm.model]}`;
   }
 }
 
@@ -177,6 +190,7 @@ export interface Settings {
   deepgram_api_key_configured: boolean;
   groq_api_key_configured: boolean;
   assemblyai_api_key_configured: boolean;
+  openai_api_key_configured: boolean;
   hotkey_bindings: HotkeyBinding[];
   term_sets: NamedTermSet[];
   correction_sets: NamedCorrectionSet[];

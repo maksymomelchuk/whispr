@@ -68,6 +68,7 @@ import type {
   ModeLanguage,
   NamedCorrectionSet,
   NamedTermSet,
+  OpenAiTranscribeModel,
   ProviderModel,
 } from "../lib/types";
 import { providerModelLanguageCodes, pttModeId } from "../lib/types";
@@ -77,6 +78,7 @@ const PROVIDER_OPTIONS: { value: ProviderModel["provider"]; label: string }[] =
     { value: "deepgram", label: "Deepgram" },
     { value: "groq", label: "Groq" },
     { value: "assembly_ai", label: "AssemblyAI" },
+    { value: "open_ai", label: "OpenAI" },
     { value: "local", label: "Local" },
   ];
 
@@ -89,6 +91,14 @@ const LOCAL_MODEL_OPTIONS: { value: LocalWhisperModel; label: string }[] = [
 const GROQ_MODEL_OPTIONS: { value: GroqModel; label: string }[] = [
   { value: "whisper_large_v3_turbo", label: "Whisper Large v3-turbo" },
   { value: "whisper_large_v3", label: "Whisper Large v3" },
+];
+
+const OPENAI_TRANSCRIBE_MODEL_OPTIONS: {
+  value: OpenAiTranscribeModel;
+  label: string;
+}[] = [
+  { value: "gpt4o_transcribe", label: "GPT-4o Transcribe" },
+  { value: "gpt4o_mini_transcribe", label: "GPT-4o mini Transcribe" },
 ];
 
 const ASSEMBLYAI_MODEL_OPTIONS: { value: AssemblyAiModel; label: string }[] = [
@@ -108,6 +118,8 @@ function defaultProviderModel(
     return { provider: "groq", model: "whisper_large_v3_turbo" };
   if (provider === "assembly_ai")
     return { provider: "assembly_ai", model: "universal_pro_streaming" };
+  if (provider === "open_ai")
+    return { provider: "open_ai", model: "gpt4o_transcribe" };
   if (provider === "local")
     return { provider: "local", model: "large_v3_turbo" };
   return { provider: "deepgram" };
@@ -496,6 +508,9 @@ export function ModeEditor({
   const setAssemblyAiModel = (model: AssemblyAiModel) =>
     setProviderModel({ provider: "assembly_ai", model });
 
+  const setOpenAiModel = (model: OpenAiTranscribeModel) =>
+    setProviderModel({ provider: "open_ai", model });
+
   const setLocalModel = (model: LocalWhisperModel) =>
     setProviderModel({ provider: "local", model });
 
@@ -722,6 +737,27 @@ export function ModeEditor({
               </SelectTrigger>
               <SelectContent>
                 {ASSEMBLYAI_MODEL_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {draft.provider_model.provider === "open_ai" && (
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[13px]">Model</Label>
+            <Select
+              value={draft.provider_model.model}
+              onValueChange={(v) => setOpenAiModel(v as OpenAiTranscribeModel)}
+            >
+              <SelectTrigger size="sm" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {OPENAI_TRANSCRIBE_MODEL_OPTIONS.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value}>
                     {opt.label}
                   </SelectItem>
@@ -1092,7 +1128,8 @@ export function ModesPage() {
               !settings.deepgram_api_key_configured) ||
             (provider === "groq" && !settings.groq_api_key_configured) ||
             (provider === "assembly_ai" &&
-              !settings.assemblyai_api_key_configured);
+              !settings.assemblyai_api_key_configured) ||
+            (provider === "open_ai" && !settings.openai_api_key_configured);
           return (
             <ModeRow
               key={mode.id}

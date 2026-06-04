@@ -11,6 +11,7 @@ use crate::hotkey::{
     TapEvent, TapState, DOUBLE_TAP_THRESHOLD,
 };
 use crate::local_engine::LocalWhisperEngine;
+use crate::openai_transcribe_session::OpenAiTranscribeEngine;
 use crate::pipeline::{self, CleanupOutput, Notice};
 use crate::provider::{self, LocalWhisperModel, ProviderModel, TranscriptionProvider};
 use crate::recorder::Recorder;
@@ -329,6 +330,10 @@ async fn run_session(
             .assemblyai_api_key
             .as_deref()
             .is_none_or(|k| k.is_empty()),
+        TranscriptionProvider::OpenAi => settings
+            .openai_api_key
+            .as_deref()
+            .is_none_or(|k| k.is_empty()),
         TranscriptionProvider::Local => false,
     };
     if missing_key {
@@ -337,6 +342,7 @@ async fn run_session(
             TranscriptionProvider::Deepgram => "Deepgram",
             TranscriptionProvider::Groq => "Groq",
             TranscriptionProvider::AssemblyAi => "AssemblyAI",
+            TranscriptionProvider::OpenAi => "OpenAI",
             TranscriptionProvider::Local => unreachable!(),
         };
         return Err(format!("API key missing for {name}"));
@@ -436,6 +442,28 @@ async fn run_session(
             };
             Session::new(
                 LocalWhisperEngine::new(*model, cache, model_path),
+                app.clone(),
+                settings.show_live_preview,
+                corrections,
+            )
+            .run(chunk_rx, ctx)
+            .await
+        }
+        ProviderModel::OpenAi { model } => {
+            let key = settings
+                .openai_api_key
+                .clone()
+                .filter(|k| !k.is_empty())
+                .ok_or_else(|| "API key not configured".to_string())?;
+            let corrections =
+                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
+            let ctx = EngineContext {
+                format,
+                language: mode_language,
+                terms: session_terms,
+            };
+            Session::new(
+                OpenAiTranscribeEngine::new(*model, key),
                 app.clone(),
                 settings.show_live_preview,
                 corrections,

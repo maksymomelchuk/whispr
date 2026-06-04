@@ -58,7 +58,7 @@ impl Engine for GroqEngine {
         let speak_start = Instant::now();
         let model = self.model.api_id();
         let language = ctx.language.as_code().map(str::to_string);
-        let prompt = terms::groq_prompt_hint(&ctx.terms);
+        let prompt = terms::whisper_prompt_hint(&ctx.terms);
         let samples_per_second: u64 = ctx.format.sample_rate as u64 * ctx.format.channels as u64;
 
         let buffered: Arc<Mutex<Vec<i16>>> = Arc::new(Mutex::new(Vec::new()));

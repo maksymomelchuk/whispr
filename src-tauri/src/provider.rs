@@ -9,6 +9,24 @@ pub enum TranscriptionProvider {
     Groq,
     AssemblyAi,
     Local,
+    OpenAi,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenAiTranscribeModel {
+    #[default]
+    Gpt4oTranscribe,
+    Gpt4oMiniTranscribe,
+}
+
+impl OpenAiTranscribeModel {
+    pub fn api_id(self) -> &'static str {
+        match self {
+            Self::Gpt4oTranscribe => "gpt-4o-transcribe",
+            Self::Gpt4oMiniTranscribe => "gpt-4o-mini-transcribe",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -108,6 +126,9 @@ pub enum ProviderModel {
     Local {
         model: LocalWhisperModel,
     },
+    OpenAi {
+        model: OpenAiTranscribeModel,
+    },
 }
 
 impl ProviderModel {
@@ -117,6 +138,7 @@ impl ProviderModel {
             Self::Groq { .. } => TranscriptionProvider::Groq,
             Self::AssemblyAi { .. } => TranscriptionProvider::AssemblyAi,
             Self::Local { .. } => TranscriptionProvider::Local,
+            Self::OpenAi { .. } => TranscriptionProvider::OpenAi,
         }
     }
 
@@ -133,6 +155,9 @@ impl ProviderModel {
             },
             TranscriptionProvider::Local => Self::Local {
                 model: LocalWhisperModel::default(),
+            },
+            TranscriptionProvider::OpenAi => Self::OpenAi {
+                model: OpenAiTranscribeModel::default(),
             },
         }
     }
@@ -185,6 +210,12 @@ mod tests {
             },
             ProviderModel::AssemblyAi {
                 model: AssemblyAiModel::WhisperStreaming,
+            },
+            ProviderModel::OpenAi {
+                model: OpenAiTranscribeModel::Gpt4oTranscribe,
+            },
+            ProviderModel::OpenAi {
+                model: OpenAiTranscribeModel::Gpt4oMiniTranscribe,
             },
         ];
         for case in cases {
@@ -251,6 +282,59 @@ mod tests {
             GroqModel::WhisperLargeV3Turbo.api_id(),
             "whisper-large-v3-turbo"
         );
+    }
+
+    #[test]
+    fn openai_transcribe_model_api_id_correct() {
+        assert_eq!(
+            OpenAiTranscribeModel::Gpt4oTranscribe.api_id(),
+            "gpt-4o-transcribe"
+        );
+        assert_eq!(
+            OpenAiTranscribeModel::Gpt4oMiniTranscribe.api_id(),
+            "gpt-4o-mini-transcribe"
+        );
+    }
+
+    #[test]
+    fn openai_transcribe_model_default_is_gpt4o_transcribe() {
+        assert_eq!(
+            OpenAiTranscribeModel::default(),
+            OpenAiTranscribeModel::Gpt4oTranscribe
+        );
+    }
+
+    #[test]
+    fn openai_transcribe_model_serializes_as_snake_case() {
+        let v: serde_json::Value =
+            serde_json::to_value(OpenAiTranscribeModel::Gpt4oTranscribe).unwrap();
+        assert_eq!(v, "gpt4o_transcribe");
+        let v: serde_json::Value =
+            serde_json::to_value(OpenAiTranscribeModel::Gpt4oMiniTranscribe).unwrap();
+        assert_eq!(v, "gpt4o_mini_transcribe");
+    }
+
+    #[test]
+    fn provider_model_openai_serializes_with_provider_and_model() {
+        let m = ProviderModel::OpenAi {
+            model: OpenAiTranscribeModel::Gpt4oTranscribe,
+        };
+        let v: serde_json::Value = serde_json::to_value(&m).unwrap();
+        assert_eq!(v["provider"], "open_ai");
+        assert_eq!(v["model"], "gpt4o_transcribe");
+    }
+
+    #[test]
+    fn provider_model_openai_round_trips() {
+        for model in [
+            OpenAiTranscribeModel::Gpt4oTranscribe,
+            OpenAiTranscribeModel::Gpt4oMiniTranscribe,
+        ] {
+            let pm = ProviderModel::OpenAi { model };
+            let json = serde_json::to_string(&pm).unwrap();
+            let decoded: ProviderModel = serde_json::from_str(&json).unwrap();
+            assert_eq!(decoded, pm);
+        }
     }
 
     #[test]

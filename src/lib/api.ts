@@ -32,8 +32,14 @@ export const setGroqApiKey = (apiKey: string) =>
 export const setAssemblyAiApiKey = (apiKey: string) =>
   invoke<void>("set_assemblyai_api_key", { apiKey });
 
+export const setOpenaiApiKey = (apiKey: string) =>
+  invoke<void>("set_openai_api_key", { apiKey });
+
 export const validateAssemblyAiApiKey = (apiKey: string) =>
   invoke<ApiKeyValidation>("validate_assemblyai_api_key", { apiKey });
+
+export const validateOpenaiApiKey = (apiKey: string) =>
+  invoke<ApiKeyValidation>("validate_openai_api_key", { apiKey });
 
 export const validateDeepgramApiKey = (apiKey: string) =>
   invoke<ApiKeyValidation>("validate_deepgram_api_key", { apiKey });

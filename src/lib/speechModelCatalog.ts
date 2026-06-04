@@ -3,14 +3,17 @@ import type { ComponentType } from "react";
 import { AssemblyAiLogo } from "@/assets/AssemblyAiLogo";
 import { DeepgramLogo } from "@/assets/DeepgramLogo";
 import { GroqLogo } from "@/assets/GroqLogo";
+import { OpenAiLogo } from "@/assets/OpenAiLogo";
 
 import {
   setAssemblyAiApiKey,
   setDeepgramApiKey,
   setGroqApiKey,
+  setOpenaiApiKey,
   validateAssemblyAiApiKey,
   validateDeepgramApiKey,
   validateGroqApiKey,
+  validateOpenaiApiKey,
 } from "./api";
 import type { ApiKeyValidation, Settings } from "./types";
 
@@ -75,5 +78,21 @@ export const SPEECH_MODEL_CATALOG: EngineDescriptor[] = [
     selectConfigured: (s) => s.assemblyai_api_key_configured,
     persist: setAssemblyAiApiKey,
     validate: validateAssemblyAiApiKey,
+  },
+  {
+    id: "openai",
+    name: "OpenAI",
+    logo: OpenAiLogo,
+    description: "Batch transcription with gpt-4o-transcribe.",
+    metadata: {
+      languages: "100+ languages",
+      streaming: "No",
+      diarization: "No",
+    },
+    keyPlaceholder: "sk-...",
+    helpUrl: "https://platform.openai.com/api-keys",
+    selectConfigured: (s) => s.openai_api_key_configured,
+    persist: setOpenaiApiKey,
+    validate: validateOpenaiApiKey,
   },
 ];

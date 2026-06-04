@@ -12,9 +12,11 @@ vi.mock("../lib/api", () => ({
   setDeepgramApiKey: vi.fn(),
   setGroqApiKey: vi.fn(),
   setAssemblyAiApiKey: vi.fn(),
+  setOpenaiApiKey: vi.fn(),
   validateDeepgramApiKey: vi.fn(),
   validateGroqApiKey: vi.fn(),
   validateAssemblyAiApiKey: vi.fn(),
+  validateOpenaiApiKey: vi.fn(),
   getLocalModelStatuses: vi.fn().mockResolvedValue([]),
   startModelDownload: vi.fn(),
   cancelModelDownload: vi.fn(),
@@ -56,6 +58,7 @@ const BASE_SETTINGS: Settings = {
   deepgram_api_key_configured: false,
   groq_api_key_configured: false,
   assemblyai_api_key_configured: false,
+  openai_api_key_configured: false,
   hotkey_bindings: [],
   term_sets: [],
   correction_sets: [],
@@ -107,11 +110,12 @@ describe("SpeechModelsPage", () => {
     expect(screen.getByText("Deepgram")).toBeInTheDocument();
     expect(screen.getByText("Groq")).toBeInTheDocument();
     expect(screen.getByText("AssemblyAI")).toBeInTheDocument();
+    expect(screen.getByText("OpenAI")).toBeInTheDocument();
   });
 
   it("marks every engine as needing setup when none are configured", () => {
     render(<Wrapper />);
-    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(3);
+    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(4);
   });
 
   it("marks an engine as configured when it has a key", () => {

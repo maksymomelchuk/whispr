@@ -18,6 +18,7 @@ use serde::Serialize;
 const DEEPGRAM_AUTH_URL: &str = "https://api.deepgram.com/v1/projects";
 
 const GROQ_TRANSCRIBE_URL: &str = "https://api.groq.com/openai/v1/audio/transcriptions";
+const OPENAI_MODELS_URL: &str = "https://api.openai.com/v1/models";
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -77,6 +78,24 @@ pub async fn validate_deepgram(api_key: &str) -> ApiKeyValidation {
     match client
         .get(DEEPGRAM_AUTH_URL)
         .header("Authorization", format!("Token {api_key}"))
+        .send()
+        .await
+    {
+        Ok(resp) => status_to_validation(resp.status()),
+        Err(e) => ApiKeyValidation::Error {
+            message: format!("Network error: {e}"),
+        },
+    }
+}
+
+pub async fn validate_openai(api_key: &str) -> ApiKeyValidation {
+    if api_key.is_empty() {
+        return ApiKeyValidation::Invalid;
+    }
+    let client = reqwest::Client::new();
+    match client
+        .get(OPENAI_MODELS_URL)
+        .bearer_auth(api_key)
         .send()
         .await
     {
@@ -208,6 +227,12 @@ mod tests {
     #[tokio::test]
     async fn validate_groq_short_circuits_on_empty_key() {
         let v = validate_groq("", GroqModel::WhisperLargeV3Turbo, "en").await;
+        assert_eq!(v, ApiKeyValidation::Invalid);
+    }
+
+    #[tokio::test]
+    async fn validate_openai_short_circuits_on_empty_key() {
+        let v = validate_openai("").await;
         assert_eq!(v, ApiKeyValidation::Invalid);
     }
 }

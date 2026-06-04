@@ -24,6 +24,7 @@ const CONFIGURED_KEY: Record<string, keyof Settings> = {
   deepgram: "deepgram_api_key_configured",
   groq: "groq_api_key_configured",
   assemblyai: "assemblyai_api_key_configured",
+  openai: "openai_api_key_configured",
 };
 
 const IDLE_TIMEOUT_OPTIONS: {

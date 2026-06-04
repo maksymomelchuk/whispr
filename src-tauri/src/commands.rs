@@ -27,6 +27,7 @@ pub struct SettingsView {
     pub deepgram_api_key_configured: bool,
     pub groq_api_key_configured: bool,
     pub assemblyai_api_key_configured: bool,
+    pub openai_api_key_configured: bool,
     pub hotkey_bindings: Vec<HotkeyBinding>,
     pub term_sets: Vec<NamedTermSet>,
     pub correction_sets: Vec<NamedCorrectionSet>,
@@ -95,6 +96,10 @@ impl From<Settings> for SettingsView {
                 .assemblyai_api_key
                 .as_deref()
                 .is_some_and(|k| !k.is_empty()),
+            openai_api_key_configured: s
+                .openai_api_key
+                .as_deref()
+                .is_some_and(|k| !k.is_empty()),
             hotkey_bindings: s.hotkey_bindings,
             term_sets: s.term_sets,
             correction_sets: s.correction_sets,
@@ -146,8 +151,18 @@ pub fn set_assemblyai_api_key(app: AppHandle, api_key: String) -> Result<(), Str
 }
 
 #[tauri::command]
+pub fn set_openai_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
+    config::update(&app, |s| s.openai_api_key = config::non_empty(api_key))
+}
+
+#[tauri::command]
 pub async fn validate_assemblyai_api_key(api_key: String) -> ApiKeyValidation {
     api_key_validation::validate_assemblyai(&api_key).await
+}
+
+#[tauri::command]
+pub async fn validate_openai_api_key(api_key: String) -> ApiKeyValidation {
+    api_key_validation::validate_openai(&api_key).await
 }
 
 #[tauri::command]

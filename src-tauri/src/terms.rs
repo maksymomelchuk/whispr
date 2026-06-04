@@ -62,10 +62,10 @@ pub fn assemblyai_keyterms_prompt(terms: &[String]) -> Option<String> {
     serde_json::to_string(&filtered).ok()
 }
 
-/// Builds the Groq prompt hint (`"Vocabulary: t1, t2, t3"`) from terms.
+/// Builds the Whisper prompt hint (`"Vocabulary: t1, t2, t3"`) from terms.
 /// Truncates at a comma boundary so the result stays within
 /// `GROQ_PROMPT_BUDGET_CHARS`. Returns `None` when no eligible terms exist.
-pub fn groq_prompt_hint(terms: &[String]) -> Option<String> {
+pub fn whisper_prompt_hint(terms: &[String]) -> Option<String> {
     const PREFIX: &str = "Vocabulary: ";
     let mut result = PREFIX.to_string();
     for term in terms {
@@ -214,14 +214,14 @@ mod tests {
     fn prompt_hint_formats_correctly() {
         let terms: Vec<String> = vec!["MongoDB".into(), "TypeScript".into(), "Kubernetes".into()];
         assert_eq!(
-            groq_prompt_hint(&terms).unwrap(),
+            whisper_prompt_hint(&terms).unwrap(),
             "Vocabulary: MongoDB, TypeScript, Kubernetes"
         );
     }
 
     #[test]
     fn prompt_hint_returns_none_for_empty() {
-        assert!(groq_prompt_hint(&[]).is_none());
+        assert!(whisper_prompt_hint(&[]).is_none());
     }
 
     #[test]
@@ -231,7 +231,7 @@ mod tests {
         // ", yy" would add 4 chars → 801 > 800 → truncated.
         let filler = "x".repeat(785);
         let terms: Vec<String> = vec![filler, "yy".into()];
-        let hint = groq_prompt_hint(&terms).unwrap();
+        let hint = whisper_prompt_hint(&terms).unwrap();
         assert_eq!(hint.len(), 797);
         assert!(!hint.contains("yy"));
     }
@@ -242,7 +242,7 @@ mod tests {
         // ", y" = 3 chars → 800 exactly ≤ 800 → included.
         let filler = "x".repeat(785);
         let terms: Vec<String> = vec![filler, "y".into()];
-        let hint = groq_prompt_hint(&terms).unwrap();
+        let hint = whisper_prompt_hint(&terms).unwrap();
         assert_eq!(hint.len(), 800);
         assert!(hint.ends_with(", y"));
     }
@@ -250,25 +250,25 @@ mod tests {
     #[test]
     fn prompt_hint_single_term_no_comma() {
         let terms: Vec<String> = vec!["MongoDB".into()];
-        assert_eq!(groq_prompt_hint(&terms).unwrap(), "Vocabulary: MongoDB");
+        assert_eq!(whisper_prompt_hint(&terms).unwrap(), "Vocabulary: MongoDB");
     }
 
     #[test]
     fn prompt_hint_skips_blank_terms() {
         let terms: Vec<String> = vec!["  ".into(), "MongoDB".into(), "\t".into()];
-        assert_eq!(groq_prompt_hint(&terms).unwrap(), "Vocabulary: MongoDB");
+        assert_eq!(whisper_prompt_hint(&terms).unwrap(), "Vocabulary: MongoDB");
     }
 
     #[test]
     fn prompt_hint_returns_none_when_all_terms_are_blank() {
         let terms: Vec<String> = vec!["  ".into(), "\t".into()];
-        assert!(groq_prompt_hint(&terms).is_none());
+        assert!(whisper_prompt_hint(&terms).is_none());
     }
 
     #[test]
     fn prompt_hint_unicode_term_fits_within_budget() {
         // "caf\u{e9}" is 5 UTF-8 bytes; "Vocabulary: " (12) + 5 = 17 ≤ 800.
         let terms: Vec<String> = vec!["caf\u{e9}".into()];
-        assert_eq!(groq_prompt_hint(&terms).unwrap(), "Vocabulary: café");
+        assert_eq!(whisper_prompt_hint(&terms).unwrap(), "Vocabulary: café");
     }
 }

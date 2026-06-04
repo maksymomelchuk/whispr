@@ -7,6 +7,7 @@ const BASE_SETTINGS: Settings = {
   deepgram_api_key_configured: false,
   groq_api_key_configured: false,
   assemblyai_api_key_configured: false,
+  openai_api_key_configured: false,
   hotkey_bindings: [],
   term_sets: [],
   correction_sets: [],
@@ -32,8 +33,8 @@ const BASE_SETTINGS: Settings = {
 };
 
 describe("speechModelCatalog", () => {
-  it("contains exactly three engines", () => {
-    expect(SPEECH_MODEL_CATALOG).toHaveLength(3);
+  it("contains exactly four engines", () => {
+    expect(SPEECH_MODEL_CATALOG).toHaveLength(4);
   });
 
   it("every descriptor has a non-empty key placeholder and a help URL", () => {
@@ -89,6 +90,21 @@ describe("speechModelCatalog", () => {
       assemblyai.selectConfigured({
         ...BASE_SETTINGS,
         assemblyai_api_key_configured: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("openai selector returns false when not configured", () => {
+    const openai = SPEECH_MODEL_CATALOG.find((d) => d.id === "openai")!;
+    expect(openai.selectConfigured(BASE_SETTINGS)).toBe(false);
+  });
+
+  it("openai selector returns true when configured", () => {
+    const openai = SPEECH_MODEL_CATALOG.find((d) => d.id === "openai")!;
+    expect(
+      openai.selectConfigured({
+        ...BASE_SETTINGS,
+        openai_api_key_configured: true,
       }),
     ).toBe(true);
   });

@@ -50,7 +50,7 @@ impl Engine for LocalWhisperEngine {
             ctx.format.channels,
         )?;
         let language_code = ctx.language.as_code().map(str::to_string);
-        let initial_prompt = terms::groq_prompt_hint(&ctx.terms);
+        let initial_prompt = terms::whisper_prompt_hint(&ctx.terms);
         let model = self.model;
         let model_path = self.model_path;
         let cache = self.model_cache;

@@ -48,6 +48,7 @@ const BASE: Settings = {
   deepgram_api_key_configured: false,
   groq_api_key_configured: false,
   assemblyai_api_key_configured: false,
+  openai_api_key_configured: false,
   hotkey_bindings: [],
   term_sets: [],
   correction_sets: [],
