@@ -46,9 +46,6 @@ const PERIOD_SPECS: PeriodSpec[] = [
 
 const TYPING_WPM_BASELINE = 45;
 
-const HAIKU_INPUT_PER_MTOK_USD = 1;
-const HAIKU_OUTPUT_PER_MTOK_USD = 5;
-
 const chartConfig = {
   words: { label: "Words", color: "var(--color-primary)" },
 } satisfies ChartConfig;
@@ -171,19 +168,6 @@ function formatWpm(words: number, seconds: number): string {
 
 function formatCount(n: number): string {
   return n.toLocaleString();
-}
-
-function estimateCostUsd(input: number, output: number): number {
-  return (
-    (input * HAIKU_INPUT_PER_MTOK_USD + output * HAIKU_OUTPUT_PER_MTOK_USD) /
-    1_000_000
-  );
-}
-
-function formatCost(cost: number): string {
-  if (cost <= 0) return "$0";
-  if (cost < 0.01) return "<$0.01";
-  return `$${cost.toFixed(2)}`;
 }
 
 export function StatsTab() {
@@ -329,7 +313,7 @@ export function StatsTab() {
           <SectionHeader
             title="AI Cleanup"
             badge={
-              <InfoTip text="Anthropic Claude Haiku 4.5 token usage and estimated cost." />
+              <InfoTip text="Tokens sent to and received from your AI cleanup provider." />
             }
           />
           {cleanupTokens && <CleanupRow tokens={cleanupTokens} />}
@@ -565,7 +549,7 @@ function AppIcon({
 }
 
 function CleanupRow({ tokens }: { tokens: CleanupTokens }) {
-  const cost = estimateCostUsd(tokens.input, tokens.output);
+  const total = tokens.input + tokens.output;
   return (
     <div className="flex items-baseline justify-between gap-3 overflow-hidden rounded-lg border border-border bg-card px-4 py-3.5">
       <span className="flex items-baseline gap-1.5 text-xs tabular-nums text-muted-foreground">
@@ -584,10 +568,10 @@ function CleanupRow({ tokens }: { tokens: CleanupTokens }) {
       </span>
       <span className="inline-flex shrink-0 items-baseline gap-1 tabular-nums">
         <span className="text-lg font-semibold leading-none text-foreground">
-          {formatCost(cost)}
+          {formatCount(total)}
         </span>
         <span className="text-eyebrow uppercase text-muted-foreground/70">
-          est.
+          tokens
         </span>
       </span>
     </div>
