@@ -83,7 +83,7 @@ export function ProviderSetupDialog({
     }
   };
 
-  const { logo: Logo, metadata } = descriptor;
+  const { logo: Logo } = descriptor;
   const isSaveDisabled = keyValue.trim() === "" || saving;
 
   return (
@@ -95,13 +95,6 @@ export function ProviderSetupDialog({
             <DialogTitle className="text-base">{descriptor.name}</DialogTitle>
           </div>
           <DialogDescription>{descriptor.description}</DialogDescription>
-          <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1 text-xs text-muted-foreground">
-            <span>{metadata.languages}</span>
-            <span>·</span>
-            <span>Streaming: {metadata.streaming}</span>
-            <span>·</span>
-            <span>Diarization: {metadata.diarization}</span>
-          </div>
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
