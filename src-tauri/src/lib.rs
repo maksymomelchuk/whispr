@@ -39,6 +39,9 @@ mod preview_throttle;
 pub(crate) mod recorder;
 mod session;
 
+#[cfg(feature = "bench")]
+pub mod bench;
+
 // cleanup is cross-platform HTTP (reqwest + serde_json, no OS APIs).
 mod cleanup;
 pub mod model_catalog;

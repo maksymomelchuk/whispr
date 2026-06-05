@@ -1,3 +1,7 @@
+# Benchmark audio + generated results (large/local, not source)
+benchmark/recordings/
+benchmark/results.md
+
 # Logs
 logs
 *.log
@@ -28,3 +32,4 @@ dist-ssr
 # Local planning / scratch notes
 PLAN.md
 
+.env
