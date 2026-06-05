@@ -51,7 +51,11 @@ mod target_app;
 // paste exposes a platform-neutral public API; per-OS injection is selected
 // internally via cfg: CGEvent on macOS, enigo on Windows, native tools or
 // enigo fallback on Linux.
+#[cfg(target_os = "macos")]
+mod mac_clipboard;
 mod paste;
+#[cfg(target_os = "windows")]
+mod windows_clipboard;
 
 // ptt compiles on all platforms; the event source is selected internally via
 // cfg: CGEventTap on macOS, rdev on Windows/Linux.

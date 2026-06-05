@@ -62,12 +62,12 @@ objc2-foundation = "0.3"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = [
     "NSBitmapImageRep", "NSGraphics", "NSGraphicsContext",
     "NSImage", "NSImageRep", "NSWorkspace",
+    "NSPasteboard", "NSPasteboardItem",
 ] }
-arboard = { version = "3", default-features = false, features = ["image-data"] }
 transcribe-rs = { version = "0.3", features = ["whisper-metal", "ort-coreml"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-arboard = { version = "3", default-features = false, features = ["image-data"] }
+clipboard-win = "5"
 transcribe-rs = { version = "0.3", features = ["ort-directml"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]

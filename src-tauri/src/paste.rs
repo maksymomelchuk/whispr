@@ -85,44 +85,17 @@ fn send_cmd_v() -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-enum SavedClipboard {
-    Text(String),
-    Image(arboard::ImageData<'static>),
-    // The original content is a format arboard can't read (file list, RTF,
-    // custom UTI). We can't put it back, so restore clears instead — leaving
-    // our injected transcription would let a clipboard-history manager capture
-    // it, which is the bug this whole save/restore dance exists to prevent.
-    Unsupported,
-}
-
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-fn save_clipboard(clipboard: &mut arboard::Clipboard) -> SavedClipboard {
-    if let Ok(text) = clipboard.get_text() {
-        return SavedClipboard::Text(text);
-    }
-    if let Ok(image) = clipboard.get_image() {
-        return SavedClipboard::Image(image);
-    }
-    SavedClipboard::Unsupported
-}
-
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-fn restore_clipboard(clipboard: &mut arboard::Clipboard, saved: SavedClipboard) {
-    let _ = match saved {
-        SavedClipboard::Text(text) => clipboard.set_text(text),
-        SavedClipboard::Image(image) => clipboard.set_image(image),
-        SavedClipboard::Unsupported => clipboard.clear(),
-    };
-}
-
 #[cfg(target_os = "macos")]
 fn clipboard_paste(text: &str) -> Result<(), String> {
-    let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("clipboard init: {e}"))?;
-    let saved = save_clipboard(&mut clipboard);
-    clipboard
-        .set_text(text)
-        .map_err(|e| format!("clipboard set: {e}"))?;
+    // Snapshot every type of the user's clipboard, then write transcription and
+    // restore both tagged transient so a history manager re-archives neither.
+    let snapshot = crate::mac_clipboard::snapshot();
+    if let Err(e) = crate::mac_clipboard::write_transient_text(text) {
+        // write_transient_text already cleared the pasteboard before failing;
+        // put the user's content back before falling through to direct typing.
+        crate::mac_clipboard::restore(snapshot);
+        return Err(e);
+    }
     // CGEvent::post queues asynchronously at the HID layer; settle before
     // firing ⌘V so the pasteboard update lands before the keystroke reads it.
     thread::sleep(CLIPBOARD_SETTLE_DELAY);
@@ -130,7 +103,7 @@ fn clipboard_paste(text: &str) -> Result<(), String> {
     // Hold off restore long enough for the target app to read the clipboard
     // before we overwrite it with the saved contents.
     thread::sleep(POST_PASTE_DELAY);
-    restore_clipboard(&mut clipboard, saved);
+    crate::mac_clipboard::restore(snapshot);
     paste_result
 }
 
@@ -295,15 +268,17 @@ fn send_ctrl_v() -> Result<(), String> {
 
 #[cfg(target_os = "windows")]
 fn clipboard_paste(text: &str) -> Result<(), String> {
-    let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("clipboard init: {e}"))?;
-    let saved = save_clipboard(&mut clipboard);
-    clipboard
-        .set_text(text)
-        .map_err(|e| format!("clipboard set: {e}"))?;
+    // Snapshot every memory-backed clipboard format, then write transcription
+    // and restore both tagged transient so a history manager re-archives neither.
+    let snapshot = crate::windows_clipboard::snapshot();
+    if let Err(e) = crate::windows_clipboard::write_transient_text(text) {
+        crate::windows_clipboard::restore(snapshot);
+        return Err(e);
+    }
     thread::sleep(CLIPBOARD_SETTLE_DELAY);
     let paste_result = send_ctrl_v();
     thread::sleep(POST_PASTE_DELAY);
-    restore_clipboard(&mut clipboard, saved);
+    crate::windows_clipboard::restore(snapshot);
     paste_result
 }
 
