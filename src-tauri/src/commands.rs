@@ -97,10 +97,7 @@ impl From<Settings> for SettingsView {
                 .assemblyai_api_key
                 .as_deref()
                 .is_some_and(|k| !k.is_empty()),
-            openai_api_key_configured: s
-                .openai_api_key
-                .as_deref()
-                .is_some_and(|k| !k.is_empty()),
+            openai_api_key_configured: s.openai_api_key.as_deref().is_some_and(|k| !k.is_empty()),
             elevenlabs_api_key_configured: s
                 .elevenlabs_api_key
                 .as_deref()
