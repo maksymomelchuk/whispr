@@ -38,8 +38,9 @@ impl Engine for OpenAiTranscribeEngine {
             });
         }
 
-        let flac = encode_to_flac_16k_mono(&all_samples, ctx.format.sample_rate, ctx.format.channels)
-            .map_err(|e| format!("FLAC encode failed: {e}"))?;
+        let flac =
+            encode_to_flac_16k_mono(&all_samples, ctx.format.sample_rate, ctx.format.channels)
+                .map_err(|e| format!("FLAC encode failed: {e}"))?;
 
         let language = ctx.language.as_code().map(str::to_string);
         let prompt = terms::whisper_prompt_hint(&ctx.terms);
@@ -136,8 +137,7 @@ fn strip_prompt_echo(text: &str, prompt: Option<&str>) -> String {
 }
 
 fn parse_transcript(body: &str) -> Result<String, String> {
-    let v: Value =
-        serde_json::from_str(body).map_err(|e| format!("JSON parse failed: {e}"))?;
+    let v: Value = serde_json::from_str(body).map_err(|e| format!("JSON parse failed: {e}"))?;
     let text = v
         .get("text")
         .and_then(|x| x.as_str())

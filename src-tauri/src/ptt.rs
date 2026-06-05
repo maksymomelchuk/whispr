@@ -2,6 +2,7 @@ use crate::assemblyai_session::AssemblyAiEngine;
 use crate::config::{HotkeyAction, HotkeyBinding, Shortcut};
 use crate::corrections::compose_corrections;
 use crate::deepgram_session::DeepgramEngine;
+use crate::elevenlabs_session::ElevenLabsEngine;
 use crate::engine::EngineContext;
 use crate::groq_session::GroqEngine;
 use crate::history::{self, CleanupStatus, HISTORY_UPDATED_EVENT};
@@ -10,7 +11,6 @@ use crate::hotkey::{
     key_has_both_kinds, shortcut_is_relevant, shortcut_matches, tap_state_key, CoexDown, Dispatch,
     TapEvent, TapState, DOUBLE_TAP_THRESHOLD,
 };
-use crate::elevenlabs_session::ElevenLabsEngine;
 use crate::local_engine::LocalWhisperEngine;
 use crate::openai_transcribe_session::OpenAiTranscribeEngine;
 use crate::pipeline::{self, CleanupOutput, Notice};

@@ -112,8 +112,7 @@ fn format_elevenlabs_error(status: reqwest::StatusCode, body: &str) -> String {
 }
 
 fn parse_transcript(body: &str) -> Result<String, String> {
-    let v: Value =
-        serde_json::from_str(body).map_err(|e| format!("JSON parse failed: {e}"))?;
+    let v: Value = serde_json::from_str(body).map_err(|e| format!("JSON parse failed: {e}"))?;
     let text = v
         .get("text")
         .and_then(|x| x.as_str())
@@ -160,7 +159,10 @@ mod tests {
         let body = r#"{"detail":"Invalid API key"}"#;
         let msg = format_elevenlabs_error(reqwest::StatusCode::UNAUTHORIZED, body);
         assert!(msg.contains("401"), "expected status, got: {msg}");
-        assert!(msg.contains("Invalid API key"), "expected detail, got: {msg}");
+        assert!(
+            msg.contains("Invalid API key"),
+            "expected detail, got: {msg}"
+        );
     }
 
     #[test]
