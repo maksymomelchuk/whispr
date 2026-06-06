@@ -1,5 +1,7 @@
 import {
+  CaretDownIcon,
   CaretRightIcon,
+  CaretUpIcon,
   CopyIcon,
   PencilSimpleIcon,
   TrashIcon,
@@ -53,6 +55,7 @@ import {
   formatShortcut,
   getLocalModelStatuses,
   getSettings,
+  reorderModes,
   updateMode,
 } from "../lib/api";
 import type {
@@ -258,6 +261,10 @@ function ModeRow({
   mode,
   bindings,
   missingProviderKey,
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
   onEdit,
   onDuplicate,
   onDelete,
@@ -265,6 +272,10 @@ function ModeRow({
   mode: Mode;
   bindings: HotkeyBinding[];
   missingProviderKey: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -301,6 +312,40 @@ function ModeRow({
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
+        <div className="flex flex-col">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="h-4 w-6 rounded-sm"
+                aria-label="Move up"
+                disabled={!canMoveUp}
+                onClick={onMoveUp}
+              >
+                <CaretUpIcon size={12} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Move up</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="h-4 w-6 rounded-sm"
+                aria-label="Move down"
+                disabled={!canMoveDown}
+                onClick={onMoveDown}
+              >
+                <CaretDownIcon size={12} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Move down</TooltipContent>
+          </Tooltip>
+        </div>
+
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -1069,6 +1114,24 @@ export function ModesPage() {
     }
   };
 
+  const handleMove = async (index: number, direction: "up" | "down") => {
+    const target = direction === "up" ? index - 1 : index + 1;
+    if (target < 0 || target >= settings.modes.length) return;
+    const previous = settings.modes;
+    const reordered = [...previous];
+    [reordered[index], reordered[target]] = [
+      reordered[target],
+      reordered[index],
+    ];
+    setSettings((s) => ({ ...s, modes: reordered }));
+    try {
+      await reorderModes(reordered.map((m) => m.id));
+    } catch (e) {
+      console.error(e);
+      setSettings((s) => ({ ...s, modes: previous }));
+    }
+  };
+
   return (
     <div className="p-6 flex flex-col gap-8">
       <SectionHeader title="Profiles" />
@@ -1078,7 +1141,7 @@ export function ModesPage() {
         </p>
       ) : (
         <div className="flex flex-col gap-2">
-          {settings.modes.map((mode) => {
+          {settings.modes.map((mode, index) => {
             const provider = mode.provider_model.provider;
             const missingProviderKey =
               (provider === "deepgram" &&
@@ -1097,6 +1160,10 @@ export function ModesPage() {
                   (b) => pttModeId(b) === mode.id,
                 )}
                 missingProviderKey={missingProviderKey}
+                canMoveUp={index > 0}
+                canMoveDown={index < settings.modes.length - 1}
+                onMoveUp={() => handleMove(index, "up")}
+                onMoveDown={() => handleMove(index, "down")}
                 onEdit={() => openEditor(mode)}
                 onDuplicate={() => handleDuplicate(mode.id)}
                 onDelete={() => handleDelete(mode.id)}

@@ -225,6 +225,7 @@ pub fn run() {
             commands::add_mode,
             commands::update_mode,
             commands::delete_mode,
+            commands::reorder_modes,
             commands::duplicate_mode,
             commands::set_anthropic_api_key,
             commands::set_anthropic_oauth_token,

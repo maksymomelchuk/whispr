@@ -323,6 +323,14 @@ fn is_ptt_for_mode(action: &HotkeyAction, id: &str) -> bool {
 }
 
 #[tauri::command]
+pub fn reorder_modes(app: AppHandle, ids: Vec<ModeId>) -> Result<(), String> {
+    config::update(&app, |s| {
+        let rank = |id: &str| ids.iter().position(|x| x == id).unwrap_or(usize::MAX);
+        s.modes.sort_by_key(|m| rank(&m.id));
+    })
+}
+
+#[tauri::command]
 pub fn duplicate_mode(app: AppHandle, id: ModeId) -> Result<(), String> {
     config::update(&app, |s| {
         if let Some(source) = s.modes.iter().find(|m| m.id == id).cloned() {

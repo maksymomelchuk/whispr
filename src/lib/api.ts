@@ -92,6 +92,9 @@ export const deleteMode = (id: string) => invoke<void>("delete_mode", { id });
 export const duplicateMode = (id: string) =>
   invoke<void>("duplicate_mode", { id });
 
+export const reorderModes = (ids: string[]) =>
+  invoke<void>("reorder_modes", { ids });
+
 export const setAnthropicApiKey = (apiKey: string) =>
   invoke<void>("set_anthropic_api_key", { apiKey });
 
