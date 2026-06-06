@@ -1,170 +1,142 @@
+<div align="center">
+
+<img src=".github/assets/logo.png" alt="Whispr" width="112" height="112" />
+
 # Whispr
 
-A push-to-talk dictation app. Hold a shortcut, speak, release — the
-transcription is typed into whatever app has focus. Speech is transcribed by
-the cloud provider (or on-device model) you choose, optionally cleaned up by an
-LLM, then injected as keystrokes. Nothing is persisted to disk beyond a local
-transcript history and your settings.
+**Hold a key. Speak. Your words appear — in any app.**
 
-Runs on **macOS, Windows, and Linux**.
+Push-to-talk dictation for your whole desktop. Whispr listens while you
+hold a shortcut, transcribes what you said, optionally cleans it up with
+an LLM, and types it straight into whatever app has focus.
+
+[![Latest release](https://img.shields.io/github/v/release/maksymomelchuk/whispr?style=for-the-badge&label=download&color=3460e9)](https://github.com/maksymomelchuk/whispr/releases/latest)
+&nbsp;
+![Platforms](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-1a1a1a?style=for-the-badge)
+&nbsp;
+[![License: MIT](https://img.shields.io/badge/license-MIT-3460e9?style=for-the-badge)](#license)
+
+<br />
+
+<img src=".github/assets/overlay.png" alt="Whispr's recording overlay — a small pill showing elapsed time and a live waveform" width="380" />
+
+</div>
+
+<br />
+
+## Why Whispr
+
+Typing is slow; talking is fast. Whispr puts dictation one keypress away
+in **every** application — your editor, your terminal, your browser, your
+chat. Hold the shortcut, say what you mean, release, and the text lands at
+your cursor.
+
+- **Yours to control.** Choose your speech provider, your cleanup model,
+  your hotkeys. Run entirely **on-device** if you never want audio to
+  leave your machine.
+- **Private by default.** Your transcript history lives only on your disk.
+  API keys are stored locally and never leave the app.
+- **Native and quiet.** A single small overlay while you speak, then it
+  gets out of the way.
+
+```
+🎙  hold & speak  →  📝  transcribe  →  ✨  clean up (optional)  →  ⌨️  paste at cursor
+```
 
 ## Features
 
-- **Push-to-talk dictation** — hold the shortcut to record, release to paste
-  into the focused app; double-tap and "paste latest" actions are configurable.
-- **Multiple speech providers** — cloud streaming via
-  [Deepgram](https://console.deepgram.com),
-  [Groq](https://console.groq.com) (Whisper Large v3 / v3 Turbo), and
-  [AssemblyAI](https://www.assemblyai.com) (Universal streaming + Whisper), or
-  fully **on-device** with local Whisper (Large v3, Large v3 Turbo) and Parakeet.
-- **Local model catalog** — download, resume, verify, and delete on-device
-  models from Settings. GPU-accelerated where available (Metal on macOS,
-  DirectML on Windows, Vulkan on Linux).
-- **AI cleanup** — optionally pass the raw transcript through an LLM to strip
-  fillers, fix self-corrections, and apply casing/punctuation. Providers:
-  Anthropic (native API, with Claude Pro/Max OAuth support), OpenAI, Google
-  Gemini, Groq, DeepSeek, Cerebras, OpenRouter, and any OpenAI-compatible
-  endpoint (Ollama, LM Studio, vLLM, …) via the Custom provider.
-- **Profiles** — each profile picks its own speech provider/model, language,
-  cleanup provider/model, terms, corrections, and snippet behavior.
-- **Terms** — recognition hints biasing the speech model toward known words.
-- **Corrections** — post-transcription find-and-replace rules.
-- **Snippets** — spoken shorthands expanded into longer text, with placeholders
-  (`{{DATE}}`, `{{TIME}}`, `{{CLIPBOARD}}`).
-- **Transcript history** — stored locally, never sent anywhere.
+- **Push-to-talk, everywhere.** Hold your shortcut to record, release to
+  paste into the focused app. Double-tap and "paste latest" actions are
+  configurable too.
+- **Your choice of speech engine.** Stream in real time with
+  [Deepgram](https://console.deepgram.com) (Nova) or
+  [AssemblyAI](https://www.assemblyai.com), or batch-transcribe with
+  [Groq](https://console.groq.com) (Whisper Large v3 / v3 Turbo),
+  [OpenAI](https://platform.openai.com) (gpt-4o-transcribe), and
+  [ElevenLabs](https://elevenlabs.io) (Scribe v2) — or go fully
+  **on-device** with local Whisper (Large v3 / Turbo) and Parakeet TDT. No
+  internet required for local models.
+- **AI cleanup.** Optionally pass the raw transcript through an LLM to
+  strip filler words, fix self-corrections, and apply casing and
+  punctuation. Choose from Anthropic Claude (Opus / Sonnet / Haiku, with
+  Claude Pro/Max sign-in), OpenAI GPT-5, Google Gemini, Groq and Cerebras
+  (Llama, Qwen, GPT-OSS), DeepSeek, OpenRouter, or any OpenAI-compatible
+  endpoint (Ollama, LM Studio, vLLM, …) via a Custom provider.
+- **Profiles.** Save a full setup — speech engine, language, cleanup
+  model, vocabulary, corrections, snippets — and switch between them for
+  different apps or tasks.
+- **Vocabulary.** Teach the recognizer your jargon, names, and acronyms so
+  it gets them right the first time.
+- **Corrections.** Find-and-replace rules applied after transcription —
+  great for verbal punctuation or words a model keeps mishearing.
+- **Snippets.** Spoken shorthands that expand into longer text, with
+  placeholders like `{{DATE}}`, `{{TIME}}`, and `{{CLIPBOARD}}`.
+- **History & stats.** Browse past transcriptions and see how much time
+  you've spent dictating — all stored locally.
 
-## Prerequisites
+## Screenshots
 
-- [Rust](https://rustup.rs/) stable
-- [pnpm](https://pnpm.io/installation) and Node.js 20+
-- [cmake](https://cmake.org/download/) — required to compile whisper.cpp for the
-  local Whisper engine
+<div align="center">
 
-Platform-specific:
+<img src=".github/assets/profiles.png" alt="Profiles settings — pick a speech engine, language, and cleanup model per profile" width="800" />
 
-- **macOS** — Xcode Command Line Tools (`xcode-select --install`); `brew install cmake`.
-- **Windows** — the MSVC toolchain (Visual Studio Build Tools) and the WebView2
-  runtime (preinstalled on Windows 11).
-- **Linux** — WebKitGTK and supporting libraries. On Debian/Ubuntu:
+<br /><br />
 
-  ```sh
-  sudo apt-get install -y \
-    libwebkit2gtk-4.1-dev libgtk-3-dev libappindicator3-dev librsvg2-dev \
-    patchelf libasound2-dev libxdo-dev libvulkan-dev glslc cmake
-  ```
+<table>
+<tr>
+<td width="50%"><img src=".github/assets/speech-models.png" alt="Speech models settings — cloud providers and the on-device model catalog" /></td>
+<td width="50%"><img src=".github/assets/stats.png" alt="Stats — time spent dictating over time" /></td>
+</tr>
+</table>
 
-## Setup
+</div>
 
-```sh
-pnpm install
-pnpm tauri dev
-```
-
-On first launch the OS prompts for the permissions Whispr needs to tap global
-key events (for the push-to-talk shortcut) and inject transcribed text:
-
-- **macOS** — grant **Accessibility** under _System Settings → Privacy &
-  Security → Accessibility_.
-- **Windows** — no extra permission required.
-- **Linux** — keystroke injection uses `wtype`/`ydotool`/`dotool` on Wayland or
-  `xdotool` on X11; install the tool matching your session.
-
-To use a cloud speech provider or AI cleanup, add the relevant API key in the
-app's **Speech models** / **AI Providers** settings pages. Keys are stored in
-the local settings file and are never returned to the webview over IPC.
-
-## Build
-
-```sh
-pnpm tauri build
-```
-
-Bundles are produced under `src-tauri/target/release/bundle/`:
-
-- **macOS** — `.dmg`
-- **Windows** — `.msi` and `_en-US.setup.exe`
-- **Linux** — `.AppImage` and `.deb`
-
-## Where things live
-
-Settings and history are written to Tauri's per-platform app data directory for
-`com.whispr.app`:
-
-- **macOS** — `~/Library/Application Support/com.whispr.app/`
-- **Windows** — `%APPDATA%\com.whispr.app\`
-- **Linux** — `$XDG_DATA_HOME/com.whispr.app/` (usually `~/.local/share/com.whispr.app/`)
-
-That directory holds `settings.json` and `history.json` (mode `0600` on Unix),
-plus downloaded local models under `models/`. API keys live in the settings
-file on disk and are never returned to the webview over IPC.
-
-## Project layout
-
-- `src/` — React + TypeScript frontend (settings UI, overlay window)
-- `src-tauri/src/` — Rust backend (audio capture, global key listener,
-  speech engines, AI cleanup, keystroke injection); platform-specific paths are
-  gated with `#[cfg(target_os = ...)]`
-
-## Installing a pre-built release
+## Install
 
 Grab the latest build from
-[Releases](https://github.com/maksymomelchuk/whispr/releases/latest):
+[**Releases**](https://github.com/maksymomelchuk/whispr/releases/latest):
 
-- **macOS** — open the `.dmg` and drag Whispr into `/Applications`. The build is
-  **unsigned** (no Apple Developer ID), so the first launch needs a one-time
-  Gatekeeper bypass: right-click the app → **Open** → confirm the "unidentified
-  developer" prompt. Subsequent launches work normally.
-- **Windows** — run the `.msi` or `_en-US.setup.exe`. The build is unsigned; if
-  SmartScreen warns, click **More info → Run anyway**.
-- **Linux** — either `chmod +x Whispr_*.AppImage` and run the AppImage, or
-  install the `.deb` with `sudo dpkg -i whispr_*.deb`.
+| Platform    | What to download             | First-run note                                                                                                                                                                                    |
+| ----------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **macOS**   | `.dmg`                       | The build is **unsigned**. Open the `.dmg`, drag Whispr to `/Applications`, then right-click the app → **Open** → confirm the "unidentified developer" prompt once. Later launches work normally. |
+| **Windows** | `.msi` or `_en-US.setup.exe` | The build is unsigned. If SmartScreen warns, click **More info → Run anyway**.                                                                                                                    |
+| **Linux**   | `.AppImage` or `.deb`        | `chmod +x Whispr_*.AppImage` and run it, or `sudo dpkg -i whispr_*.deb`.                                                                                                                          |
 
-Once running, auto-updates are handled by the built-in updater
-(`tauri-plugin-updater`) — no reinstall required for later versions.
+Once installed, Whispr keeps itself up to date — its built-in updater
+fetches new versions automatically, no reinstall needed.
 
-## Releasing a new version
+## Quick start
 
-Before tagging, run through the [manual smoke checklist](docs/manual-smoke.md)
-to verify the parts of the app that can't be covered by automated tests.
+1. **Launch Whispr** and grant the one permission it needs to type for you:
+   - **macOS** — _System Settings → Privacy & Security → Accessibility_,
+     enable Whispr.
+   - **Windows** — nothing extra.
+   - **Linux** — install the keystroke tool for your session:
+     `wtype` / `ydotool` / `dotool` on Wayland, or `xdotool` on X11.
+2. **Pick how you want to transcribe.** For a cloud engine or AI cleanup,
+   add your API key under **Speech models** / **AI Providers**. Prefer to
+   stay offline? Download an on-device model from **Speech models → Local**.
+3. **Hold your shortcut and talk.** Release, and your words appear at the
+   cursor. Tune the rest — hotkeys, profiles, vocabulary — whenever you
+   like.
 
-Releases are cut by `.github/workflows/release.yml`: push a semver tag and the
-workflow builds installers for macOS, Windows, and Linux in parallel, publishes
-a single GitHub Release, and uploads the signed `latest.json` manifest that
-installed apps poll.
+## Privacy
 
-1. Bump the version in **three** files (they must match):
-   - `package.json` → `version`
-   - `src-tauri/Cargo.toml` → `[package] version`
-   - `src-tauri/tauri.conf.json` → `version`
-2. Commit: `git commit -am "chore(release): v1.5.0"`.
-3. Tag and push:
-   ```sh
-   git tag v1.5.0
-   git push origin main --tags
-   ```
-4. Watch the run at `Actions → Release`.
+Whispr is local-first. Your transcript **history** and **settings** never
+leave your machine, and your **API keys** are stored on disk and are never
+exposed back to the app's interface. When you use a cloud speech provider
+or AI cleanup, only the audio or text for that request is sent to the
+provider you chose — pick an on-device model to keep everything offline.
 
-### One-time setup before the first release
+Settings and history live in your platform's app-data directory for
+`com.whispr.app` (`~/Library/Application Support/…` on macOS,
+`%APPDATA%\…` on Windows, `~/.local/share/…` on Linux).
 
-The updater verifies downloads against a signing key you generate locally and
-store as a GitHub Actions secret:
+## Contributing
 
-```sh
-pnpm tauri signer generate -w ~/.tauri/whispr.key
-```
-
-- The command prints a **public** key — paste it into
-  `src-tauri/tauri.conf.json → plugins.updater.pubkey`.
-- The **private** key file (`~/.tauri/whispr.key`) stays on your machine —
-  never commit it. Paste its full contents as the GitHub secret
-  `TAURI_SIGNING_PRIVATE_KEY` (Repo → Settings → Secrets and variables →
-  Actions). If you set a password for it, add
-  `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` too.
-
-If the private key is ever lost, updates break for existing installs — you'd
-have to publish a new public key and ship a build with it, which existing
-installs can't auto-update to. Back it up somewhere safe.
+Want to build from source, run the dev environment, or cut a release?
+See [**CONTRIBUTING.md**](CONTRIBUTING.md).
 
 ## License
 
-MIT — see `LICENSE` if present, or add one before publishing a release.
+Released under the MIT License.
