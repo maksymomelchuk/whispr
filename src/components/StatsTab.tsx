@@ -44,7 +44,7 @@ const PERIOD_SPECS: PeriodSpec[] = [
   { id: "all", label: "All Time" },
 ];
 
-const TYPING_WPM_BASELINE = 45;
+const TYPING_WPM_BASELINE = 40;
 
 const chartConfig = {
   words: { label: "Words", color: "var(--color-primary)" },
@@ -157,6 +157,15 @@ function formatTimeSaved(words: number, seconds: number): string {
   if (savedMinutes < 1) return "0m";
   const h = Math.floor(savedMinutes / 60);
   const m = Math.round(savedMinutes % 60);
+  if (h === 0) return `${m}m`;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const minutes = Math.round(seconds / 60);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
   if (h === 0) return `${m}m`;
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
@@ -288,6 +297,7 @@ export function StatsTab() {
           <StatSummary
             words={formatCount(agg.words)}
             timeSaved={formatTimeSaved(agg.words, agg.seconds)}
+            dictationTime={formatDuration(agg.seconds)}
             wpm={formatWpm(agg.words, agg.seconds)}
             dictations={agg.dictations}
           />
@@ -353,15 +363,22 @@ function PeriodToggle({
 interface StatSummaryProps {
   words: string;
   timeSaved: string;
+  dictationTime: string;
   wpm: string;
   dictations: number;
 }
 
-function StatSummary({ words, timeSaved, wpm, dictations }: StatSummaryProps) {
+function StatSummary({
+  words,
+  timeSaved,
+  dictationTime,
+  wpm,
+  dictations,
+}: StatSummaryProps) {
   return (
-    <div className="flex items-baseline gap-6 px-1 py-1">
+    <div className="flex flex-wrap items-baseline gap-x-6 gap-y-3 px-1 py-1">
       <div className="flex items-baseline gap-1.5">
-        <span className="text-[28px] font-semibold tabular-nums leading-none text-foreground">
+        <span className="whitespace-nowrap text-[28px] font-semibold tabular-nums leading-none text-foreground">
           {words}
         </span>
         <span className="text-[12px] text-muted-foreground">words</span>
@@ -370,20 +387,26 @@ function StatSummary({ words, timeSaved, wpm, dictations }: StatSummaryProps) {
       <span className="text-border select-none text-base">·</span>
 
       <div className="flex items-baseline gap-1.5">
-        <span className="text-[28px] font-semibold tabular-nums leading-none text-foreground">
+        <span className="whitespace-nowrap text-[28px] font-semibold tabular-nums leading-none text-foreground">
           {timeSaved}
         </span>
         <span className="text-[12px] text-muted-foreground">saved</span>
       </div>
 
       <div className="ml-auto flex items-center gap-4 text-[12px] text-muted-foreground">
-        <span>
+        <span className="whitespace-nowrap">
+          <span className="font-medium tabular-nums text-foreground">
+            {dictationTime}
+          </span>{" "}
+          spoken
+        </span>
+        <span className="whitespace-nowrap">
           <span className="font-medium tabular-nums text-foreground">
             {wpm}
           </span>{" "}
           WPM avg
         </span>
-        <span>
+        <span className="whitespace-nowrap">
           <span className="font-medium tabular-nums text-foreground">
             {formatCount(dictations)}
           </span>{" "}
@@ -431,7 +454,7 @@ function ActivityChart({
           isAnimationActive={false}
           content={
             <ChartTooltipContent
-              formatter={(value) => [formatCount(value as number), "words"]}
+              formatter={(value) => [formatCount(value as number), " words"]}
               labelFormatter={(label) =>
                 new Date(label + "T00:00:00").toLocaleDateString("en-US", {
                   month: "long",
