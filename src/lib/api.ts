@@ -92,9 +92,6 @@ export const deleteMode = (id: string) => invoke<void>("delete_mode", { id });
 export const duplicateMode = (id: string) =>
   invoke<void>("duplicate_mode", { id });
 
-export const setDefaultMode = (id: string) =>
-  invoke<void>("set_default_mode", { id });
-
 export const setAnthropicApiKey = (apiKey: string) =>
   invoke<void>("set_anthropic_api_key", { apiKey });
 

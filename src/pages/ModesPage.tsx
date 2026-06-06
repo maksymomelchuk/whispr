@@ -2,7 +2,6 @@ import {
   CaretRightIcon,
   CopyIcon,
   PencilSimpleIcon,
-  StarIcon,
   TrashIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react";
@@ -54,7 +53,6 @@ import {
   formatShortcut,
   getLocalModelStatuses,
   getSettings,
-  setDefaultMode,
   updateMode,
 } from "../lib/api";
 import type {
@@ -258,30 +256,19 @@ function buildLanguage(
 
 function ModeRow({
   mode,
-  isDefault,
-  isLast,
   bindings,
   missingProviderKey,
   onEdit,
   onDuplicate,
   onDelete,
-  onSetDefault,
 }: {
   mode: Mode;
-  isDefault: boolean;
-  isLast: boolean;
   bindings: HotkeyBinding[];
   missingProviderKey: boolean;
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
-  onSetDefault: () => void;
 }) {
-  const deleteDisabled = isLast || isDefault;
-  let deleteTooltip: string | null = null;
-  if (isLast) deleteTooltip = "Cannot delete the only remaining profile";
-  else if (isDefault) deleteTooltip = "Set a different default before deleting";
-
   return (
     <RowCard>
       <div className="flex flex-1 min-w-0 flex-col gap-0.5">
@@ -289,7 +276,6 @@ function ModeRow({
           <span className="text-sm font-semibold text-foreground">
             {mode.name}
           </span>
-          {isDefault && <Badge className="text-[10px]">Default</Badge>}
           {mode.ai_cleanup.enabled && (
             <Badge variant="neutral" className="text-[10px]">
               Cleanup
@@ -315,33 +301,6 @@ function ModeRow({
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
-        {!isDefault && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Set as default"
-                onClick={onSetDefault}
-              >
-                <StarIcon size={15} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Set as default</TooltipContent>
-          </Tooltip>
-        )}
-        {isDefault && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Default profile"
-            disabled
-            className="opacity-100 text-primary"
-          >
-            <StarIcon size={15} weight="fill" />
-          </Button>
-        )}
-
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -372,20 +331,17 @@ function ModeRow({
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <span>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Delete"
-                disabled={deleteDisabled}
-                onClick={onDelete}
-                className="text-muted-foreground/70 hover:text-destructive"
-              >
-                <TrashIcon size={15} />
-              </Button>
-            </span>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Delete"
+              onClick={onDelete}
+              className="text-muted-foreground/70 hover:text-destructive"
+            >
+              <TrashIcon size={15} />
+            </Button>
           </TooltipTrigger>
-          {deleteTooltip && <TooltipContent>{deleteTooltip}</TooltipContent>}
+          <TooltipContent>Delete</TooltipContent>
         </Tooltip>
       </div>
     </RowCard>
@@ -1094,7 +1050,10 @@ export function ModesPage() {
   const handleDelete = async (id: string) => {
     try {
       await deleteMode(id);
-      setSettings((s) => ({ ...s, modes: s.modes.filter((m) => m.id !== id) }));
+      // deleteMode also drops the mode's hotkey binding server-side; re-fetch so
+      // the stale binding doesn't linger and trip a phantom shortcut conflict.
+      const updated = await getSettings();
+      setSettings(() => updated);
     } catch (e) {
       console.error(e);
     }
@@ -1110,48 +1069,42 @@ export function ModesPage() {
     }
   };
 
-  const handleSetDefault = async (id: string) => {
-    try {
-      await setDefaultMode(id);
-      setSettings((s) => ({ ...s, default_mode_id: id }));
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   return (
     <div className="p-6 flex flex-col gap-8">
       <SectionHeader title="Profiles" />
-      <div className="flex flex-col gap-2">
-        {settings.modes.map((mode) => {
-          const provider = mode.provider_model.provider;
-          const missingProviderKey =
-            (provider === "deepgram" &&
-              !settings.deepgram_api_key_configured) ||
-            (provider === "groq" && !settings.groq_api_key_configured) ||
-            (provider === "assembly_ai" &&
-              !settings.assemblyai_api_key_configured) ||
-            (provider === "open_ai" && !settings.openai_api_key_configured) ||
-            (provider === "eleven_labs" &&
-              !settings.elevenlabs_api_key_configured);
-          return (
-            <ModeRow
-              key={mode.id}
-              mode={mode}
-              isDefault={mode.id === settings.default_mode_id}
-              isLast={settings.modes.length === 1}
-              bindings={settings.hotkey_bindings.filter(
-                (b) => pttModeId(b) === mode.id,
-              )}
-              missingProviderKey={missingProviderKey}
-              onEdit={() => openEditor(mode)}
-              onDuplicate={() => handleDuplicate(mode.id)}
-              onDelete={() => handleDelete(mode.id)}
-              onSetDefault={() => handleSetDefault(mode.id)}
-            />
-          );
-        })}
-      </div>
+      {settings.modes.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No profiles yet. Add one to start dictating.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {settings.modes.map((mode) => {
+            const provider = mode.provider_model.provider;
+            const missingProviderKey =
+              (provider === "deepgram" &&
+                !settings.deepgram_api_key_configured) ||
+              (provider === "groq" && !settings.groq_api_key_configured) ||
+              (provider === "assembly_ai" &&
+                !settings.assemblyai_api_key_configured) ||
+              (provider === "open_ai" && !settings.openai_api_key_configured) ||
+              (provider === "eleven_labs" &&
+                !settings.elevenlabs_api_key_configured);
+            return (
+              <ModeRow
+                key={mode.id}
+                mode={mode}
+                bindings={settings.hotkey_bindings.filter(
+                  (b) => pttModeId(b) === mode.id,
+                )}
+                missingProviderKey={missingProviderKey}
+                onEdit={() => openEditor(mode)}
+                onDuplicate={() => handleDuplicate(mode.id)}
+                onDelete={() => handleDelete(mode.id)}
+              />
+            );
+          })}
+        </div>
+      )}
 
       <div className="flex items-center gap-3">
         <Button variant="outline" size="sm" onClick={handleAddMode}>

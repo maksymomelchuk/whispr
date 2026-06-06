@@ -34,7 +34,6 @@ pub struct SettingsView {
     pub correction_sets: Vec<NamedCorrectionSet>,
     pub snippets: Vec<SnippetEntry>,
     pub modes: Vec<Mode>,
-    pub default_mode_id: ModeId,
     pub ai_cleanup_auth_mode: CleanupAuthMode,
     pub ai_cleanup_key_configured: bool,
     pub ai_cleanup_oauth_token_configured: bool,
@@ -107,7 +106,6 @@ impl From<Settings> for SettingsView {
             correction_sets: s.correction_sets,
             snippets: s.snippets,
             modes: s.modes,
-            default_mode_id: s.default_mode_id,
             ai_cleanup_auth_mode: s.ai_cleanup.auth_mode,
             ai_cleanup_key_configured: anthropic_key_configured,
             ai_cleanup_oauth_token_configured: s
@@ -185,9 +183,10 @@ pub async fn validate_deepgram_api_key(api_key: String) -> ApiKeyValidation {
 #[tauri::command]
 pub async fn validate_groq_api_key(app: AppHandle, api_key: String) -> ApiKeyValidation {
     let settings = config::load(&app);
-    let language = config::get_default_mode(&settings)
-        .language
-        .as_code()
+    let language = settings
+        .modes
+        .first()
+        .and_then(|m| m.language.as_code())
         .unwrap_or("en")
         .to_string();
     api_key_validation::validate_groq(&api_key, GroqModel::default(), &language).await
@@ -306,12 +305,10 @@ pub fn update_mode(app: AppHandle, mode: Mode) -> Result<(), String> {
 
 #[tauri::command]
 pub fn delete_mode(app: AppHandle, state: State<'_, AppState>, id: ModeId) -> Result<(), String> {
-    config::update_fallible(&app, |s| {
-        config::check_delete_mode(s, &id)?;
+    config::update(&app, |s| {
         s.modes.retain(|m| m.id != id);
         s.hotkey_bindings
             .retain(|b| !is_ptt_for_mode(&b.action, &id));
-        Ok(())
     })?;
     state
         .hotkey_bindings
@@ -339,17 +336,6 @@ pub fn duplicate_mode(app: AppHandle, id: ModeId) -> Result<(), String> {
                 ..source
             });
         }
-    })
-}
-
-#[tauri::command]
-pub fn set_default_mode(app: AppHandle, id: ModeId) -> Result<(), String> {
-    config::update_fallible(&app, |s| {
-        if !s.modes.iter().any(|m| m.id == id) {
-            return Err(format!("Mode '{id}' not found."));
-        }
-        s.default_mode_id = id;
-        Ok(())
     })
 }
 
@@ -733,8 +719,8 @@ mod tests {
         let view: SettingsView = Settings::default().into();
         assert!(!view.deepgram_api_key_configured);
         assert!(!view.groq_api_key_configured);
-        assert_eq!(view.hotkey_bindings.len(), 1);
-        assert_eq!(view.hotkey_bindings[0].shortcut.key, "AltRight");
+        assert!(view.modes.is_empty());
+        assert!(view.hotkey_bindings.is_empty());
         assert!(view.term_sets.is_empty());
     }
 
@@ -748,10 +734,13 @@ mod tests {
     }
 
     #[test]
-    fn settings_view_exposes_modes_and_default_mode_id() {
-        let view: SettingsView = Settings::default().into();
-        assert_eq!(view.modes.len(), 4);
-        assert_eq!(view.default_mode_id, crate::mode::SEED_MODE_DEFAULT_EN);
+    fn settings_view_exposes_modes() {
+        let settings = Settings {
+            modes: vec![Mode::seed_default_en(false), Mode::seed_cleaned_en()],
+            ..Settings::default()
+        };
+        let view: SettingsView = settings.into();
+        assert_eq!(view.modes.len(), 2);
         let default = view
             .modes
             .iter()
@@ -825,7 +814,10 @@ mod tests {
 
     #[test]
     fn settings_view_carries_per_mode_provider_model() {
-        let mut settings = Settings::default();
+        let mut settings = Settings {
+            modes: vec![Mode::seed_default_en(false), Mode::seed_cleaned_en()],
+            ..Settings::default()
+        };
         settings.modes[0].provider_model = ProviderModel::Groq {
             model: GroqModel::WhisperLargeV3,
         };

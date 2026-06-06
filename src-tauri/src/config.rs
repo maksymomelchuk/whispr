@@ -1,7 +1,4 @@
-use crate::mode::{
-    Mode, ModeId, ModeLanguage, SetId, SEED_MODE_CLEANED_EN, SEED_MODE_DEFAULT_EN, SEED_MODE_UA_EN,
-    SEED_MODE_UKRAINIAN,
-};
+use crate::mode::{Mode, ModeId, SetId, SEED_MODE_UA_EN};
 pub use crate::provider::{AssemblyAiModel, GroqModel, ProviderModel, TranscriptionProvider};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
@@ -100,13 +97,6 @@ impl<'de> Deserialize<'de> for HotkeyBinding {
             action,
         })
     }
-}
-
-pub fn default_hotkey_bindings() -> Vec<HotkeyBinding> {
-    vec![HotkeyBinding::ptt(
-        Shortcut::default(),
-        SEED_MODE_DEFAULT_EN.to_string(),
-    )]
 }
 
 /// Same key+modifiers with different is_double_tap are distinct shortcuts and allowed.
@@ -297,10 +287,6 @@ fn default_history_limit() -> Option<usize> {
     Some(5)
 }
 
-fn default_mode_id() -> ModeId {
-    SEED_MODE_DEFAULT_EN.to_string()
-}
-
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LocalWhisperIdleTimeout {
@@ -387,8 +373,6 @@ pub struct Settings {
     pub ai_cleanup: AiCleanupSettings,
     #[serde(default)]
     pub modes: Vec<Mode>,
-    #[serde(default = "default_mode_id")]
-    pub default_mode_id: ModeId,
     #[serde(default)]
     pub input_device: Option<String>,
     #[serde(default = "default_true")]
@@ -407,10 +391,6 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        let mode_default_en = Mode::seed_default_en(false);
-        let mode_cleaned_en = Mode::seed_cleaned_en();
-        let mode_ukrainian = Mode::seed_ukrainian();
-        let mode_ua_en = Mode::seed_ua_en();
         Self {
             api_key: None,
             ai_cleanup_enabled: None,
@@ -422,7 +402,7 @@ impl Default for Settings {
             openai_api_key: None,
             elevenlabs_api_key: None,
             legacy_shortcut: Shortcut::default(),
-            hotkey_bindings: default_hotkey_bindings(),
+            hotkey_bindings: vec![],
             legacy_dictionary: vec![],
             terms: vec![],
             term_sets: vec![],
@@ -433,8 +413,7 @@ impl Default for Settings {
             groq: GroqSettings::default(),
             assemblyai: AssemblyAiSettings::default(),
             ai_cleanup: AiCleanupSettings::default(),
-            modes: vec![mode_default_en, mode_cleaned_en, mode_ukrainian, mode_ua_en],
-            default_mode_id: default_mode_id(),
+            modes: vec![],
             input_device: None,
             pause_media_on_record: true,
             history_limit: default_history_limit(),
@@ -444,23 +423,6 @@ impl Default for Settings {
             local_whisper: LocalWhisperSettings::default(),
         }
     }
-}
-
-/// Returns the default mode from settings, falling back to the first mode if
-/// `default_mode_id` doesn't match any entry, or creating a fallback mode if
-/// `modes` is somehow empty.
-pub fn get_default_mode(settings: &Settings) -> &Mode {
-    settings
-        .modes
-        .iter()
-        .find(|m| m.id == settings.default_mode_id)
-        .or_else(|| settings.modes.first())
-        .unwrap_or_else(|| {
-            // Statically allocated fallback so we can return a reference.
-            // Unreachable in practice: migration always seeds at least one mode.
-            static FALLBACK: std::sync::OnceLock<Mode> = std::sync::OnceLock::new();
-            FALLBACK.get_or_init(|| Mode::seed_default_en(false))
-        })
 }
 
 /// Migrates legacy settings into the new shape. Returns `true` if any change
@@ -485,41 +447,8 @@ fn migrate(s: &mut Settings) -> bool {
         }
     }
 
-    if s.modes.is_empty() {
-        // An empty/whitespace value is treated as missing.
-        let non_empty = |opt: &Option<String>| -> Option<String> {
-            opt.clone().filter(|l| !l.trim().is_empty())
-        };
-        let (primary, secondary) = match s.transcription_provider {
-            TranscriptionProvider::Groq => (&s.groq.language, &s.deepgram.language),
-            _ => (&s.deepgram.language, &s.groq.language),
-        };
-        let legacy_language = non_empty(primary).or_else(|| non_empty(secondary));
-
-        let mut mode = Mode::seed_default_en(s.ai_cleanup_enabled.unwrap_or(false));
-        if let Some(code) = legacy_language {
-            mode.language = ModeLanguage::exact(code);
-        }
-        s.modes.push(mode);
-        s.modes.push(Mode::seed_cleaned_en());
-        s.modes.push(Mode::seed_ukrainian());
-        s.modes.push(Mode::seed_ua_en());
-        s.default_mode_id = SEED_MODE_DEFAULT_EN.to_string();
-        changed = true;
-    } else {
-        // For any predefined mode that's absent, add it — idempotent across upgrades.
-        for (id, seed) in [
-            (SEED_MODE_DEFAULT_EN, Mode::seed_default_en(false)),
-            (SEED_MODE_CLEANED_EN, Mode::seed_cleaned_en()),
-            (SEED_MODE_UKRAINIAN, Mode::seed_ukrainian()),
-            (SEED_MODE_UA_EN, Mode::seed_ua_en()),
-        ] {
-            if !s.modes.iter().any(|m| m.id == id) {
-                s.modes.push(seed);
-                changed = true;
-            }
-        }
-    }
+    // Profiles are never auto-created or backfilled: a fresh install starts with
+    // an empty list and the user builds their own. Deleted profiles stay deleted.
 
     if s.ai_cleanup_enabled.take().is_some() {
         changed = true;
@@ -643,13 +572,14 @@ fn migrate(s: &mut Settings) -> bool {
     }
 
     // On first load after this upgrade the bindings list will be empty
-    // (the old JSON only has "shortcut"). Seed it from the legacy field.
+    // (the old JSON only has "shortcut"). Seed it from the legacy field, bound
+    // to the first mode (the seeding above guarantees at least one exists).
     if s.hotkey_bindings.is_empty() {
-        s.hotkey_bindings.push(HotkeyBinding::ptt(
-            s.legacy_shortcut.clone(),
-            s.default_mode_id.clone(),
-        ));
-        changed = true;
+        if let Some(first_mode_id) = s.modes.first().map(|m| m.id.clone()) {
+            s.hotkey_bindings
+                .push(HotkeyBinding::ptt(s.legacy_shortcut.clone(), first_mode_id));
+            changed = true;
+        }
     }
 
     // PasteLatest bindings are independent of modes and always retained.
@@ -696,16 +626,6 @@ pub fn from_json(json: &str) -> Result<Settings, serde_json::Error> {
     let mut s: Settings = serde_json::from_str(json)?;
     migrate(&mut s);
     Ok(s)
-}
-
-pub fn check_delete_mode(s: &Settings, id: &str) -> Result<(), String> {
-    if s.modes.len() <= 1 {
-        return Err("Cannot delete the last mode.".to_string());
-    }
-    if s.default_mode_id == id {
-        return Err("Set a different default mode before deleting this one.".to_string());
-    }
-    Ok(())
 }
 
 /// Like [`update`] but the closure may return an error to abort the save.
@@ -783,7 +703,7 @@ pub fn save(app: &tauri::AppHandle, settings: &Settings) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mode::ModeLanguage;
+    use crate::mode::SEED_MODE_DEFAULT_EN;
 
     #[test]
     fn default_settings_have_expected_provider_and_groq_defaults() {
@@ -802,15 +722,10 @@ mod tests {
     }
 
     #[test]
-    fn default_settings_seed_four_predefined_modes() {
+    fn default_settings_start_with_no_profiles_or_bindings() {
         let s = Settings::default();
-        assert_eq!(s.modes.len(), 4);
-        assert_eq!(s.default_mode_id, SEED_MODE_DEFAULT_EN);
-        let ids: Vec<&str> = s.modes.iter().map(|m| m.id.as_str()).collect();
-        assert!(ids.contains(&SEED_MODE_DEFAULT_EN));
-        assert!(ids.contains(&crate::mode::SEED_MODE_CLEANED_EN));
-        assert!(ids.contains(&crate::mode::SEED_MODE_UKRAINIAN));
-        assert!(ids.contains(&crate::mode::SEED_MODE_UA_EN));
+        assert!(s.modes.is_empty());
+        assert!(s.hotkey_bindings.is_empty());
     }
 
     #[test]
@@ -877,75 +792,16 @@ mod tests {
     }
 
     #[test]
-    fn migration_creates_mode_from_deepgram_language() {
-        let json = r#"{
-            "transcription_provider": "deepgram",
-            "deepgram": { "language": "fr" }
-        }"#;
-        let mut s: Settings = serde_json::from_str(json).unwrap();
-        assert!(s.modes.is_empty());
-
-        let changed = migrate(&mut s);
-        assert!(changed);
-        assert_eq!(s.modes.len(), 4);
-        let default = s
-            .modes
-            .iter()
-            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
-            .unwrap();
-        assert_eq!(default.language, ModeLanguage::exact("fr"));
-    }
-
-    #[test]
-    fn migration_creates_mode_from_groq_language_when_groq_is_active() {
-        let json = r#"{
-            "transcription_provider": "groq",
-            "groq": { "model": "whisper_large_v3_turbo", "language": "uk" }
-        }"#;
-        let mut s: Settings = serde_json::from_str(json).unwrap();
-        let changed = migrate(&mut s);
-        assert!(changed);
-        assert_eq!(s.modes.len(), 4);
-        let default = s
-            .modes
-            .iter()
-            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
-            .unwrap();
-        assert_eq!(default.language, ModeLanguage::exact("uk"));
-    }
-
-    #[test]
-    fn migration_defaults_language_to_en_when_none_present() {
-        let json = r#"{}"#;
-        let mut s: Settings = serde_json::from_str(json).unwrap();
-        migrate(&mut s);
-        let default = s
-            .modes
-            .iter()
-            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
-            .unwrap();
-        assert_eq!(default.language, ModeLanguage::exact("en"));
-    }
-
-    #[test]
-    fn migration_reads_legacy_ai_cleanup_enabled_into_mode() {
-        let json = r#"{"ai_cleanup_enabled": true}"#;
-        let mut s: Settings = serde_json::from_str(json).unwrap();
-        migrate(&mut s);
-        let default = s
-            .modes
-            .iter()
-            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
-            .unwrap();
-        assert!(default.ai_cleanup.enabled);
-        let reserialized = serde_json::to_string(&s).unwrap();
-        let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
-        assert!(v.get("ai_cleanup_enabled").is_none());
-    }
-
-    #[test]
     fn migration_global_ai_cleanup_off_forces_every_mode_off() {
-        let json = r#"{"ai_cleanup": {"enabled": false}}"#;
+        // Legacy flat `ai_cleanup.enabled = false` must force every existing
+        // mode's per-mode cleanup off so nothing silently starts cleaning.
+        let json = r#"{
+            "ai_cleanup": {"enabled": false},
+            "modes": [
+                {"id":"a","name":"A","language":{"kind":"auto"},"ai_cleanup":{"enabled":true,"prompt_override":null},"use_snippets":true},
+                {"id":"b","name":"B","language":{"kind":"auto"},"ai_cleanup":{"enabled":true,"prompt_override":null},"use_snippets":true}
+            ]
+        }"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
         for mode in &s.modes {
@@ -965,27 +821,20 @@ mod tests {
 
     #[test]
     fn migration_global_ai_cleanup_on_leaves_modes_alone() {
-        let json = r#"{"ai_cleanup": {"enabled": true}}"#;
+        // Legacy flat `ai_cleanup.enabled = true` must not touch per-mode toggles.
+        let json = r#"{
+            "ai_cleanup": {"enabled": true},
+            "modes": [
+                {"id":"on","name":"On","language":{"kind":"auto"},"ai_cleanup":{"enabled":true,"prompt_override":null},"use_snippets":true},
+                {"id":"off","name":"Off","language":{"kind":"auto"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_snippets":true}
+            ]
+        }"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
-        let cleaned = s
-            .modes
-            .iter()
-            .find(|m| m.id == SEED_MODE_CLEANED_EN)
-            .unwrap();
-        assert!(
-            cleaned.ai_cleanup.enabled,
-            "global-on must not stomp seed-mode defaults"
-        );
-        let default = s
-            .modes
-            .iter()
-            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
-            .unwrap();
-        assert!(
-            !default.ai_cleanup.enabled,
-            "global-on must not enable modes that were off by default"
-        );
+        let on = s.modes.iter().find(|m| m.id == "on").unwrap();
+        assert!(on.ai_cleanup.enabled, "an enabled mode stays enabled");
+        let off = s.modes.iter().find(|m| m.id == "off").unwrap();
+        assert!(!off.ai_cleanup.enabled, "a disabled mode stays disabled");
     }
 
     #[test]
@@ -1140,12 +989,6 @@ mod tests {
             s.term_sets.is_empty(),
             "no legacy terms → no Default Terms set"
         );
-        let default_mode = s
-            .modes
-            .iter()
-            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
-            .unwrap();
-        assert!(default_mode.term_set_ids.is_empty());
     }
 
     #[test]
@@ -1258,104 +1101,46 @@ mod tests {
     }
 
     #[test]
-    fn migration_is_idempotent_when_all_four_modes_already_present() {
-        let mut s = Settings::default();
-        assert_eq!(s.modes.len(), 4);
-        migrate(&mut s);
-        assert_eq!(
-            s.modes.len(),
-            4,
-            "second migration must not duplicate modes"
-        );
-    }
-
-    #[test]
-    fn migrate_seeds_all_four_modes_when_modes_empty() {
+    fn migrate_does_not_seed_profiles_into_an_empty_config() {
         let json = r#"{}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         assert!(s.modes.is_empty());
 
-        let changed = migrate(&mut s);
-        assert!(changed);
-        assert_eq!(s.modes.len(), 4);
+        migrate(&mut s);
 
-        let ids: Vec<&str> = s.modes.iter().map(|m| m.id.as_str()).collect();
-        assert!(ids.contains(&SEED_MODE_DEFAULT_EN));
-        assert!(ids.contains(&crate::mode::SEED_MODE_CLEANED_EN));
-        assert!(ids.contains(&crate::mode::SEED_MODE_UKRAINIAN));
-        assert!(ids.contains(&crate::mode::SEED_MODE_UA_EN));
+        assert!(s.modes.is_empty(), "a fresh config must stay profile-free");
     }
 
     #[test]
-    fn migrate_adds_missing_seeds_to_existing_mode_default_en() {
+    fn migrate_leaves_an_explicit_profile_list_unchanged() {
         let json = r#"{
-            "modes": [{"id":"mode-default-en","name":"My Custom Name","language":{"kind":"exact","code":"en"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_terms":true,"use_corrections":true,"use_snippets":true}],
-            "default_mode_id": "mode-default-en"
+            "modes": [
+                {"id":"a","name":"A","language":{"kind":"auto"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_snippets":true},
+                {"id":"b","name":"B","language":{"kind":"auto"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_snippets":true}
+            ]
+        }"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        migrate(&mut s);
+
+        let ids: Vec<&str> = s.modes.iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(ids, vec!["a", "b"], "neither dropped nor backfilled");
+    }
+
+    #[test]
+    fn migrate_does_not_backfill_seeds_into_a_non_empty_mode_list() {
+        // A user who deleted every predefined profile but one keeps exactly that
+        // list — migration must not resurrect the deleted seeds.
+        let json = r#"{
+            "modes": [{"id":"mode-default-en","name":"My Custom Name","language":{"kind":"exact","code":"en"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_terms":true,"use_corrections":true,"use_snippets":true}]
         }"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         assert_eq!(s.modes.len(), 1);
 
-        let changed = migrate(&mut s);
-        assert!(changed);
-        assert_eq!(s.modes.len(), 4);
+        migrate(&mut s);
 
-        // User-edited name is preserved, not overwritten.
-        let default = s
-            .modes
-            .iter()
-            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
-            .unwrap();
-        assert_eq!(default.name, "My Custom Name");
-    }
-
-    #[test]
-    fn migrate_is_fully_idempotent_with_all_four_seeds() {
-        let mut s = Settings::default();
-        assert_eq!(s.modes.len(), 4);
-
-        let changed = migrate(&mut s);
-        assert!(
-            !changed,
-            "migrate on fully-seeded settings must return false"
-        );
-        assert_eq!(s.modes.len(), 4);
-    }
-
-    #[test]
-    fn check_delete_mode_rejects_last_mode() {
-        let s = Settings {
-            modes: vec![Mode::seed_default_en(false)],
-            default_mode_id: SEED_MODE_DEFAULT_EN.to_string(),
-            ..Settings::default()
-        };
-        assert!(check_delete_mode(&s, SEED_MODE_DEFAULT_EN).is_err());
-    }
-
-    #[test]
-    fn check_delete_mode_rejects_default_mode() {
-        let s = Settings::default();
-        assert!(check_delete_mode(&s, SEED_MODE_DEFAULT_EN).is_err());
-    }
-
-    #[test]
-    fn check_delete_mode_allows_non_default_non_last_mode() {
-        let s = Settings::default();
-        assert!(check_delete_mode(&s, crate::mode::SEED_MODE_CLEANED_EN).is_ok());
-    }
-
-    #[test]
-    fn get_default_mode_finds_mode_by_id() {
-        let s = Settings::default();
-        let mode = get_default_mode(&s);
-        assert_eq!(mode.id, SEED_MODE_DEFAULT_EN);
-    }
-
-    #[test]
-    fn get_default_mode_falls_back_to_first_when_id_missing() {
-        let mut s = Settings::default();
-        s.default_mode_id = "nonexistent".to_string();
-        let mode = get_default_mode(&s);
-        assert_eq!(mode.id, SEED_MODE_DEFAULT_EN);
+        assert_eq!(s.modes.len(), 1, "seeds must not be backfilled");
+        assert_eq!(s.modes[0].id, SEED_MODE_DEFAULT_EN);
+        assert_eq!(s.modes[0].name, "My Custom Name");
     }
 
     #[test]
@@ -1395,12 +1180,6 @@ mod tests {
         }"#;
         let mut s: Settings = serde_json::from_str(legacy).unwrap();
         migrate(&mut s);
-        let default = s
-            .modes
-            .iter()
-            .find(|m| m.id == SEED_MODE_DEFAULT_EN)
-            .unwrap();
-        assert_eq!(default.language, ModeLanguage::exact("fr"));
         assert_eq!(s.deepgram_api_key.as_deref(), Some("dg-key"));
         let json = serde_json::to_string(&s).unwrap();
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
@@ -1409,7 +1188,11 @@ mod tests {
 
     #[test]
     fn migration_converts_legacy_shortcut_to_hotkey_binding() {
-        let json = r#"{"shortcut": {"key": "MetaRight", "modifiers": []}}"#;
+        // The legacy single shortcut binds to the first profile in the list.
+        let json = r#"{
+            "shortcut": {"key": "MetaRight", "modifiers": []},
+            "modes": [{"id":"first","name":"First","language":{"kind":"auto"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_snippets":true}]
+        }"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         assert!(s.hotkey_bindings.is_empty());
         let changed = migrate(&mut s);
@@ -1419,7 +1202,7 @@ mod tests {
         assert_eq!(
             s.hotkey_bindings[0].action,
             HotkeyAction::Ptt {
-                mode_id: SEED_MODE_DEFAULT_EN.to_string()
+                mode_id: "first".to_string()
             }
         );
         let reserialized = serde_json::to_string(&s).unwrap();
@@ -1433,8 +1216,14 @@ mod tests {
 
     #[test]
     fn migration_hotkey_bindings_is_idempotent() {
-        let mut s = Settings::default();
+        let json = r#"{
+            "modes": [{"id":"m1","name":"M","language":{"kind":"auto"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_snippets":true}],
+            "hotkey_bindings": [{"shortcut":{"key":"AltRight","modifiers":[]},"action":{"type":"Ptt","mode_id":"m1"}}]
+        }"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        migrate(&mut s);
         assert_eq!(s.hotkey_bindings.len(), 1);
+
         let changed = migrate(&mut s);
         assert!(
             !changed,
@@ -1445,7 +1234,18 @@ mod tests {
 
     #[test]
     fn migration_drops_orphaned_bindings_for_deleted_modes() {
-        let mut s = Settings::default();
+        let mut s = Settings {
+            modes: vec![Mode::seed_default_en(false)],
+            ..Settings::default()
+        };
+        s.hotkey_bindings.push(HotkeyBinding::ptt(
+            Shortcut {
+                key: "AltRight".to_string(),
+                modifiers: vec![],
+                is_double_tap: false,
+            },
+            SEED_MODE_DEFAULT_EN.to_string(),
+        ));
         s.hotkey_bindings.push(HotkeyBinding::ptt(
             Shortcut {
                 key: "MetaRight".to_string(),
@@ -1454,23 +1254,9 @@ mod tests {
             },
             "mode-nonexistent".to_string(),
         ));
-        assert_eq!(s.hotkey_bindings.len(), 2);
         let changed = migrate(&mut s);
         assert!(changed);
         assert_eq!(s.hotkey_bindings.len(), 1);
-        assert_eq!(
-            s.hotkey_bindings[0].action,
-            HotkeyAction::Ptt {
-                mode_id: SEED_MODE_DEFAULT_EN.to_string()
-            }
-        );
-    }
-
-    #[test]
-    fn default_settings_have_one_hotkey_binding_for_default_mode() {
-        let s = Settings::default();
-        assert_eq!(s.hotkey_bindings.len(), 1);
-        assert_eq!(s.hotkey_bindings[0].shortcut.key, "AltRight");
         assert_eq!(
             s.hotkey_bindings[0].action,
             HotkeyAction::Ptt {
@@ -1641,7 +1427,10 @@ mod tests {
 
     #[test]
     fn migration_collapses_duplicate_mode_bindings_to_first() {
-        let mut s = Settings::default();
+        let mut s = Settings {
+            modes: vec![Mode::seed_default_en(false)],
+            ..Settings::default()
+        };
         s.hotkey_bindings = vec![
             HotkeyBinding::ptt(
                 Shortcut {
@@ -1707,6 +1496,7 @@ mod tests {
     #[test]
     fn legacy_settings_with_mode_id_bindings_migrate_to_ptt_actions() {
         let json = r#"{
+            "modes": [{"id":"mode-default-en","name":"M","language":{"kind":"auto"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_snippets":true}],
             "hotkey_bindings": [
                 {"shortcut": {"key": "AltRight", "modifiers": []}, "mode_id": "mode-default-en"}
             ]
@@ -1785,8 +1575,17 @@ mod tests {
     }
 
     #[test]
-    fn migration_stamps_groq_provider_model_onto_all_seeded_modes() {
-        let json = r#"{"transcription_provider": "groq", "groq": {"model": "whisper_large_v3"}}"#;
+    fn migration_stamps_groq_provider_model_onto_default_provider_modes() {
+        // A pre-per-mode-provider config: global Groq, modes still on the
+        // default (Deepgram) provider_model get stamped with Groq.
+        let json = r#"{
+            "transcription_provider": "groq",
+            "groq": {"model": "whisper_large_v3"},
+            "modes": [
+                {"id":"a","name":"A","language":{"kind":"auto"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_snippets":true},
+                {"id":"b","name":"B","language":{"kind":"auto"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_snippets":true}
+            ]
+        }"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         let changed = migrate(&mut s);
         assert!(changed);
@@ -1803,8 +1602,14 @@ mod tests {
     }
 
     #[test]
-    fn migration_stamps_assemblyai_provider_model_onto_all_seeded_modes() {
-        let json = r#"{"transcription_provider": "assembly_ai", "assemblyai": {"model": "whisper_streaming"}}"#;
+    fn migration_stamps_assemblyai_provider_model_onto_default_provider_modes() {
+        let json = r#"{
+            "transcription_provider": "assembly_ai",
+            "assemblyai": {"model": "whisper_streaming"},
+            "modes": [
+                {"id":"a","name":"A","language":{"kind":"auto"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_snippets":true}
+            ]
+        }"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         let changed = migrate(&mut s);
         assert!(changed);
@@ -1822,9 +1627,13 @@ mod tests {
 
     #[test]
     fn migration_provider_model_skips_already_customised_modes() {
-        let json = r#"{"transcription_provider": "groq"}"#;
+        let json = r#"{
+            "transcription_provider": "groq",
+            "modes": [
+                {"id":"a","name":"A","language":{"kind":"auto"},"ai_cleanup":{"enabled":false,"prompt_override":null},"use_snippets":true}
+            ]
+        }"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
-        migrate(&mut s);
         s.modes[0].provider_model = ProviderModel::AssemblyAi {
             model: AssemblyAiModel::default(),
         };

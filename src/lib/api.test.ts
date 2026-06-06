@@ -23,7 +23,6 @@ import {
   setCleanupAuthMode,
   setCleanupThresholds,
   setDeepgramApiKey,
-  setDefaultMode,
   setGroqApiKey,
   setHistoryLimit,
   setHotkeyBindings,
@@ -224,11 +223,6 @@ const COMMANDS: Array<{
   {
     call: () => duplicateMode("m1"),
     cmd: "duplicate_mode",
-    args: { id: "m1" },
-  },
-  {
-    call: () => setDefaultMode("m1"),
-    cmd: "set_default_mode",
     args: { id: "m1" },
   },
   {

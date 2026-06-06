@@ -47,8 +47,13 @@ pub struct PipelineHarness {
 
 impl PipelineHarness {
     pub fn new() -> Self {
+        // Settings::default() starts profile-free; seed the one mode the
+        // harness drives so the pipeline has a profile to resolve.
         PipelineHarness {
-            settings: Settings::default(),
+            settings: Settings {
+                modes: vec![Mode::seed_default_en(false)],
+                ..Settings::default()
+            },
             mode_id: SEED_MODE_DEFAULT_EN.to_string(),
             cleanup: None,
             cleanup_error: None,

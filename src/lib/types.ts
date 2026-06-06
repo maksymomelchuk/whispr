@@ -201,7 +201,6 @@ export interface Settings {
   correction_sets: NamedCorrectionSet[];
   snippets: Snippet[];
   modes: Mode[];
-  default_mode_id: string;
   ai_cleanup_auth_mode: CleanupAuthMode;
   ai_cleanup_key_configured: boolean;
   ai_cleanup_oauth_token_configured: boolean;

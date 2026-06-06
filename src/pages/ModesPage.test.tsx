@@ -6,17 +6,21 @@ import {
   waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Mode, NamedCorrectionSet, Settings } from "@/lib/types";
+import { pttBinding } from "@/lib/types";
 
 import { SettingsContext } from "../context/SettingsContext";
 import {
   addMode as mockAddMode,
+  deleteMode as mockDeleteMode,
   getLocalModelStatuses as mockGetLocalModelStatuses,
+  getSettings as mockGetSettings,
   updateMode as mockUpdateMode,
 } from "../lib/api";
 import { ModeEditor, ModesPage } from "./ModesPage";
@@ -35,7 +39,6 @@ vi.mock("../lib/api", () => ({
   deleteMode: vi.fn(),
   duplicateMode: vi.fn(),
   getSettings: vi.fn(),
-  setDefaultMode: vi.fn(),
   formatShortcut: vi.fn(),
   getLocalModelStatuses: vi.fn().mockResolvedValue([]),
 }));
@@ -220,7 +223,6 @@ const BASE_SETTINGS: Settings = {
   correction_sets: [],
   snippets: [],
   modes: [],
-  default_mode_id: "mode-1",
   ai_cleanup_auth_mode: "api_key",
   ai_cleanup_key_configured: false,
   ai_cleanup_oauth_token_configured: false,
@@ -315,6 +317,102 @@ describe("ModesPage – warning badge", () => {
     };
     const { container } = render(<ModesPageWrapper settings={settings} />);
     expect(container.querySelector(".text-amber-500")).not.toBeInTheDocument();
+  });
+});
+
+function StatefulModesPageWrapper({ initial }: { initial: Settings }) {
+  const [settings, setSettings] = useState(initial);
+  return (
+    <MemoryRouter>
+      <TooltipProvider>
+        <SettingsContext.Provider
+          value={{
+            settings,
+            setSettings,
+            setSetting: vi.fn(),
+            themePreference: "system",
+            setThemePreference: vi.fn(),
+            accent: "indigo",
+            setAccent: vi.fn(),
+          }}
+        >
+          <ModesPage />
+        </SettingsContext.Provider>
+      </TooltipProvider>
+    </MemoryRouter>
+  );
+}
+
+describe("ModesPage – delete", () => {
+  const firstMode: Mode = { ...MODE, id: "mode-1", name: "Original" };
+  const secondMode: Mode = { ...MODE, id: "mode-2", name: "Second" };
+
+  it("re-fetches settings after delete so the removed mode's binding does not linger", async () => {
+    const initial: Settings = {
+      ...BASE_SETTINGS,
+      modes: [firstMode, secondMode],
+      hotkey_bindings: [
+        pttBinding(
+          { key: "KeyK", modifiers: ["AltLeft", "MetaLeft"] },
+          "mode-1",
+        ),
+      ],
+    };
+    // Backend drops the deleted mode and its binding; the page must adopt this
+    // server truth rather than optimistically filtering only `modes`.
+    const afterDelete: Settings = {
+      ...initial,
+      modes: [secondMode],
+      hotkey_bindings: [],
+    };
+    vi.mocked(mockDeleteMode).mockResolvedValue(undefined);
+    vi.mocked(mockGetSettings).mockResolvedValue(afterDelete);
+
+    render(<StatefulModesPageWrapper initial={initial} />);
+
+    fireEvent.click(screen.getAllByLabelText("Delete")[0]);
+
+    await waitFor(() =>
+      expect(vi.mocked(mockDeleteMode)).toHaveBeenCalledWith("mode-1"),
+    );
+    expect(vi.mocked(mockGetSettings)).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.queryByText("Original")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText("Second")).toBeInTheDocument();
+  });
+
+  it("allows deleting the only remaining profile (down to zero)", async () => {
+    const initial: Settings = { ...BASE_SETTINGS, modes: [firstMode] };
+    vi.mocked(mockDeleteMode).mockResolvedValue(undefined);
+    vi.mocked(mockGetSettings).mockResolvedValue({
+      ...BASE_SETTINGS,
+      modes: [],
+    });
+
+    render(<StatefulModesPageWrapper initial={initial} />);
+
+    const deleteButton = screen.getByLabelText("Delete");
+    expect(deleteButton).not.toBeDisabled();
+    fireEvent.click(deleteButton);
+
+    await waitFor(() =>
+      expect(vi.mocked(mockDeleteMode)).toHaveBeenCalledWith("mode-1"),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByText("No profiles yet. Add one to start dictating."),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it("shows an empty state when there are no profiles", () => {
+    render(
+      <StatefulModesPageWrapper initial={{ ...BASE_SETTINGS, modes: [] }} />,
+    );
+    expect(
+      screen.getByText("No profiles yet. Add one to start dictating."),
+    ).toBeInTheDocument();
   });
 });
 

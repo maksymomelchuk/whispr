@@ -303,13 +303,14 @@ async fn run_session(
     let settings = config::load(app);
 
     // Resolve the active mode up front: the STT call needs its language hint,
-    // otherwise the provider falls back to the default mode's language and
+    // otherwise the provider falls back to the first mode's language and
     // transcribes (e.g.) Ukrainian audio as English.
     let active_mode = settings
         .modes
         .iter()
         .find(|m| m.id == mode_id)
-        .unwrap_or_else(|| config::get_default_mode(&settings));
+        .or_else(|| settings.modes.first())
+        .ok_or_else(|| format!("No profile found for mode '{mode_id}'."))?;
     let mode_cleanup_enabled = active_mode.ai_cleanup.enabled;
     let mode_language = active_mode.language.clone();
     let mode_prompt_override = active_mode.ai_cleanup.prompt_override.clone();

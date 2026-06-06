@@ -319,6 +319,11 @@ export function HotkeysPage() {
         <p className="font-mono text-eyebrow uppercase text-foreground">
           Dictation Modes
         </p>
+        {settings.modes.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            No profiles yet. Create one in Profiles to bind a hotkey.
+          </p>
+        )}
         <div className="flex flex-col gap-8">
           {settings.modes.map((mode, modeIdx) => {
             const rows = modeBindings(mode);

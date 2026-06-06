@@ -226,7 +226,6 @@ pub fn run() {
             commands::update_mode,
             commands::delete_mode,
             commands::duplicate_mode,
-            commands::set_default_mode,
             commands::set_anthropic_api_key,
             commands::set_anthropic_oauth_token,
             commands::set_provider_key,
