@@ -20,6 +20,9 @@ import {
   useNavigate,
 } from "react-router-dom";
 
+import { isMacOS } from "@/lib/platform";
+import { cn } from "@/lib/utils";
+
 import { AiProvidersPage } from "../pages/AiProvidersPage";
 import { CorrectionsPage } from "../pages/CorrectionsPage";
 import { GeneralPage } from "../pages/GeneralPage";
@@ -39,9 +42,9 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarTrigger,
   useSidebar,
 } from "./ui/sidebar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { UpdateBanner } from "./UpdateBanner";
 
 interface NavItem {
@@ -161,25 +164,73 @@ function useNavShortcuts() {
   }, [navigate]);
 }
 
+function SidebarCollapseToggle() {
+  const { state, toggleSidebar } = useSidebar();
+  const collapsed = state === "collapsed";
+  const shortcut = isMacOS() ? "⌘B" : "Ctrl+B";
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className={
+            "absolute bottom-3 right-0 z-20 flex h-8 w-4 translate-x-[calc(50%+0.5px)] cursor-pointer items-center justify-center " +
+            "rounded-sm bg-[linear-gradient(to_right,var(--color-sidebar)_50%,var(--color-background)_50%)] text-sidebar-border transition-colors " +
+            "outline-hidden ring-sidebar-ring hover:text-foreground focus-visible:ring-2"
+          }
+        >
+          <svg
+            viewBox="0 0 16 32"
+            fill="none"
+            aria-hidden
+            className={cn("h-full w-full", collapsed && "-scale-x-100")}
+          >
+            <path
+              d="M8 0 V11 L3 16 L8 21 V32"
+              stroke="currentColor"
+              strokeWidth={1.25}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right">
+        {collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        <kbd className="ml-2 font-mono text-[10px] tracking-wide text-background/70">
+          {shortcut}
+        </kbd>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 function ShellInner() {
   useNavShortcuts();
   const { pathname } = useLocation();
   const isHome = pathname === "/";
+  const isMac = isMacOS();
   let counter = 0;
 
   return (
     <>
-      <header
-        data-tauri-drag-region=""
-        className="relative z-20 h-11 shrink-0 flex items-center pl-28 border-b border-sidebar-border"
-      >
-        <SidebarTrigger data-tauri-drag-region="false" />
-      </header>
+      {isMac && (
+        <header
+          data-tauri-drag-region=""
+          className="relative z-20 h-11 shrink-0 border-b border-sidebar-border"
+        />
+      )}
 
       <div className="flex flex-1 min-h-0 w-full">
         <Sidebar
           collapsible="icon"
-          className="top-11! h-auto! group-data-[side=left]:border-sidebar-border"
+          className={cn(
+            "h-auto! group-data-[side=left]:border-sidebar-border",
+            isMac && "top-11!",
+          )}
         >
           <SidebarContent className="px-2 py-3 gap-4">
             {NAV_SECTIONS.map((section, sectionIdx) => (
@@ -226,6 +277,7 @@ function ShellInner() {
               })}
             </SidebarMenu>
           </SidebarFooter>
+          <SidebarCollapseToggle />
         </Sidebar>
 
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
