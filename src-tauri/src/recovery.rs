@@ -121,9 +121,7 @@ fn build_outcome(
 mod tests {
     use super::*;
     use crate::cleanup::{AiProviderId, CleanupError, Transport, TransportResponse};
-    use crate::config::{
-        AiCleanupSettings, CorrectionEntry, NamedCorrectionSet, Settings, SnippetEntry,
-    };
+    use crate::config::{CorrectionEntry, NamedCorrectionSet, Settings, SnippetEntry};
     use crate::history::{CleanupStatus, HistoryEntry, ProfileSnapshot};
 
     struct MockTransport {
