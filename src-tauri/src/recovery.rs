@@ -1,10 +1,10 @@
 use crate::cleanup::{CleanupError, Transport};
+use crate::cleanup_invoke;
 use crate::config::Settings;
 use crate::corrections::{apply_corrections, compose_corrections};
 use crate::history::{CleanupStatus, HistoryEntry, ProfileSnapshot};
 use crate::pipeline::Outcome;
 use crate::snippets::expand_snippets;
-use crate::cleanup_invoke;
 use std::time::{Duration, Instant};
 
 /// Returns true only when `entry` carries a stored Profile snapshot, a stable
@@ -45,7 +45,13 @@ pub async fn recover_entry(
     )
     .await?;
 
-    Ok(build_outcome(entry, snapshot, replaced_text, settings, start))
+    Ok(build_outcome(
+        entry,
+        snapshot,
+        replaced_text,
+        settings,
+        start,
+    ))
 }
 
 pub(crate) async fn recover_entry_with_transport<T: Transport>(
@@ -68,7 +74,13 @@ pub(crate) async fn recover_entry_with_transport<T: Transport>(
     )
     .await?;
 
-    Ok(build_outcome(entry, snapshot, replaced_text, settings, start))
+    Ok(build_outcome(
+        entry,
+        snapshot,
+        replaced_text,
+        settings,
+        start,
+    ))
 }
 
 fn require_snapshot(entry: &HistoryEntry) -> Result<&ProfileSnapshot, CleanupError> {
@@ -403,8 +415,7 @@ mod tests {
             serde_json::json!({"error": {"message": "invalid key"}}).to_string(),
         );
 
-        let result =
-            recover_entry_with_transport(&entry, &settings, &transport, FIVE_SECS).await;
+        let result = recover_entry_with_transport(&entry, &settings, &transport, FIVE_SECS).await;
 
         assert!(
             matches!(result, Err(CleanupError::Credential(_))),
@@ -418,8 +429,7 @@ mod tests {
         let entry = make_entry(CleanupStatus::FailedTransient("net error".to_string()));
         let transport = MockTransport::failing("connection reset");
 
-        let result =
-            recover_entry_with_transport(&entry, &settings, &transport, FIVE_SECS).await;
+        let result = recover_entry_with_transport(&entry, &settings, &transport, FIVE_SECS).await;
 
         assert!(
             matches!(result, Err(CleanupError::Transient(_))),
@@ -434,8 +444,7 @@ mod tests {
         entry.profile_snapshot = None;
         let transport = MockTransport::returning(200, anthropic_success_body("irrelevant"));
 
-        let result =
-            recover_entry_with_transport(&entry, &settings, &transport, FIVE_SECS).await;
+        let result = recover_entry_with_transport(&entry, &settings, &transport, FIVE_SECS).await;
 
         assert!(
             matches!(result, Err(CleanupError::Transient(_))),

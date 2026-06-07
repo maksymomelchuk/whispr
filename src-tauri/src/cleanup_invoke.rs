@@ -60,8 +60,14 @@ pub async fn invoke(
         }
         _ => {
             let api_key = resolve_provider_key(cleanup_settings, provider)?;
-            cleanup::run_openai(transcript, api_key, provider.openai_chat_url(), model, &prompt)
-                .await
+            cleanup::run_openai(
+                transcript,
+                api_key,
+                provider.openai_chat_url(),
+                model,
+                &prompt,
+            )
+            .await
         }
     }
 }
@@ -81,10 +87,8 @@ pub(crate) async fn invoke_with_transport<T: cleanup::Transport>(
     match provider {
         AiProviderId::Anthropic => {
             let credential = resolve_anthropic_credential(cleanup_settings)?;
-            cleanup::run_with_transport(
-                transcript, credential, model, &prompt, transport, timeout,
-            )
-            .await
+            cleanup::run_with_transport(transcript, credential, model, &prompt, transport, timeout)
+                .await
         }
         AiProviderId::Custom => {
             let (api_key, chat_url, custom_model) = resolve_custom_endpoint(cleanup_settings)?;
@@ -131,15 +135,12 @@ fn resolve_anthropic_credential<'a>(
                 )),
             }
         }
-        config::CleanupAuthMode::Oauth => {
-            match cleanup_settings.anthropic_oauth_token.as_deref() {
-                Some(t) if !t.is_empty() => Ok(cleanup::Credential::OauthToken(t)),
-                _ => Err(cleanup::CleanupError::Credential(
-                    "AI cleanup is set to OAuth but no Claude Code token is configured."
-                        .to_string(),
-                )),
-            }
-        }
+        config::CleanupAuthMode::Oauth => match cleanup_settings.anthropic_oauth_token.as_deref() {
+            Some(t) if !t.is_empty() => Ok(cleanup::Credential::OauthToken(t)),
+            _ => Err(cleanup::CleanupError::Credential(
+                "AI cleanup is set to OAuth but no Claude Code token is configured.".to_string(),
+            )),
+        },
     }
 }
 
@@ -148,8 +149,7 @@ fn resolve_custom_endpoint(
 ) -> Result<(String, String, String), cleanup::CleanupError> {
     match &cleanup_settings.custom_provider {
         Some(cp) if !cp.base_url.is_empty() => {
-            let chat_url =
-                format!("{}/chat/completions", cp.base_url.trim_end_matches('/'));
+            let chat_url = format!("{}/chat/completions", cp.base_url.trim_end_matches('/'));
             let api_key = cp.api_key.as_deref().unwrap_or("").to_string();
             Ok((api_key, chat_url, cp.model.clone()))
         }
@@ -238,7 +238,8 @@ mod tests {
 
     fn settings_with_anthropic_api_key(key: &str) -> AiCleanupSettings {
         let mut s = AiCleanupSettings::default();
-        s.provider_keys.insert("anthropic".to_string(), key.to_string());
+        s.provider_keys
+            .insert("anthropic".to_string(), key.to_string());
         s
     }
 
@@ -251,7 +252,8 @@ mod tests {
 
     fn settings_with_provider_key(provider: &str, key: &str) -> AiCleanupSettings {
         let mut s = AiCleanupSettings::default();
-        s.provider_keys.insert(provider.to_string(), key.to_string());
+        s.provider_keys
+            .insert(provider.to_string(), key.to_string());
         s
     }
 

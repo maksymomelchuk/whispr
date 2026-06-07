@@ -577,10 +577,8 @@ async fn run_session(
         history_entry.bundle_id = resolved_app.map(|a| a.bundle_id);
     }
 
-    let paste_policy = pipeline::resolve_paste_policy(
-        &history_entry.cleanup_status,
-        paste_raw_on_failure,
-    );
+    let paste_policy =
+        pipeline::resolve_paste_policy(&history_entry.cleanup_status, paste_raw_on_failure);
 
     // paste_handle must complete before any notify_error: set_focus()
     // during the modifier-release wait would steal focus mid-paste.
