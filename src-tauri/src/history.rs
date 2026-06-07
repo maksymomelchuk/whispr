@@ -1,14 +1,39 @@
+use crate::cleanup::AiProviderId;
 use crate::config;
+use crate::mode::SetId;
 use crate::provider::ProviderModel;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 
 const HISTORY_FILE: &str = "history.json";
 
 pub const HISTORY_UPDATED_EVENT: &str = "history-updated";
+
+static ENTRY_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+pub fn new_entry_id() -> String {
+    let ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    let seq = ENTRY_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("entry-{ms}-{seq}")
+}
+
+/// Profile settings captured at dictation time so recovery can replay the
+/// exact cleanup that ran, even if the user later edits or deletes the profile.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileSnapshot {
+    pub cleanup_provider: AiProviderId,
+    pub cleanup_model: String,
+    pub cleanup_prompt_override: Option<String>,
+    pub use_snippets: bool,
+    pub correction_set_ids: Vec<SetId>,
+}
 
 /// Outcome of the optional Anthropic cleanup step. Persisted so the History
 /// tab can distinguish ran-with-no-change from skipped/failed.
@@ -20,6 +45,7 @@ pub enum CleanupStatus {
     SkippedBelowMinDuration,
     NoCredential,
     Ran,
+    RecoveredManually,
     FailedTimeout,
     FailedTransient(String),
     FailedCredential(String),
@@ -27,12 +53,19 @@ pub enum CleanupStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryEntry {
+    /// Stable unique id generated at dictation time. Absent in entries written
+    /// before this field was added; those fall back to a composite key in the UI.
+    #[serde(default)]
+    pub id: String,
     pub timestamp: i64,
     pub speak_duration_ms: u64,
     pub raw_text: String,
     pub replaced_text: String,
     pub final_text: String,
     pub cleanup_status: CleanupStatus,
+    /// Profile settings frozen at dictation time for recovery replay.
+    #[serde(default)]
+    pub profile_snapshot: Option<ProfileSnapshot>,
     // Optional so existing on-disk histories written before this field was added
     // still deserialize. Old entries fall back to a generic label in the UI.
     #[serde(default)]
@@ -110,14 +143,29 @@ pub fn latest(app: &tauri::AppHandle) -> Option<HistoryEntry> {
 }
 
 /// The text that was originally pasted for `entry` — `final_text` if cleanup
-/// ran, otherwise `replaced_text`. Matches the resolution used by the
-/// dictation pipeline so "paste latest" reproduces what the user already saw.
+/// ran or the entry was recovered, otherwise `replaced_text`.
 pub fn pasted_text(entry: &HistoryEntry) -> &str {
-    if matches!(entry.cleanup_status, CleanupStatus::Ran) {
-        &entry.final_text
-    } else {
-        &entry.replaced_text
+    match entry.cleanup_status {
+        CleanupStatus::Ran | CleanupStatus::RecoveredManually => &entry.final_text,
+        _ => &entry.replaced_text,
     }
+}
+
+pub fn update_by_id(
+    app: &tauri::AppHandle,
+    id: &str,
+    replaced_text: String,
+    final_text: String,
+) -> Result<(), String> {
+    let mut entries = load(app);
+    let entry = entries
+        .iter_mut()
+        .find(|e| e.id == id)
+        .ok_or_else(|| format!("history entry not found: {id}"))?;
+    entry.replaced_text = replaced_text;
+    entry.final_text = final_text;
+    entry.cleanup_status = CleanupStatus::RecoveredManually;
+    save(app, &entries)
 }
 
 /// Apply the limit to the existing on-disk history. Used when the user

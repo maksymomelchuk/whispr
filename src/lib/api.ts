@@ -148,6 +148,17 @@ export const clearHistory = () => invoke<void>("clear_history");
 export const setHistoryLimit = (limit: HistoryLimit) =>
   invoke<void>("set_history_limit", { limit });
 
+export const updateHistoryEntry = (
+  id: string,
+  replacedText: string,
+  finalText: string,
+) =>
+  invoke<void>("update_history_entry", {
+    id,
+    replaced_text: replacedText,
+    final_text: finalText,
+  });
+
 export const getStats = () => invoke<StatsRow[]>("get_stats");
 
 export const clearStats = () => invoke<void>("clear_stats");

@@ -53,7 +53,7 @@ const limitHint = (l: HistoryLimit, count: number): string => {
 type LoadState = "loading" | "ready" | "error";
 
 function entryId(entry: HistoryEntry): string {
-  return `${entry.timestamp}|${entry.final_text.length}`;
+  return entry.id || `${entry.timestamp}|${entry.final_text.length}`;
 }
 
 function dayKey(timestamp: number): string {
@@ -325,6 +325,11 @@ function cleanupView(status: CleanupStatus): CleanupView {
           changed
             ? null
             : { text: "Cleanup ran — no edits needed.", tone: "info" },
+      };
+    case "recovered_manually":
+      return {
+        badge: { label: "recovered", tone: "neutral" },
+        note: () => ({ text: "Recovered via manual retry.", tone: "info" }),
       };
     case "skipped_below_min_words":
       return {

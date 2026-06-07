@@ -523,6 +523,18 @@ pub fn set_history_limit(app: AppHandle, limit: Option<usize>) -> Result<(), Str
 }
 
 #[tauri::command]
+pub fn update_history_entry(
+    app: AppHandle,
+    id: String,
+    replaced_text: String,
+    final_text: String,
+) -> Result<(), String> {
+    history::update_by_id(&app, &id, replaced_text, final_text)?;
+    let _ = app.emit(HISTORY_UPDATED_EVENT, ());
+    Ok(())
+}
+
+#[tauri::command]
 pub fn get_stats(app: AppHandle) -> Vec<StatsRow> {
     stats::load(&app)
 }

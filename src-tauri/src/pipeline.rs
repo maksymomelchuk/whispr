@@ -1,6 +1,6 @@
 use crate::config::Settings;
 use crate::corrections::{apply_corrections, compose_corrections};
-use crate::history::{now_unix_seconds, CleanupStatus, HistoryEntry};
+use crate::history::{new_entry_id, now_unix_seconds, CleanupStatus, HistoryEntry, ProfileSnapshot};
 use crate::mode::Mode;
 use crate::snippets::expand_snippets;
 use std::time::{Duration, Instant};
@@ -112,13 +112,23 @@ pub fn run_stages(
 
     let pasted_text = format!("{final_text} ");
 
+    let profile_snapshot = ProfileSnapshot {
+        cleanup_provider: mode.ai_cleanup.provider.clone(),
+        cleanup_model: mode.ai_cleanup.model.clone(),
+        cleanup_prompt_override: mode.ai_cleanup.prompt_override.clone(),
+        use_snippets: mode.use_snippets,
+        correction_set_ids: mode.correction_set_ids.clone(),
+    };
+
     let history_entry = HistoryEntry {
+        id: new_entry_id(),
         timestamp: now_unix_seconds(),
         speak_duration_ms: speak_duration.as_millis() as u64,
         raw_text: raw_text.to_string(),
         replaced_text,
         final_text,
         cleanup_status,
+        profile_snapshot: Some(profile_snapshot),
         provider_model: Some(mode.provider_model.clone()),
         app_name: None,
         bundle_id: None,
