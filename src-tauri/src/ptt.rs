@@ -752,7 +752,7 @@ async fn maybe_cleanup(
                 cleanup::CleanupError::Credential(m) => {
                     (CleanupStatus::FailedCredential(m), Notice::Focus(message))
                 }
-                cleanup::CleanupError::Timeout => {
+                cleanup::CleanupError::Timeout(_) => {
                     let _ = app.emit(PTT_ERROR_EVENT, ());
                     (CleanupStatus::FailedTimeout, Notice::Flash(message))
                 }
