@@ -26,6 +26,7 @@ pub fn merge_notices(a: Notice, b: Notice) -> Notice {
 }
 
 /// Result of running the post-transcription pipeline stages.
+#[derive(Debug)]
 pub struct Outcome {
     /// Text that would be pasted (final text with a trailing space).
     pub pasted_text: String,

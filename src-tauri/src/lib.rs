@@ -43,6 +43,7 @@ mod session;
 pub mod cleanup;
 mod cleanup_invoke;
 pub mod model_catalog;
+pub mod recovery;
 
 // media, overlay, and target_app expose platform-neutral public APIs and
 // select their OS implementation internally via cfg.
