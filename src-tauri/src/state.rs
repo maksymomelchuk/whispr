@@ -74,4 +74,8 @@ pub struct AppState {
     pub ptt_running: Arc<AtomicBool>,
     pub recorder: Arc<Mutex<Option<Recorder>>>,
     pub model_cache: Arc<Mutex<HashMap<LocalWhisperModel, LoadedModel>>>,
+    /// Set to true while a RecoverLatest hotkey run is in flight. A second
+    /// press is ignored while this is set, preventing two AI calls from racing
+    /// to overwrite the same entry.
+    pub recover_in_flight: Arc<AtomicBool>,
 }

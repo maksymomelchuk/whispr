@@ -40,6 +40,7 @@ impl Default for Shortcut {
 pub enum HotkeyAction {
     Ptt { mode_id: ModeId },
     PasteLatest,
+    RecoverLatest,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -60,6 +61,13 @@ impl HotkeyBinding {
         Self {
             shortcut,
             action: HotkeyAction::PasteLatest,
+        }
+    }
+
+    pub fn recover_latest(shortcut: Shortcut) -> Self {
+        Self {
+            shortcut,
+            action: HotkeyAction::RecoverLatest,
         }
     }
 }
@@ -114,12 +122,13 @@ pub fn check_hotkey_conflicts(bindings: &[HotkeyBinding]) -> Result<(), String> 
     Ok(())
 }
 
-/// At most one binding per PTT mode_id, and at most one PasteLatest binding total.
-/// Two bindings for the same action would fire identically on different gestures —
-/// redundant and confusing in the UI.
+/// At most one binding per PTT mode_id, at most one PasteLatest binding, and at
+/// most one RecoverLatest binding total. Two bindings for the same action would
+/// fire identically on different gestures — redundant and confusing in the UI.
 pub fn check_action_constraints(bindings: &[HotkeyBinding]) -> Result<(), String> {
     let mut seen_modes: HashSet<&str> = HashSet::new();
     let mut paste_latest_count = 0;
+    let mut recover_latest_count = 0;
     for b in bindings {
         match &b.action {
             HotkeyAction::Ptt { mode_id } => {
@@ -134,6 +143,15 @@ pub fn check_action_constraints(bindings: &[HotkeyBinding]) -> Result<(), String
                 if paste_latest_count > 1 {
                     return Err(
                         "Paste Latest already has a hotkey. Only one Paste Latest binding is allowed."
+                            .to_string(),
+                    );
+                }
+            }
+            HotkeyAction::RecoverLatest => {
+                recover_latest_count += 1;
+                if recover_latest_count > 1 {
+                    return Err(
+                        "Recover Latest already has a hotkey. Only one Recover Latest binding is allowed."
                             .to_string(),
                     );
                 }
@@ -588,7 +606,7 @@ fn migrate(s: &mut Settings) -> bool {
         let before = s.hotkey_bindings.len();
         s.hotkey_bindings.retain(|b| match &b.action {
             HotkeyAction::Ptt { mode_id } => mode_ids.contains(mode_id.as_str()),
-            HotkeyAction::PasteLatest => true,
+            HotkeyAction::PasteLatest | HotkeyAction::RecoverLatest => true,
         });
         if s.hotkey_bindings.len() != before {
             changed = true;
@@ -600,6 +618,7 @@ fn migrate(s: &mut Settings) -> bool {
         let before = s.hotkey_bindings.len();
         let mut seen_modes: HashSet<String> = HashSet::new();
         let mut seen_paste_latest = false;
+        let mut seen_recover_latest = false;
         s.hotkey_bindings.retain(|b| match &b.action {
             HotkeyAction::Ptt { mode_id } => seen_modes.insert(mode_id.clone()),
             HotkeyAction::PasteLatest => {
@@ -607,6 +626,14 @@ fn migrate(s: &mut Settings) -> bool {
                     false
                 } else {
                     seen_paste_latest = true;
+                    true
+                }
+            }
+            HotkeyAction::RecoverLatest => {
+                if seen_recover_latest {
+                    false
+                } else {
+                    seen_recover_latest = true;
                     true
                 }
             }
@@ -1418,6 +1445,48 @@ mod tests {
             ),
             HotkeyBinding::paste_latest(Shortcut {
                 key: "F1".to_string(),
+                modifiers: vec![],
+                is_double_tap: false,
+            }),
+        ];
+        assert!(check_action_constraints(&bindings).is_ok());
+    }
+
+    #[test]
+    fn check_action_constraints_rejects_two_recover_latest_bindings() {
+        let bindings = vec![
+            HotkeyBinding::recover_latest(Shortcut {
+                key: "F3".to_string(),
+                modifiers: vec![],
+                is_double_tap: false,
+            }),
+            HotkeyBinding::recover_latest(Shortcut {
+                key: "F4".to_string(),
+                modifiers: vec![],
+                is_double_tap: false,
+            }),
+        ];
+        assert!(check_action_constraints(&bindings).is_err());
+    }
+
+    #[test]
+    fn check_action_constraints_allows_recover_latest_with_other_actions() {
+        let bindings = vec![
+            HotkeyBinding::ptt(
+                Shortcut {
+                    key: "AltRight".to_string(),
+                    modifiers: vec![],
+                    is_double_tap: false,
+                },
+                "mode-default-en".to_string(),
+            ),
+            HotkeyBinding::paste_latest(Shortcut {
+                key: "F1".to_string(),
+                modifiers: vec![],
+                is_double_tap: false,
+            }),
+            HotkeyBinding::recover_latest(Shortcut {
+                key: "F2".to_string(),
                 modifiers: vec![],
                 is_double_tap: false,
             }),

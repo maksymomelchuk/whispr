@@ -18,7 +18,7 @@ use crate::provider::{self, LocalWhisperModel, ProviderModel, TranscriptionProvi
 use crate::recorder::Recorder;
 use crate::session::{Session, PTT_ERROR_EVENT, TRANSCRIPTION_ERROR_EVENT};
 use crate::state::{AppState, ModifierState};
-use crate::{cleanup, cleanup_invoke, cleanup_stats, config, model_catalog, stats};
+use crate::{cleanup, cleanup_invoke, cleanup_stats, config, model_catalog, recovery, stats};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
@@ -744,8 +744,56 @@ fn fire_paste_latest(app: &AppHandle) {
     });
 }
 
-/// PasteLatest is suppressed while a PTT session is active so a stray
-/// double-tap during recording can't fire a stale paste at the same target.
+fn fire_recover_latest(app: &AppHandle, state: &AppState) {
+    use std::sync::atomic::Ordering;
+    if state.recover_in_flight.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    let app = app.clone();
+    let state = state.clone();
+    tauri::async_runtime::spawn(async move {
+        let Some(entry) = history::latest(&app) else {
+            state.recover_in_flight.store(false, Ordering::Release);
+            return;
+        };
+        if !recovery::is_recoverable(&entry) {
+            notify_silent(&app, "Nothing to recover");
+            tokio::time::sleep(ERROR_FLASH).await;
+            state.recover_in_flight.store(false, Ordering::Release);
+            return;
+        }
+        let settings = config::load(&app);
+        #[cfg(target_os = "macos")]
+        overlay::show(&app);
+        let _ = app.emit(PTT_THINKING_EVENT, ());
+        let result = recovery::recover_entry(&entry, &settings).await;
+        #[cfg(target_os = "macos")]
+        overlay::hide(&app);
+        match result {
+            Ok(outcome) => {
+                if let Err(e) = history::update_by_id(
+                    &app,
+                    &entry.id,
+                    outcome.history_entry.replaced_text,
+                    outcome.history_entry.final_text,
+                ) {
+                    eprintln!("[recovery] update_by_id failed: {e}");
+                }
+                let _ = app.emit(HISTORY_UPDATED_EVENT, ());
+                paste::paste_text(outcome.pasted_text).await.ok();
+            }
+            Err(err) => {
+                notify_silent(&app, format!("Recovery failed: {err}"));
+                tokio::time::sleep(ERROR_FLASH).await;
+            }
+        }
+        state.recover_in_flight.store(false, Ordering::Release);
+    });
+}
+
+/// PasteLatest and RecoverLatest are suppressed while a PTT session is active
+/// so a stray double-tap during recording can't fire a stale paste at the same
+/// target.
 fn dispatch_binding(
     app: &AppHandle,
     state: &AppState,
@@ -761,6 +809,12 @@ fn dispatch_binding(
                 return;
             }
             fire_paste_latest(app);
+        }
+        HotkeyAction::RecoverLatest => {
+            if *state.ptt_active.lock().unwrap() {
+                return;
+            }
+            fire_recover_latest(app, state);
         }
     }
 }
