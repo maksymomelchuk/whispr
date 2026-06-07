@@ -71,7 +71,7 @@ pnpm tauri build
 Bundles are produced under `src-tauri/target/release/bundle/`:
 
 - **macOS** — `.dmg`
-- **Windows** — `.msi` and `_en-US.setup.exe`
+- **Windows** — `_en-US.setup.exe` (NSIS)
 - **Linux** — `.AppImage` and `.deb`
 
 ## Releasing a new version

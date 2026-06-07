@@ -91,6 +91,13 @@ jobs:
       - name: Install frontend deps
         run: pnpm install --frozen-lockfile
 
+      - name: Download Visual C++ Redistributable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path src-tauri/resources | Out-Null
+          Invoke-WebRequest -Uri https://aka.ms/vs/17/release/vc_redist.x64.exe -OutFile src-tauri/resources/vc_redist.x64.exe
+
       - name: Build and publish
         uses: tauri-apps/tauri-action@v0
         env:
@@ -113,7 +120,8 @@ jobs:
                push-to-talk listener and keystroke injection).
 
             ### Windows (unsigned build)
-            1. Download and run the `.msi` or `_en-US.setup.exe` installer.
+            1. Download and run the `_en-US.setup.exe` installer. It bundles the
+               Microsoft Visual C++ runtime and installs it automatically if missing.
             2. If SmartScreen shows "Windows protected your PC": click
                **More info → Run anyway**.
             3. No additional permissions are required.

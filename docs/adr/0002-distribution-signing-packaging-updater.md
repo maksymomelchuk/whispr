@@ -46,6 +46,41 @@ For contrast, macOS removes its warning fully for a flat $99 USD/year Apple Deve
 membership (Developer ID signing + notarization + stapling), with no company required —
 the cheaper and cleaner first buy if signing is revisited.
 
+## Windows packaging and runtime dependency
+
+**Decision: NSIS only; bundle the Visual C++ runtime and install it on first run.**
+
+The native dependencies (`whisper.cpp` compiled into `whispr.exe`, and the bundled
+`onnxruntime.dll`) link the dynamic VC++ 2015–2022 runtime. A clean Windows install lacks
+it, so the app fails to launch with `MSVCP140.dll was not found` — confirmed on a fresh
+Windows VM. Dev machines and most consumer PCs only have the runtime because some other
+installer pulled it in incidentally; the installer cannot rely on that.
+
+- **Windows targets are restricted to `nsis`** (overridden in `tauri.windows.conf.json`).
+  The runtime is installed via an NSIS `installerHooks` script, which only runs for the
+  NSIS installer — an MSI build would ship the same broken-on-clean-install binary. NSIS
+  is also the only Windows artifact the updater consumes (see the updater table below), so
+  MSI carried no benefit.
+- **`vc_redist.x64.exe` is bundled as an installer resource** and run silently from
+  `NSIS_HOOK_POSTINSTALL` (`/install /quiet /norestart`). A registry check
+  (`SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64`, read via `SetRegView 64`) skips
+  the sub-install when the runtime is already present, so silent auto-updates don't trigger
+  a UAC prompt on every run.
+- The redistributable is **downloaded at build time** by a Windows-only CI step (from
+  `https://aka.ms/vs/17/release/vc_redist.x64.exe`) rather than committed to the repo.
+
+### Considered options
+
+- **Static-link the CRT (`+crt-static`).** Fixes `whispr.exe` but not the separately
+  shipped `onnxruntime.dll`, a prebuilt Microsoft binary that dynamically links the same
+  runtime — the app would launch and then crash when ONNX transcription runs. Rejected as
+  insufficient on its own.
+- **Bundle the loose CRT DLLs app-locally.** Lighter and needs no UAC, but the DLL set must
+  be kept complete by hand and located in CI from a versioned VS path. Rejected as more
+  fragile than the redistributable installer, which is Microsoft's supported mechanism.
+- **Document a manual VC++ install in the release notes.** Pushes a hard launch-time
+  dependency onto every first-time user. Rejected.
+
 ## Linux packaging
 
 **Decision: AppImage + `.deb`.**

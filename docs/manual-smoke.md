@@ -41,7 +41,7 @@ The single check that must pass on every environment. If this fails, stop — no
 ## 1. Install + first launch + permissions
 
 - [ ] **(mac)** `.dmg`: right-click → Open bypasses Gatekeeper; app launches without crash.
-- [ ] **(win)** `.msi` / NSIS `.exe` installs; SmartScreen → **More info → Run anyway** launches it; no extra permission prompts.
+- [ ] **(win)** NSIS `.setup.exe` installs (incl. on a clean Windows with no VC++ runtime); SmartScreen → **More info → Run anyway** launches it; no extra permission prompts.
 - [ ] **(linux)** `.AppImage` runs after `chmod +x`; `.deb` installs via `sudo dpkg -i` and launches.
 - [ ] **(mac)** Accessibility prompt appears on first launch; granting it needs no restart.
 - [ ] **(mac)** Microphone prompt appears on first record; granting it lets audio flow.

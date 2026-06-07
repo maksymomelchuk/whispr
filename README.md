@@ -96,11 +96,11 @@ your cursor.
 Grab the latest build from
 [**Releases**](https://github.com/maksymomelchuk/whispr/releases/latest):
 
-| Platform    | What to download             | First-run note                                                                                                                                                                                    |
-| ----------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **macOS**   | `.dmg`                       | The build is **unsigned**. Open the `.dmg`, drag Whispr to `/Applications`, then right-click the app → **Open** → confirm the "unidentified developer" prompt once. Later launches work normally. |
-| **Windows** | `.msi` or `_en-US.setup.exe` | The build is unsigned. If SmartScreen warns, click **More info → Run anyway**.                                                                                                                    |
-| **Linux**   | `.AppImage` or `.deb`        | `chmod +x Whispr_*.AppImage` and run it, or `sudo dpkg -i whispr_*.deb`.                                                                                                                          |
+| Platform    | What to download      | First-run note                                                                                                                                                                                    |
+| ----------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **macOS**   | `.dmg`                | The build is **unsigned**. Open the `.dmg`, drag Whispr to `/Applications`, then right-click the app → **Open** → confirm the "unidentified developer" prompt once. Later launches work normally. |
+| **Windows** | `_en-US.setup.exe`    | The build is unsigned. If SmartScreen warns, click **More info → Run anyway**. The installer bundles the Microsoft Visual C++ runtime and installs it if missing.                                 |
+| **Linux**   | `.AppImage` or `.deb` | `chmod +x Whispr_*.AppImage` and run it, or `sudo dpkg -i whispr_*.deb`.                                                                                                                          |
 
 Once installed, Whispr keeps itself up to date — its built-in updater
 fetches new versions automatically, no reinstall needed.

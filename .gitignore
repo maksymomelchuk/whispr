@@ -29,3 +29,6 @@ dist-ssr
 PLAN.md
 
 .env
+
+# Downloaded at build time by CI (see .github/workflows), not committed.
+src-tauri/resources/vc_redist.x64.exe
