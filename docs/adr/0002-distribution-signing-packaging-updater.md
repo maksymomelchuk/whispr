@@ -7,20 +7,44 @@ Three decisions needed before the release matrix (issue #101) can ship.
 **Decision: unsigned for v1.**
 
 The existing macOS build ships unsigned (Gatekeeper requires right-click → Open on first
-launch). Authenticode/EV certificates cost roughly $200–400 USD/year and require legal
-entity verification; this overhead is not warranted for an early-access open-source tool.
-SmartScreen bypass: click **More info → Run anyway** in the Windows Defender SmartScreen
-dialog. Installation instructions in every release body document this step.
+launch), so unsigned-for-v1 is a consistent precedent. SmartScreen bypass: click
+**More info → Run anyway** in the Windows Defender SmartScreen dialog. Installation
+instructions in every release body document this step.
+
+Two distinct problems must both be solved to ship a warning-free Windows build, and a
+certificate alone does not solve the second:
+
+- An **"Unknown publisher" prompt**, removed by any valid code-signing certificate.
+- The **SmartScreen reputation screen** ("Windows protected your PC"), removed only by an
+  EV certificate or a cloud signing service that carries reputation — an OV certificate
+  does not clear it until enough installs accrue.
+
+Since June 2023, all OV and EV certificates must be stored on a FIPS-validated hardware
+token or cloud HSM; file-based certificates are no longer issued. Every real option below
+also requires a registered legal entity, except the individual tier of Azure Trusted
+Signing. This overhead is not warranted for an early-access open-source tool.
 
 ### Considered options
 
 - **EV Authenticode certificate.** Immediate SmartScreen trust with no bypass needed.
-  Rejected: annual cost, legal entity verification, and certificate lifecycle management
-  are disproportionate for an early-access project.
+  ~$300–600+ USD/year. Rejected: cost, registered-legal-entity validation, mandatory
+  hardware token, and certificate lifecycle management are disproportionate for an
+  early-access project.
+- **OV Authenticode certificate.** ~$200–400 USD/year; clears "Unknown publisher" but
+  **not** SmartScreen until reputation builds over many installs. Rejected: pays the cost
+  and hardware-token overhead without removing the warning users actually see first.
+- **Azure Trusted Signing.** Microsoft's cloud signing service, ~$120 USD/year (~$10/mo);
+  carries SmartScreen reputation, no physical token. Cheapest path that removes the
+  warning, and its individual tier is the only no-company option. Deferred: revisit
+  post-v1 if Windows install friction proves material.
 - **Self-signed certificate.** Still triggers SmartScreen; no practical benefit over
   unsigned for end-users without pre-installing the cert. Rejected.
 - **Unsigned.** Consistent with macOS precedent; documented bypass is one extra click.
   **Accepted.**
+
+For contrast, macOS removes its warning fully for a flat $99 USD/year Apple Developer
+membership (Developer ID signing + notarization + stapling), with no company required —
+the cheaper and cleaner first buy if signing is revisited.
 
 ## Linux packaging
 
