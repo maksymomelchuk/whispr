@@ -41,6 +41,7 @@ mod session;
 
 // cleanup is cross-platform HTTP (reqwest + serde_json, no OS APIs).
 mod cleanup;
+mod cleanup_invoke;
 pub mod model_catalog;
 
 // media, overlay, and target_app expose platform-neutral public APIs and

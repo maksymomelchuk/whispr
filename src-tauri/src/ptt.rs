@@ -18,7 +18,7 @@ use crate::provider::{self, LocalWhisperModel, ProviderModel, TranscriptionProvi
 use crate::recorder::Recorder;
 use crate::session::{Session, PTT_ERROR_EVENT, TRANSCRIPTION_ERROR_EVENT};
 use crate::state::{AppState, ModifierState};
-use crate::{cleanup, cleanup_stats, config, model_catalog, stats};
+use crate::{cleanup, cleanup_invoke, cleanup_stats, config, model_catalog, stats};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
@@ -652,94 +652,15 @@ async fn maybe_cleanup(
     }
 
     let _ = app.emit(PTT_THINKING_EVENT, ());
-    let prompt = cleanup::effective_prompt(prompt_override);
 
-    use cleanup::AiProviderId;
-    let result = match cleanup_provider {
-        AiProviderId::Anthropic => {
-            let credential = match cleanup_settings.auth_mode {
-                config::CleanupAuthMode::ApiKey => {
-                    match cleanup_settings
-                        .provider_keys
-                        .get("anthropic")
-                        .filter(|k| !k.is_empty())
-                    {
-                        Some(k) => cleanup::Credential::ApiKey(k),
-                        None => {
-                            return (
-                                transcript.to_string(),
-                                CleanupStatus::NoCredential,
-                                Notice::Focus(
-                                    "AI cleanup is enabled but Anthropic API key is not set."
-                                        .to_string(),
-                                ),
-                            );
-                        }
-                    }
-                }
-                config::CleanupAuthMode::Oauth => {
-                    match cleanup_settings.anthropic_oauth_token.as_deref() {
-                        Some(t) if !t.is_empty() => cleanup::Credential::OauthToken(t),
-                        _ => {
-                            return (
-                                transcript.to_string(),
-                                CleanupStatus::NoCredential,
-                                Notice::Focus(
-                                    "AI cleanup is set to OAuth but no Claude Code token is configured."
-                                        .to_string(),
-                                ),
-                            );
-                        }
-                    }
-                }
-            };
-            cleanup::run(transcript, credential, cleanup_model, &prompt).await
-        }
-        AiProviderId::Custom => {
-            let custom = match &cleanup_settings.custom_provider {
-                Some(cp) if !cp.base_url.is_empty() => cp.clone(),
-                _ => {
-                    return (
-                        transcript.to_string(),
-                        CleanupStatus::NoCredential,
-                        Notice::Focus(
-                            "AI cleanup is enabled but the Custom provider is not configured."
-                                .to_string(),
-                        ),
-                    );
-                }
-            };
-            let chat_url = format!("{}/chat/completions", custom.base_url.trim_end_matches('/'));
-            let api_key = custom.api_key.as_deref().unwrap_or("");
-            cleanup::run_openai(transcript, api_key, &chat_url, &custom.model, &prompt).await
-        }
-        AiProviderId::OpenAi
-        | AiProviderId::Google
-        | AiProviderId::Groq
-        | AiProviderId::DeepSeek
-        | AiProviderId::Cerebras
-        | AiProviderId::OpenRouter => {
-            let api_key = match cleanup_settings
-                .provider_keys
-                .get(cleanup_provider.as_str())
-                .filter(|k| !k.is_empty())
-            {
-                Some(k) => k.clone(),
-                None => {
-                    return (
-                        transcript.to_string(),
-                        CleanupStatus::NoCredential,
-                        Notice::Focus(format!(
-                            "AI cleanup is enabled but the {} API key is not set.",
-                            cleanup_provider.as_str()
-                        )),
-                    );
-                }
-            };
-            let chat_url = cleanup_provider.openai_chat_url();
-            cleanup::run_openai(transcript, &api_key, chat_url, cleanup_model, &prompt).await
-        }
-    };
+    let result = cleanup_invoke::invoke(
+        cleanup_settings,
+        cleanup_provider,
+        cleanup_model,
+        prompt_override,
+        transcript,
+    )
+    .await;
 
     match result {
         Ok((cleaned, usage)) => {
@@ -750,7 +671,12 @@ async fn maybe_cleanup(
             let message = format!("AI cleanup unavailable: {err}");
             let (status, notice) = match err {
                 cleanup::CleanupError::Credential(m) => {
-                    (CleanupStatus::FailedCredential(m), Notice::Focus(message))
+                    if cleanup_invoke::is_credential_configured(cleanup_settings, cleanup_provider)
+                    {
+                        (CleanupStatus::FailedCredential(m), Notice::Focus(message))
+                    } else {
+                        (CleanupStatus::NoCredential, Notice::Focus(m))
+                    }
                 }
                 cleanup::CleanupError::Timeout(_) => {
                     let _ = app.emit(PTT_ERROR_EVENT, ());
