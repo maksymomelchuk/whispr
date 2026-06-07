@@ -57,6 +57,7 @@ const MODE: Mode = {
     prompt_override: null,
     provider: "anthropic",
     model: "claude-haiku-4-5",
+    paste_raw_on_failure: true,
   },
   term_set_ids: [],
   correction_set_ids: [],
@@ -551,6 +552,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
       prompt_override: null,
       provider: "anthropic",
       model: "claude-haiku-4-5",
+      paste_raw_on_failure: true,
     },
   };
 
@@ -572,6 +574,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         prompt_override: null,
         provider: "openai",
         model: "gpt-5.4-mini",
+        paste_raw_on_failure: true,
       },
     };
     render(
@@ -600,6 +603,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         prompt_override: null,
         provider: "google",
         model: "gemini-2.5-flash",
+        paste_raw_on_failure: true,
       },
     };
     render(
@@ -616,6 +620,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         prompt_override: null,
         provider: "groq",
         model: "llama-3.1-8b-instant",
+        paste_raw_on_failure: true,
       },
     };
     render(<EditorWrapper mode={groqMode} configuredProviders={["groq"]} />);
@@ -630,6 +635,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         prompt_override: null,
         provider: "deepseek",
         model: "deepseek-v4-flash",
+        paste_raw_on_failure: true,
       },
     };
     render(
@@ -646,6 +652,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         prompt_override: null,
         provider: "cerebras",
         model: "llama-3.3-70b",
+        paste_raw_on_failure: true,
       },
     };
     render(
@@ -662,6 +669,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         prompt_override: null,
         provider: "openrouter",
         model: "anthropic/claude-haiku-4.5",
+        paste_raw_on_failure: true,
       },
     };
     render(
@@ -681,6 +689,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         prompt_override: null,
         provider: "custom",
         model: "",
+        paste_raw_on_failure: true,
       },
     };
     render(
@@ -701,6 +710,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         prompt_override: null,
         provider: "custom",
         model: "",
+        paste_raw_on_failure: true,
       },
     };
     render(
@@ -723,6 +733,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         prompt_override: null,
         provider: "custom",
         model: "",
+        paste_raw_on_failure: true,
       },
     };
     render(

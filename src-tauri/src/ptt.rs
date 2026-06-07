@@ -316,6 +316,7 @@ async fn run_session(
     let mode_prompt_override = active_mode.ai_cleanup.prompt_override.clone();
     let cleanup_provider = active_mode.ai_cleanup.provider;
     let cleanup_model = active_mode.ai_cleanup.model.clone();
+    let paste_raw_on_failure = active_mode.ai_cleanup.paste_raw_on_failure;
     let session_terms =
         crate::terms::compose_term_hints(&settings.term_sets, &active_mode.term_set_ids);
 
@@ -576,9 +577,17 @@ async fn run_session(
         history_entry.bundle_id = resolved_app.map(|a| a.bundle_id);
     }
 
+    let paste_policy = pipeline::resolve_paste_policy(
+        &history_entry.cleanup_status,
+        paste_raw_on_failure,
+    );
+
     // paste_handle must complete before any notify_error: set_focus()
     // during the modifier-release wait would steal focus mid-paste.
-    let paste_handle = paste::paste_text(pasted_text);
+    let paste_handle = match paste_policy {
+        pipeline::PastePolicy::PasteRaw => paste::paste_text(pasted_text),
+        pipeline::PastePolicy::SuppressAndClipboard => paste::write_to_clipboard(raw_text),
+    };
 
     let words = history_entry.final_text.split_whitespace().count() as u64;
     let seconds = speak_duration.as_secs() as u32;

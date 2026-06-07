@@ -333,6 +333,30 @@ pub fn paste_text(text: String) -> JoinHandle<()> {
     })
 }
 
+#[cfg(target_os = "macos")]
+fn write_clipboard(text: &str) {
+    let _ = crate::mac_clipboard::write_transient_text(text);
+}
+
+#[cfg(target_os = "windows")]
+fn write_clipboard(text: &str) {
+    let _ = crate::windows_clipboard::write_transient_text(text);
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn write_clipboard(_text: &str) {}
+
+/// Write `text` to the clipboard without injecting a paste keystroke.
+/// Used when the paste policy is SuppressAndClipboard — the user can
+/// retrieve the raw transcript manually without it appearing in the target app.
+pub fn write_to_clipboard(text: String) -> JoinHandle<()> {
+    async_runtime::spawn_blocking(move || {
+        if !text.is_empty() {
+            write_clipboard(&text);
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     // ── Linux injector selection ──────────────────────────────────────────────

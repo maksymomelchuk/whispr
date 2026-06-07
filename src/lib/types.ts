@@ -170,6 +170,7 @@ export interface ModeCleanup {
   prompt_override: string | null;
   provider: AiProviderId;
   model: string;
+  paste_raw_on_failure: boolean;
 }
 
 export interface NamedTermSet {
