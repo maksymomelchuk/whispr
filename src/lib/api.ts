@@ -159,6 +159,9 @@ export const updateHistoryEntry = (
     final_text: finalText,
   });
 
+export const recoverCleanup = (id: string) =>
+  invoke<string>("recover_cleanup", { id });
+
 export const getStats = () => invoke<StatsRow[]>("get_stats");
 
 export const clearStats = () => invoke<void>("clear_stats");

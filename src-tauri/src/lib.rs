@@ -247,6 +247,7 @@ pub fn run() {
             commands::clear_history,
             commands::set_history_limit,
             commands::update_history_entry,
+            commands::recover_cleanup,
             commands::get_stats,
             commands::clear_stats,
             commands::get_app_icon,
