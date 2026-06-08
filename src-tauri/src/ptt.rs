@@ -1120,6 +1120,16 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
             let mut was_capture_paused = false;
 
             move |event: rdev::Event| {
+                if let rdev::EventType::KeyPress(k) | rdev::EventType::KeyRelease(k) =
+                    &event.event_type
+                {
+                    let press = matches!(event.event_type, rdev::EventType::KeyPress(_));
+                    eprintln!(
+                        "[ptt diag] raw {k:?} press={press} -> {:?}",
+                        rdev_key_to_code(k)
+                    );
+                }
+
                 // A key pressed while the settings UI binds a shortcut can lose
                 // its release to the settings window, which would otherwise leave
                 // it stuck "down" in held-key/modifier tracking — dead until restart.
@@ -1179,6 +1189,10 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
 
                 let bindings = state.hotkey_bindings.lock().unwrap().clone();
                 let modifiers_val = *state.modifiers.lock().unwrap();
+                eprintln!(
+                    "[ptt diag] {code} press={is_press} active={ptt_active_now} mods={modifiers_val:?} bindings={}",
+                    bindings.len()
+                );
 
                 if is_press && !ptt_active_now {
                     let mut tap_states_guard = tap_states.lock().unwrap();
