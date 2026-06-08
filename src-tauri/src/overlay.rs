@@ -53,13 +53,23 @@ fn reposition(window: &WebviewWindow) {
         _ => return,
     };
     let scale = monitor.scale_factor();
-    let size = monitor.size();
-    let pos = monitor.position();
+
+    // work_area excludes the taskbar/panel, so the pill rests above it rather
+    // than clipped behind the always-on-top taskbar. macOS keeps the full frame
+    // to preserve its tuned resting position.
+    #[cfg(target_os = "macos")]
+    let (origin, extent) = (*monitor.position(), *monitor.size());
+    #[cfg(not(target_os = "macos"))]
+    let (origin, extent) = {
+        let area = monitor.work_area();
+        (area.position, area.size)
+    };
+
     let win_w = (OVERLAY_WIDTH * scale) as i32;
     let win_h = (OVERLAY_HEIGHT * scale) as i32;
     let margin = (BOTTOM_MARGIN * scale) as i32;
-    let x = pos.x + (size.width as i32 - win_w) / 2;
-    let y = pos.y + size.height as i32 - win_h - margin;
+    let x = origin.x + (extent.width as i32 - win_w) / 2;
+    let y = origin.y + extent.height as i32 - win_h - margin;
     let _ = window.set_position(PhysicalPosition::new(x, y));
 }
 
