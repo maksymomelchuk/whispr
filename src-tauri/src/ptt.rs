@@ -1117,8 +1117,29 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
             let app = app.clone();
             let state = state.clone();
             let recorder = recorder.clone();
+            let mut was_capture_paused = false;
 
             move |event: rdev::Event| {
+                // A key pressed while the settings UI binds a shortcut can lose
+                // its release to the settings window, which would otherwise leave
+                // it stuck "down" in held-key/modifier tracking — dead until restart.
+                if *state.shortcut_capture_paused.lock().unwrap() {
+                    was_capture_paused = true;
+                    if matches!(
+                        event.event_type,
+                        rdev::EventType::KeyPress(_) | rdev::EventType::KeyRelease(_)
+                    ) {
+                        eprintln!("[ptt diag] dropped key event: capture paused");
+                    }
+                    return;
+                }
+                if was_capture_paused {
+                    was_capture_paused = false;
+                    pressed_keys.lock().unwrap().clear();
+                    *mod_sides.lock().unwrap() = ModKeyState::default();
+                    *state.modifiers.lock().unwrap() = ModifierState::default();
+                }
+
                 let (code, is_press) = match event.event_type {
                     rdev::EventType::KeyPress(key) => match rdev_key_to_code(&key) {
                         Some(c) => (c, true),
@@ -1138,6 +1159,7 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                     let mut pressed = pressed_keys.lock().unwrap();
                     if is_press {
                         if !pressed.insert(code.to_string()) {
+                            eprintln!("[ptt diag] dropped {code}: already held (pressed_keys)");
                             return;
                         }
                     } else {
@@ -1146,10 +1168,6 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                 }
 
                 update_modifier_state(&state, code, is_press, &mut mod_sides.lock().unwrap());
-
-                if *state.shortcut_capture_paused.lock().unwrap() {
-                    return;
-                }
 
                 let now = Instant::now();
                 let ptt_active_now = *state.ptt_active.lock().unwrap();
