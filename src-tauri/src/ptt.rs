@@ -279,7 +279,6 @@ fn spawn_session(app: AppHandle, recorder: Recorder, device: Option<String>, mod
             eprintln!("[pipeline] {e}");
             notify_error(&app, e);
         }
-        #[cfg(target_os = "macos")]
         overlay::hide(&app);
     });
 }
@@ -714,15 +713,13 @@ fn start_ptt(
     state.session_cancelled.store(false, Ordering::Release);
     *state.active_shortcut.lock().unwrap() = Some(shortcut.clone());
     let device = state.input_device.lock().unwrap().clone();
-    // Capture frontmost app before overlay::show so the worker's
-    // frontmostApplication() lookup can't race any window-server bookkeeping
-    // that show() triggers.
-    #[cfg(target_os = "macos")]
+    // Capture the target app before showing our overlay: show() can make the
+    // overlay the frontmost window, and the capture would then attribute the
+    // dictation to our own overlay instead of the app the user is typing into.
     target_app::capture(app.clone());
     // Spawn up front so the WS handshake overlaps with capture rather than
     // waiting for PTT release.
     spawn_session(app.clone(), recorder.clone(), device, mode_id);
-    #[cfg(target_os = "macos")]
     overlay::show(app);
     let _ = app.emit(PTT_PRESSED_EVENT, shortcut);
     maybe_pause_media(state);
@@ -761,11 +758,9 @@ fn fire_recover_latest(app: &AppHandle, state: &AppState) {
             return;
         }
         let settings = config::load(&app);
-        #[cfg(target_os = "macos")]
         overlay::show(&app);
         let _ = app.emit(PTT_THINKING_EVENT, ());
         let result = recovery::recover_entry(&entry, &settings).await;
-        #[cfg(target_os = "macos")]
         overlay::hide(&app);
         match result {
             Ok(outcome) => {
