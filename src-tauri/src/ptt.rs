@@ -1353,7 +1353,10 @@ mod win32_hook {
     pub const WM_KEYUP: usize = 0x0101;
     pub const WM_SYSKEYDOWN: usize = 0x0104;
     pub const WM_SYSKEYUP: usize = 0x0105;
+    pub const WM_QUIT: u32 = 0x0012;
     pub const LLKHF_INJECTED: u32 = 0x10;
+    pub const PM_REMOVE: u32 = 0x0001;
+    pub const QS_ALLINPUT: u32 = 0x04FF;
 
     #[repr(C)]
     pub struct KbdLlHookStruct {
@@ -1396,12 +1399,22 @@ mod win32_hook {
             w_param: usize,
             l_param: isize,
         ) -> isize;
-        pub fn GetMessageW(
+        pub fn PeekMessageW(
             lp_msg: *mut Msg,
             hwnd: *mut c_void,
             w_msg_filter_min: u32,
             w_msg_filter_max: u32,
+            w_remove_msg: u32,
         ) -> i32;
+        pub fn TranslateMessage(lp_msg: *const Msg) -> i32;
+        pub fn DispatchMessageW(lp_msg: *const Msg) -> isize;
+        pub fn MsgWaitForMultipleObjects(
+            n_count: u32,
+            p_handles: *const *mut c_void,
+            f_wait_all: i32,
+            dw_milliseconds: u32,
+            dw_wake_mask: u32,
+        ) -> u32;
     }
 }
 
@@ -1493,42 +1506,51 @@ fn vk_to_code(vk: u32) -> Option<&'static str> {
 
 #[cfg(target_os = "windows")]
 thread_local! {
-    static HOOK_SENDER: std::cell::RefCell<Option<std::sync::mpsc::Sender<(u32, bool)>>> =
+    static HOOK_SENDER: std::cell::RefCell<Option<std::sync::mpsc::Sender<(u32, u32, usize)>>> =
         const { std::cell::RefCell::new(None) };
 }
 
-// Windows drops the event and stalls the hook if a low-level callback exceeds
-// LowLevelHooksTimeout (~300ms). dispatch_binding marshals overlay::show /
-// app.emit to the main UI thread, which blocks for >300ms whenever our own
-// window is foreground (its UI thread is busy) — so the callback only forwards
-// the raw key over a channel and all mapping/matching/dispatch runs on the
-// worker thread.
+// The callback must return fast: Windows drops the event and stalls the hook if
+// it exceeds LowLevelHooksTimeout (~300ms), and dispatch marshals overlay/emit
+// work to the main UI thread. So it only forwards the raw (vk, flags, message)
+// and all filtering/mapping/matching runs on the worker thread.
 #[cfg(target_os = "windows")]
 unsafe extern "system" fn keyboard_proc(code: i32, w_param: usize, l_param: isize) -> isize {
     if code == win32_hook::HC_ACTION {
         let info = &*(l_param as *const win32_hook::KbdLlHookStruct);
-        // Ignore our own synthetic paste keystrokes so they can't match a hotkey.
-        if info.flags & win32_hook::LLKHF_INJECTED == 0 {
-            let is_press =
-                w_param == win32_hook::WM_KEYDOWN || w_param == win32_hook::WM_SYSKEYDOWN;
-            let is_release = w_param == win32_hook::WM_KEYUP || w_param == win32_hook::WM_SYSKEYUP;
-            if is_press || is_release {
-                HOOK_SENDER.with(|cell| {
-                    if let Some(tx) = cell.borrow().as_ref() {
-                        let _ = tx.send((info.vk_code, is_press));
-                    }
-                });
+        HOOK_SENDER.with(|cell| {
+            if let Some(tx) = cell.borrow().as_ref() {
+                let _ = tx.send((info.vk_code, info.flags, w_param));
             }
-        }
+        });
     }
     win32_hook::CallNextHookEx(std::ptr::null_mut(), code, w_param, l_param)
+}
+
+#[cfg(target_os = "windows")]
+fn run_event_worker(ctx: EventCtx, rx: std::sync::mpsc::Receiver<(u32, u32, usize)>) {
+    let mut tracking = EventTracking::default();
+    while let Ok((vk, flags, message)) = rx.recv() {
+        let injected = flags & win32_hook::LLKHF_INJECTED != 0;
+        let is_press = message == win32_hook::WM_KEYDOWN || message == win32_hook::WM_SYSKEYDOWN;
+        let is_release = message == win32_hook::WM_KEYUP || message == win32_hook::WM_SYSKEYUP;
+        let mapped = vk_to_code(vk);
+        eprintln!("[ptt diag] raw vk={vk:#x} msg={message:#x} injected={injected} -> {mapped:?}");
+        // Skip our own synthetic paste keystrokes so they can't match a hotkey.
+        if injected || !(is_press || is_release) {
+            continue;
+        }
+        if let Some(code) = mapped {
+            handle_key_event(&ctx, &mut tracking, code, is_press);
+        }
+    }
 }
 
 /// Caller must set `state.ptt_running` to true (via CAS) before invoking.
 #[cfg(target_os = "windows")]
 pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
     let ptt_running = state.ptt_running.clone();
-    let (tx, rx) = std::sync::mpsc::channel::<(u32, bool)>();
+    let (tx, rx) = std::sync::mpsc::channel::<(u32, u32, usize)>();
 
     let ctx = EventCtx {
         app,
@@ -1536,19 +1558,8 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
         recorder,
         tap_states: Arc::new(Mutex::new(HashMap::new())),
     };
-    std::thread::spawn(move || {
-        let mut tracking = EventTracking::default();
-        while let Ok((vk, is_press)) = rx.recv() {
-            let mapped = vk_to_code(vk);
-            eprintln!("[ptt diag] raw vk={vk:#x} press={is_press} -> {mapped:?}");
-            if let Some(code) = mapped {
-                handle_key_event(&ctx, &mut tracking, code, is_press);
-            }
-        }
-    });
+    std::thread::spawn(move || run_event_worker(ctx, rx));
 
-    // The low-level hook fires on the thread that installed it, but only while
-    // that thread pumps messages — hence the otherwise-empty loop.
     std::thread::spawn(move || {
         HOOK_SENDER.with(|cell| *cell.borrow_mut() = Some(tx));
         unsafe {
@@ -1564,10 +1575,37 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                 return;
             }
             eprintln!("[ptt diag] WH_KEYBOARD_LL hook installed");
-            let mut msg: win32_hook::Msg = std::mem::zeroed();
-            while win32_hook::GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {}
+            pump_messages();
         }
     });
+}
+
+// A bare GetMessageW block only runs the hook when the OS wakes the thread,
+// which it defers for a background thread while our own window is foreground —
+// leaving the hook silent exactly then. Polling input state on a short timeout
+// (matching Handy's listener) runs the hook regardless of focus.
+#[cfg(target_os = "windows")]
+unsafe fn pump_messages() {
+    const TIMEOUT_MS: u32 = 10;
+    let mut msg: win32_hook::Msg = std::mem::zeroed();
+    loop {
+        while win32_hook::PeekMessageW(&mut msg, std::ptr::null_mut(), 0, 0, win32_hook::PM_REMOVE)
+            != 0
+        {
+            if msg.message == win32_hook::WM_QUIT {
+                return;
+            }
+            win32_hook::TranslateMessage(&msg);
+            win32_hook::DispatchMessageW(&msg);
+        }
+        win32_hook::MsgWaitForMultipleObjects(
+            0,
+            std::ptr::null(),
+            0,
+            TIMEOUT_MS,
+            win32_hook::QS_ALLINPUT,
+        );
+    }
 }
 
 #[cfg(test)]
