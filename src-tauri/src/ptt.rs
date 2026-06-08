@@ -46,7 +46,7 @@ use std::os::raw::c_void;
 #[cfg(target_os = "macos")]
 use std::sync::atomic::AtomicPtr;
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use crate::keysym::rdev_key_to_code;
 #[cfg(not(target_os = "macos"))]
 use std::collections::HashSet;
@@ -1098,243 +1098,462 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
     });
 }
 
-// ── Non-macOS event source: rdev ─────────────────────────────────────────────
+// ── Shared keyboard-event handling (Windows + Linux) ─────────────────────────
 
-/// Caller must set `state.ptt_running` to true (via CAS) before invoking.
-// Keyboard-capture pattern adapted from the MIT-licensed Handy project
-// (https://github.com/cjpais/Handy). Copyright (c) cjpais.
 #[cfg(not(target_os = "macos"))]
-pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
-    std::thread::spawn(move || {
-        let tap_states: Arc<Mutex<HashMap<(String, Vec<String>), TapState>>> =
-            Arc::new(Mutex::new(HashMap::new()));
-        // Tracks currently-held keys so OS key-repeat events (successive
-        // KeyPress without an intervening KeyRelease) are ignored.
-        let pressed_keys: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
-        let mod_sides = Arc::new(Mutex::new(ModKeyState::default()));
+struct EventCtx {
+    app: AppHandle,
+    state: AppState,
+    recorder: Recorder,
+    tap_states: Arc<Mutex<HashMap<(String, Vec<String>), TapState>>>,
+}
 
-        let callback = {
-            let app = app.clone();
-            let state = state.clone();
-            let recorder = recorder.clone();
-            let mut was_capture_paused = false;
+#[cfg(not(target_os = "macos"))]
+#[derive(Default)]
+struct EventTracking {
+    /// Currently-held keys, so OS auto-repeat (successive press without an
+    /// intervening release) is ignored.
+    pressed_keys: HashSet<String>,
+    mod_sides: ModKeyState,
+    was_capture_paused: bool,
+}
 
-            move |event: rdev::Event| {
-                if let rdev::EventType::KeyPress(k) | rdev::EventType::KeyRelease(k) =
-                    &event.event_type
-                {
-                    let press = matches!(event.event_type, rdev::EventType::KeyPress(_));
-                    eprintln!(
-                        "[ptt diag] raw {k:?} press={press} -> {:?}",
-                        rdev_key_to_code(k)
-                    );
+#[cfg(not(target_os = "macos"))]
+fn handle_key_event(ctx: &EventCtx, tracking: &mut EventTracking, code: &str, is_press: bool) {
+    let app = &ctx.app;
+    let state = &ctx.state;
+    let recorder = &ctx.recorder;
+    let tap_states = &ctx.tap_states;
+
+    // A key pressed while the settings UI binds a shortcut can lose its release
+    // to the settings window, which would otherwise leave it stuck "down" in
+    // held-key/modifier tracking — dead until restart.
+    if *state.shortcut_capture_paused.lock().unwrap() {
+        tracking.was_capture_paused = true;
+        return;
+    }
+    if tracking.was_capture_paused {
+        tracking.was_capture_paused = false;
+        tracking.pressed_keys.clear();
+        tracking.mod_sides = ModKeyState::default();
+        *state.modifiers.lock().unwrap() = ModifierState::default();
+    }
+
+    if is_press {
+        if !tracking.pressed_keys.insert(code.to_string()) {
+            return;
+        }
+    } else {
+        tracking.pressed_keys.remove(code);
+    }
+
+    update_modifier_state(state, code, is_press, &mut tracking.mod_sides);
+
+    let now = Instant::now();
+    let ptt_active_now = *state.ptt_active.lock().unwrap();
+
+    if is_cancel_event(code, is_press, ptt_active_now) {
+        cancel_session(app, state, recorder);
+        return;
+    }
+
+    let bindings = state.hotkey_bindings.lock().unwrap().clone();
+    let modifiers_val = *state.modifiers.lock().unwrap();
+    eprintln!(
+        "[ptt diag] {code} press={is_press} active={ptt_active_now} mods={modifiers_val:?} bindings={}",
+        bindings.len()
+    );
+
+    if is_press && !ptt_active_now {
+        let mut tap_states_guard = tap_states.lock().unwrap();
+        for b in bindings.iter().filter(|b| b.shortcut.is_double_tap) {
+            if !shortcut_matches(code, &b.shortcut, modifiers_val) {
+                if let Some(ts) = tap_states_guard.get_mut(&tap_state_key(&b.shortcut)) {
+                    advance_tap_state(ts, TapEvent::OtherKey, now);
                 }
+            }
+        }
+    }
 
-                // A key pressed while the settings UI binds a shortcut can lose
-                // its release to the settings window, which would otherwise leave
-                // it stuck "down" in held-key/modifier tracking — dead until restart.
-                if *state.shortcut_capture_paused.lock().unwrap() {
-                    was_capture_paused = true;
-                    if matches!(
-                        event.event_type,
-                        rdev::EventType::KeyPress(_) | rdev::EventType::KeyRelease(_)
-                    ) {
-                        eprintln!("[ptt diag] dropped key event: capture paused");
-                    }
-                    return;
-                }
-                if was_capture_paused {
-                    was_capture_paused = false;
-                    pressed_keys.lock().unwrap().clear();
-                    *mod_sides.lock().unwrap() = ModKeyState::default();
-                    *state.modifiers.lock().unwrap() = ModifierState::default();
-                }
+    let relevant = if ptt_active_now {
+        state
+            .active_shortcut
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|sc| shortcut_is_relevant(code, sc))
+            .unwrap_or(false)
+    } else {
+        bindings
+            .iter()
+            .any(|b| shortcut_is_relevant(code, &b.shortcut))
+    };
+    if !relevant {
+        return;
+    }
 
-                let (code, is_press) = match event.event_type {
-                    rdev::EventType::KeyPress(key) => match rdev_key_to_code(&key) {
-                        Some(c) => (c, true),
-                        None => return,
-                    },
-                    rdev::EventType::KeyRelease(key) => match rdev_key_to_code(&key) {
-                        Some(c) => (c, false),
-                        None => return,
-                    },
-                    _ => return,
+    if is_press && !ptt_active_now {
+        let sp = bindings.iter().find(|b| {
+            !b.shortcut.is_double_tap && shortcut_matches(code, &b.shortcut, modifiers_val)
+        });
+        let dt = bindings.iter().find(|b| {
+            b.shortcut.is_double_tap && shortcut_matches(code, &b.shortcut, modifiers_val)
+        });
+
+        match (sp, dt) {
+            (Some(sp_b), Some(dt_b)) if key_has_both_kinds(&bindings, &dt_b.shortcut) => {
+                let key = tap_state_key(&dt_b.shortcut);
+                let outcome = {
+                    let mut guard = tap_states.lock().unwrap();
+                    let ts = guard.entry(key.clone()).or_default();
+                    coex_advance_down(ts, now)
                 };
-
-                // Auto-repeat suppression: skip a press if the key is already
-                // in the held set. The set is cleared on release so a genuine
-                // re-press after release goes through.
-                {
-                    let mut pressed = pressed_keys.lock().unwrap();
-                    if is_press {
-                        if !pressed.insert(code.to_string()) {
-                            eprintln!("[ptt diag] dropped {code}: already held (pressed_keys)");
-                            return;
-                        }
-                    } else {
-                        pressed.remove(code);
+                match outcome {
+                    CoexDown::FireDoubleTap => {
+                        dispatch_binding(app, state, recorder, dt_b);
+                    }
+                    CoexDown::ScheduleSinglePress {
+                        captured_generation,
+                    } => {
+                        let tap_states_for_timer = tap_states.clone();
+                        let app_for_timer = app.clone();
+                        let state_for_timer = state.clone();
+                        let recorder_for_timer = recorder.clone();
+                        let sp_for_timer = sp_b.clone();
+                        tauri::async_runtime::spawn(async move {
+                            tokio::time::sleep(DOUBLE_TAP_THRESHOLD).await;
+                            let should_fire = {
+                                let mut guard = tap_states_for_timer.lock().unwrap();
+                                let Some(ts) = guard.get_mut(&key) else {
+                                    return;
+                                };
+                                if !coex_timer_should_fire(ts, captured_generation) {
+                                    return;
+                                }
+                                ts.generation = ts.generation.wrapping_add(1);
+                                true
+                            };
+                            if should_fire {
+                                dispatch_binding(
+                                    &app_for_timer,
+                                    &state_for_timer,
+                                    &recorder_for_timer,
+                                    &sp_for_timer,
+                                );
+                            }
+                        });
                     }
                 }
-
-                update_modifier_state(&state, code, is_press, &mut mod_sides.lock().unwrap());
-
-                let now = Instant::now();
-                let ptt_active_now = *state.ptt_active.lock().unwrap();
-
-                if is_cancel_event(code, is_press, ptt_active_now) {
-                    cancel_session(&app, &state, &recorder);
-                    return;
+            }
+            (_, Some(dt_b)) => {
+                let dispatch = {
+                    let mut guard = tap_states.lock().unwrap();
+                    let ts = guard.entry(tap_state_key(&dt_b.shortcut)).or_default();
+                    advance_tap_state(ts, TapEvent::Down, now)
+                };
+                if dispatch == Dispatch::StartPtt {
+                    dispatch_binding(app, state, recorder, dt_b);
                 }
-
-                let bindings = state.hotkey_bindings.lock().unwrap().clone();
-                let modifiers_val = *state.modifiers.lock().unwrap();
-                eprintln!(
-                    "[ptt diag] {code} press={is_press} active={ptt_active_now} mods={modifiers_val:?} bindings={}",
-                    bindings.len()
-                );
-
-                if is_press && !ptt_active_now {
+            }
+            (Some(sp_b), None) => {
+                dispatch_binding(app, state, recorder, sp_b);
+            }
+            (None, None) => {}
+        }
+    } else if !is_press {
+        let mut active = state.ptt_active.lock().unwrap();
+        if *active {
+            let sc_opt = state.active_shortcut.lock().unwrap().clone();
+            let should_stop = match sc_opt {
+                Some(ref sc) if sc.is_double_tap => {
                     let mut tap_states_guard = tap_states.lock().unwrap();
-                    for b in bindings.iter().filter(|b| b.shortcut.is_double_tap) {
-                        if !shortcut_matches(code, &b.shortcut, modifiers_val) {
-                            if let Some(ts) = tap_states_guard.get_mut(&tap_state_key(&b.shortcut))
-                            {
-                                advance_tap_state(ts, TapEvent::OtherKey, now);
-                            }
-                        }
-                    }
+                    let ts = tap_states_guard.entry(tap_state_key(sc)).or_default();
+                    advance_tap_state(ts, TapEvent::Up, now) == Dispatch::StopPtt
                 }
-
-                let relevant = if ptt_active_now {
-                    state
-                        .active_shortcut
-                        .lock()
-                        .unwrap()
-                        .as_ref()
-                        .map(|sc| shortcut_is_relevant(code, sc))
-                        .unwrap_or(false)
-                } else {
-                    bindings
-                        .iter()
-                        .any(|b| shortcut_is_relevant(code, &b.shortcut))
-                };
-                if !relevant {
-                    return;
-                }
-
-                if is_press && !ptt_active_now {
-                    let sp = bindings.iter().find(|b| {
-                        !b.shortcut.is_double_tap
-                            && shortcut_matches(code, &b.shortcut, modifiers_val)
-                    });
-                    let dt = bindings.iter().find(|b| {
-                        b.shortcut.is_double_tap
-                            && shortcut_matches(code, &b.shortcut, modifiers_val)
-                    });
-
-                    match (sp, dt) {
-                        (Some(sp_b), Some(dt_b))
-                            if key_has_both_kinds(&bindings, &dt_b.shortcut) =>
-                        {
-                            let key = tap_state_key(&dt_b.shortcut);
-                            let outcome = {
-                                let mut guard = tap_states.lock().unwrap();
-                                let ts = guard.entry(key.clone()).or_default();
-                                coex_advance_down(ts, now)
-                            };
-                            match outcome {
-                                CoexDown::FireDoubleTap => {
-                                    dispatch_binding(&app, &state, &recorder, dt_b);
-                                }
-                                CoexDown::ScheduleSinglePress {
-                                    captured_generation,
-                                } => {
-                                    let tap_states_for_timer = tap_states.clone();
-                                    let app_for_timer = app.clone();
-                                    let state_for_timer = state.clone();
-                                    let recorder_for_timer = recorder.clone();
-                                    let sp_for_timer = sp_b.clone();
-                                    tauri::async_runtime::spawn(async move {
-                                        tokio::time::sleep(DOUBLE_TAP_THRESHOLD).await;
-                                        let should_fire = {
-                                            let mut guard = tap_states_for_timer.lock().unwrap();
-                                            let Some(ts) = guard.get_mut(&key) else {
-                                                return;
-                                            };
-                                            if !coex_timer_should_fire(ts, captured_generation) {
-                                                return;
-                                            }
-                                            ts.generation = ts.generation.wrapping_add(1);
-                                            true
-                                        };
-                                        if should_fire {
-                                            dispatch_binding(
-                                                &app_for_timer,
-                                                &state_for_timer,
-                                                &recorder_for_timer,
-                                                &sp_for_timer,
-                                            );
-                                        }
-                                    });
-                                }
-                            }
-                        }
-                        (_, Some(dt_b)) => {
-                            let dispatch = {
-                                let mut guard = tap_states.lock().unwrap();
-                                let ts = guard.entry(tap_state_key(&dt_b.shortcut)).or_default();
-                                advance_tap_state(ts, TapEvent::Down, now)
-                            };
-                            if dispatch == Dispatch::StartPtt {
-                                dispatch_binding(&app, &state, &recorder, dt_b);
-                            }
-                        }
-                        (Some(sp_b), None) => {
-                            dispatch_binding(&app, &state, &recorder, sp_b);
-                        }
-                        (None, None) => {}
-                    }
-                } else if !is_press {
-                    let mut active = state.ptt_active.lock().unwrap();
-                    if *active {
-                        let sc_opt = state.active_shortcut.lock().unwrap().clone();
-                        let should_stop = match sc_opt {
-                            Some(ref sc) if sc.is_double_tap => {
-                                let mut tap_states_guard = tap_states.lock().unwrap();
-                                let ts = tap_states_guard.entry(tap_state_key(sc)).or_default();
-                                advance_tap_state(ts, TapEvent::Up, now) == Dispatch::StopPtt
-                            }
-                            _ => true,
-                        };
-                        if should_stop {
-                            *active = false;
-                            *state.active_shortcut.lock().unwrap() = None;
-                            let _ = app.emit(PTT_RELEASED_EVENT, ());
-                            maybe_resume_media(&state);
-                            recorder.stop();
-                        }
-                    } else {
-                        let mut tap_states_guard = tap_states.lock().unwrap();
-                        for b in bindings.iter().filter(|b| b.shortcut.is_double_tap) {
-                            if shortcut_matches(code, &b.shortcut, modifiers_val) {
-                                if let Some(ts) =
-                                    tap_states_guard.get_mut(&tap_state_key(&b.shortcut))
-                                {
-                                    if ts.tap_count > 0 {
-                                        advance_tap_state(ts, TapEvent::Up, now);
-                                    }
-                                }
-                            }
+                _ => true,
+            };
+            if should_stop {
+                *active = false;
+                *state.active_shortcut.lock().unwrap() = None;
+                let _ = app.emit(PTT_RELEASED_EVENT, ());
+                maybe_resume_media(state);
+                recorder.stop();
+            }
+        } else {
+            let mut tap_states_guard = tap_states.lock().unwrap();
+            for b in bindings.iter().filter(|b| b.shortcut.is_double_tap) {
+                if shortcut_matches(code, &b.shortcut, modifiers_val) {
+                    if let Some(ts) = tap_states_guard.get_mut(&tap_state_key(&b.shortcut)) {
+                        if ts.tap_count > 0 {
+                            advance_tap_state(ts, TapEvent::Up, now);
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+// ── Linux event source: rdev ─────────────────────────────────────────────────
+
+/// Caller must set `state.ptt_running` to true (via CAS) before invoking.
+// Keyboard-capture pattern adapted from the MIT-licensed Handy project
+// (https://github.com/cjpais/Handy). Copyright (c) cjpais.
+#[cfg(target_os = "linux")]
+pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
+    std::thread::spawn(move || {
+        let ptt_running = state.ptt_running.clone();
+        let ctx = EventCtx {
+            app,
+            state,
+            recorder,
+            tap_states: Arc::new(Mutex::new(HashMap::new())),
+        };
+        let mut tracking = EventTracking::default();
+
+        let callback = move |event: rdev::Event| {
+            let (code, is_press) = match event.event_type {
+                rdev::EventType::KeyPress(key) => match rdev_key_to_code(&key) {
+                    Some(c) => (c, true),
+                    None => return,
+                },
+                rdev::EventType::KeyRelease(key) => match rdev_key_to_code(&key) {
+                    Some(c) => (c, false),
+                    None => return,
+                },
+                _ => return,
+            };
+            handle_key_event(&ctx, &mut tracking, code, is_press);
         };
 
         if let Err(e) = rdev::listen(callback) {
             eprintln!("[ptt] rdev listener failed: {e:?}");
-            state.ptt_running.store(false, Ordering::Release);
+            ptt_running.store(false, Ordering::Release);
+        }
+    });
+}
+
+// ── Windows event source: WH_KEYBOARD_LL ──────────────────────────────────────
+//
+// rdev resolves the typed character on every key press, which attaches the
+// listener thread to the foreground window's input thread — that stalls and
+// drops the event whenever our own window is focused. We only need keycodes, so
+// we run the low-level hook directly and never touch the character layer.
+
+// FFI structs mirror the Win32 layout; several fields exist only for size and
+// are never read.
+#[cfg(target_os = "windows")]
+#[allow(dead_code)]
+mod win32_hook {
+    use std::ffi::c_void;
+
+    pub const WH_KEYBOARD_LL: i32 = 13;
+    pub const HC_ACTION: i32 = 0;
+    pub const WM_KEYDOWN: usize = 0x0100;
+    pub const WM_KEYUP: usize = 0x0101;
+    pub const WM_SYSKEYDOWN: usize = 0x0104;
+    pub const WM_SYSKEYUP: usize = 0x0105;
+    pub const LLKHF_INJECTED: u32 = 0x10;
+
+    #[repr(C)]
+    pub struct KbdLlHookStruct {
+        pub vk_code: u32,
+        pub scan_code: u32,
+        pub flags: u32,
+        pub time: u32,
+        pub dw_extra_info: usize,
+    }
+
+    #[repr(C)]
+    pub struct Point {
+        pub x: i32,
+        pub y: i32,
+    }
+
+    #[repr(C)]
+    pub struct Msg {
+        pub hwnd: *mut c_void,
+        pub message: u32,
+        pub w_param: usize,
+        pub l_param: isize,
+        pub time: u32,
+        pub pt: Point,
+    }
+
+    pub type HookProc = unsafe extern "system" fn(i32, usize, isize) -> isize;
+
+    #[link(name = "user32")]
+    extern "system" {
+        pub fn SetWindowsHookExW(
+            id_hook: i32,
+            lpfn: HookProc,
+            hmod: *mut c_void,
+            dw_thread_id: u32,
+        ) -> *mut c_void;
+        pub fn CallNextHookEx(
+            hhk: *mut c_void,
+            n_code: i32,
+            w_param: usize,
+            l_param: isize,
+        ) -> isize;
+        pub fn GetMessageW(
+            lp_msg: *mut Msg,
+            hwnd: *mut c_void,
+            w_msg_filter_min: u32,
+            w_msg_filter_max: u32,
+        ) -> i32;
+    }
+}
+
+/// Maps Windows virtual-key codes to the web `KeyboardEvent.code` strings that
+/// bindings are stored as. A low-level hook reports distinct VKs for the left
+/// and right modifiers, so they resolve unambiguously (unlike rdev).
+#[cfg(target_os = "windows")]
+fn vk_to_code(vk: u32) -> Option<&'static str> {
+    Some(match vk {
+        0x41 => "KeyA",
+        0x42 => "KeyB",
+        0x43 => "KeyC",
+        0x44 => "KeyD",
+        0x45 => "KeyE",
+        0x46 => "KeyF",
+        0x47 => "KeyG",
+        0x48 => "KeyH",
+        0x49 => "KeyI",
+        0x4A => "KeyJ",
+        0x4B => "KeyK",
+        0x4C => "KeyL",
+        0x4D => "KeyM",
+        0x4E => "KeyN",
+        0x4F => "KeyO",
+        0x50 => "KeyP",
+        0x51 => "KeyQ",
+        0x52 => "KeyR",
+        0x53 => "KeyS",
+        0x54 => "KeyT",
+        0x55 => "KeyU",
+        0x56 => "KeyV",
+        0x57 => "KeyW",
+        0x58 => "KeyX",
+        0x59 => "KeyY",
+        0x5A => "KeyZ",
+        0x30 => "Digit0",
+        0x31 => "Digit1",
+        0x32 => "Digit2",
+        0x33 => "Digit3",
+        0x34 => "Digit4",
+        0x35 => "Digit5",
+        0x36 => "Digit6",
+        0x37 => "Digit7",
+        0x38 => "Digit8",
+        0x39 => "Digit9",
+        0x70 => "F1",
+        0x71 => "F2",
+        0x72 => "F3",
+        0x73 => "F4",
+        0x74 => "F5",
+        0x75 => "F6",
+        0x76 => "F7",
+        0x77 => "F8",
+        0x78 => "F9",
+        0x79 => "F10",
+        0x7A => "F11",
+        0x7B => "F12",
+        0x20 => "Space",
+        0x0D => "Enter",
+        0x09 => "Tab",
+        0x1B => "Escape",
+        0x08 => "Backspace",
+        0x25 => "ArrowLeft",
+        0x26 => "ArrowUp",
+        0x27 => "ArrowRight",
+        0x28 => "ArrowDown",
+        0xA0 | 0x10 => "ShiftLeft",
+        0xA1 => "ShiftRight",
+        0xA2 | 0x11 => "ControlLeft",
+        0xA3 => "ControlRight",
+        0xA4 | 0x12 => "AltLeft",
+        0xA5 => "AltRight",
+        0x5B => "MetaLeft",
+        0x5C => "MetaRight",
+        0xC0 => "Backquote",
+        0xBD => "Minus",
+        0xBB => "Equal",
+        0xDB => "BracketLeft",
+        0xDD => "BracketRight",
+        0xDC => "Backslash",
+        0xBA => "Semicolon",
+        0xDE => "Quote",
+        0xBC => "Comma",
+        0xBE => "Period",
+        0xBF => "Slash",
+        _ => return None,
+    })
+}
+
+#[cfg(target_os = "windows")]
+thread_local! {
+    static HOOK_STATE: std::cell::RefCell<Option<(EventCtx, EventTracking)>> =
+        std::cell::RefCell::new(None);
+}
+
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn keyboard_proc(code: i32, w_param: usize, l_param: isize) -> isize {
+    if code == win32_hook::HC_ACTION {
+        let info = &*(l_param as *const win32_hook::KbdLlHookStruct);
+        // Ignore our own synthetic paste keystrokes so they can't match a hotkey.
+        if info.flags & win32_hook::LLKHF_INJECTED == 0 {
+            let is_press =
+                w_param == win32_hook::WM_KEYDOWN || w_param == win32_hook::WM_SYSKEYDOWN;
+            let is_release = w_param == win32_hook::WM_KEYUP || w_param == win32_hook::WM_SYSKEYUP;
+            if is_press || is_release {
+                let mapped = vk_to_code(info.vk_code);
+                eprintln!(
+                    "[ptt diag] raw vk={:#x} press={is_press} -> {mapped:?}",
+                    info.vk_code
+                );
+                if let Some(c) = mapped {
+                    HOOK_STATE.with(|cell| {
+                        if let Some((ctx, tracking)) = cell.borrow_mut().as_mut() {
+                            handle_key_event(ctx, tracking, c, is_press);
+                        }
+                    });
+                }
+            }
+        }
+    }
+    win32_hook::CallNextHookEx(std::ptr::null_mut(), code, w_param, l_param)
+}
+
+/// Caller must set `state.ptt_running` to true (via CAS) before invoking.
+#[cfg(target_os = "windows")]
+pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
+    std::thread::spawn(move || {
+        let ptt_running = state.ptt_running.clone();
+        let ctx = EventCtx {
+            app,
+            state,
+            recorder,
+            tap_states: Arc::new(Mutex::new(HashMap::new())),
+        };
+        HOOK_STATE.with(|cell| *cell.borrow_mut() = Some((ctx, EventTracking::default())));
+
+        // The low-level hook fires on the thread that installed it, but only
+        // while that thread pumps messages — hence the otherwise-empty loop.
+        unsafe {
+            let hook = win32_hook::SetWindowsHookExW(
+                win32_hook::WH_KEYBOARD_LL,
+                keyboard_proc,
+                std::ptr::null_mut(),
+                0,
+            );
+            if hook.is_null() {
+                eprintln!("[ptt] SetWindowsHookExW failed");
+                ptt_running.store(false, Ordering::Release);
+                return;
+            }
+            let mut msg: win32_hook::Msg = std::mem::zeroed();
+            while win32_hook::GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {}
         }
     });
 }

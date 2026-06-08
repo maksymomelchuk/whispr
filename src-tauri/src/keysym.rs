@@ -104,7 +104,7 @@ pub fn keycode_to_code(kc: u16) -> Option<&'static str> {
 /// right Alt / AltGr key. Neither variant distinguishes hardware side the way
 /// macOS keycodes do, so the mapping is best-effort on keyboards with two
 /// symmetric Alt keys where the right one is not labelled AltGr.
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "linux")]
 pub fn rdev_key_to_code(key: &rdev::Key) -> Option<&'static str> {
     use rdev::Key;
     Some(match key {
@@ -258,7 +258,7 @@ mod tests {
     }
 }
 
-#[cfg(all(test, not(target_os = "macos")))]
+#[cfg(all(test, target_os = "linux"))]
 mod rdev_tests {
     use super::*;
     use rdev::Key;
