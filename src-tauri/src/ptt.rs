@@ -30,9 +30,10 @@ use crate::keysym::{
     keycode_to_code, KC_ALT_LEFT, KC_ALT_RIGHT, KC_CONTROL_LEFT, KC_CONTROL_RIGHT, KC_META_LEFT,
     KC_META_RIGHT, KC_SHIFT_LEFT, KC_SHIFT_RIGHT,
 };
-use crate::paste;
 #[cfg(target_os = "macos")]
-use crate::{media, overlay, target_app};
+use crate::media;
+use crate::paste;
+use crate::{overlay, target_app};
 #[cfg(target_os = "macos")]
 use core_foundation::base::TCFType;
 #[cfg(target_os = "macos")]
@@ -539,6 +540,7 @@ async fn run_session(
     )
     .await;
 
+    #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
     let pipeline::Outcome {
         pasted_text,
         mut history_entry,
