@@ -1493,7 +1493,7 @@ fn vk_to_code(vk: u32) -> Option<&'static str> {
 
 #[cfg(target_os = "windows")]
 thread_local! {
-    static HOOK_SENDER: std::cell::RefCell<Option<std::sync::mpsc::Sender<(&'static str, bool)>>> =
+    static HOOK_SENDER: std::cell::RefCell<Option<std::sync::mpsc::Sender<(u32, bool)>>> =
         const { std::cell::RefCell::new(None) };
 }
 
@@ -1501,7 +1501,8 @@ thread_local! {
 // LowLevelHooksTimeout (~300ms). dispatch_binding marshals overlay::show /
 // app.emit to the main UI thread, which blocks for >300ms whenever our own
 // window is foreground (its UI thread is busy) — so the callback only forwards
-// the key over a channel and all matching/dispatch runs on the worker thread.
+// the raw key over a channel and all mapping/matching/dispatch runs on the
+// worker thread.
 #[cfg(target_os = "windows")]
 unsafe extern "system" fn keyboard_proc(code: i32, w_param: usize, l_param: isize) -> isize {
     if code == win32_hook::HC_ACTION {
@@ -1512,13 +1513,11 @@ unsafe extern "system" fn keyboard_proc(code: i32, w_param: usize, l_param: isiz
                 w_param == win32_hook::WM_KEYDOWN || w_param == win32_hook::WM_SYSKEYDOWN;
             let is_release = w_param == win32_hook::WM_KEYUP || w_param == win32_hook::WM_SYSKEYUP;
             if is_press || is_release {
-                if let Some(c) = vk_to_code(info.vk_code) {
-                    HOOK_SENDER.with(|cell| {
-                        if let Some(tx) = cell.borrow().as_ref() {
-                            let _ = tx.send((c, is_press));
-                        }
-                    });
-                }
+                HOOK_SENDER.with(|cell| {
+                    if let Some(tx) = cell.borrow().as_ref() {
+                        let _ = tx.send((info.vk_code, is_press));
+                    }
+                });
             }
         }
     }
@@ -1529,7 +1528,7 @@ unsafe extern "system" fn keyboard_proc(code: i32, w_param: usize, l_param: isiz
 #[cfg(target_os = "windows")]
 pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
     let ptt_running = state.ptt_running.clone();
-    let (tx, rx) = std::sync::mpsc::channel::<(&'static str, bool)>();
+    let (tx, rx) = std::sync::mpsc::channel::<(u32, bool)>();
 
     let ctx = EventCtx {
         app,
@@ -1539,8 +1538,12 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
     };
     std::thread::spawn(move || {
         let mut tracking = EventTracking::default();
-        while let Ok((code, is_press)) = rx.recv() {
-            handle_key_event(&ctx, &mut tracking, code, is_press);
+        while let Ok((vk, is_press)) = rx.recv() {
+            let mapped = vk_to_code(vk);
+            eprintln!("[ptt diag] raw vk={vk:#x} press={is_press} -> {mapped:?}");
+            if let Some(code) = mapped {
+                handle_key_event(&ctx, &mut tracking, code, is_press);
+            }
         }
     });
 
@@ -1560,6 +1563,7 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                 ptt_running.store(false, Ordering::Release);
                 return;
             }
+            eprintln!("[ptt diag] WH_KEYBOARD_LL hook installed");
             let mut msg: win32_hook::Msg = std::mem::zeroed();
             while win32_hook::GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {}
         }
