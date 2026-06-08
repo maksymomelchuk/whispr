@@ -47,7 +47,7 @@ Make a git commit. The commit message must:
 4. Files changed
 5. Blockers or notes for next iteration
 
-Keep it concise.
+Keep it concise. Do not add a `Co-Authored-By` trailer or any "Generated with Claude Code" line.
 
 # THE ISSUE
 

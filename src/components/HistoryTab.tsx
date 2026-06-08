@@ -23,6 +23,7 @@ import {
   getHistory,
   clearHistory as persistClearHistory,
   setHistoryLimit as persistHistoryLimit,
+  recoverCleanup,
 } from "../lib/api";
 import type { CleanupStatus, HistoryEntry, HistoryLimit } from "../lib/types";
 import { providerModelLabel } from "../lib/types";
@@ -53,7 +54,7 @@ const limitHint = (l: HistoryLimit, count: number): string => {
 type LoadState = "loading" | "ready" | "error";
 
 function entryId(entry: HistoryEntry): string {
-  return `${entry.timestamp}|${entry.final_text.length}`;
+  return entry.id || `${entry.timestamp}|${entry.final_text.length}`;
 }
 
 function dayKey(timestamp: number): string {
@@ -326,6 +327,11 @@ function cleanupView(status: CleanupStatus): CleanupView {
             ? null
             : { text: "Cleanup ran — no edits needed.", tone: "info" },
       };
+    case "recovered_manually":
+      return {
+        badge: { label: "recovered", tone: "neutral" },
+        note: () => ({ text: "Recovered via manual retry.", tone: "info" }),
+      };
     case "skipped_below_min_words":
       return {
         badge: { label: "skipped: too short", tone: "neutral" },
@@ -392,6 +398,17 @@ function useCopyFlash(): { copied: boolean; flash: (text: string) => void } {
   return { copied, flash };
 }
 
+function isRecoverable(entry: HistoryEntry): boolean {
+  if (!entry.id || !entry.profile_snapshot) return false;
+  const { kind } = entry.cleanup_status;
+  return (
+    kind === "failed_timeout" ||
+    kind === "failed_transient" ||
+    kind === "failed_credential" ||
+    kind === "no_credential"
+  );
+}
+
 function HistoryRow({
   entry,
   flashing,
@@ -401,7 +418,23 @@ function HistoryRow({
 }) {
   const [traceOpen, setTraceOpen] = useState(false);
   const { copied, flash } = useCopyFlash();
+  const [recovering, setRecovering] = useState(false);
+  const [recoverError, setRecoverError] = useState<string | null>(null);
   const view = cleanupView(entry.cleanup_status);
+  const recoverable = isRecoverable(entry);
+
+  const handleRecover = async () => {
+    setRecovering(true);
+    setRecoverError(null);
+    try {
+      const text = await recoverCleanup(entry.id);
+      flash(text);
+    } catch (e) {
+      setRecoverError(String(e));
+    } finally {
+      setRecovering(false);
+    }
+  };
 
   return (
     <RowCard
@@ -456,7 +489,22 @@ function HistoryRow({
             >
               {copied ? "Copied" : "Copy"}
             </Button>
+            {recoverable && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                className="text-muted-foreground"
+                disabled={recovering}
+                onClick={handleRecover}
+              >
+                {recovering ? "Recovering…" : "Recover"}
+              </Button>
+            )}
           </div>
+          {recoverError && (
+            <p className="text-xs text-destructive">{recoverError}</p>
+          )}
         </div>
       </div>
 

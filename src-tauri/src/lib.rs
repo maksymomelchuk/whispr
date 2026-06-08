@@ -40,8 +40,10 @@ pub(crate) mod recorder;
 mod session;
 
 // cleanup is cross-platform HTTP (reqwest + serde_json, no OS APIs).
-mod cleanup;
+pub mod cleanup;
+mod cleanup_invoke;
 pub mod model_catalog;
+pub mod recovery;
 
 // media, overlay, and target_app expose platform-neutral public APIs and
 // select their OS implementation internally via cfg.
@@ -244,6 +246,8 @@ pub fn run() {
             commands::get_history,
             commands::clear_history,
             commands::set_history_limit,
+            commands::update_history_entry,
+            commands::recover_cleanup,
             commands::get_stats,
             commands::clear_stats,
             commands::get_app_icon,

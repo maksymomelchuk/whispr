@@ -6,7 +6,8 @@ export interface Shortcut {
 
 export type HotkeyAction =
   | { type: "Ptt"; mode_id: string }
-  | { type: "PasteLatest" };
+  | { type: "PasteLatest" }
+  | { type: "RecoverLatest" };
 
 export interface HotkeyBinding {
   shortcut: Shortcut;
@@ -21,8 +22,16 @@ export function pasteLatestBinding(shortcut: Shortcut): HotkeyBinding {
   return { shortcut, action: { type: "PasteLatest" } };
 }
 
+export function recoverLatestBinding(shortcut: Shortcut): HotkeyBinding {
+  return { shortcut, action: { type: "RecoverLatest" } };
+}
+
 export function isPasteLatestBinding(b: HotkeyBinding): boolean {
   return b.action.type === "PasteLatest";
+}
+
+export function isRecoverLatestBinding(b: HotkeyBinding): boolean {
+  return b.action.type === "RecoverLatest";
 }
 
 export function pttModeId(b: HotkeyBinding): string | null {
@@ -170,6 +179,7 @@ export interface ModeCleanup {
   prompt_override: string | null;
   provider: AiProviderId;
   model: string;
+  paste_raw_on_failure: boolean;
 }
 
 export interface NamedTermSet {
@@ -245,17 +255,29 @@ export type CleanupStatus =
   | { kind: "skipped_below_min_duration" }
   | { kind: "no_credential" }
   | { kind: "ran" }
+  | { kind: "recovered_manually" }
   | { kind: "failed_timeout" }
   | { kind: "failed_transient"; message: string }
   | { kind: "failed_credential"; message: string };
 
+export interface ProfileSnapshot {
+  cleanup_provider: AiProviderId;
+  cleanup_model: string;
+  cleanup_prompt_override: string | null;
+  use_snippets: boolean;
+  correction_set_ids: string[];
+}
+
 export interface HistoryEntry {
+  /** Stable unique id generated at dictation time. Empty string on pre-upgrade entries. */
+  id: string;
   timestamp: number;
   speak_duration_ms: number;
   raw_text: string;
   replaced_text: string;
   final_text: string;
   cleanup_status: CleanupStatus;
+  profile_snapshot?: ProfileSnapshot | null;
   provider_model?: ProviderModel | null;
   app_name?: string | null;
   bundle_id?: string | null;

@@ -12,6 +12,7 @@ use crate::mode::{Mode, ModeId, SetId};
 use crate::model_catalog;
 use crate::permissions;
 use crate::provider::{local_model_path, GroqModel, LocalWhisperModel};
+use crate::recovery;
 use crate::state::AppState;
 use crate::stats::{self, StatsRow, STATS_UPDATED_EVENT};
 use serde::Serialize;
@@ -520,6 +521,48 @@ pub fn set_history_limit(app: AppHandle, limit: Option<usize>) -> Result<(), Str
     history::enforce_limit(&app, limit)?;
     let _ = app.emit(HISTORY_UPDATED_EVENT, ());
     Ok(())
+}
+
+#[tauri::command]
+pub fn update_history_entry(
+    app: AppHandle,
+    id: String,
+    replaced_text: String,
+    final_text: String,
+) -> Result<(), String> {
+    history::update_by_id(&app, &id, replaced_text, final_text)?;
+    let _ = app.emit(HISTORY_UPDATED_EVENT, ());
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn recover_cleanup(app: AppHandle, id: String) -> Result<String, String> {
+    let entries = history::load(&app);
+    let entry = entries
+        .iter()
+        .find(|e| e.id == id)
+        .ok_or_else(|| format!("history entry not found: {id}"))?
+        .clone();
+
+    if !recovery::is_recoverable(&entry) {
+        return Err("entry is not recoverable".to_string());
+    }
+
+    let settings = config::load(&app);
+    let outcome = recovery::recover_entry(&entry, &settings)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    history::update_by_id(
+        &app,
+        &id,
+        outcome.history_entry.replaced_text,
+        outcome.history_entry.final_text.clone(),
+    )?;
+
+    let _ = app.emit(HISTORY_UPDATED_EVENT, ());
+
+    Ok(outcome.history_entry.final_text)
 }
 
 #[tauri::command]

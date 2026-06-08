@@ -18,7 +18,7 @@ use crate::provider::{self, LocalWhisperModel, ProviderModel, TranscriptionProvi
 use crate::recorder::Recorder;
 use crate::session::{Session, PTT_ERROR_EVENT, TRANSCRIPTION_ERROR_EVENT};
 use crate::state::{AppState, ModifierState};
-use crate::{cleanup, cleanup_stats, config, model_catalog, stats};
+use crate::{cleanup, cleanup_invoke, cleanup_stats, config, model_catalog, recovery, stats};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
@@ -316,6 +316,7 @@ async fn run_session(
     let mode_prompt_override = active_mode.ai_cleanup.prompt_override.clone();
     let cleanup_provider = active_mode.ai_cleanup.provider;
     let cleanup_model = active_mode.ai_cleanup.model.clone();
+    let paste_raw_on_failure = active_mode.ai_cleanup.paste_raw_on_failure;
     let session_terms =
         crate::terms::compose_term_hints(&settings.term_sets, &active_mode.term_set_ids);
 
@@ -576,9 +577,15 @@ async fn run_session(
         history_entry.bundle_id = resolved_app.map(|a| a.bundle_id);
     }
 
+    let paste_policy =
+        pipeline::resolve_paste_policy(&history_entry.cleanup_status, paste_raw_on_failure);
+
     // paste_handle must complete before any notify_error: set_focus()
     // during the modifier-release wait would steal focus mid-paste.
-    let paste_handle = paste::paste_text(pasted_text);
+    let paste_handle = match paste_policy {
+        pipeline::PastePolicy::PasteRaw => paste::paste_text(pasted_text),
+        pipeline::PastePolicy::SuppressAndClipboard => paste::write_to_clipboard(raw_text),
+    };
 
     let words = history_entry.final_text.split_whitespace().count() as u64;
     let seconds = speak_duration.as_secs() as u32;
@@ -652,94 +659,15 @@ async fn maybe_cleanup(
     }
 
     let _ = app.emit(PTT_THINKING_EVENT, ());
-    let prompt = cleanup::effective_prompt(prompt_override);
 
-    use cleanup::AiProviderId;
-    let result = match cleanup_provider {
-        AiProviderId::Anthropic => {
-            let credential = match cleanup_settings.auth_mode {
-                config::CleanupAuthMode::ApiKey => {
-                    match cleanup_settings
-                        .provider_keys
-                        .get("anthropic")
-                        .filter(|k| !k.is_empty())
-                    {
-                        Some(k) => cleanup::Credential::ApiKey(k),
-                        None => {
-                            return (
-                                transcript.to_string(),
-                                CleanupStatus::NoCredential,
-                                Notice::Focus(
-                                    "AI cleanup is enabled but Anthropic API key is not set."
-                                        .to_string(),
-                                ),
-                            );
-                        }
-                    }
-                }
-                config::CleanupAuthMode::Oauth => {
-                    match cleanup_settings.anthropic_oauth_token.as_deref() {
-                        Some(t) if !t.is_empty() => cleanup::Credential::OauthToken(t),
-                        _ => {
-                            return (
-                                transcript.to_string(),
-                                CleanupStatus::NoCredential,
-                                Notice::Focus(
-                                    "AI cleanup is set to OAuth but no Claude Code token is configured."
-                                        .to_string(),
-                                ),
-                            );
-                        }
-                    }
-                }
-            };
-            cleanup::run(transcript, credential, cleanup_model, &prompt).await
-        }
-        AiProviderId::Custom => {
-            let custom = match &cleanup_settings.custom_provider {
-                Some(cp) if !cp.base_url.is_empty() => cp.clone(),
-                _ => {
-                    return (
-                        transcript.to_string(),
-                        CleanupStatus::NoCredential,
-                        Notice::Focus(
-                            "AI cleanup is enabled but the Custom provider is not configured."
-                                .to_string(),
-                        ),
-                    );
-                }
-            };
-            let chat_url = format!("{}/chat/completions", custom.base_url.trim_end_matches('/'));
-            let api_key = custom.api_key.as_deref().unwrap_or("");
-            cleanup::run_openai(transcript, api_key, &chat_url, &custom.model, &prompt).await
-        }
-        AiProviderId::OpenAi
-        | AiProviderId::Google
-        | AiProviderId::Groq
-        | AiProviderId::DeepSeek
-        | AiProviderId::Cerebras
-        | AiProviderId::OpenRouter => {
-            let api_key = match cleanup_settings
-                .provider_keys
-                .get(cleanup_provider.as_str())
-                .filter(|k| !k.is_empty())
-            {
-                Some(k) => k.clone(),
-                None => {
-                    return (
-                        transcript.to_string(),
-                        CleanupStatus::NoCredential,
-                        Notice::Focus(format!(
-                            "AI cleanup is enabled but the {} API key is not set.",
-                            cleanup_provider.as_str()
-                        )),
-                    );
-                }
-            };
-            let chat_url = cleanup_provider.openai_chat_url();
-            cleanup::run_openai(transcript, &api_key, chat_url, cleanup_model, &prompt).await
-        }
-    };
+    let result = cleanup_invoke::invoke(
+        cleanup_settings,
+        cleanup_provider,
+        cleanup_model,
+        prompt_override,
+        transcript,
+    )
+    .await;
 
     match result {
         Ok((cleaned, usage)) => {
@@ -750,7 +678,12 @@ async fn maybe_cleanup(
             let message = format!("AI cleanup unavailable: {err}");
             let (status, notice) = match err {
                 cleanup::CleanupError::Credential(m) => {
-                    (CleanupStatus::FailedCredential(m), Notice::Focus(message))
+                    if cleanup_invoke::is_credential_configured(cleanup_settings, cleanup_provider)
+                    {
+                        (CleanupStatus::FailedCredential(m), Notice::Focus(message))
+                    } else {
+                        (CleanupStatus::NoCredential, Notice::Focus(m))
+                    }
                 }
                 cleanup::CleanupError::Timeout(_) => {
                     let _ = app.emit(PTT_ERROR_EVENT, ());
@@ -809,8 +742,56 @@ fn fire_paste_latest(app: &AppHandle) {
     });
 }
 
-/// PasteLatest is suppressed while a PTT session is active so a stray
-/// double-tap during recording can't fire a stale paste at the same target.
+fn fire_recover_latest(app: &AppHandle, state: &AppState) {
+    use std::sync::atomic::Ordering;
+    if state.recover_in_flight.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    let app = app.clone();
+    let state = state.clone();
+    tauri::async_runtime::spawn(async move {
+        let Some(entry) = history::latest(&app) else {
+            state.recover_in_flight.store(false, Ordering::Release);
+            return;
+        };
+        if !recovery::is_recoverable(&entry) {
+            notify_silent(&app, "Nothing to recover");
+            tokio::time::sleep(ERROR_FLASH).await;
+            state.recover_in_flight.store(false, Ordering::Release);
+            return;
+        }
+        let settings = config::load(&app);
+        #[cfg(target_os = "macos")]
+        overlay::show(&app);
+        let _ = app.emit(PTT_THINKING_EVENT, ());
+        let result = recovery::recover_entry(&entry, &settings).await;
+        #[cfg(target_os = "macos")]
+        overlay::hide(&app);
+        match result {
+            Ok(outcome) => {
+                if let Err(e) = history::update_by_id(
+                    &app,
+                    &entry.id,
+                    outcome.history_entry.replaced_text,
+                    outcome.history_entry.final_text,
+                ) {
+                    eprintln!("[recovery] update_by_id failed: {e}");
+                }
+                let _ = app.emit(HISTORY_UPDATED_EVENT, ());
+                paste::paste_text(outcome.pasted_text).await.ok();
+            }
+            Err(err) => {
+                notify_silent(&app, format!("Recovery failed: {err}"));
+                tokio::time::sleep(ERROR_FLASH).await;
+            }
+        }
+        state.recover_in_flight.store(false, Ordering::Release);
+    });
+}
+
+/// PasteLatest and RecoverLatest are suppressed while a PTT session is active
+/// so a stray double-tap during recording can't fire a stale paste at the same
+/// target.
 fn dispatch_binding(
     app: &AppHandle,
     state: &AppState,
@@ -826,6 +807,12 @@ fn dispatch_binding(
                 return;
             }
             fire_paste_latest(app);
+        }
+        HotkeyAction::RecoverLatest => {
+            if *state.ptt_active.lock().unwrap() {
+                return;
+            }
+            fire_recover_latest(app, state);
         }
     }
 }

@@ -66,6 +66,8 @@ pub struct ModeCleanup {
     pub provider: AiProviderId,
     #[serde(default = "default_cleanup_model")]
     pub model: String,
+    #[serde(default = "default_true")]
+    pub paste_raw_on_failure: bool,
 }
 
 impl Default for ModeCleanup {
@@ -75,6 +77,7 @@ impl Default for ModeCleanup {
             prompt_override: None,
             provider: AiProviderId::default(),
             model: default_cleanup_model(),
+            paste_raw_on_failure: true,
         }
     }
 }
@@ -186,6 +189,7 @@ impl Mode {
                      Output only the translated text, nothing else."
                         .to_string(),
                 ),
+                paste_raw_on_failure: false,
                 ..ModeCleanup::default()
             },
             legacy_use_dictionary: None,
@@ -395,11 +399,31 @@ mod tests {
             prompt_override: None,
             provider: AiProviderId::OpenAi,
             model: "gpt-4o-mini".to_string(),
+            paste_raw_on_failure: true,
         };
         let json = serde_json::to_string(&c).unwrap();
         let decoded: ModeCleanup = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.provider, AiProviderId::OpenAi);
         assert_eq!(decoded.model, "gpt-4o-mini");
+    }
+
+    #[test]
+    fn mode_cleanup_paste_raw_on_failure_defaults_to_true() {
+        let c = ModeCleanup::default();
+        assert!(c.paste_raw_on_failure);
+    }
+
+    #[test]
+    fn mode_cleanup_paste_raw_on_failure_deserializes_to_true_when_absent() {
+        let json = r#"{"enabled":false,"prompt_override":null}"#;
+        let c: ModeCleanup = serde_json::from_str(json).unwrap();
+        assert!(c.paste_raw_on_failure);
+    }
+
+    #[test]
+    fn seed_ua_en_has_paste_raw_on_failure_false() {
+        let m = Mode::seed_ua_en();
+        assert!(!m.ai_cleanup.paste_raw_on_failure);
     }
 
     #[test]

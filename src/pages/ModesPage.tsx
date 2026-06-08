@@ -560,6 +560,12 @@ export function ModeEditor({
   const setCleanupModel = (model: string) =>
     setDraft((d) => ({ ...d, ai_cleanup: { ...d.ai_cleanup, model } }));
 
+  const setPasteRawOnFailure = (paste_raw_on_failure: boolean) =>
+    setDraft((d) => ({
+      ...d,
+      ai_cleanup: { ...d.ai_cleanup, paste_raw_on_failure },
+    }));
+
   const cleanupProvider = draft.ai_cleanup.provider;
   const cleanupProviderConfigured = (configuredProviders ?? []).includes(
     cleanupProvider,
@@ -995,6 +1001,13 @@ export function ModeEditor({
                   />
                 </CollapsibleContent>
               </Collapsible>
+              <ToggleRow
+                id="paste-raw-on-failure"
+                label="Paste raw on failure"
+                info="When off, cleanup failures copy the raw transcript to clipboard instead of pasting it into the target app."
+                checked={draft.ai_cleanup.paste_raw_on_failure}
+                onCheckedChange={setPasteRawOnFailure}
+              />
             </>
           )}
           <div className="flex items-center gap-3 mt-3 mb-1">
@@ -1083,6 +1096,7 @@ export function ModesPage() {
         prompt_override: null,
         provider: "anthropic",
         model: "claude-haiku-4-5",
+        paste_raw_on_failure: true,
       },
       term_set_ids: [],
       correction_set_ids: [],

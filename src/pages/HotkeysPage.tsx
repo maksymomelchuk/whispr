@@ -29,9 +29,11 @@ import {
 } from "../lib/shortcut";
 import {
   isPasteLatestBinding,
+  isRecoverLatestBinding,
   pasteLatestBinding,
   pttBinding,
   pttModeId,
+  recoverLatestBinding,
 } from "../lib/types";
 import type { HotkeyBinding, Mode, Shortcut } from "../lib/types";
 
@@ -40,10 +42,12 @@ const CONFLICT_MESSAGE =
 
 const DEFAULT_SHORTCUT: Shortcut = { key: "AltRight", modifiers: [] };
 const PASTE_LATEST_TARGET_ID = "__paste_latest__";
+const RECOVER_LATEST_TARGET_ID = "__recover_latest__";
 
 type RecorderTargetKind =
   | { kind: "mode"; modeId: string }
-  | { kind: "paste_latest" };
+  | { kind: "paste_latest" }
+  | { kind: "recover_latest" };
 
 interface RecorderTarget {
   target: RecorderTargetKind;
@@ -52,7 +56,9 @@ interface RecorderTarget {
 }
 
 function targetId(target: RecorderTargetKind): string {
-  return target.kind === "mode" ? target.modeId : PASTE_LATEST_TARGET_ID;
+  if (target.kind === "mode") return target.modeId;
+  if (target.kind === "paste_latest") return PASTE_LATEST_TARGET_ID;
+  return RECOVER_LATEST_TARGET_ID;
 }
 
 function makeBindingForTarget(
@@ -61,6 +67,9 @@ function makeBindingForTarget(
 ): HotkeyBinding {
   if (target.kind === "mode") {
     return pttBinding(shortcut, target.modeId);
+  }
+  if (target.kind === "recover_latest") {
+    return recoverLatestBinding(shortcut);
   }
   return pasteLatestBinding(shortcut);
 }
@@ -304,6 +313,10 @@ export function HotkeysPage() {
     .map((b, i) => ({ binding: b, index: i }))
     .filter(({ binding }) => isPasteLatestBinding(binding));
 
+  const recoverLatestBindings = bindings
+    .map((b, i) => ({ binding: b, index: i }))
+    .filter(({ binding }) => isRecoverLatestBinding(binding));
+
   const rowFlashId = (targetIdValue: string, shortcut: Shortcut) =>
     `${targetIdValue}|${shortcutKey(shortcut)}`;
 
@@ -420,6 +433,19 @@ export function HotkeysPage() {
         isFlashing={isFlashing}
         rowFlashId={rowFlashId}
       />
+
+      <Separator />
+
+      <RecoverLatestSection
+        rows={recoverLatestBindings}
+        recorderTarget={recorderTarget}
+        setRecorderTarget={setRecorderTarget}
+        bindings={bindings}
+        onSave={handleRecordSave}
+        onRemove={handleRemove}
+        isFlashing={isFlashing}
+        rowFlashId={rowFlashId}
+      />
     </div>
   );
 }
@@ -489,6 +515,90 @@ function PasteLatestSection({
             }
             const flashing = isFlashing(
               rowFlashId(PASTE_LATEST_TARGET_ID, binding.shortcut),
+            );
+            return (
+              <BindingRow
+                key={bindingIndex}
+                binding={binding}
+                conflict={hasConflict(bindings, bindingIndex)}
+                armed={false}
+                flashing={flashing}
+                onEdit={() => startRecording(bindingIndex, binding.shortcut)}
+                onRemove={() => onRemove(bindingIndex)}
+              />
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+interface RecoverLatestSectionProps {
+  rows: { binding: HotkeyBinding; index: number }[];
+  recorderTarget: RecorderTarget | null;
+  setRecorderTarget: (target: RecorderTarget | null) => void;
+  bindings: HotkeyBinding[];
+  onSave: (shortcut: Shortcut) => void;
+  onRemove: (index: number) => void;
+  isFlashing: (id: string) => boolean;
+  rowFlashId: (targetId: string, shortcut: Shortcut) => string;
+}
+
+function RecoverLatestSection({
+  rows,
+  recorderTarget,
+  setRecorderTarget,
+  bindings,
+  onSave,
+  onRemove,
+  isFlashing,
+  rowFlashId,
+}: RecoverLatestSectionProps) {
+  const isRecordingHere = recorderTarget?.target.kind === "recover_latest";
+  const recordingExistingIndex =
+    isRecordingHere && recorderTarget?.bindingIndex !== null
+      ? recorderTarget?.bindingIndex
+      : null;
+  const recordingNewBinding =
+    isRecordingHere && recorderTarget?.bindingIndex === null;
+
+  const startRecording = (bindingIndex: number | null, current: Shortcut) =>
+    setRecorderTarget({
+      target: { kind: "recover_latest" },
+      bindingIndex,
+      current,
+    });
+
+  return (
+    <section className="flex flex-col gap-2.5">
+      <SectionHeader title="Recover Latest Transcription" />
+
+      {rows.length === 0 ? (
+        recordingNewBinding ? (
+          <RecordingRow
+            initial={recorderTarget!.current}
+            onSave={onSave}
+            onCancel={() => setRecorderTarget(null)}
+          />
+        ) : (
+          <EmptyModeCard onAdd={() => startRecording(null, DEFAULT_SHORTCUT)} />
+        )
+      ) : (
+        <div className="flex flex-col gap-2">
+          {rows.map(({ binding, index: bindingIndex }) => {
+            if (recordingExistingIndex === bindingIndex) {
+              return (
+                <RecordingRow
+                  key={bindingIndex}
+                  initial={recorderTarget!.current}
+                  onSave={onSave}
+                  onCancel={() => setRecorderTarget(null)}
+                />
+              );
+            }
+            const flashing = isFlashing(
+              rowFlashId(RECOVER_LATEST_TARGET_ID, binding.shortcut),
             );
             return (
               <BindingRow
