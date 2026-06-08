@@ -1,4 +1,5 @@
 use crate::{cleanup, config};
+#[cfg(test)]
 use std::time::Duration;
 
 /// Returns true if a credential is present for `provider` in `cleanup_settings`.
@@ -73,6 +74,7 @@ pub async fn invoke(
 }
 
 /// Testable variant of `invoke` with injectable transport and explicit timeout.
+#[cfg(test)]
 pub(crate) async fn invoke_with_transport<T: cleanup::Transport>(
     cleanup_settings: &config::AiCleanupSettings,
     provider: cleanup::AiProviderId,

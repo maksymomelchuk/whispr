@@ -1,11 +1,15 @@
-use crate::cleanup::{CleanupError, Transport};
+use crate::cleanup::CleanupError;
+#[cfg(test)]
+use crate::cleanup::Transport;
 use crate::cleanup_invoke;
 use crate::config::Settings;
 use crate::corrections::{apply_corrections, compose_corrections};
 use crate::history::{CleanupStatus, HistoryEntry, ProfileSnapshot};
 use crate::pipeline::Outcome;
 use crate::snippets::expand_snippets;
-use std::time::{Duration, Instant};
+#[cfg(test)]
+use std::time::Duration;
+use std::time::Instant;
 
 /// Returns true only when `entry` carries a stored Profile snapshot, a stable
 /// id, and a cleanup status from which recovery is meaningful: one of the four
@@ -54,6 +58,7 @@ pub async fn recover_entry(
     ))
 }
 
+#[cfg(test)]
 pub(crate) async fn recover_entry_with_transport<T: Transport>(
     entry: &HistoryEntry,
     settings: &Settings,
