@@ -30,10 +30,8 @@ use crate::keysym::{
     keycode_to_code, KC_ALT_LEFT, KC_ALT_RIGHT, KC_CONTROL_LEFT, KC_CONTROL_RIGHT, KC_META_LEFT,
     KC_META_RIGHT, KC_SHIFT_LEFT, KC_SHIFT_RIGHT,
 };
-#[cfg(target_os = "macos")]
-use crate::media;
 use crate::paste;
-use crate::{overlay, target_app};
+use crate::{media, overlay, target_app};
 #[cfg(target_os = "macos")]
 use core_foundation::base::TCFType;
 #[cfg(target_os = "macos")]
@@ -242,7 +240,6 @@ fn cancel_session(app: &AppHandle, state: &AppState, recorder: &Recorder) {
 
 fn maybe_pause_media(state: &AppState) {
     *state.did_pause_media.lock().unwrap() = false;
-    #[cfg(target_os = "macos")]
     if *state.pause_media_on_record.lock().unwrap() {
         *state.did_pause_media.lock().unwrap() = true;
         tauri::async_runtime::spawn_blocking(media::mute_output);
@@ -256,7 +253,6 @@ fn maybe_resume_media(state: &AppState) {
         return;
     }
     *flag = false;
-    #[cfg(target_os = "macos")]
     tauri::async_runtime::spawn_blocking(media::unmute_output);
 }
 

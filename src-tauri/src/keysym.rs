@@ -1,12 +1,21 @@
+#[cfg(target_os = "macos")]
 pub const KC_ALT_LEFT: u16 = 0x3A;
+#[cfg(target_os = "macos")]
 pub const KC_ALT_RIGHT: u16 = 0x3D;
+#[cfg(target_os = "macos")]
 pub const KC_META_LEFT: u16 = 0x37;
+#[cfg(target_os = "macos")]
 pub const KC_META_RIGHT: u16 = 0x36;
+#[cfg(target_os = "macos")]
 pub const KC_CONTROL_LEFT: u16 = 0x3B;
+#[cfg(target_os = "macos")]
 pub const KC_CONTROL_RIGHT: u16 = 0x3E;
+#[cfg(target_os = "macos")]
 pub const KC_SHIFT_LEFT: u16 = 0x38;
+#[cfg(target_os = "macos")]
 pub const KC_SHIFT_RIGHT: u16 = 0x3C;
 
+#[cfg(target_os = "macos")]
 static KEYSYM_MAP: &[(u16, &str)] = &[
     (0x00, "KeyA"),
     (0x0B, "KeyB"),
@@ -86,6 +95,7 @@ static KEYSYM_MAP: &[(u16, &str)] = &[
     (0x6F, "F12"),
 ];
 
+#[cfg(target_os = "macos")]
 pub fn keycode_to_code(kc: u16) -> Option<&'static str> {
     KEYSYM_MAP.iter().find(|(k, _)| *k == kc).map(|(_, c)| *c)
 }
@@ -207,7 +217,7 @@ pub fn rdev_key_to_code(key: &rdev::Key) -> Option<&'static str> {
     })
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
 
