@@ -178,12 +178,26 @@ function RecordingRow({
     [onCancel],
   );
 
+  // Pause/resume must fire exactly once per mount, independent of the
+  // keydown listener below. Coupling them to handleKeyDown's identity made
+  // every parent re-render re-emit interleaved pause/resume IPC calls, and an
+  // in-flight `true` could outlive the unmount's `false` — leaving global
+  // capture stuck paused until an app restart.
   useEffect(() => {
-    setShortcutCapturePaused(true).catch(() => {});
+    setShortcutCapturePaused(true).catch((e) =>
+      console.error("failed to pause shortcut capture", e),
+    );
+    return () => {
+      setShortcutCapturePaused(false).catch((e) =>
+        console.error("failed to resume shortcut capture", e),
+      );
+    };
+  }, []);
+
+  useEffect(() => {
     window.addEventListener("keydown", handleKeyDown, { capture: true });
     return () => {
       window.removeEventListener("keydown", handleKeyDown, { capture: true });
-      setShortcutCapturePaused(false).catch(() => {});
     };
   }, [handleKeyDown]);
 
