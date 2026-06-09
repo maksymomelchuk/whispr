@@ -57,18 +57,23 @@ pub async fn invoke(
         }
         AiProviderId::Custom => {
             let (api_key, chat_url, custom_model) = resolve_custom_endpoint(cleanup_settings)?;
-            cleanup::run_openai(transcript, &api_key, &chat_url, &custom_model, &prompt).await
+            let target = cleanup::OpenAiTarget {
+                api_key: &api_key,
+                chat_url: &chat_url,
+                model: &custom_model,
+                provider,
+            };
+            cleanup::run_openai(transcript, target, &prompt).await
         }
         _ => {
             let api_key = resolve_provider_key(cleanup_settings, provider)?;
-            cleanup::run_openai(
-                transcript,
+            let target = cleanup::OpenAiTarget {
                 api_key,
-                provider.openai_chat_url(),
+                chat_url: provider.openai_chat_url(),
                 model,
-                &prompt,
-            )
-            .await
+                provider,
+            };
+            cleanup::run_openai(transcript, target, &prompt).await
         }
     }
 }
@@ -94,29 +99,25 @@ pub(crate) async fn invoke_with_transport<T: cleanup::Transport>(
         }
         AiProviderId::Custom => {
             let (api_key, chat_url, custom_model) = resolve_custom_endpoint(cleanup_settings)?;
-            cleanup::run_openai_with_transport(
-                transcript,
-                &api_key,
-                &chat_url,
-                &custom_model,
-                &prompt,
-                transport,
-                timeout,
-            )
-            .await
+            let target = cleanup::OpenAiTarget {
+                api_key: &api_key,
+                chat_url: &chat_url,
+                model: &custom_model,
+                provider,
+            };
+            cleanup::run_openai_with_transport(transcript, target, &prompt, transport, timeout)
+                .await
         }
         _ => {
             let api_key = resolve_provider_key(cleanup_settings, provider)?;
-            cleanup::run_openai_with_transport(
-                transcript,
+            let target = cleanup::OpenAiTarget {
                 api_key,
-                provider.openai_chat_url(),
+                chat_url: provider.openai_chat_url(),
                 model,
-                &prompt,
-                transport,
-                timeout,
-            )
-            .await
+                provider,
+            };
+            cleanup::run_openai_with_transport(transcript, target, &prompt, transport, timeout)
+                .await
         }
     }
 }

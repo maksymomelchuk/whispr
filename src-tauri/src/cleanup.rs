@@ -88,6 +88,15 @@ pub enum Credential<'a> {
     ApiKey(&'a str),
     OauthToken(&'a str),
 }
+
+/// An OpenAI-compatible chat endpoint and the model to call on it. `provider`
+/// drives per-model request shaping (e.g. whether `reasoning_effort` is sent).
+pub struct OpenAiTarget<'a> {
+    pub api_key: &'a str,
+    pub chat_url: &'a str,
+    pub model: &'a str,
+    pub provider: AiProviderId,
+}
 /// Wall-clock ceiling on the LLM round-trip; past it the pipeline pastes the
 /// raw transcript so a slow response never strands the user. Scales with
 /// transcript length: generation time tracks output length, which tracks
@@ -283,16 +292,12 @@ pub(crate) async fn run_with_transport<T: Transport>(
 
 pub async fn run_openai(
     transcript: &str,
-    api_key: &str,
-    chat_url: &str,
-    model: &str,
+    target: OpenAiTarget<'_>,
     prompt: &str,
 ) -> Result<(String, Usage), CleanupError> {
     run_openai_with_transport(
         transcript,
-        api_key,
-        chat_url,
-        model,
+        target,
         prompt,
         &ReqwestTransport,
         cleanup_timeout(transcript),
@@ -302,16 +307,14 @@ pub async fn run_openai(
 
 pub(crate) async fn run_openai_with_transport<T: Transport>(
     transcript: &str,
-    api_key: &str,
-    chat_url: &str,
-    model: &str,
+    target: OpenAiTarget<'_>,
     prompt: &str,
     transport: &T,
     timeout: Duration,
 ) -> Result<(String, Usage), CleanupError> {
     match tokio::time::timeout(
         timeout,
-        call_openai_with_transport(transcript, api_key, chat_url, model, prompt, transport),
+        call_openai_with_transport(transcript, target, prompt, transport),
     )
     .await
     {
@@ -374,25 +377,83 @@ pub(crate) fn build_openai_headers(api_key: &str) -> Vec<(String, String)> {
     headers
 }
 
+/// The lowest `reasoning_effort` that keeps cleanup latency down, or `None`
+/// when the parameter must be omitted because the model would reject it or it
+/// has no effect. Cleanup is translation plus light formatting — reasoning
+/// only adds dead air before the answer.
+///
+/// The value is model-specific, not provider-wide:
+/// - GPT-5.4/5.5 accept `none`; GPT-5.0 mini/nano predate `none`, so the
+///   lightest they take is `minimal`. Non-GPT-5 OpenAI models reject both.
+/// - Gemini's OpenAI-compatible endpoint rejects `medium` and won't reliably
+///   honor `none`, so `low` is the floor it accepts.
+/// - GPT-OSS (served by Groq and Cerebras) exposes only low/medium/high; plain
+///   Llama models reject the field outright, so it is gated to `gpt-oss`.
+/// - Qwen3 on Groq defaults to thinking mode and accepts only `none`/`default`;
+///   `none` returns the answer with no reasoning preamble.
+/// - DeepSeek silently maps `low` to `high`, buying nothing — omit it.
+fn reasoning_effort_for(provider: AiProviderId, model: &str) -> Option<&'static str> {
+    match provider {
+        AiProviderId::OpenAi => openai_compatible_effort(model),
+        AiProviderId::Google => Some("low"),
+        AiProviderId::Groq => groq_effort(model),
+        AiProviderId::Cerebras => model.contains("gpt-oss").then_some("low"),
+        AiProviderId::OpenRouter => openrouter_effort(model),
+        AiProviderId::DeepSeek | AiProviderId::Anthropic | AiProviderId::Custom => None,
+    }
+}
+
+fn groq_effort(model: &str) -> Option<&'static str> {
+    if model.contains("gpt-oss") {
+        return Some("low");
+    }
+    if model.contains("qwen") {
+        return Some("none");
+    }
+    None
+}
+
+fn openai_compatible_effort(model: &str) -> Option<&'static str> {
+    if !model.starts_with("gpt-5") {
+        return None;
+    }
+    if model.contains("5.4") || model.contains("5.5") {
+        Some("none")
+    } else {
+        Some("minimal")
+    }
+}
+
+fn openrouter_effort(model: &str) -> Option<&'static str> {
+    if let Some(openai_model) = model.strip_prefix("openai/") {
+        return openai_compatible_effort(openai_model);
+    }
+    if model.starts_with("google/gemini") {
+        return Some("low");
+    }
+    None
+}
+
 async fn call_openai_with_transport<T: Transport>(
     transcript: &str,
-    api_key: &str,
-    chat_url: &str,
-    model: &str,
+    target: OpenAiTarget<'_>,
     prompt: &str,
     transport: &T,
 ) -> Result<(String, Usage), CleanupError> {
-    let headers = build_openai_headers(api_key);
-    let body = serde_json::json!({
-        "model": model,
+    let headers = build_openai_headers(target.api_key);
+    let mut body = serde_json::json!({
+        "model": target.model,
         "max_tokens": MAX_TOKENS,
         "messages": [
             {"role": "system", "content": prompt},
             {"role": "user", "content": format!("<transcript>\n{transcript}\n</transcript>")}
         ]
     });
+    if let Some(effort) = reasoning_effort_for(target.provider, target.model) {
+        body["reasoning_effort"] = Value::String(effort.to_string());
+    }
     let resp = transport
-        .post(chat_url, &headers, &body)
+        .post(target.chat_url, &headers, &body)
         .await
         .map_err(|e| CleanupError::Transient(format!("cleanup request failed: {e}")))?;
     parse_openai_response(resp.status, &resp.body)
@@ -575,6 +636,47 @@ mod tests {
             self.call_count.fetch_add(1, Ordering::SeqCst);
             let result = (self.response)();
             Box::pin(async move { result })
+        }
+    }
+
+    /// Records the request body so tests can assert what was sent on the wire.
+    struct CapturingTransport {
+        body: std::sync::Mutex<Option<serde_json::Value>>,
+        response_body: String,
+    }
+
+    impl CapturingTransport {
+        fn new(response_body: String) -> Self {
+            CapturingTransport {
+                body: std::sync::Mutex::new(None),
+                response_body,
+            }
+        }
+
+        fn body(&self) -> serde_json::Value {
+            self.body
+                .lock()
+                .unwrap()
+                .clone()
+                .expect("post was not called")
+        }
+    }
+
+    impl Transport for CapturingTransport {
+        fn post<'a>(
+            &'a self,
+            _url: &'a str,
+            _headers: &'a [(String, String)],
+            body: &'a serde_json::Value,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<TransportResponse, String>> + Send + 'a>,
+        > {
+            *self.body.lock().unwrap() = Some(body.clone());
+            let response = TransportResponse {
+                status: 200,
+                body: self.response_body.clone(),
+            };
+            Box::pin(async move { Ok(response) })
         }
     }
 
@@ -901,9 +1003,12 @@ mod tests {
         let transport = MockTransport::returning(200, openai_success_body("Hello, world."));
         let result = run_openai_with_transport(
             "hello world",
-            "test-key",
-            OPENAI_CHAT_URL,
-            OPENAI_DEFAULT_MODEL,
+            OpenAiTarget {
+                api_key: "test-key",
+                chat_url: OPENAI_CHAT_URL,
+                model: OPENAI_DEFAULT_MODEL,
+                provider: AiProviderId::OpenAi,
+            },
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -921,9 +1026,12 @@ mod tests {
         let transport = MockTransport::returning(401, error_body("invalid api key"));
         let result = run_openai_with_transport(
             "some text",
-            "bad-key",
-            OPENAI_CHAT_URL,
-            OPENAI_DEFAULT_MODEL,
+            OpenAiTarget {
+                api_key: "bad-key",
+                chat_url: OPENAI_CHAT_URL,
+                model: OPENAI_DEFAULT_MODEL,
+                provider: AiProviderId::OpenAi,
+            },
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -940,9 +1048,12 @@ mod tests {
         let transport = MockTransport::returning(403, error_body("forbidden"));
         let result = run_openai_with_transport(
             "some text",
-            "bad-key",
-            OPENAI_CHAT_URL,
-            OPENAI_DEFAULT_MODEL,
+            OpenAiTarget {
+                api_key: "bad-key",
+                chat_url: OPENAI_CHAT_URL,
+                model: OPENAI_DEFAULT_MODEL,
+                provider: AiProviderId::OpenAi,
+            },
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -959,9 +1070,12 @@ mod tests {
         let transport = MockTransport::returning(500, error_body("internal server error"));
         let result = run_openai_with_transport(
             "some text",
-            "test-key",
-            OPENAI_CHAT_URL,
-            OPENAI_DEFAULT_MODEL,
+            OpenAiTarget {
+                api_key: "test-key",
+                chat_url: OPENAI_CHAT_URL,
+                model: OPENAI_DEFAULT_MODEL,
+                provider: AiProviderId::OpenAi,
+            },
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -982,9 +1096,12 @@ mod tests {
         let transport = MockTransport::returning(200, body);
         let result = run_openai_with_transport(
             "some text",
-            "test-key",
-            OPENAI_CHAT_URL,
-            OPENAI_DEFAULT_MODEL,
+            OpenAiTarget {
+                api_key: "test-key",
+                chat_url: OPENAI_CHAT_URL,
+                model: OPENAI_DEFAULT_MODEL,
+                provider: AiProviderId::OpenAi,
+            },
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -999,9 +1116,12 @@ mod tests {
     async fn openai_compat_timeout_returns_timeout_error() {
         let result = run_openai_with_transport(
             "some text",
-            "test-key",
-            OPENAI_CHAT_URL,
-            OPENAI_DEFAULT_MODEL,
+            OpenAiTarget {
+                api_key: "test-key",
+                chat_url: OPENAI_CHAT_URL,
+                model: OPENAI_DEFAULT_MODEL,
+                provider: AiProviderId::OpenAi,
+            },
             DEFAULT_SYSTEM_PROMPT,
             &HangingTransport,
             Duration::from_millis(50),
@@ -1087,6 +1207,178 @@ mod tests {
         assert_eq!(
             AiProviderId::OpenRouter.openai_chat_url(),
             OPENROUTER_CHAT_URL
+        );
+    }
+
+    #[test]
+    fn groq_gpt_oss_gets_low_effort_but_llama_gets_none() {
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::Groq, "openai/gpt-oss-120b"),
+            Some("low")
+        );
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::Groq, "openai/gpt-oss-20b"),
+            Some("low")
+        );
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::Groq, "llama-3.1-8b-instant"),
+            None,
+            "Groq rejects reasoning_effort on non-GPT-OSS models"
+        );
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::Groq, "llama-3.3-70b-versatile"),
+            None
+        );
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::Groq, "qwen/qwen3-32b"),
+            Some("none"),
+            "Qwen3 on Groq defaults to thinking mode; `none` skips the reasoning preamble"
+        );
+    }
+
+    #[test]
+    fn cerebras_matches_groq_gpt_oss_gating() {
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::Cerebras, "gpt-oss-120b"),
+            Some("low")
+        );
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::Cerebras, "llama-3.3-70b"),
+            None
+        );
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::Cerebras, "qwen-3-235b-a22b-instruct-2507"),
+            None
+        );
+    }
+
+    #[test]
+    fn openai_gpt5_4_and_5_5_get_none_but_gpt5_0_gets_minimal() {
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::OpenAi, "gpt-5.4-mini"),
+            Some("none")
+        );
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::OpenAi, "gpt-5.4-nano"),
+            Some("none")
+        );
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::OpenAi, "gpt-5.4"),
+            Some("none")
+        );
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::OpenAi, "gpt-5.5"),
+            Some("none")
+        );
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::OpenAi, "gpt-5-mini"),
+            Some("minimal"),
+            "GPT-5.0 predates the `none` value, so the lightest it accepts is `minimal`"
+        );
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::OpenAi, "gpt-5-nano"),
+            Some("minimal")
+        );
+    }
+
+    #[test]
+    fn openai_non_gpt5_model_gets_no_effort() {
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::OpenAi, "gpt-4o-mini"),
+            None
+        );
+    }
+
+    #[test]
+    fn google_gemini_gets_low_effort() {
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::Google, "gemini-2.5-flash"),
+            Some("low"),
+            "Gemini's OpenAI-compatible endpoint rejects `medium` and won't honor `none`"
+        );
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::Google, "gemini-3.1-flash-lite"),
+            Some("low")
+        );
+    }
+
+    #[test]
+    fn deepseek_anthropic_and_custom_get_no_effort() {
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::DeepSeek, "deepseek-v4-flash"),
+            None,
+            "DeepSeek maps `low` to `high`, so the field buys nothing"
+        );
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::DeepSeek, "deepseek-v4-pro"),
+            None
+        );
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::Anthropic, "claude-haiku-4-5"),
+            None
+        );
+        assert_eq!(reasoning_effort_for(AiProviderId::Custom, "anything"), None);
+    }
+
+    #[test]
+    fn openrouter_routes_effort_by_namespaced_model() {
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::OpenRouter, "openai/gpt-5-mini"),
+            Some("minimal")
+        );
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::OpenRouter, "google/gemini-2.5-flash"),
+            Some("low")
+        );
+        assert_eq!(
+            reasoning_effort_for(
+                AiProviderId::OpenRouter,
+                "meta-llama/llama-3.3-70b-instruct"
+            ),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn body_includes_reasoning_effort_only_when_supported() {
+        let with_effort = CapturingTransport::new(openai_success_body("ok"));
+        run_openai_with_transport(
+            "hi",
+            OpenAiTarget {
+                api_key: "key",
+                chat_url: GROQ_CHAT_URL,
+                model: "openai/gpt-oss-120b",
+                provider: AiProviderId::Groq,
+            },
+            DEFAULT_SYSTEM_PROMPT,
+            &with_effort,
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("should succeed");
+        assert_eq!(
+            with_effort.body()["reasoning_effort"],
+            Value::String("low".to_string())
+        );
+
+        let without_effort = CapturingTransport::new(openai_success_body("ok"));
+        run_openai_with_transport(
+            "hi",
+            OpenAiTarget {
+                api_key: "key",
+                chat_url: GROQ_CHAT_URL,
+                model: "llama-3.1-8b-instant",
+                provider: AiProviderId::Groq,
+            },
+            DEFAULT_SYSTEM_PROMPT,
+            &without_effort,
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("should succeed");
+        assert!(
+            without_effort.body().get("reasoning_effort").is_none(),
+            "Llama models must not carry reasoning_effort"
         );
     }
 }
