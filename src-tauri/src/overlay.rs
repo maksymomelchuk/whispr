@@ -13,9 +13,6 @@ const OVERLAY_HEIGHT: f64 = 120.0;
 /// platforms anchor to the full monitor frame; on Windows the pill therefore
 /// draws on top of the taskbar (the window is topmost and click-through, so the
 /// taskbar stays usable), and this margin tunes how far it sits over it.
-#[cfg(target_os = "macos")]
-const BOTTOM_MARGIN: f64 = 16.0;
-#[cfg(not(target_os = "macos"))]
 const BOTTOM_MARGIN: f64 = 16.0;
 
 pub fn create(app: &AppHandle) -> Result<(), String> {

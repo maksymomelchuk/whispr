@@ -48,6 +48,8 @@ use std::sync::atomic::AtomicPtr;
 
 #[cfg(target_os = "linux")]
 use crate::keysym::rdev_key_to_code;
+#[cfg(target_os = "windows")]
+use crate::keysym::vk_to_code;
 #[cfg(not(target_os = "macos"))]
 use std::collections::HashSet;
 
@@ -1277,12 +1279,13 @@ fn handle_key_event(ctx: &EventCtx, tracking: &mut EventTracking, code: &str, is
             }
         } else {
             let mut tap_states_guard = tap_states.lock().unwrap();
-            for b in bindings.iter().filter(|b| b.shortcut.is_double_tap) {
-                if shortcut_matches(code, &b.shortcut, modifiers_val) {
-                    if let Some(ts) = tap_states_guard.get_mut(&tap_state_key(&b.shortcut)) {
-                        if ts.tap_count > 0 {
-                            advance_tap_state(ts, TapEvent::Up, now);
-                        }
+            let matching = bindings.iter().filter(|b| {
+                b.shortcut.is_double_tap && shortcut_matches(code, &b.shortcut, modifiers_val)
+            });
+            for b in matching {
+                if let Some(ts) = tap_states_guard.get_mut(&tap_state_key(&b.shortcut)) {
+                    if ts.tap_count > 0 {
+                        advance_tap_state(ts, TapEvent::Up, now);
                     }
                 }
             }
@@ -1405,92 +1408,6 @@ mod win32_hook {
     }
 }
 
-/// Maps Windows virtual-key codes to the web `KeyboardEvent.code` strings that
-/// bindings are stored as. A low-level hook reports distinct VKs for the left
-/// and right modifiers, so they resolve unambiguously (unlike rdev).
-#[cfg(target_os = "windows")]
-fn vk_to_code(vk: u32) -> Option<&'static str> {
-    Some(match vk {
-        0x41 => "KeyA",
-        0x42 => "KeyB",
-        0x43 => "KeyC",
-        0x44 => "KeyD",
-        0x45 => "KeyE",
-        0x46 => "KeyF",
-        0x47 => "KeyG",
-        0x48 => "KeyH",
-        0x49 => "KeyI",
-        0x4A => "KeyJ",
-        0x4B => "KeyK",
-        0x4C => "KeyL",
-        0x4D => "KeyM",
-        0x4E => "KeyN",
-        0x4F => "KeyO",
-        0x50 => "KeyP",
-        0x51 => "KeyQ",
-        0x52 => "KeyR",
-        0x53 => "KeyS",
-        0x54 => "KeyT",
-        0x55 => "KeyU",
-        0x56 => "KeyV",
-        0x57 => "KeyW",
-        0x58 => "KeyX",
-        0x59 => "KeyY",
-        0x5A => "KeyZ",
-        0x30 => "Digit0",
-        0x31 => "Digit1",
-        0x32 => "Digit2",
-        0x33 => "Digit3",
-        0x34 => "Digit4",
-        0x35 => "Digit5",
-        0x36 => "Digit6",
-        0x37 => "Digit7",
-        0x38 => "Digit8",
-        0x39 => "Digit9",
-        0x70 => "F1",
-        0x71 => "F2",
-        0x72 => "F3",
-        0x73 => "F4",
-        0x74 => "F5",
-        0x75 => "F6",
-        0x76 => "F7",
-        0x77 => "F8",
-        0x78 => "F9",
-        0x79 => "F10",
-        0x7A => "F11",
-        0x7B => "F12",
-        0x20 => "Space",
-        0x0D => "Enter",
-        0x09 => "Tab",
-        0x1B => "Escape",
-        0x08 => "Backspace",
-        0x25 => "ArrowLeft",
-        0x26 => "ArrowUp",
-        0x27 => "ArrowRight",
-        0x28 => "ArrowDown",
-        0xA0 | 0x10 => "ShiftLeft",
-        0xA1 => "ShiftRight",
-        0xA2 | 0x11 => "ControlLeft",
-        0xA3 => "ControlRight",
-        0xA4 | 0x12 => "AltLeft",
-        0xA5 => "AltRight",
-        0x5B => "MetaLeft",
-        0x5C => "MetaRight",
-        0xC0 => "Backquote",
-        0xBD => "Minus",
-        0xBB => "Equal",
-        0xDB => "BracketLeft",
-        0xDD => "BracketRight",
-        0xDC => "Backslash",
-        0xBA => "Semicolon",
-        0xDE => "Quote",
-        0xBC => "Comma",
-        0xBE => "Period",
-        0xBF => "Slash",
-        _ => return None,
-    })
-}
-
 #[cfg(target_os = "windows")]
 thread_local! {
     static HOOK_SENDER: std::cell::RefCell<Option<std::sync::mpsc::Sender<(u32, u32, usize)>>> =
@@ -1521,12 +1438,11 @@ fn run_event_worker(ctx: EventCtx, rx: std::sync::mpsc::Receiver<(u32, u32, usiz
         let injected = flags & win32_hook::LLKHF_INJECTED != 0;
         let is_press = message == win32_hook::WM_KEYDOWN || message == win32_hook::WM_SYSKEYDOWN;
         let is_release = message == win32_hook::WM_KEYUP || message == win32_hook::WM_SYSKEYUP;
-        let mapped = vk_to_code(vk);
         // Skip our own synthetic paste keystrokes so they can't match a hotkey.
         if injected || !(is_press || is_release) {
             continue;
         }
-        if let Some(code) = mapped {
+        if let Some(code) = vk_to_code(vk) {
             handle_key_event(&ctx, &mut tracking, code, is_press);
         }
     }
