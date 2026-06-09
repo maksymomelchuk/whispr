@@ -6,7 +6,8 @@
   color-scheme: light dark;
 
   --font-sans:
-    -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    "Twemoji Country Flags", -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    system-ui, sans-serif;
   --font-mono:
     "SF Mono", ui-monospace, "Menlo", "Cascadia Mono", "Consolas", monospace;
 
