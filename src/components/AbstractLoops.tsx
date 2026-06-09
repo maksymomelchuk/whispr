@@ -178,19 +178,7 @@ export function AbstractLoops({
   }, [active]);
 
   useEffect(() => {
-    const reduce = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
     const radius = (VIEW / 2) * 0.92 * scale;
-
-    if (reduce) {
-      scaleRef.current = radius;
-      for (let i = 0; i < loops.length; i++) {
-        const el = pathRefs.current[i];
-        if (el) el.setAttribute("d", pathString(loops[i], 0, radius));
-      }
-      return;
-    }
 
     let raf = 0;
     let running = true;
