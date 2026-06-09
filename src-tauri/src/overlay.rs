@@ -9,7 +9,13 @@ const OVERLAY_RESET_EVENT: &str = "overlay-reset";
 const OVERLAY_WIDTH: f64 = 640.0;
 const OVERLAY_HEIGHT: f64 = 120.0;
 /// Distance from monitor bottom to window bottom — the pill anchors to the
-/// window bottom in CSS so this also fixes the pill's resting position.
+/// window bottom in CSS so this also fixes the pill's resting position. Both
+/// platforms anchor to the full monitor frame; on Windows the pill therefore
+/// draws on top of the taskbar (the window is topmost and click-through, so the
+/// taskbar stays usable), and this margin tunes how far it sits over it.
+#[cfg(target_os = "macos")]
+const BOTTOM_MARGIN: f64 = 16.0;
+#[cfg(not(target_os = "macos"))]
 const BOTTOM_MARGIN: f64 = 16.0;
 
 pub fn create(app: &AppHandle) -> Result<(), String> {
@@ -54,16 +60,8 @@ fn reposition(window: &WebviewWindow) {
     };
     let scale = monitor.scale_factor();
 
-    // work_area excludes the taskbar/panel, so the pill rests above it rather
-    // than clipped behind the always-on-top taskbar. macOS keeps the full frame
-    // to preserve its tuned resting position.
-    #[cfg(target_os = "macos")]
-    let (origin, extent) = (*monitor.position(), *monitor.size());
-    #[cfg(not(target_os = "macos"))]
-    let (origin, extent) = {
-        let area = monitor.work_area();
-        (area.position, area.size)
-    };
+    let origin = *monitor.position();
+    let extent = *monitor.size();
 
     let win_w = (OVERLAY_WIDTH * scale) as i32;
     let win_h = (OVERLAY_HEIGHT * scale) as i32;
