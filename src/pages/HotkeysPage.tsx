@@ -28,6 +28,7 @@ import {
   shortcutKey,
   shortcutsEqual,
 } from "../lib/shortcut";
+import type { HotkeyBinding, Mode, Shortcut } from "../lib/types";
 import {
   isPasteLatestBinding,
   isRecoverLatestBinding,
@@ -36,7 +37,6 @@ import {
   pttModeId,
   recoverLatestBinding,
 } from "../lib/types";
-import type { HotkeyBinding, Mode, Shortcut } from "../lib/types";
 
 const CONFLICT_MESSAGE =
   "Two bindings use the same shortcut. Remove the conflict before saving.";
@@ -211,7 +211,7 @@ function RecordingRow({
 
   return (
     <RowCard tone="accent" interactive={false} className="shadow-sm">
-      <div className="flex flex-1 min-w-0 items-center gap-3 flex-wrap">
+      <div className="flex flex-1 min-h-8 min-w-0 items-center gap-3 flex-wrap">
         {captured ? (
           <ShortcutKeycaps shortcut={captured} tone="accent" />
         ) : (
