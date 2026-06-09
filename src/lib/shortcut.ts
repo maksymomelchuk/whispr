@@ -1,31 +1,42 @@
+import { currentPlatform, type Platform } from "./platform";
 import type { HotkeyBinding, Shortcut } from "./types";
 
-export const MOD_LABEL: Record<string, string> = {
-  Meta: "⌘",
-  Control: "⌃",
-  Alt: "⌥",
-  Shift: "⇧",
+const MOD_LABELS: Record<Platform, Record<string, string>> = {
+  macos: { Meta: "⌘", Control: "⌃", Alt: "⌥", Shift: "⇧" },
+  windows: { Meta: "Win", Control: "Ctrl", Alt: "Alt", Shift: "Shift" },
+  linux: { Meta: "Super", Control: "Ctrl", Alt: "Alt", Shift: "Shift" },
 };
 
-export const KEY_LABEL: Record<string, string> = {
-  AltRight: "Right ⌥",
-  AltLeft: "Left ⌥",
-  MetaRight: "Right ⌘",
-  MetaLeft: "Left ⌘",
-  ControlRight: "Right ⌃",
-  ControlLeft: "Left ⌃",
-  ShiftRight: "Right ⇧",
-  ShiftLeft: "Left ⇧",
+const COMMON_KEY_LABELS: Record<string, string> = {
   Space: "Space",
   Escape: "Esc",
   Tab: "Tab",
-  Enter: "Return",
-  Backspace: "Del",
   ArrowUp: "↑",
   ArrowDown: "↓",
   ArrowLeft: "←",
   ArrowRight: "→",
 };
+
+const PLATFORM_KEY_LABELS: Record<Platform, Record<string, string>> = {
+  macos: { Enter: "Return", Backspace: "Del" },
+  windows: { Enter: "Enter", Backspace: "Backspace" },
+  linux: { Enter: "Enter", Backspace: "Backspace" },
+};
+
+function buildKeyLabels(platform: Platform): Record<string, string> {
+  const mods = MOD_LABELS[platform];
+  const sides: Record<string, string> = {};
+  for (const base of ["Meta", "Control", "Alt", "Shift"]) {
+    sides[`${base}Left`] = `Left ${mods[base]}`;
+    sides[`${base}Right`] = `Right ${mods[base]}`;
+  }
+  return { ...COMMON_KEY_LABELS, ...PLATFORM_KEY_LABELS[platform], ...sides };
+}
+
+const platform = currentPlatform();
+
+export const MOD_LABEL: Record<string, string> = MOD_LABELS[platform];
+export const KEY_LABEL: Record<string, string> = buildKeyLabels(platform);
 
 const MODIFIER_CODES = new Set([
   "MetaLeft",

@@ -1,3 +1,4 @@
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
 
 export type ThemePreference = "system" | "light" | "dark";
@@ -35,11 +36,22 @@ function resolveDark(pref: ThemePreference): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
+// The webview CSS class only themes our content; the OS-drawn title bar
+// (and its close button) follows the native window theme. A null theme
+// hands the window back to the system preference.
+function syncWindowTheme(pref: ThemePreference) {
+  const theme = pref === "system" ? null : pref;
+  getCurrentWindow()
+    .setTheme(theme)
+    .catch(() => {});
+}
+
 export function useTheme() {
   const [preference, setPreference] = useState<ThemePreference>(readStored);
 
   useEffect(() => {
     applyDark(resolveDark(preference));
+    syncWindowTheme(preference);
     try {
       localStorage.setItem(STORAGE_KEY, preference);
     } catch {

@@ -6478,6 +6478,7 @@ dependencies = [
  "tokio-tungstenite",
  "transcribe-rs",
  "url",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

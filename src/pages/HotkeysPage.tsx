@@ -24,6 +24,7 @@ import {
   collectModifiers,
   hasConflict,
   isModifierCode,
+  MOD_LABEL,
   shortcutKey,
   shortcutsEqual,
 } from "../lib/shortcut";
@@ -254,8 +255,8 @@ function EmptyModeCard({ onAdd }: { onAdd: () => void }) {
     <EmptyRowCard
       preview={
         <div className="flex items-center gap-1.5">
-          <Keycap tone="phantom">⌥</Keycap>
-          <Keycap tone="phantom">⌘</Keycap>
+          <Keycap tone="phantom">{MOD_LABEL.Alt}</Keycap>
+          <Keycap tone="phantom">{MOD_LABEL.Meta}</Keycap>
           <Keycap tone="phantom">K</Keycap>
         </div>
       }

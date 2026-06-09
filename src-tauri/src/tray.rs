@@ -60,6 +60,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
 /// hook, so this never surfaces as a Tauri `RunEvent` we could intercept. Build
 /// the default menu, then swap that predefined Quit for a Cmd+Q item routed
 /// through our `_exit(0)` path. Non-macOS keeps the default menu unchanged.
+#[cfg_attr(target_os = "windows", allow(dead_code))] // no app menu on Windows
 pub fn build_app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let menu = Menu::default(app)?;
     #[cfg(target_os = "macos")]
@@ -84,6 +85,7 @@ fn replace_quit_with_safe_exit(app: &AppHandle, menu: &Menu<tauri::Wry>) -> taur
     app_submenu.append(&quit_item)
 }
 
+#[cfg_attr(target_os = "windows", allow(dead_code))] // no app menu on Windows
 pub fn on_app_menu_event(app: &AppHandle, event: MenuEvent) {
     if event.id.as_ref() == QUIT_MENU_ID {
         quit(app);

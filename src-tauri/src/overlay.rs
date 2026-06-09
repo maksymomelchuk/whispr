@@ -9,7 +9,10 @@ const OVERLAY_RESET_EVENT: &str = "overlay-reset";
 const OVERLAY_WIDTH: f64 = 640.0;
 const OVERLAY_HEIGHT: f64 = 120.0;
 /// Distance from monitor bottom to window bottom — the pill anchors to the
-/// window bottom in CSS so this also fixes the pill's resting position.
+/// window bottom in CSS so this also fixes the pill's resting position. Both
+/// platforms anchor to the full monitor frame; on Windows the pill therefore
+/// draws on top of the taskbar (the window is topmost and click-through, so the
+/// taskbar stays usable), and this margin tunes how far it sits over it.
 const BOTTOM_MARGIN: f64 = 16.0;
 
 pub fn create(app: &AppHandle) -> Result<(), String> {
@@ -53,13 +56,15 @@ fn reposition(window: &WebviewWindow) {
         _ => return,
     };
     let scale = monitor.scale_factor();
-    let size = monitor.size();
-    let pos = monitor.position();
+
+    let origin = *monitor.position();
+    let extent = *monitor.size();
+
     let win_w = (OVERLAY_WIDTH * scale) as i32;
     let win_h = (OVERLAY_HEIGHT * scale) as i32;
     let margin = (BOTTOM_MARGIN * scale) as i32;
-    let x = pos.x + (size.width as i32 - win_w) / 2;
-    let y = pos.y + size.height as i32 - win_h - margin;
+    let x = origin.x + (extent.width as i32 - win_w) / 2;
+    let y = origin.y + extent.height as i32 - win_h - margin;
     let _ = window.set_position(PhysicalPosition::new(x, y));
 }
 
@@ -67,8 +72,38 @@ pub fn show(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(OVERLAY_LABEL) {
         reposition(&window);
         let _ = window.show();
+        raise_above_taskbar(&window);
     }
 }
+
+/// The Windows taskbar is also topmost; z-order within the topmost band goes to
+/// whoever re-inserted last, so without this the taskbar's next repaint draws
+/// over us. tao's set_always_on_top can't do this — it diffs window flags and
+/// no-ops once ALWAYS_ON_TOP is set (it was, at build), so it never re-inserts.
+/// SetWindowPos re-inserts unconditionally.
+#[cfg(target_os = "windows")]
+fn raise_above_taskbar(window: &WebviewWindow) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    };
+    let Ok(hwnd) = window.hwnd() else {
+        return;
+    };
+    unsafe {
+        SetWindowPos(
+            hwnd.0 as _,
+            HWND_TOPMOST,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+        );
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn raise_above_taskbar(_window: &WebviewWindow) {}
 
 pub fn hide(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(OVERLAY_LABEL) {

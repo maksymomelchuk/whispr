@@ -1,12 +1,21 @@
+#[cfg(target_os = "macos")]
 pub const KC_ALT_LEFT: u16 = 0x3A;
+#[cfg(target_os = "macos")]
 pub const KC_ALT_RIGHT: u16 = 0x3D;
+#[cfg(target_os = "macos")]
 pub const KC_META_LEFT: u16 = 0x37;
+#[cfg(target_os = "macos")]
 pub const KC_META_RIGHT: u16 = 0x36;
+#[cfg(target_os = "macos")]
 pub const KC_CONTROL_LEFT: u16 = 0x3B;
+#[cfg(target_os = "macos")]
 pub const KC_CONTROL_RIGHT: u16 = 0x3E;
+#[cfg(target_os = "macos")]
 pub const KC_SHIFT_LEFT: u16 = 0x38;
+#[cfg(target_os = "macos")]
 pub const KC_SHIFT_RIGHT: u16 = 0x3C;
 
+#[cfg(target_os = "macos")]
 static KEYSYM_MAP: &[(u16, &str)] = &[
     (0x00, "KeyA"),
     (0x0B, "KeyB"),
@@ -86,6 +95,7 @@ static KEYSYM_MAP: &[(u16, &str)] = &[
     (0x6F, "F12"),
 ];
 
+#[cfg(target_os = "macos")]
 pub fn keycode_to_code(kc: u16) -> Option<&'static str> {
     KEYSYM_MAP.iter().find(|(k, _)| *k == kc).map(|(_, c)| *c)
 }
@@ -94,7 +104,7 @@ pub fn keycode_to_code(kc: u16) -> Option<&'static str> {
 /// right Alt / AltGr key. Neither variant distinguishes hardware side the way
 /// macOS keycodes do, so the mapping is best-effort on keyboards with two
 /// symmetric Alt keys where the right one is not labelled AltGr.
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "linux")]
 pub fn rdev_key_to_code(key: &rdev::Key) -> Option<&'static str> {
     use rdev::Key;
     Some(match key {
@@ -207,7 +217,93 @@ pub fn rdev_key_to_code(key: &rdev::Key) -> Option<&'static str> {
     })
 }
 
-#[cfg(test)]
+/// Maps Windows virtual-key codes to the web `KeyboardEvent.code` strings that
+/// bindings are stored as. A low-level hook reports distinct VKs for the left
+/// and right modifiers, so they resolve unambiguously (unlike rdev).
+#[cfg(target_os = "windows")]
+pub fn vk_to_code(vk: u32) -> Option<&'static str> {
+    Some(match vk {
+        0x41 => "KeyA",
+        0x42 => "KeyB",
+        0x43 => "KeyC",
+        0x44 => "KeyD",
+        0x45 => "KeyE",
+        0x46 => "KeyF",
+        0x47 => "KeyG",
+        0x48 => "KeyH",
+        0x49 => "KeyI",
+        0x4A => "KeyJ",
+        0x4B => "KeyK",
+        0x4C => "KeyL",
+        0x4D => "KeyM",
+        0x4E => "KeyN",
+        0x4F => "KeyO",
+        0x50 => "KeyP",
+        0x51 => "KeyQ",
+        0x52 => "KeyR",
+        0x53 => "KeyS",
+        0x54 => "KeyT",
+        0x55 => "KeyU",
+        0x56 => "KeyV",
+        0x57 => "KeyW",
+        0x58 => "KeyX",
+        0x59 => "KeyY",
+        0x5A => "KeyZ",
+        0x30 => "Digit0",
+        0x31 => "Digit1",
+        0x32 => "Digit2",
+        0x33 => "Digit3",
+        0x34 => "Digit4",
+        0x35 => "Digit5",
+        0x36 => "Digit6",
+        0x37 => "Digit7",
+        0x38 => "Digit8",
+        0x39 => "Digit9",
+        0x70 => "F1",
+        0x71 => "F2",
+        0x72 => "F3",
+        0x73 => "F4",
+        0x74 => "F5",
+        0x75 => "F6",
+        0x76 => "F7",
+        0x77 => "F8",
+        0x78 => "F9",
+        0x79 => "F10",
+        0x7A => "F11",
+        0x7B => "F12",
+        0x20 => "Space",
+        0x0D => "Enter",
+        0x09 => "Tab",
+        0x1B => "Escape",
+        0x08 => "Backspace",
+        0x25 => "ArrowLeft",
+        0x26 => "ArrowUp",
+        0x27 => "ArrowRight",
+        0x28 => "ArrowDown",
+        0xA0 | 0x10 => "ShiftLeft",
+        0xA1 => "ShiftRight",
+        0xA2 | 0x11 => "ControlLeft",
+        0xA3 => "ControlRight",
+        0xA4 | 0x12 => "AltLeft",
+        0xA5 => "AltRight",
+        0x5B => "MetaLeft",
+        0x5C => "MetaRight",
+        0xC0 => "Backquote",
+        0xBD => "Minus",
+        0xBB => "Equal",
+        0xDB => "BracketLeft",
+        0xDD => "BracketRight",
+        0xDC => "Backslash",
+        0xBA => "Semicolon",
+        0xDE => "Quote",
+        0xBC => "Comma",
+        0xBE => "Period",
+        0xBF => "Slash",
+        _ => return None,
+    })
+}
+
+#[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
 
@@ -248,7 +344,7 @@ mod tests {
     }
 }
 
-#[cfg(all(test, not(target_os = "macos")))]
+#[cfg(all(test, target_os = "linux"))]
 mod rdev_tests {
     use super::*;
     use rdev::Key;

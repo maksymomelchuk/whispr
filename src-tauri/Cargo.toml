@@ -69,6 +69,7 @@ transcribe-rs = { version = "0.3", features = ["whisper-metal", "ort-coreml"] }
 [target.'cfg(target_os = "windows")'.dependencies]
 clipboard-win = "5"
 transcribe-rs = { version = "0.3", features = ["ort-directml"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 transcribe-rs = { version = "0.3", features = ["whisper-vulkan"] }
