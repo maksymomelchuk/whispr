@@ -200,6 +200,17 @@ fn run_osascript(script: &str, args: &[&str]) -> Option<String> {
 // ── Windows ───────────────────────────────────────────────────────────────────
 
 #[cfg(target_os = "windows")]
+use std::collections::HashMap;
+#[cfg(target_os = "windows")]
+use std::sync::{Mutex, OnceLock};
+
+#[cfg(target_os = "windows")]
+fn icon_cache() -> &'static Mutex<HashMap<String, TargetApp>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, TargetApp>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+#[cfg(target_os = "windows")]
 mod win32 {
     use std::ffi::c_void;
 
@@ -229,20 +240,38 @@ mod win32 {
 #[cfg(target_os = "windows")]
 fn platform_capture(app: AppHandle) {
     tauri::async_runtime::spawn_blocking(move || {
-        let Some(frontmost) = resolve_foreground_window() else {
+        let Some((frontmost, exe_path)) = resolve_foreground_window() else {
             return;
         };
+
+        if let Some(cached) = icon_cache()
+            .lock()
+            .unwrap()
+            .get(&frontmost.bundle_id)
+            .cloned()
+        {
+            let _ = app.emit(TARGET_APP_EVENT, &cached);
+            return;
+        }
+
+        let icon_data_url = extract_icon_data_url(&exe_path);
         let target = TargetApp {
-            bundle_id: frontmost.bundle_id,
+            bundle_id: frontmost.bundle_id.clone(),
             name: frontmost.name,
-            icon_data_url: None,
+            icon_data_url,
         };
+        icon_cache()
+            .lock()
+            .unwrap()
+            .insert(frontmost.bundle_id, target.clone());
         let _ = app.emit(TARGET_APP_EVENT, &target);
     });
 }
 
+/// Returns the frontmost window's app plus a null-terminated wide path to its
+/// executable — the path is what the Shell needs to resolve the app's icon.
 #[cfg(target_os = "windows")]
-fn resolve_foreground_window() -> Option<FrontmostApp> {
+fn resolve_foreground_window() -> Option<(FrontmostApp, Vec<u16>)> {
     use std::ffi::OsString;
     use std::os::windows::ffi::OsStringExt;
     use std::path::Path;
@@ -275,7 +304,8 @@ fn resolve_foreground_window() -> Option<FrontmostApp> {
             return None;
         }
 
-        let path = OsString::from_wide(&buf[..len as usize]);
+        let path_wide = &buf[..len as usize];
+        let path = OsString::from_wide(path_wide);
         let name = Path::new(&path)
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
@@ -285,11 +315,150 @@ fn resolve_foreground_window() -> Option<FrontmostApp> {
             return None;
         }
 
-        Some(FrontmostApp {
-            bundle_id: name.clone(),
-            name,
-        })
+        let mut path_terminated = path_wide.to_vec();
+        path_terminated.push(0);
+
+        Some((
+            FrontmostApp {
+                bundle_id: name.clone(),
+                name,
+            },
+            path_terminated,
+        ))
     }
+}
+
+#[cfg(target_os = "windows")]
+fn extract_icon_data_url(exe_path: &[u16]) -> Option<String> {
+    use base64::Engine as _;
+    use std::mem::{size_of, zeroed};
+    use windows_sys::Win32::UI::Shell::{SHGetFileInfoW, SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON};
+    use windows_sys::Win32::UI::WindowsAndMessaging::DestroyIcon;
+
+    unsafe {
+        let mut info: SHFILEINFOW = zeroed();
+        let ok = SHGetFileInfoW(
+            exe_path.as_ptr(),
+            0,
+            &mut info,
+            size_of::<SHFILEINFOW>() as u32,
+            SHGFI_ICON | SHGFI_LARGEICON,
+        );
+        if ok == 0 || info.hIcon.is_null() {
+            return None;
+        }
+
+        let png = icon_to_png(info.hIcon);
+        DestroyIcon(info.hIcon);
+
+        let png = png?;
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
+        Some(format!("data:image/png;base64,{b64}"))
+    }
+}
+
+#[cfg(target_os = "windows")]
+unsafe fn icon_to_png(hicon: *mut std::ffi::c_void) -> Option<Vec<u8>> {
+    use std::mem::zeroed;
+    use windows_sys::Win32::Graphics::Gdi::DeleteObject;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetIconInfo, ICONINFO};
+
+    let mut icon_info: ICONINFO = zeroed();
+    if GetIconInfo(hicon, &mut icon_info) == 0 {
+        return None;
+    }
+
+    let rgba = if icon_info.hbmColor.is_null() {
+        None
+    } else {
+        bitmap_to_rgba(icon_info.hbmColor)
+    };
+
+    if !icon_info.hbmColor.is_null() {
+        DeleteObject(icon_info.hbmColor);
+    }
+    if !icon_info.hbmMask.is_null() {
+        DeleteObject(icon_info.hbmMask);
+    }
+
+    let (width, height, pixels) = rgba?;
+    encode_png(&pixels, width, height)
+}
+
+/// Reads an HBITMAP into a top-down RGBA buffer. Older icons carry no alpha
+/// channel in their color bitmap, leaving it all-zero (fully transparent); in
+/// that case we force opaque rather than render an invisible icon.
+#[cfg(target_os = "windows")]
+unsafe fn bitmap_to_rgba(hbm: *mut std::ffi::c_void) -> Option<(u32, u32, Vec<u8>)> {
+    use std::mem::{size_of, zeroed};
+    use std::ptr::null_mut;
+    use windows_sys::Win32::Graphics::Gdi::{
+        CreateCompatibleDC, DeleteDC, GetDIBits, GetObjectW, BITMAP, BITMAPINFO, BITMAPINFOHEADER,
+        BI_RGB, DIB_RGB_COLORS,
+    };
+
+    let mut bmp: BITMAP = zeroed();
+    let read = GetObjectW(
+        hbm,
+        size_of::<BITMAP>() as i32,
+        &mut bmp as *mut BITMAP as *mut std::ffi::c_void,
+    );
+    if read == 0 || bmp.bmWidth <= 0 || bmp.bmHeight <= 0 {
+        return None;
+    }
+    let width = bmp.bmWidth;
+    let height = bmp.bmHeight;
+
+    let mut bmi: BITMAPINFO = zeroed();
+    bmi.bmiHeader.biSize = size_of::<BITMAPINFOHEADER>() as u32;
+    bmi.bmiHeader.biWidth = width;
+    bmi.bmiHeader.biHeight = -height;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+
+    let mut pixels = vec![0u8; (width * height) as usize * 4];
+
+    let hdc = CreateCompatibleDC(null_mut());
+    if hdc.is_null() {
+        return None;
+    }
+    let scanlines = GetDIBits(
+        hdc,
+        hbm,
+        0,
+        height as u32,
+        pixels.as_mut_ptr() as *mut std::ffi::c_void,
+        &mut bmi,
+        DIB_RGB_COLORS,
+    );
+    DeleteDC(hdc);
+
+    if scanlines == 0 {
+        return None;
+    }
+
+    let has_alpha = pixels.chunks_exact(4).any(|px| px[3] != 0);
+    for px in pixels.chunks_exact_mut(4) {
+        px.swap(0, 2);
+        if !has_alpha {
+            px[3] = 0xFF;
+        }
+    }
+
+    Some((width as u32, height as u32, pixels))
+}
+
+#[cfg(target_os = "windows")]
+fn encode_png(rgba: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
+    let mut out = Vec::new();
+    let mut encoder = png::Encoder::new(&mut out, width, height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().ok()?;
+    writer.write_image_data(rgba).ok()?;
+    writer.finish().ok()?;
+    Some(out)
 }
 
 // ── Linux / other ─────────────────────────────────────────────────────────────
