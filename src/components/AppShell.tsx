@@ -213,6 +213,7 @@ function ShellInner() {
   const { pathname } = useLocation();
   const isHome = pathname === "/";
   const isMac = isMacOS();
+  const navModifier = isMac ? "⌘" : "Ctrl+";
   let counter = 0;
 
   return (
@@ -253,7 +254,8 @@ function ShellInner() {
                 <SidebarMenu>
                   {section.items.map((item) => {
                     counter += 1;
-                    const shortcut = counter <= 9 ? `⌘${counter}` : null;
+                    const shortcut =
+                      counter <= 9 ? `${navModifier}${counter}` : null;
                     return (
                       <SidebarMenuItem key={item.path}>
                         <NavMenuButton {...item} shortcut={shortcut} />
