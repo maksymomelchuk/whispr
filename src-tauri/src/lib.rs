@@ -70,7 +70,7 @@ const MAIN_LABEL: &str = "main";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         // tao registers RawInput for the app window (RIDEV_DEVNOTIFY). On
         // Windows, RawInput for the process's own window preempts the
         // WH_KEYBOARD_LL hook chain, so our global keyboard hook never fires
@@ -83,9 +83,18 @@ pub fn run() {
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec![]),
-        ))
+        ));
+
+    // The default menu (File/Edit/Window/Help) is the system menu bar on macOS
+    // — where it also hosts our safe Cmd+Q swap — but renders as a per-window
+    // menu bar on Windows/Linux. Drop it on Windows only; macOS needs it and
+    // Linux keeps its existing bar.
+    #[cfg(not(target_os = "windows"))]
+    let builder = builder
         .menu(tray::build_app_menu)
-        .on_menu_event(tray::on_app_menu_event)
+        .on_menu_event(tray::on_app_menu_event);
+
+    builder
         .on_window_event(|window, event| {
             if window.label() != MAIN_LABEL {
                 return;
