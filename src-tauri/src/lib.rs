@@ -71,6 +71,12 @@ const MAIN_LABEL: &str = "main";
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // tao registers RawInput for the app window (RIDEV_DEVNOTIFY). On
+        // Windows, RawInput for the process's own window preempts the
+        // WH_KEYBOARD_LL hook chain, so our global keyboard hook never fires
+        // while our own window is focused. RIDEV_REMOVE unregisters it; we
+        // don't consume tao DeviceEvents, so nothing is lost.
+        .device_event_filter(tauri::DeviceEventFilter::Always)
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())

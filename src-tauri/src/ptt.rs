@@ -1159,10 +1159,6 @@ fn handle_key_event(ctx: &EventCtx, tracking: &mut EventTracking, code: &str, is
 
     let bindings = state.hotkey_bindings.lock().unwrap().clone();
     let modifiers_val = *state.modifiers.lock().unwrap();
-    eprintln!(
-        "[ptt diag] {code} press={is_press} active={ptt_active_now} mods={modifiers_val:?} bindings={}",
-        bindings.len()
-    );
 
     if is_press && !ptt_active_now {
         let mut tap_states_guard = tap_states.lock().unwrap();
@@ -1335,10 +1331,12 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
 
 // ── Windows event source: WH_KEYBOARD_LL ──────────────────────────────────────
 //
-// rdev resolves the typed character on every key press, which attaches the
-// listener thread to the foreground window's input thread — that stalls and
-// drops the event whenever our own window is focused. We only need keycodes, so
-// we run the low-level hook directly and never touch the character layer.
+// We own the low-level hook directly instead of going through rdev: it reports
+// distinct VKs for left/right modifiers (rdev collapses them) and lets us
+// forward raw keycodes to a worker thread without resolving the character
+// layer. Capture works while our own window is focused only because RawInput is
+// disabled (DeviceEventFilter::Always in lib.rs) — tao's RawInput registration
+// otherwise preempts this hook for our process's own focused window.
 
 // FFI structs mirror the Win32 layout; several fields exist only for size and
 // are never read.
@@ -1353,10 +1351,7 @@ mod win32_hook {
     pub const WM_KEYUP: usize = 0x0101;
     pub const WM_SYSKEYDOWN: usize = 0x0104;
     pub const WM_SYSKEYUP: usize = 0x0105;
-    pub const WM_QUIT: u32 = 0x0012;
     pub const LLKHF_INJECTED: u32 = 0x10;
-    pub const PM_REMOVE: u32 = 0x0001;
-    pub const QS_ALLINPUT: u32 = 0x04FF;
 
     #[repr(C)]
     pub struct KbdLlHookStruct {
@@ -1399,22 +1394,14 @@ mod win32_hook {
             w_param: usize,
             l_param: isize,
         ) -> isize;
-        pub fn PeekMessageW(
+        pub fn GetMessageW(
             lp_msg: *mut Msg,
             hwnd: *mut c_void,
             w_msg_filter_min: u32,
             w_msg_filter_max: u32,
-            w_remove_msg: u32,
         ) -> i32;
         pub fn TranslateMessage(lp_msg: *const Msg) -> i32;
         pub fn DispatchMessageW(lp_msg: *const Msg) -> isize;
-        pub fn MsgWaitForMultipleObjects(
-            n_count: u32,
-            p_handles: *const *mut c_void,
-            f_wait_all: i32,
-            dw_milliseconds: u32,
-            dw_wake_mask: u32,
-        ) -> u32;
     }
 }
 
@@ -1535,7 +1522,6 @@ fn run_event_worker(ctx: EventCtx, rx: std::sync::mpsc::Receiver<(u32, u32, usiz
         let is_press = message == win32_hook::WM_KEYDOWN || message == win32_hook::WM_SYSKEYDOWN;
         let is_release = message == win32_hook::WM_KEYUP || message == win32_hook::WM_SYSKEYUP;
         let mapped = vk_to_code(vk);
-        eprintln!("[ptt diag] raw vk={vk:#x} msg={message:#x} injected={injected} -> {mapped:?}");
         // Skip our own synthetic paste keystrokes so they can't match a hotkey.
         if injected || !(is_press || is_release) {
             continue;
@@ -1580,31 +1566,14 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
     });
 }
 
-// A bare GetMessageW block only runs the hook when the OS wakes the thread,
-// which it defers for a background thread while our own window is foreground —
-// leaving the hook silent exactly then. Polling input state on a short timeout
-// (matching Handy's listener) runs the hook regardless of focus.
+// WH_KEYBOARD_LL callbacks are delivered to this thread while it pumps messages;
+// a blocking GetMessageW services them as they arrive and returns 0 on WM_QUIT.
 #[cfg(target_os = "windows")]
 unsafe fn pump_messages() {
-    const TIMEOUT_MS: u32 = 10;
     let mut msg: win32_hook::Msg = std::mem::zeroed();
-    loop {
-        while win32_hook::PeekMessageW(&mut msg, std::ptr::null_mut(), 0, 0, win32_hook::PM_REMOVE)
-            != 0
-        {
-            if msg.message == win32_hook::WM_QUIT {
-                return;
-            }
-            win32_hook::TranslateMessage(&msg);
-            win32_hook::DispatchMessageW(&msg);
-        }
-        win32_hook::MsgWaitForMultipleObjects(
-            0,
-            std::ptr::null(),
-            0,
-            TIMEOUT_MS,
-            win32_hook::QS_ALLINPUT,
-        );
+    while win32_hook::GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {
+        win32_hook::TranslateMessage(&msg);
+        win32_hook::DispatchMessageW(&msg);
     }
 }
 
