@@ -424,7 +424,7 @@ function HistoryRow({
   const [recoverError, setRecoverError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(entry.final_text);
-  const [displayText, setDisplayText] = useState(entry.final_text);
+  const [savedText, setSavedText] = useState(entry.final_text);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const view = cleanupView(entry.cleanup_status);
@@ -445,7 +445,7 @@ function HistoryRow({
   };
 
   const handleEditStart = () => {
-    setEditText(displayText);
+    setEditText(savedText);
     setSaveError(null);
     setEditing(true);
   };
@@ -459,8 +459,8 @@ function HistoryRow({
     setSaving(true);
     setSaveError(null);
     try {
-      await updateHistoryEntry(entry.id, displayText, editText);
-      setDisplayText(editText);
+      await updateHistoryEntry(entry.id, savedText, editText);
+      setSavedText(editText);
       setEditing(false);
     } catch (e) {
       setSaveError(String(e));
@@ -529,7 +529,7 @@ function HistoryRow({
           ) : (
             <>
               <div className="whitespace-pre-wrap break-words text-[13px] leading-[1.5] text-foreground select-text">
-                {displayText}
+                {savedText}
               </div>
               {view.badge && (
                 <Badge
@@ -557,7 +557,7 @@ function HistoryRow({
                   className="text-muted-foreground"
                   aria-label="Copy transcript"
                   aria-live="polite"
-                  onClick={() => flash(displayText)}
+                  onClick={() => flash(savedText)}
                 >
                   {copied ? "Copied" : "Copy"}
                 </Button>
