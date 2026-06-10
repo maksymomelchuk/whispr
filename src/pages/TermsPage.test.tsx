@@ -265,6 +265,10 @@ describe("TermsPage – expand and edit entries", () => {
 
   it("saves entries when a term is committed", async () => {
     const set: NamedTermSet = { id: "ts-1", name: "My Set", entries: [] };
+    vi.mocked(mockUpdateTermSetEntries).mockResolvedValue({
+      ...BASE,
+      term_sets: [{ id: "ts-1", name: "My Set", entries: ["MongoDB"] }],
+    });
     render(<Wrapper initial={{ ...BASE, term_sets: [set] }} />);
 
     await userEvent.click(screen.getByText("My Set"));
@@ -278,5 +282,6 @@ describe("TermsPage – expand and edit entries", () => {
         "MongoDB",
       ]),
     );
+    expect(screen.getByText("MongoDB")).toBeInTheDocument();
   });
 });
