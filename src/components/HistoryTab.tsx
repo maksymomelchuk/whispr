@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 import { useSettings } from "../context/SettingsContext";
@@ -24,6 +25,7 @@ import {
   clearHistory as persistClearHistory,
   setHistoryLimit as persistHistoryLimit,
   recoverCleanup,
+  updateHistoryEntry,
 } from "../lib/api";
 import type { CleanupStatus, HistoryEntry, HistoryLimit } from "../lib/types";
 import { providerModelLabel } from "../lib/types";
@@ -420,8 +422,14 @@ function HistoryRow({
   const { copied, flash } = useCopyFlash();
   const [recovering, setRecovering] = useState(false);
   const [recoverError, setRecoverError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(entry.final_text);
+  const [displayText, setDisplayText] = useState(entry.final_text);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const view = cleanupView(entry.cleanup_status);
   const recoverable = isRecoverable(entry);
+  const editable = Boolean(entry.id);
 
   const handleRecover = async () => {
     setRecovering(true);
@@ -436,10 +444,35 @@ function HistoryRow({
     }
   };
 
+  const handleEditStart = () => {
+    setEditText(displayText);
+    setSaveError(null);
+    setEditing(true);
+  };
+
+  const handleEditCancel = () => {
+    setEditing(false);
+    setSaveError(null);
+  };
+
+  const handleEditSave = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await updateHistoryEntry(entry.id, displayText, editText);
+      setDisplayText(editText);
+      setEditing(false);
+    } catch (e) {
+      setSaveError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <RowCard
       flashing={flashing}
-      interactive={!traceOpen}
+      interactive={!traceOpen && !editing}
       className="items-stretch flex-col gap-2 py-3 pr-3"
     >
       <div className="flex items-start gap-3.5">
@@ -459,56 +492,108 @@ function HistoryRow({
         </div>
 
         <div className="flex flex-1 min-w-0 flex-col gap-1.5">
-          <div className="whitespace-pre-wrap break-words text-[13px] leading-[1.5] text-foreground select-text">
-            {entry.final_text}
-          </div>
-          {view.badge && (
-            <Badge variant={view.badge.tone} className="self-start text-[10px]">
-              {view.badge.label}
-            </Badge>
-          )}
-          <div className="flex items-center gap-1 pt-0.5 opacity-65 group-hover:opacity-100 transition-opacity">
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              className="text-muted-foreground"
-              aria-expanded={traceOpen}
-              onClick={() => setTraceOpen((o) => !o)}
-            >
-              {traceOpen ? "Hide trace" : "Show trace"}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              className="text-muted-foreground"
-              aria-label="Copy transcript"
-              aria-live="polite"
-              onClick={() => flash(entry.final_text)}
-            >
-              {copied ? "Copied" : "Copy"}
-            </Button>
-            {recoverable && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                className="text-muted-foreground"
-                disabled={recovering}
-                onClick={handleRecover}
-              >
-                {recovering ? "Recovering…" : "Recover"}
-              </Button>
-            )}
-          </div>
-          {recoverError && (
-            <p className="text-xs text-destructive">{recoverError}</p>
+          {editing ? (
+            <>
+              <Textarea
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                className="text-[13px] leading-[1.5] resize-none min-h-[60px]"
+                autoFocus
+              />
+              {saveError && (
+                <p className="text-xs text-destructive">{saveError}</p>
+              )}
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="text-muted-foreground"
+                  disabled={saving}
+                  onClick={handleEditSave}
+                >
+                  {saving ? "Saving…" : "Save"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="text-muted-foreground"
+                  disabled={saving}
+                  onClick={handleEditCancel}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="whitespace-pre-wrap break-words text-[13px] leading-[1.5] text-foreground select-text">
+                {displayText}
+              </div>
+              {view.badge && (
+                <Badge
+                  variant={view.badge.tone}
+                  className="self-start text-[10px]"
+                >
+                  {view.badge.label}
+                </Badge>
+              )}
+              <div className="flex items-center gap-1 pt-0.5 opacity-65 group-hover:opacity-100 transition-opacity">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="text-muted-foreground"
+                  aria-expanded={traceOpen}
+                  onClick={() => setTraceOpen((o) => !o)}
+                >
+                  {traceOpen ? "Hide trace" : "Show trace"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="text-muted-foreground"
+                  aria-label="Copy transcript"
+                  aria-live="polite"
+                  onClick={() => flash(displayText)}
+                >
+                  {copied ? "Copied" : "Copy"}
+                </Button>
+                {editable && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    className="text-muted-foreground"
+                    onClick={handleEditStart}
+                  >
+                    Edit
+                  </Button>
+                )}
+                {recoverable && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    className="text-muted-foreground"
+                    disabled={recovering}
+                    onClick={handleRecover}
+                  >
+                    {recovering ? "Recovering…" : "Recover"}
+                  </Button>
+                )}
+              </div>
+              {recoverError && (
+                <p className="text-xs text-destructive">{recoverError}</p>
+              )}
+            </>
           )}
         </div>
       </div>
 
-      {traceOpen && (
+      {!editing && traceOpen && (
         <div className="ml-[84px]">
           <HistoryTrace entry={entry} cleanupNote={view.note} />
         </div>

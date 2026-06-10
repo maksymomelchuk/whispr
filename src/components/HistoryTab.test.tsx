@@ -9,6 +9,7 @@ import type { HistoryEntry, Settings } from "@/lib/types";
 import {
   getHistory as mockGetHistory,
   recoverCleanup as mockRecoverCleanup,
+  updateHistoryEntry as mockUpdateHistoryEntry,
 } from "../lib/api";
 import { HistoryTab } from "./HistoryTab";
 
@@ -17,6 +18,7 @@ vi.mock("../lib/api", () => ({
   clearHistory: vi.fn(),
   setHistoryLimit: vi.fn(),
   recoverCleanup: vi.fn(),
+  updateHistoryEntry: vi.fn(),
 }));
 
 const BASE_SETTINGS: Settings = {
@@ -203,5 +205,111 @@ describe("HistoryTab Recover button", () => {
     const recoverBtn = screen.getByRole("button", { name: "Recover" });
     expect(recoverBtn).toBeInTheDocument();
     expect(recoverBtn).not.toBeDisabled();
+  });
+});
+
+describe("HistoryTab entry editing", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows Edit button on entries with an id", async () => {
+    vi.mocked(mockGetHistory).mockResolvedValue([RAN_ENTRY]);
+    render(<Wrapper />);
+
+    await waitFor(() => screen.getByText("cleaned text"));
+
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+  });
+
+  it("does not show Edit button on entries without an id", async () => {
+    const entryNoId: HistoryEntry = { ...RAN_ENTRY, id: "" };
+    vi.mocked(mockGetHistory).mockResolvedValue([entryNoId]);
+    render(<Wrapper />);
+
+    await waitFor(() => screen.getByText("cleaned text"));
+
+    expect(
+      screen.queryByRole("button", { name: "Edit" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows a textarea with current text when Edit is clicked", async () => {
+    vi.mocked(mockGetHistory).mockResolvedValue([RAN_ENTRY]);
+    const user = userEvent.setup();
+    render(<Wrapper />);
+
+    await waitFor(() => screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    const textarea = screen.getByRole("textbox");
+    expect(textarea).toBeInTheDocument();
+    expect(textarea).toHaveValue("cleaned text");
+  });
+
+  it("saves the edited text and updates the list", async () => {
+    vi.mocked(mockGetHistory).mockResolvedValue([RAN_ENTRY]);
+    vi.mocked(mockUpdateHistoryEntry).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<Wrapper />);
+
+    await waitFor(() => screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    const textarea = screen.getByRole("textbox");
+    await user.clear(textarea);
+    await user.type(textarea, "edited text");
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(mockUpdateHistoryEntry).toHaveBeenCalledWith(
+        "entry-456",
+        "cleaned text",
+        "edited text",
+      );
+    });
+
+    expect(screen.getByText("edited text")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("cancels editing and leaves the entry unchanged", async () => {
+    vi.mocked(mockGetHistory).mockResolvedValue([RAN_ENTRY]);
+    const user = userEvent.setup();
+    render(<Wrapper />);
+
+    await waitFor(() => screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    const textarea = screen.getByRole("textbox");
+    await user.clear(textarea);
+    await user.type(textarea, "should not be saved");
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.getByText("cleaned text")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(mockUpdateHistoryEntry).not.toHaveBeenCalled();
+  });
+
+  it("shows inline error and keeps edit mode on save failure", async () => {
+    vi.mocked(mockGetHistory).mockResolvedValue([RAN_ENTRY]);
+    vi.mocked(mockUpdateHistoryEntry).mockRejectedValue(
+      new Error("save failed"),
+    );
+    const user = userEvent.setup();
+    render(<Wrapper />);
+
+    await waitFor(() => screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/save failed/i)).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
   });
 });
