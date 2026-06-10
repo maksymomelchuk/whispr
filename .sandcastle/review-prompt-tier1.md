@@ -14,11 +14,11 @@ not failure — it is the correct action when a careful read is needed.
 
 ## Branch diff
 
-!`git diff {{TARGET_BRANCH}}...{{BRANCH}}`
+!`git diff {{BASE_BRANCH}}...{{BRANCH}}`
 
 ## Commits on this branch
 
-!`git log {{TARGET_BRANCH}}..{{BRANCH}} --oneline`
+!`git log {{BASE_BRANCH}}..{{BRANCH}} --oneline`
 
 # SCOPE
 

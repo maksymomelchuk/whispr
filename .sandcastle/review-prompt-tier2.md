@@ -16,11 +16,11 @@ reviewer is fast and shallow — assume they may have missed adjacent issues.
 
 ## Branch diff
 
-!`git diff {{TARGET_BRANCH}}...{{BRANCH}}`
+!`git diff {{BASE_BRANCH}}...{{BRANCH}}`
 
 ## Commits on this branch
 
-!`git log {{TARGET_BRANCH}}..{{BRANCH}} --oneline`
+!`git log {{BASE_BRANCH}}..{{BRANCH}} --oneline`
 
 # REVIEW PROCESS
 
