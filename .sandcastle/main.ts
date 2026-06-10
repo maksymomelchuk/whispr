@@ -31,6 +31,7 @@
 import { execSync } from "node:child_process";
 import * as sandcastle from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
+import { z } from "zod";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -61,6 +62,57 @@ const hooks = {
 };
 
 const copyToWorktree = ["pnpm-lock.yaml"];
+
+// ---------------------------------------------------------------------------
+// Plan output
+// ---------------------------------------------------------------------------
+
+const PLAN_OUTPUT = sandcastle.Output.object({
+  tag: "plan",
+  schema: z.object({
+    issues: z.array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        branch: z.string(),
+      }),
+    ),
+  }),
+});
+
+// One resume retry: a malformed <plan> costs only a re-emit of the tag, not
+// a re-run of the planner's whole analysis.
+async function runPlanner() {
+  const options = {
+    hooks,
+    sandbox: docker(),
+    name: "planner",
+    // One iteration is enough: the planner just needs to read and reason,
+    // not write code.
+    maxIterations: 1,
+    // Opus for planning: dependency analysis benefits from deeper reasoning.
+    agent: sandcastle.claudeCode("claude-opus-4-7"),
+    output: PLAN_OUTPUT,
+  };
+  try {
+    return await sandcastle.run({
+      ...options,
+      promptFile: "./.sandcastle/plan-prompt.md",
+    });
+  } catch (error) {
+    if (
+      error instanceof sandcastle.StructuredOutputError &&
+      error.sessionId !== undefined
+    ) {
+      return await sandcastle.run({
+        ...options,
+        resumeSession: error.sessionId,
+        prompt: `Your previous output failed validation: ${error.message}. Re-emit the complete plan JSON inside <plan> tags.`,
+      });
+    }
+    throw error;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Triage
@@ -123,32 +175,10 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   // builds a dependency graph, and selects the issues that can be worked in
   // parallel right now (i.e., no blocking dependencies on other open issues).
   //
-  // It outputs a <plan> JSON block — we parse that to drive Phase 2.
+  // It outputs a <plan> JSON block — extracted and validated by PLAN_OUTPUT.
   // -------------------------------------------------------------------------
-  const plan = await sandcastle.run({
-    hooks,
-    sandbox: docker(),
-    name: "planner",
-    // One iteration is enough: the planner just needs to read and reason,
-    // not write code.
-    maxIterations: 1,
-    // Opus for planning: dependency analysis benefits from deeper reasoning.
-    agent: sandcastle.claudeCode("claude-opus-4-7"),
-    promptFile: "./.sandcastle/plan-prompt.md",
-  });
-
-  // Extract the <plan>…</plan> block from the agent's stdout.
-  const planMatch = plan.stdout.match(/<plan>([\s\S]*?)<\/plan>/);
-  if (!planMatch) {
-    throw new Error(
-      "Planning agent did not produce a <plan> tag.\n\n" + plan.stdout,
-    );
-  }
-
-  // The plan JSON contains an array of issues, each with id, title, branch.
-  const { issues } = JSON.parse(planMatch[1]!) as {
-    issues: { id: string; title: string; branch: string }[];
-  };
+  const plan = await runPlanner();
+  const { issues } = plan.output;
 
   if (issues.length === 0) {
     // No unblocked work — either everything is done or everything is blocked.
@@ -227,6 +257,10 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
           },
         });
 
+        // sandbox.run() has no structured-output option, so verdicts are
+        // parsed from stdout. Since 0.6.0, stdout is a bounded rolling tail
+        // (64KiB default) — parseable only because the tier-1 prompt requires
+        // the verdict tags at the very end of the response.
         const escalate = /<verdict>\s*ESCALATE\s*<\/verdict>/.test(
           tier1.stdout,
         );
