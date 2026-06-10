@@ -39,13 +39,11 @@ export function CorrectionsPage() {
   const handleCreateSave = async () => {
     if (creatingName === null || !creatingName.trim()) return;
     try {
-      const newSet = await createCorrectionSet(creatingName.trim());
-      setSettings((s) => ({
-        ...s,
-        correction_sets: [...s.correction_sets, newSet],
-      }));
+      const updated = await createCorrectionSet(creatingName.trim());
+      const newId = updated.correction_sets.at(-1)?.id ?? null;
+      setSettings(() => updated);
       setCreatingName(null);
-      setExpandedSetId(newSet.id);
+      setExpandedSetId(newId);
     } catch (e) {
       toast.error("Couldn't create correction set", { description: String(e) });
     }
@@ -53,13 +51,8 @@ export function CorrectionsPage() {
 
   const handleRename = async (setId: string, newName: string) => {
     try {
-      await renameCorrectionSet(setId, newName);
-      setSettings((s) => ({
-        ...s,
-        correction_sets: s.correction_sets.map((cs) =>
-          cs.id === setId ? { ...cs, name: newName } : cs,
-        ),
-      }));
+      const updated = await renameCorrectionSet(setId, newName);
+      setSettings(() => updated);
     } catch (e) {
       toast.error("Couldn't rename correction set", { description: String(e) });
     }
@@ -70,13 +63,8 @@ export function CorrectionsPage() {
     entries: CorrectionEntry[],
   ) => {
     try {
-      await updateCorrectionSetEntries(setId, entries);
-      setSettings((s) => ({
-        ...s,
-        correction_sets: s.correction_sets.map((cs) =>
-          cs.id === setId ? { ...cs, entries } : cs,
-        ),
-      }));
+      const updated = await updateCorrectionSetEntries(setId, entries);
+      setSettings(() => updated);
     } catch (e) {
       toast.error("Couldn't save corrections", { description: String(e) });
     }
@@ -93,17 +81,8 @@ export function CorrectionsPage() {
     if (!deleteConfirm) return;
     const { set } = deleteConfirm;
     try {
-      await deleteCorrectionSet(set.id);
-      setSettings((s) => ({
-        ...s,
-        correction_sets: s.correction_sets.filter((cs) => cs.id !== set.id),
-        modes: s.modes.map((m) => ({
-          ...m,
-          correction_set_ids: m.correction_set_ids.filter(
-            (id) => id !== set.id,
-          ),
-        })),
-      }));
+      const updated = await deleteCorrectionSet(set.id);
+      setSettings(() => updated);
       if (expandedSetId === set.id) setExpandedSetId(null);
     } catch (e) {
       toast.error("Couldn't delete correction set", { description: String(e) });

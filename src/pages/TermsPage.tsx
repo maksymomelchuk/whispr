@@ -50,13 +50,11 @@ export function TermsPage() {
     if (!name) return;
     setCreating(true);
     try {
-      const created = await createTermSet(name);
-      setSettings((s) => ({
-        ...s,
-        term_sets: [...(s.term_sets ?? []), created],
-      }));
+      const updated = await createTermSet(name);
+      const newId = updated.term_sets.at(-1)?.id ?? null;
+      setSettings(() => updated);
       setNewName("");
-      setExpandedId(created.id);
+      setExpandedId(newId);
     } catch (e) {
       toast.error("Couldn't create term set", { description: String(e) });
     } finally {
@@ -76,13 +74,8 @@ export function TermsPage() {
       return;
     }
     try {
-      await renameTermSet(id, name);
-      setSettings((s) => ({
-        ...s,
-        term_sets: (s.term_sets ?? []).map((ts) =>
-          ts.id === id ? { ...ts, name } : ts,
-        ),
-      }));
+      const updated = await renameTermSet(id, name);
+      setSettings(() => updated);
     } catch (e) {
       toast.error("Couldn't rename term set", { description: String(e) });
     } finally {
@@ -102,15 +95,8 @@ export function TermsPage() {
     const { set } = deleteTarget;
     setDeleteTarget(null);
     try {
-      await deleteTermSet(set.id);
-      setSettings((s) => ({
-        ...s,
-        term_sets: (s.term_sets ?? []).filter((ts) => ts.id !== set.id),
-        modes: s.modes.map((m) => ({
-          ...m,
-          term_set_ids: m.term_set_ids.filter((id) => id !== set.id),
-        })),
-      }));
+      const updated = await deleteTermSet(set.id);
+      setSettings(() => updated);
       if (expandedId === set.id) setExpandedId(null);
     } catch (e) {
       toast.error("Couldn't delete term set", { description: String(e) });
@@ -119,13 +105,8 @@ export function TermsPage() {
 
   async function handleEntriesChange(id: string, entries: string[]) {
     try {
-      await updateTermSetEntries(id, entries);
-      setSettings((s) => ({
-        ...s,
-        term_sets: (s.term_sets ?? []).map((ts) =>
-          ts.id === id ? { ...ts, entries } : ts,
-        ),
-      }));
+      const updated = await updateTermSetEntries(id, entries);
+      setSettings(() => updated);
     } catch (e) {
       toast.error("Couldn't save entries", { description: String(e) });
     }

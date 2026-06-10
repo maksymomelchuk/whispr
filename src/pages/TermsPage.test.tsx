@@ -98,9 +98,9 @@ function Wrapper({ initial = BASE }: { initial?: Settings }) {
 }
 
 beforeEach(() => {
-  vi.mocked(mockRenameTermSet).mockResolvedValue(undefined);
-  vi.mocked(mockUpdateTermSetEntries).mockResolvedValue(undefined);
-  vi.mocked(mockDeleteTermSet).mockResolvedValue(undefined);
+  vi.mocked(mockRenameTermSet).mockResolvedValue(BASE);
+  vi.mocked(mockUpdateTermSetEntries).mockResolvedValue(BASE);
+  vi.mocked(mockDeleteTermSet).mockResolvedValue(BASE);
 });
 
 afterEach(() => {
@@ -116,12 +116,10 @@ describe("TermsPage – empty state", () => {
 
 describe("TermsPage – create", () => {
   it("creates a term set and shows it in the list", async () => {
-    const created: NamedTermSet = {
-      id: "ts-new",
-      name: "Medical",
-      entries: [],
-    };
-    vi.mocked(mockCreateTermSet).mockResolvedValue(created);
+    vi.mocked(mockCreateTermSet).mockResolvedValue({
+      ...BASE,
+      term_sets: [{ id: "ts-new", name: "Medical", entries: [] }],
+    });
 
     render(<Wrapper />);
     await userEvent.type(
@@ -137,8 +135,10 @@ describe("TermsPage – create", () => {
   });
 
   it("clears the name input after creation", async () => {
-    const created: NamedTermSet = { id: "ts-1", name: "Legal", entries: [] };
-    vi.mocked(mockCreateTermSet).mockResolvedValue(created);
+    vi.mocked(mockCreateTermSet).mockResolvedValue({
+      ...BASE,
+      term_sets: [{ id: "ts-1", name: "Legal", entries: [] }],
+    });
 
     render(<Wrapper />);
     const input = screen.getByPlaceholderText("New set name");
@@ -157,6 +157,10 @@ describe("TermsPage – create", () => {
 describe("TermsPage – rename", () => {
   it("renames a set on Enter", async () => {
     const set: NamedTermSet = { id: "ts-1", name: "Originals", entries: [] };
+    vi.mocked(mockRenameTermSet).mockResolvedValue({
+      ...BASE,
+      term_sets: [{ id: "ts-1", name: "Renamed", entries: [] }],
+    });
     render(<Wrapper initial={{ ...BASE, term_sets: [set] }} />);
 
     await userEvent.click(screen.getByRole("button", { name: /rename set/i }));
@@ -174,6 +178,7 @@ describe("TermsPage – rename", () => {
 describe("TermsPage – delete", () => {
   it("shows confirmation dialog and deletes on confirm", async () => {
     const set: NamedTermSet = { id: "ts-1", name: "Old Set", entries: [] };
+    vi.mocked(mockDeleteTermSet).mockResolvedValue({ ...BASE, term_sets: [] });
     render(<Wrapper initial={{ ...BASE, term_sets: [set] }} />);
 
     await userEvent.click(screen.getByRole("button", { name: /delete set/i }));
@@ -221,6 +226,30 @@ describe("TermsPage – delete", () => {
 
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText(/Default/)).toBeInTheDocument();
+  });
+
+  it("delete: applies returned Settings verbatim, including cascade removals", async () => {
+    const setA: NamedTermSet = { id: "ts-1", name: "Set A", entries: [] };
+    const setB: NamedTermSet = { id: "ts-2", name: "Set B", entries: [] };
+    vi.mocked(mockDeleteTermSet).mockResolvedValue({
+      ...BASE,
+      term_sets: [],
+    });
+
+    render(<Wrapper initial={{ ...BASE, term_sets: [setA, setB] }} />);
+
+    await userEvent.click(
+      screen.getAllByRole("button", { name: /delete set/i })[0],
+    );
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: /delete/i,
+      }),
+    );
+
+    await waitFor(() => expect(mockDeleteTermSet).toHaveBeenCalledWith("ts-1"));
+    expect(screen.queryByText("Set A")).not.toBeInTheDocument();
+    expect(screen.queryByText("Set B")).not.toBeInTheDocument();
   });
 });
 

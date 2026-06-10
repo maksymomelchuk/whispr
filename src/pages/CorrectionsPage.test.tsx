@@ -99,13 +99,12 @@ function Wrapper({ initial = BASE }: { initial?: Settings }) {
 
 beforeEach(() => {
   vi.mocked(mockCreateCorrectionSet).mockResolvedValue({
-    id: "correction-set-123",
-    name: "",
-    entries: [],
+    ...BASE,
+    correction_sets: [{ id: "correction-set-123", name: "", entries: [] }],
   });
-  vi.mocked(mockRenameCorrectionSet).mockResolvedValue(undefined);
-  vi.mocked(mockUpdateCorrectionSetEntries).mockResolvedValue(undefined);
-  vi.mocked(mockDeleteCorrectionSet).mockResolvedValue(undefined);
+  vi.mocked(mockRenameCorrectionSet).mockResolvedValue(BASE);
+  vi.mocked(mockUpdateCorrectionSetEntries).mockResolvedValue(BASE);
+  vi.mocked(mockDeleteCorrectionSet).mockResolvedValue(BASE);
 });
 
 afterEach(() => {
@@ -122,9 +121,10 @@ describe("CorrectionsPage – set creation", () => {
 
   it("create: saves set and expands it", async () => {
     vi.mocked(mockCreateCorrectionSet).mockResolvedValue({
-      id: "correction-set-123",
-      name: "My Rules",
-      entries: [],
+      ...BASE,
+      correction_sets: [
+        { id: "correction-set-123", name: "My Rules", entries: [] },
+      ],
     });
     render(<Wrapper />);
 
@@ -160,6 +160,10 @@ describe("CorrectionsPage – set deletion", () => {
   };
 
   it("delete: shows confirm dialog and removes on confirm", async () => {
+    vi.mocked(mockDeleteCorrectionSet).mockResolvedValue({
+      ...BASE,
+      correction_sets: [],
+    });
     render(<Wrapper initial={{ ...BASE, correction_sets: [SET] }} />);
 
     await userEvent.click(
@@ -210,6 +214,36 @@ describe("CorrectionsPage – set deletion", () => {
     expect(mockDeleteCorrectionSet).not.toHaveBeenCalled();
     expect(screen.getByText("Punctuation")).toBeInTheDocument();
   });
+
+  it("delete: applies returned Settings verbatim, including cascade removals", async () => {
+    const setA: NamedCorrectionSet = {
+      id: "cs-1",
+      name: "Rules A",
+      entries: [],
+    };
+    const setB: NamedCorrectionSet = {
+      id: "cs-2",
+      name: "Rules B",
+      entries: [],
+    };
+    vi.mocked(mockDeleteCorrectionSet).mockResolvedValue({
+      ...BASE,
+      correction_sets: [],
+    });
+
+    render(<Wrapper initial={{ ...BASE, correction_sets: [setA, setB] }} />);
+
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Delete correction set" })[0],
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() =>
+      expect(mockDeleteCorrectionSet).toHaveBeenCalledWith("cs-1"),
+    );
+    expect(screen.queryByText("Rules A")).not.toBeInTheDocument();
+    expect(screen.queryByText("Rules B")).not.toBeInTheDocument();
+  });
 });
 
 describe("CorrectionsPage – entry management", () => {
@@ -220,6 +254,16 @@ describe("CorrectionsPage – entry management", () => {
   };
 
   it("add rule: saves new entry on Save", async () => {
+    vi.mocked(mockUpdateCorrectionSetEntries).mockResolvedValue({
+      ...BASE,
+      correction_sets: [
+        {
+          id: "cs-1",
+          name: "Tech",
+          entries: [{ from: "mongo", to: "MongoDB" }],
+        },
+      ],
+    });
     render(<Wrapper initial={{ ...BASE, correction_sets: [SET] }} />);
 
     await userEvent.click(screen.getByRole("button", { name: "Open" }));
