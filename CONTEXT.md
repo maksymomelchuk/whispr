@@ -22,6 +22,12 @@ A user-defined shorthand the user _deliberately_ uses in speech. Triggers are ma
 
 Distinction from [[Correction]]: a Correction patches over a recognizer mistake (involuntary); a Snippet expands a chosen shortcut (voluntary). A Correction's replacement is always static text; a Snippet's expansion can contain placeholders resolved at injection time.
 
+## Set
+
+A named, reusable collection of [[Term]]s or [[Correction]]s. Modes reference Sets by id; a Mode can apply any combination, and one Set can be shared across Modes. Deleting a Set unlinks it from every Mode that references it — the **delete cascade** — atomically with the deletion itself. The backend owns the cascade; UI state only reflects what the backend returns, never re-derives it.
+
+Two kinds exist: Term Sets and Correction Sets. A [[Snippet]] is not a Set — Snippets are individual entries, global rather than assigned to Modes, and have no cascade.
+
 ## Engine
 
 Provider-specific plumbing that turns audio into text — Deepgram's streaming WebSocket, Groq's polling REST. An Engine sees raw audio chunks and emits raw text-so-far updates plus a final raw transcript. It knows its protocol and nothing else: not [[Correction]]s, not the UI overlay, not how previews are throttled. Swapping providers means writing a new Engine; nothing else in the pipeline needs to change.
@@ -68,6 +74,7 @@ An alternate way to authenticate the Anthropic [[AI Provider]]: a Claude Pro/Max
 
 ## Flagged ambiguities
 
+- "Profile" vs "Mode" are the same concept: the UI consistently says **Profile** (sidebar, editor, toasts); the code, Tauri commands, and ADRs say **Mode** (`Mode`, `update_mode`, `mode.term_set_ids`). Glossary entries use Mode for the code-facing concept; anything user-facing renders it as Profile.
 - "Provider" was overloaded: it meant both an STT [[Engine]] (speech model) and the cleanup LLM. Resolved by splitting the settings surface into **Speech models** (cloud Engines + the local [[Model Catalog]]) and **AI Providers** (the [[AI Provider]] for cleanup). "Speech model" or "Engine" = STT; "AI Provider" = cleanup LLM.
 - "Local" is overloaded: [[Local Engine]] = on-device Whisper STT, whereas a self-hosted cleanup LLM is a [[Custom Provider]] — never called "local". The two are unrelated.
 - Groq appears on **both** sides: it is a speech [[Engine]] (Whisper STT) _and_ can be a cleanup [[AI Provider]] (Llama LLMs). Same vendor, two different jobs in two different settings sections. The Speech models / AI Providers split keeps them apart in the UI.
