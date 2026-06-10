@@ -43,6 +43,10 @@ import { z } from "zod";
 // Maximum number of plan→execute→merge cycles before stopping.
 const MAX_ITERATIONS = 10;
 
+// cargo test linking and vitest runs in the resource-limited container can
+// stay silent well past sandcastle's 600s default without being stuck.
+const AGENT_IDLE_TIMEOUT_SECONDS = 1800;
+
 function sh(command: string): string {
   return execSync(command, { encoding: "utf-8" }).trim();
 }
@@ -393,6 +397,7 @@ async function runIssuePipeline(issue: IssueRef, workset: Workset) {
     const implement = await sandbox.run({
       name: "implementer",
       maxIterations: 100,
+      idleTimeoutSeconds: AGENT_IDLE_TIMEOUT_SECONDS,
       agent: sandcastle.claudeCode("claude-sonnet-4-6"),
       promptFile: "./.sandcastle/implement-prompt.md",
       promptArgs: {
@@ -416,6 +421,7 @@ async function runIssuePipeline(issue: IssueRef, workset: Workset) {
     const tier1 = await sandbox.run({
       name: "reviewer-tier1",
       maxIterations: 1,
+      idleTimeoutSeconds: AGENT_IDLE_TIMEOUT_SECONDS,
       agent: sandcastle.claudeCode("claude-haiku-4-5"),
       promptFile: "./.sandcastle/review-prompt-tier1.md",
       // BASE_BRANCH is explicit because 0.7's built-in TARGET_BRANCH is the
@@ -440,6 +446,7 @@ async function runIssuePipeline(issue: IssueRef, workset: Workset) {
       const tier2 = await sandbox.run({
         name: "reviewer-tier2",
         maxIterations: 1,
+        idleTimeoutSeconds: AGENT_IDLE_TIMEOUT_SECONDS,
         agent: sandcastle.claudeCode("claude-sonnet-4-6"),
         promptFile: "./.sandcastle/review-prompt-tier2.md",
         promptArgs: {
@@ -477,6 +484,7 @@ async function mergeWorkset(workset: Workset, completed: IssueRef[]) {
     await sandbox.run({
       name: `merger-${workset.name}`,
       maxIterations: 1,
+      idleTimeoutSeconds: AGENT_IDLE_TIMEOUT_SECONDS,
       agent: sandcastle.claudeCode("claude-opus-4-8"),
       promptFile: "./.sandcastle/merge-prompt.md",
       promptArgs: {
@@ -557,6 +565,23 @@ function finalizeCompletedWorksets(open: Set<string>): void {
     }
   }
 }
+
+// A worktree left behind by an interrupted run keeps its branch checked out,
+// so the per-issue `git branch -f` reset fails and the scheduler skips that
+// issue on every subsequent run.
+function removeStaleWorktrees() {
+  const stalePaths = sh("git worktree list --porcelain")
+    .split("\n")
+    .filter((line) => line.startsWith("worktree "))
+    .map((line) => line.slice("worktree ".length))
+    .filter((path) => path.includes("/.sandcastle/worktrees/"));
+  for (const path of stalePaths) {
+    sh(`git worktree remove --force ${shellQuote(path)}`);
+    console.log(`Removed stale worktree: ${path}`);
+  }
+}
+
+removeStaleWorktrees();
 
 for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   console.log(`\n=== Iteration ${iteration}/${MAX_ITERATIONS} ===\n`);

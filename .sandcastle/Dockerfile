@@ -87,6 +87,11 @@ ENV PATH="/home/agent/.cargo/bin:/home/agent/.local/bin:$PATH"
 ENV GGML_NATIVE=OFF \
     GGML_CPU_ARM_ARCH=armv8.2-a+fp16
 
+# A wide vitest worker pool exhausts the Docker VM's memory and stalls with
+# worker-startup timeouts; cap the pool so test runs keep producing output.
+ENV VITEST_MAX_FORKS=2 \
+    VITEST_MAX_THREADS=2
+
 WORKDIR /home/agent
 
 # In worktree sandbox mode, Sandcastle bind-mounts the git worktree at /home/agent/workspace
