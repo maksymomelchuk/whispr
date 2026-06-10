@@ -161,7 +161,7 @@ async function runGrouper(parentless: IssueRef[]) {
     sandbox: docker(),
     name: "grouper",
     maxIterations: 1,
-    agent: sandcastle.claudeCode("claude-opus-4-7"),
+    agent: sandcastle.claudeCode("claude-opus-4-8"),
     output: CLUSTERS_OUTPUT,
   };
   try {
@@ -303,7 +303,7 @@ async function runPlanner(pending: Workset[], open: Set<string>) {
     name: "planner",
     maxIterations: 1,
     // Opus for planning: dependency analysis benefits from deeper reasoning.
-    agent: sandcastle.claudeCode("claude-opus-4-7"),
+    agent: sandcastle.claudeCode("claude-fable-5"),
     output: PLAN_OUTPUT,
   };
   const worksetsJson = JSON.stringify(
@@ -477,7 +477,7 @@ async function mergeWorkset(workset: Workset, completed: IssueRef[]) {
     await sandbox.run({
       name: `merger-${workset.name}`,
       maxIterations: 1,
-      agent: sandcastle.claudeCode("claude-opus-4-7"),
+      agent: sandcastle.claudeCode("claude-opus-4-8"),
       promptFile: "./.sandcastle/merge-prompt.md",
       promptArgs: {
         BRANCHES: completed.map((i) => `- sandcastle/issue-${i.id}`).join("\n"),
