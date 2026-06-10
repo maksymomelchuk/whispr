@@ -40,7 +40,8 @@ export function CorrectionsPage() {
     if (creatingName === null || !creatingName.trim()) return;
     try {
       const updated = await createCorrectionSet(creatingName.trim());
-      const newId = updated.correction_sets.at(-1)?.id ?? null;
+      const newId =
+        updated.correction_sets[updated.correction_sets.length - 1]?.id ?? null;
       setSettings(() => updated);
       setCreatingName(null);
       setExpandedSetId(newId);

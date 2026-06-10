@@ -51,7 +51,7 @@ export function TermsPage() {
     setCreating(true);
     try {
       const updated = await createTermSet(name);
-      const newId = updated.term_sets.at(-1)?.id ?? null;
+      const newId = updated.term_sets[updated.term_sets.length - 1]?.id ?? null;
       setSettings(() => updated);
       setNewName("");
       setExpandedId(newId);
