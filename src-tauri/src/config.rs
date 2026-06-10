@@ -279,9 +279,7 @@ pub struct AiCleanupSettings {
     pub min_words: usize,
     #[serde(default = "default_cleanup_min_duration_ms")]
     pub min_duration_ms: u64,
-    /// When true, a tone directive derived from the frontmost app's category
-    /// is appended to the assembled cleanup prompt. Defaults to false so
-    /// existing behaviour is unchanged after upgrade.
+    // Defaults to false so existing behaviour is unchanged after upgrade.
     #[serde(default)]
     pub tone_overlay_enabled: bool,
 }

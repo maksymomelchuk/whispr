@@ -45,7 +45,6 @@ mod cleanup_invoke;
 pub mod model_catalog;
 pub mod recovery;
 
-// tone is pure Rust — no OS APIs, no I/O.
 mod tone;
 
 // media, overlay, and target_app expose platform-neutral public APIs and

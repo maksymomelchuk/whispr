@@ -526,7 +526,32 @@ async fn run_session(
         return Ok(());
     }
 
-    let session_bundle_id = target_app::session_app().map(|a| a.bundle_id);
+    // On macOS, pending_app_rx is the correct synchronization point: it's
+    // populated by the platform_capture spawn_blocking task (osascript) and
+    // awaited with a timeout. Reading session_app() directly would race if
+    // osascript hasn't finished yet. Resolve once and reuse for both tone
+    // overlay and history attribution.
+    #[cfg(target_os = "macos")]
+    let resolved_app: Option<target_app::FrontmostApp> = {
+        let rx = app
+            .state::<crate::state::AppState>()
+            .pending_app_rx
+            .lock()
+            .unwrap()
+            .take();
+        match rx {
+            Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
+                .await
+                .ok()
+                .and_then(|r| r.ok())
+                .flatten(),
+            None => None,
+        }
+    };
+    #[cfg(not(target_os = "macos"))]
+    let resolved_app: Option<target_app::FrontmostApp> = target_app::session_app();
+
+    let session_bundle_id = resolved_app.as_ref().map(|a| a.bundle_id.clone());
     let (replaced_text, cleanup_status, notice) = maybe_cleanup(
         app,
         &settings,
@@ -558,22 +583,6 @@ async fn run_session(
 
     #[cfg(target_os = "macos")]
     {
-        let resolved_app = {
-            let rx = app
-                .state::<crate::state::AppState>()
-                .pending_app_rx
-                .lock()
-                .unwrap()
-                .take();
-            match rx {
-                Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
-                    .await
-                    .ok()
-                    .and_then(|r| r.ok())
-                    .flatten(),
-                None => None,
-            }
-        };
         history_entry.app_name = resolved_app.as_ref().map(|a| a.name.clone());
         history_entry.bundle_id = resolved_app.map(|a| a.bundle_id);
     }

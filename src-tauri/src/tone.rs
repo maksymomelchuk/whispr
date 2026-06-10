@@ -58,7 +58,6 @@ fn taxonomy() -> &'static HashMap<&'static str, AppCategory> {
         m.insert("com.whatsapp.WhatsApp", AppCategory::PersonalMessaging);
         m.insert("org.telegram.desktop", AppCategory::PersonalMessaging);
         m.insert("ru.keepcoder.Telegram", AppCategory::PersonalMessaging);
-        m.insert("com.sindresorhus.Lungo", AppCategory::PersonalMessaging);
         m.insert("com.viber.desktop", AppCategory::PersonalMessaging);
         m.insert("org.whispersystems.signal-desktop", AppCategory::PersonalMessaging);
 
