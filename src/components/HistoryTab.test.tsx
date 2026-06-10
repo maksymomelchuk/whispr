@@ -39,6 +39,7 @@ const BASE_SETTINGS: Settings = {
   custom_provider_model: "",
   ai_cleanup_min_words: 3,
   ai_cleanup_min_duration_ms: 1000,
+  ai_cleanup_tone_overlay_enabled: false,
   input_device: null,
   pause_media_on_record: false,
   history_limit: 100,

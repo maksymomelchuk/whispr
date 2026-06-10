@@ -37,13 +37,16 @@ import { cn } from "@/lib/utils";
 
 import { ProviderSetupDialog } from "../components/ProviderSetupDialog";
 import { SectionCard } from "../components/SectionCard";
+import { ToggleRow } from "../components/ToggleRow";
 import { useSettings } from "../context/SettingsContext";
+import { usePersistedToggle } from "../hooks/usePersistedToggle";
 import {
   clearCustomProvider,
   setAnthropicApiKey as persistApiKey,
   setCleanupAuthMode as persistAuthMode,
   setAnthropicOauthToken as persistOauthToken,
   setCleanupThresholds as persistThresholds,
+  setToneOverlayEnabled as persistToneOverlay,
   setCustomProvider,
   setProviderKey,
 } from "../lib/api";
@@ -449,6 +452,13 @@ export function AiProvidersPage() {
     ai_cleanup_min_words: minWords,
     ai_cleanup_min_duration_ms: minDurationMs,
   } = settings;
+
+  const toneOverlay = usePersistedToggle(
+    settings.ai_cleanup_tone_overlay_enabled,
+    persistToneOverlay,
+    (next) =>
+      setSettings((s) => ({ ...s, ai_cleanup_tone_overlay_enabled: next })),
+  );
   const [openDialog, setOpenDialog] = useState<string | null>(null);
 
   const anthropicDescriptor =
@@ -692,6 +702,22 @@ export function AiProvidersPage() {
             Cleanup runs only when both thresholds are met and is enabled
             per-Profile in the Profiles page. There is no global toggle — enable
             cleanup per-Profile under Profiles.
+          </p>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Tone Overlay">
+        <div className="flex flex-col gap-3">
+          <ToggleRow
+            id="tone-overlay-enabled"
+            label="Adapt tone to app"
+            info="Appends a tone directive to the cleanup prompt based on the frontmost app. Email → formal, messaging → casual, code → technical."
+            checked={settings.ai_cleanup_tone_overlay_enabled}
+            onCheckedChange={toneOverlay.toggle}
+          />
+          <p className="text-xs text-muted-foreground">
+            Tone adjusts punctuation, capitalization, and line breaks only —
+            grammar, phrasing, and word choice are never touched.
           </p>
         </div>
       </SectionCard>

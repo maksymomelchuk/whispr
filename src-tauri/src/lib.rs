@@ -45,6 +45,9 @@ mod cleanup_invoke;
 pub mod model_catalog;
 pub mod recovery;
 
+// tone is pure Rust — no OS APIs, no I/O.
+mod tone;
+
 // media, overlay, and target_app expose platform-neutral public APIs and
 // select their OS implementation internally via cfg.
 mod media;
@@ -252,6 +255,7 @@ pub fn run() {
             commands::clear_custom_provider,
             commands::set_cleanup_auth_mode,
             commands::set_cleanup_thresholds,
+            commands::set_tone_overlay_enabled,
             commands::list_input_devices,
             commands::set_input_device,
             commands::set_pause_media_on_record,

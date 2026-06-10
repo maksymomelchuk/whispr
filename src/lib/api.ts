@@ -124,6 +124,9 @@ export const setCleanupThresholds = (minWords: number, minDurationMs: number) =>
     minDurationMs,
   });
 
+export const setToneOverlayEnabled = (enabled: boolean) =>
+  invoke<void>("set_tone_overlay_enabled", { enabled });
+
 export const listInputDevices = () => invoke<string[]>("list_input_devices");
 
 export const setInputDevice = (device: string | null) =>

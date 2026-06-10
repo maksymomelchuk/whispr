@@ -14,6 +14,7 @@ vi.mock("../lib/api", () => ({
   setAnthropicOauthToken: vi.fn(),
   setCleanupAuthMode: vi.fn(),
   setCleanupThresholds: vi.fn(),
+  setToneOverlayEnabled: vi.fn(),
   setProviderKey: vi.fn(),
 }));
 
@@ -68,6 +69,7 @@ const BASE_SETTINGS: Settings = {
   custom_provider_model: "",
   ai_cleanup_min_words: 9,
   ai_cleanup_min_duration_ms: 3000,
+  ai_cleanup_tone_overlay_enabled: false,
   input_device: null,
   pause_media_on_record: true,
   history_limit: 5,

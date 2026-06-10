@@ -198,12 +198,15 @@ impl std::fmt::Display for CleanupError {
     }
 }
 
-pub fn effective_prompt(override_prompt: Option<&str>) -> String {
+pub fn effective_prompt(override_prompt: Option<&str>, tone_directive: Option<&str>) -> String {
     let rules = match override_prompt {
         Some(p) if !p.trim().is_empty() => p,
         _ => DEFAULT_SYSTEM_PROMPT,
     };
-    format!("{SAFETY_PREAMBLE}\n\n{rules}")
+    match tone_directive.filter(|d| !d.trim().is_empty()) {
+        Some(tone) => format!("{SAFETY_PREAMBLE}\n\n{rules}\n\n{tone}"),
+        None => format!("{SAFETY_PREAMBLE}\n\n{rules}"),
+    }
 }
 
 pub(crate) struct TransportResponse {
@@ -727,21 +730,21 @@ mod tests {
 
     #[test]
     fn effective_prompt_none_includes_preamble_and_default_rules() {
-        let result = effective_prompt(None);
+        let result = effective_prompt(None, None);
         assert!(result.starts_with(SAFETY_PREAMBLE));
         assert!(result.contains(DEFAULT_SYSTEM_PROMPT));
     }
 
     #[test]
     fn effective_prompt_empty_string_falls_back_to_default_rules() {
-        let result = effective_prompt(Some(""));
+        let result = effective_prompt(Some(""), None);
         assert!(result.starts_with(SAFETY_PREAMBLE));
         assert!(result.contains(DEFAULT_SYSTEM_PROMPT));
     }
 
     #[test]
     fn effective_prompt_whitespace_only_falls_back_to_default_rules() {
-        let result = effective_prompt(Some("   "));
+        let result = effective_prompt(Some("   "), None);
         assert!(result.starts_with(SAFETY_PREAMBLE));
         assert!(result.contains(DEFAULT_SYSTEM_PROMPT));
     }
@@ -749,7 +752,7 @@ mod tests {
     #[test]
     fn effective_prompt_override_is_prefixed_with_preamble() {
         let custom = "Translate the transcript to French.";
-        let result = effective_prompt(Some(custom));
+        let result = effective_prompt(Some(custom), None);
         assert!(result.starts_with(SAFETY_PREAMBLE));
         assert!(result.contains(custom));
     }
@@ -757,11 +760,53 @@ mod tests {
     #[test]
     fn effective_prompt_override_does_not_include_default_rules() {
         let custom = "Translate the transcript to French.";
-        let result = effective_prompt(Some(custom));
+        let result = effective_prompt(Some(custom), None);
         assert!(
             !result.contains(DEFAULT_SYSTEM_PROMPT),
             "override should fully replace the default rules; preamble only"
         );
+    }
+
+    #[test]
+    fn effective_prompt_tone_directive_appended_after_rules() {
+        let directive = "Tone: formal. End sentences with periods.";
+        let result = effective_prompt(None, Some(directive));
+        assert!(result.starts_with(SAFETY_PREAMBLE));
+        assert!(result.contains(DEFAULT_SYSTEM_PROMPT));
+        assert!(result.contains(directive));
+        let rules_pos = result.find(DEFAULT_SYSTEM_PROMPT).unwrap();
+        let tone_pos = result.find(directive).unwrap();
+        assert!(
+            tone_pos > rules_pos,
+            "tone directive must appear after cleanup rules"
+        );
+    }
+
+    #[test]
+    fn effective_prompt_tone_directive_with_override_composes_both() {
+        let custom_rules = "My custom rules.";
+        let directive = "Tone: casual.";
+        let result = effective_prompt(Some(custom_rules), Some(directive));
+        assert!(result.starts_with(SAFETY_PREAMBLE));
+        assert!(result.contains(custom_rules));
+        assert!(result.contains(directive));
+        assert!(!result.contains(DEFAULT_SYSTEM_PROMPT));
+    }
+
+    #[test]
+    fn effective_prompt_none_tone_directive_omits_tone_section() {
+        let result = effective_prompt(None, None);
+        assert!(result.starts_with(SAFETY_PREAMBLE));
+        assert!(result.ends_with(DEFAULT_SYSTEM_PROMPT));
+    }
+
+    #[test]
+    fn effective_prompt_empty_tone_directive_is_ignored() {
+        let result_none = effective_prompt(None, None);
+        let result_empty = effective_prompt(None, Some(""));
+        let result_whitespace = effective_prompt(None, Some("  "));
+        assert_eq!(result_none, result_empty);
+        assert_eq!(result_none, result_whitespace);
     }
 
     #[test]

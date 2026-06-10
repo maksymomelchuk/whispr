@@ -18,7 +18,7 @@ use crate::provider::{self, LocalWhisperModel, ProviderModel, TranscriptionProvi
 use crate::recorder::Recorder;
 use crate::session::{Session, PTT_ERROR_EVENT, TRANSCRIPTION_ERROR_EVENT};
 use crate::state::{AppState, ModifierState};
-use crate::{cleanup, cleanup_invoke, cleanup_stats, config, model_catalog, recovery, stats};
+use crate::{cleanup, cleanup_invoke, cleanup_stats, config, model_catalog, recovery, stats, tone};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
@@ -526,6 +526,7 @@ async fn run_session(
         return Ok(());
     }
 
+    let session_bundle_id = target_app::session_app().map(|a| a.bundle_id);
     let (replaced_text, cleanup_status, notice) = maybe_cleanup(
         app,
         &settings,
@@ -535,6 +536,7 @@ async fn run_session(
         mode_prompt_override.as_deref(),
         cleanup_provider,
         &cleanup_model,
+        session_bundle_id.as_deref(),
     )
     .await;
 
@@ -629,6 +631,7 @@ async fn maybe_cleanup(
     prompt_override: Option<&str>,
     cleanup_provider: cleanup::AiProviderId,
     cleanup_model: &str,
+    bundle_id: Option<&str>,
 ) -> (String, CleanupStatus, Notice) {
     let cleanup_settings = &settings.ai_cleanup;
 
@@ -657,6 +660,15 @@ async fn maybe_cleanup(
         );
     }
 
+    let tone = if cleanup_settings.tone_overlay_enabled {
+        bundle_id
+            .map(tone::categorize_app)
+            .map(tone::preset_for_category)
+            .and_then(tone::tone_directive)
+    } else {
+        None
+    };
+
     let _ = app.emit(PTT_THINKING_EVENT, ());
 
     let result = cleanup_invoke::invoke(
@@ -664,6 +676,7 @@ async fn maybe_cleanup(
         cleanup_provider,
         cleanup_model,
         prompt_override,
+        tone,
         transcript,
     )
     .await;

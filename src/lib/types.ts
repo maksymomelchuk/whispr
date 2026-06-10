@@ -221,6 +221,7 @@ export interface Settings {
   custom_provider_model: string;
   ai_cleanup_min_words: number;
   ai_cleanup_min_duration_ms: number;
+  ai_cleanup_tone_overlay_enabled: boolean;
   input_device: string | null;
   pause_media_on_record: boolean;
   history_limit: HistoryLimit;

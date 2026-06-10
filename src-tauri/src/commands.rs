@@ -44,6 +44,7 @@ pub struct SettingsView {
     pub custom_provider_model: String,
     pub ai_cleanup_min_words: usize,
     pub ai_cleanup_min_duration_ms: u64,
+    pub ai_cleanup_tone_overlay_enabled: bool,
     pub input_device: Option<String>,
     pub pause_media_on_record: bool,
     pub history_limit: Option<usize>,
@@ -120,6 +121,7 @@ impl From<Settings> for SettingsView {
             custom_provider_model,
             ai_cleanup_min_words: s.ai_cleanup.min_words,
             ai_cleanup_min_duration_ms: s.ai_cleanup.min_duration_ms,
+            ai_cleanup_tone_overlay_enabled: s.ai_cleanup.tone_overlay_enabled,
             input_device: s.input_device,
             pause_media_on_record: s.pause_media_on_record,
             history_limit: s.history_limit,
@@ -438,6 +440,11 @@ pub fn set_cleanup_thresholds(
         s.ai_cleanup.min_words = min_words;
         s.ai_cleanup.min_duration_ms = min_duration_ms;
     })
+}
+
+#[tauri::command]
+pub fn set_tone_overlay_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
+    config::update(&app, |s| s.ai_cleanup.tone_overlay_enabled = enabled)
 }
 
 #[tauri::command]
