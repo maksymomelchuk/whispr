@@ -1,7 +1,7 @@
 use crate::api_key_validation::{self, ApiKeyValidation};
 use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
 use crate::config::{
-    self, CleanupAuthMode, HotkeyAction, HotkeyBinding, LocalWhisperIdleTimeout,
+    self, CleanupAuthMode, CorrectionEntry, HotkeyAction, HotkeyBinding, LocalWhisperIdleTimeout,
     NamedCorrectionSet, NamedTermSet, Settings, SnippetEntry,
 };
 use crate::download::{
@@ -289,7 +289,7 @@ pub fn rename_correction_set(app: AppHandle, id: SetId, name: String) -> Result<
 pub fn update_correction_set_entries(
     app: AppHandle,
     id: SetId,
-    entries: Vec<crate::config::CorrectionEntry>,
+    entries: Vec<CorrectionEntry>,
 ) -> Result<(), String> {
     config::update(&app, |s| {
         if let Some(cs) = s.correction_sets.iter_mut().find(|cs| cs.id == id) {
