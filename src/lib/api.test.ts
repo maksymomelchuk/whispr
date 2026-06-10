@@ -2,10 +2,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  addCorrectionSet,
   addMode,
   clearHistory,
   clearStats,
+  createCorrectionSet,
   createTermSet,
   deleteCorrectionSet,
   deleteMode,
@@ -16,6 +16,7 @@ import {
   getSettings,
   getStats,
   listInputDevices,
+  renameCorrectionSet,
   renameTermSet,
   setAnthropicApiKey,
   setAnthropicOauthToken,
@@ -32,7 +33,7 @@ import {
   setShowInDock,
   setShowLivePreview,
   setSnippets,
-  updateCorrectionSet,
+  updateCorrectionSetEntries,
   updateMode,
   updateTermSetEntries,
   validateAssemblyAiApiKey,
@@ -108,27 +109,24 @@ const COMMANDS: Array<{
     args: { id: "ts-1" },
   },
   {
-    call: () =>
-      addCorrectionSet({
-        id: "cs1",
-        name: "My Set",
-        entries: [{ from: "x", to: "y" }],
-      }),
-    cmd: "add_correction_set",
-    args: {
-      set: { id: "cs1", name: "My Set", entries: [{ from: "x", to: "y" }] },
-    },
+    call: () => createCorrectionSet("My Set"),
+    cmd: "create_correction_set",
+    args: { name: "My Set" },
   },
   {
-    call: () =>
-      updateCorrectionSet({ id: "cs1", name: "Updated", entries: [] }),
-    cmd: "update_correction_set",
-    args: { set: { id: "cs1", name: "Updated", entries: [] } },
+    call: () => renameCorrectionSet("cs1", "Renamed"),
+    cmd: "rename_correction_set",
+    args: { id: "cs1", name: "Renamed" },
+  },
+  {
+    call: () => updateCorrectionSetEntries("cs1", [{ from: "x", to: "y" }]),
+    cmd: "update_correction_set_entries",
+    args: { id: "cs1", entries: [{ from: "x", to: "y" }] },
   },
   {
     call: () => deleteCorrectionSet("cs1"),
     cmd: "delete_correction_set",
-    args: { setId: "cs1" },
+    args: { id: "cs1" },
   },
   {
     call: () => setSnippets([]),

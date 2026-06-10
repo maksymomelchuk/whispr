@@ -261,25 +261,49 @@ pub fn delete_term_set(app: AppHandle, id: SetId) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn add_correction_set(app: AppHandle, set: NamedCorrectionSet) -> Result<(), String> {
-    config::update(&app, |s| s.correction_sets.push(set))
+pub fn create_correction_set(app: AppHandle, name: String) -> Result<NamedCorrectionSet, String> {
+    let ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let set = NamedCorrectionSet {
+        id: format!("correction-set-{ms}"),
+        name: name.trim().to_string(),
+        entries: vec![],
+    };
+    let result = set.clone();
+    config::update(&app, |s| s.correction_sets.push(set))?;
+    Ok(result)
 }
 
 #[tauri::command]
-pub fn update_correction_set(app: AppHandle, set: NamedCorrectionSet) -> Result<(), String> {
+pub fn rename_correction_set(app: AppHandle, id: SetId, name: String) -> Result<(), String> {
     config::update(&app, |s| {
-        if let Some(cs) = s.correction_sets.iter_mut().find(|cs| cs.id == set.id) {
-            *cs = set;
+        if let Some(cs) = s.correction_sets.iter_mut().find(|cs| cs.id == id) {
+            cs.name = name.trim().to_string();
         }
     })
 }
 
 #[tauri::command]
-pub fn delete_correction_set(app: AppHandle, set_id: String) -> Result<(), String> {
+pub fn update_correction_set_entries(
+    app: AppHandle,
+    id: SetId,
+    entries: Vec<crate::config::CorrectionEntry>,
+) -> Result<(), String> {
     config::update(&app, |s| {
-        s.correction_sets.retain(|cs| cs.id != set_id);
+        if let Some(cs) = s.correction_sets.iter_mut().find(|cs| cs.id == id) {
+            cs.entries = entries;
+        }
+    })
+}
+
+#[tauri::command]
+pub fn delete_correction_set(app: AppHandle, id: SetId) -> Result<(), String> {
+    config::update(&app, |s| {
+        s.correction_sets.retain(|cs| cs.id != id);
         for mode in s.modes.iter_mut() {
-            mode.correction_set_ids.retain(|id| id != &set_id);
+            mode.correction_set_ids.retain(|csid| *csid != id);
         }
     })
 }

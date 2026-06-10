@@ -71,14 +71,19 @@ export const updateTermSetEntries = (id: string, entries: string[]) =>
 export const deleteTermSet = (id: string) =>
   invoke<void>("delete_term_set", { id });
 
-export const addCorrectionSet = (set: NamedCorrectionSet) =>
-  invoke<void>("add_correction_set", { set });
+export const createCorrectionSet = (name: string) =>
+  invoke<NamedCorrectionSet>("create_correction_set", { name });
 
-export const updateCorrectionSet = (set: NamedCorrectionSet) =>
-  invoke<void>("update_correction_set", { set });
+export const renameCorrectionSet = (id: string, name: string) =>
+  invoke<void>("rename_correction_set", { id, name });
 
-export const deleteCorrectionSet = (setId: string) =>
-  invoke<void>("delete_correction_set", { setId });
+export const updateCorrectionSetEntries = (
+  id: string,
+  entries: NamedCorrectionSet["entries"],
+) => invoke<void>("update_correction_set_entries", { id, entries });
+
+export const deleteCorrectionSet = (id: string) =>
+  invoke<void>("delete_correction_set", { id });
 
 export const setSnippets = (snippets: Snippet[]) =>
   invoke<void>("set_snippets", { snippets });

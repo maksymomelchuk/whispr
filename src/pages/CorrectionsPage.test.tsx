@@ -8,15 +8,17 @@ import { SettingsContext } from "@/context/SettingsContext";
 import type { Mode, NamedCorrectionSet, Settings } from "@/lib/types";
 
 import {
-  addCorrectionSet as mockAddCorrectionSet,
+  createCorrectionSet as mockCreateCorrectionSet,
   deleteCorrectionSet as mockDeleteCorrectionSet,
-  updateCorrectionSet as mockUpdateCorrectionSet,
+  renameCorrectionSet as mockRenameCorrectionSet,
+  updateCorrectionSetEntries as mockUpdateCorrectionSetEntries,
 } from "../lib/api";
 import { CorrectionsPage } from "./CorrectionsPage";
 
 vi.mock("../lib/api", () => ({
-  addCorrectionSet: vi.fn(),
-  updateCorrectionSet: vi.fn(),
+  createCorrectionSet: vi.fn(),
+  renameCorrectionSet: vi.fn(),
+  updateCorrectionSetEntries: vi.fn(),
   deleteCorrectionSet: vi.fn(),
   formatShortcut: vi.fn(),
 }));
@@ -96,8 +98,13 @@ function Wrapper({ initial = BASE }: { initial?: Settings }) {
 }
 
 beforeEach(() => {
-  vi.mocked(mockAddCorrectionSet).mockResolvedValue(undefined);
-  vi.mocked(mockUpdateCorrectionSet).mockResolvedValue(undefined);
+  vi.mocked(mockCreateCorrectionSet).mockResolvedValue({
+    id: "correction-set-123",
+    name: "",
+    entries: [],
+  });
+  vi.mocked(mockRenameCorrectionSet).mockResolvedValue(undefined);
+  vi.mocked(mockUpdateCorrectionSetEntries).mockResolvedValue(undefined);
   vi.mocked(mockDeleteCorrectionSet).mockResolvedValue(undefined);
 });
 
@@ -114,6 +121,11 @@ describe("CorrectionsPage – set creation", () => {
   });
 
   it("create: saves set and expands it", async () => {
+    vi.mocked(mockCreateCorrectionSet).mockResolvedValue({
+      id: "correction-set-123",
+      name: "My Rules",
+      entries: [],
+    });
     render(<Wrapper />);
 
     await userEvent.click(
@@ -124,9 +136,7 @@ describe("CorrectionsPage – set creation", () => {
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() =>
-      expect(mockAddCorrectionSet).toHaveBeenCalledWith(
-        expect.objectContaining({ name: "My Rules", entries: [] }),
-      ),
+      expect(mockCreateCorrectionSet).toHaveBeenCalledWith("My Rules"),
     );
     expect(screen.getByText("My Rules")).toBeInTheDocument();
   });
@@ -219,12 +229,9 @@ describe("CorrectionsPage – entry management", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
-      expect(mockUpdateCorrectionSet).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: "cs-1",
-          entries: [{ from: "mongo", to: "MongoDB" }],
-        }),
-      ),
+      expect(mockUpdateCorrectionSetEntries).toHaveBeenCalledWith("cs-1", [
+        { from: "mongo", to: "MongoDB" },
+      ]),
     );
     expect(screen.getByText("mongo")).toBeInTheDocument();
   });

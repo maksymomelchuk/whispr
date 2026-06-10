@@ -16,9 +16,10 @@ import {
 
 import { useSettings } from "../context/SettingsContext";
 import {
-  addCorrectionSet,
+  createCorrectionSet,
   deleteCorrectionSet,
-  updateCorrectionSet,
+  renameCorrectionSet,
+  updateCorrectionSetEntries,
 } from "../lib/api";
 import type { CorrectionEntry, Mode, NamedCorrectionSet } from "../lib/types";
 import { EntriesEditor } from "./CorrectionEntriesEditor";
@@ -37,14 +38,8 @@ export function CorrectionsPage() {
 
   const handleCreateSave = async () => {
     if (creatingName === null || !creatingName.trim()) return;
-    const ms = Date.now();
-    const newSet: NamedCorrectionSet = {
-      id: `correction-set-${ms}`,
-      name: creatingName.trim(),
-      entries: [],
-    };
     try {
-      await addCorrectionSet(newSet);
+      const newSet = await createCorrectionSet(creatingName.trim());
       setSettings((s) => ({
         ...s,
         correction_sets: [...s.correction_sets, newSet],
@@ -57,15 +52,12 @@ export function CorrectionsPage() {
   };
 
   const handleRename = async (setId: string, newName: string) => {
-    const existing = correctionSets.find((cs) => cs.id === setId);
-    if (!existing) return;
-    const updated = { ...existing, name: newName };
     try {
-      await updateCorrectionSet(updated);
+      await renameCorrectionSet(setId, newName);
       setSettings((s) => ({
         ...s,
         correction_sets: s.correction_sets.map((cs) =>
-          cs.id === setId ? updated : cs,
+          cs.id === setId ? { ...cs, name: newName } : cs,
         ),
       }));
     } catch (e) {
@@ -77,15 +69,12 @@ export function CorrectionsPage() {
     setId: string,
     entries: CorrectionEntry[],
   ) => {
-    const existing = correctionSets.find((cs) => cs.id === setId);
-    if (!existing) return;
-    const updated = { ...existing, entries };
     try {
-      await updateCorrectionSet(updated);
+      await updateCorrectionSetEntries(setId, entries);
       setSettings((s) => ({
         ...s,
         correction_sets: s.correction_sets.map((cs) =>
-          cs.id === setId ? updated : cs,
+          cs.id === setId ? { ...cs, entries } : cs,
         ),
       }));
     } catch (e) {
