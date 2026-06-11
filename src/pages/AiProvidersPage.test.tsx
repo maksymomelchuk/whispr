@@ -248,7 +248,12 @@ describe("AiProvidersPage", () => {
     );
     await waitFor(() => screen.getByText("Mail"));
     await userEvent.selectOptions(screen.getByRole("combobox"), "casual");
-    expect(setToneAppOverride).toHaveBeenCalledWith("com.apple.mail", "casual");
+    await waitFor(() => {
+      expect(setToneAppOverride).toHaveBeenCalledWith(
+        "com.apple.mail",
+        "casual",
+      );
+    });
   });
 
   it("calls clearToneAppOverride when user selects Auto for an app with an override", async () => {
@@ -269,7 +274,9 @@ describe("AiProvidersPage", () => {
     );
     await waitFor(() => screen.getByText("Mail"));
     await userEvent.selectOptions(screen.getByRole("combobox"), "auto");
-    expect(clearToneAppOverride).toHaveBeenCalledWith("com.apple.mail");
+    await waitFor(() => {
+      expect(clearToneAppOverride).toHaveBeenCalledWith("com.apple.mail");
+    });
   });
 });
 
