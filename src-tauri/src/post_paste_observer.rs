@@ -9,8 +9,128 @@ fn platform_start(app: tauri::AppHandle, bundle_id: Option<String>) {
     });
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+fn platform_start(app: tauri::AppHandle, bundle_id: Option<String>) {
+    std::thread::spawn(move || {
+        windows_impl::run_observation(app, bundle_id);
+    });
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn platform_start(_app: tauri::AppHandle, _bundle_id: Option<String>) {}
+
+#[cfg(target_os = "windows")]
+mod windows_impl {
+    use crate::{config, miner};
+    use std::sync::mpsc;
+    use std::time::Duration;
+    use windows::Win32::System::Com::{
+        CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
+    };
+    use windows::Win32::System::Variant::{VT_BOOL, VT_BSTR};
+    use windows::Win32::UI::Accessibility::{
+        CUIAutomation, IUIAutomation, IUIAutomationElement,
+        IUIAutomationFocusChangedEventHandler, IUIAutomationFocusChangedEventHandler_Impl,
+        UIA_IsPasswordPropertyId, UIA_ValueValuePropertyId,
+    };
+    use windows::core::implement;
+
+    const WATCH_TIMEOUT_SECS: u64 = 90;
+
+    #[implement(IUIAutomationFocusChangedEventHandler)]
+    struct FocusChangedHandler(mpsc::SyncSender<()>);
+
+    impl IUIAutomationFocusChangedEventHandler_Impl for FocusChangedHandler {
+        fn HandleFocusChangedEvent(
+            &self,
+            _sender: Option<&IUIAutomationElement>,
+        ) -> windows::core::Result<()> {
+            let _ = self.0.send(());
+            Ok(())
+        }
+    }
+
+    pub fn run_observation(app: tauri::AppHandle, bundle_id: Option<String>) {
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+
+            let uia: IUIAutomation =
+                match CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER) {
+                    Ok(u) => u,
+                    Err(_) => return,
+                };
+
+            let (element, snapshot) = match snapshot_focused_field(&uia) {
+                Some(pair) => pair,
+                None => return,
+            };
+
+            let (stop_tx, stop_rx) = mpsc::sync_channel::<()>(4);
+            let focus_handler: IUIAutomationFocusChangedEventHandler =
+                FocusChangedHandler(stop_tx).into();
+
+            if uia.AddFocusChangedEventHandler(None, &focus_handler).is_err() {
+                return;
+            }
+
+            // MTA: focus-changed callbacks fire on a COM thread pool thread and
+            // signal via the channel; this thread blocks until focus moves away,
+            // the element dies (which also triggers a focus change), or 90 s.
+            let _ = stop_rx.recv_timeout(Duration::from_secs(WATCH_TIMEOUT_SECS));
+
+            let _ = uia.RemoveFocusChangedEventHandler(&focus_handler);
+
+            let final_text = match read_current_value(&element) {
+                Some(t) => t,
+                None => return,
+            };
+
+            let candidates = miner::mine(&snapshot, &final_text);
+            if candidates.is_empty() {
+                return;
+            }
+
+            let now_ms = miner::now_ms();
+            let _ = config::update(&app, |s| {
+                miner::observe_candidates(&candidates, s, bundle_id.as_deref(), now_ms);
+            });
+        }
+    }
+
+    unsafe fn snapshot_focused_field(uia: &IUIAutomation) -> Option<(IUIAutomationElement, String)> {
+        let cache_req = uia.CreateCacheRequest().ok()?;
+        cache_req.AddProperty(UIA_IsPasswordPropertyId).ok()?;
+        cache_req.AddProperty(UIA_ValueValuePropertyId).ok()?;
+
+        let element = uia.GetFocusedElementBuildCache(&cache_req).ok()?;
+
+        let pw_var = element.GetCachedPropertyValue(UIA_IsPasswordPropertyId).ok()?;
+        let pw_inner = &*pw_var.0.Anonymous;
+        // Fail-closed: if we cannot confirm the field is not a password field, skip it.
+        if pw_inner.vt != VT_BOOL || pw_inner.Anonymous.boolVal.0 != 0 {
+            return None;
+        }
+
+        let val_var = element.GetCachedPropertyValue(UIA_ValueValuePropertyId).ok()?;
+        let inner = &*val_var.0.Anonymous;
+        if inner.vt != VT_BSTR {
+            return None;
+        }
+        let snapshot = (&*inner.Anonymous.bstrVal).to_string();
+
+        Some((element, snapshot))
+    }
+
+    unsafe fn read_current_value(element: &IUIAutomationElement) -> Option<String> {
+        let var = element.GetCurrentPropertyValue(UIA_ValueValuePropertyId).ok()?;
+        let inner = &*var.0.Anonymous;
+        if inner.vt != VT_BSTR {
+            return None;
+        }
+        let text = (&*inner.Anonymous.bstrVal).to_string();
+        if text.is_empty() { None } else { Some(text) }
+    }
+}
 
 #[cfg(target_os = "macos")]
 mod macos {
