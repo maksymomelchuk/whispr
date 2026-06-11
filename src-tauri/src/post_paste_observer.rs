@@ -73,9 +73,7 @@ mod windows_impl {
                 return;
             }
 
-            // MTA: focus-changed callbacks fire on a COM thread pool thread and
-            // signal via the channel; this thread blocks until focus moves away,
-            // the element dies (which also triggers a focus change), or 90 s.
+            // MTA: focus-changed callbacks fire on a COM thread pool thread.
             let _ = stop_rx.recv_timeout(Duration::from_secs(WATCH_TIMEOUT_SECS));
 
             let _ = uia.RemoveFocusChangedEventHandler(&focus_handler);
