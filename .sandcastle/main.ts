@@ -483,7 +483,7 @@ async function mergeWorkset(workset: Workset, completed: IssueRef[]) {
   try {
     await sandbox.run({
       name: `merger-${workset.name}`,
-      maxIterations: 1,
+      maxIterations: 5,
       idleTimeoutSeconds: AGENT_IDLE_TIMEOUT_SECONDS,
       agent: sandcastle.claudeCode("claude-opus-4-8"),
       promptFile: "./.sandcastle/merge-prompt.md",
