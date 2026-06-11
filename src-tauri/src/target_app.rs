@@ -218,8 +218,6 @@ fn run_osascript(script: &str, args: &[&str]) -> Option<String> {
 
 #[cfg(target_os = "windows")]
 use std::collections::HashMap;
-#[cfg(target_os = "windows")]
-use std::sync::{Mutex, OnceLock};
 
 #[cfg(target_os = "windows")]
 fn icon_cache() -> &'static Mutex<HashMap<String, TargetApp>> {

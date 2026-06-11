@@ -96,7 +96,7 @@ pub fn platform_read_text() -> Option<String> {
 
 #[cfg(target_os = "windows")]
 pub fn platform_change_count() -> i64 {
-    use windows_sys::Win32::UI::WindowsAndMessaging::GetClipboardSequenceNumber;
+    use windows_sys::Win32::System::DataExchange::GetClipboardSequenceNumber;
     unsafe { GetClipboardSequenceNumber() as i64 }
 }
 
