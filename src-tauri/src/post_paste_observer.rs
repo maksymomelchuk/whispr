@@ -209,6 +209,7 @@ mod macos {
         if err != AX_ERROR_SUCCESS || focused.is_null() {
             return None;
         }
+        AXUIElementSetMessagingTimeout(focused, FIELD_READ_TIMEOUT_SECS);
 
         let role_attr = CFString::from_static_string("AXRole");
         let mut role_val: CFTypeRef = ptr::null();
