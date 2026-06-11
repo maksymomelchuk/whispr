@@ -320,8 +320,11 @@ async fn run_session(
     let paste_raw_on_failure = active_mode.ai_cleanup.paste_raw_on_failure;
     let clipboard_context_enabled = active_mode.ai_cleanup.clipboard_context_enabled;
     let selected_text_context_enabled = active_mode.ai_cleanup.selected_text_context_enabled;
-    let session_terms =
-        crate::terms::compose_term_hints(&settings.term_sets, &active_mode.term_set_ids);
+    let session_terms = crate::terms::compose_term_hints(
+        &settings.term_sets,
+        &active_mode.term_set_ids,
+        &settings.learned_entries,
+    );
 
     let missing_key = match active_mode.provider_model.provider() {
         TranscriptionProvider::Deepgram => settings
@@ -381,8 +384,11 @@ async fn run_session(
                 .or_else(|| settings.api_key.clone())
                 .filter(|k| !k.is_empty())
                 .ok_or_else(|| "API key not configured".to_string())?;
-            let corrections =
-                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
+            let corrections = compose_corrections(
+                &active_mode.correction_set_ids,
+                &settings.correction_sets,
+                &settings.learned_entries,
+            );
             let ctx = EngineContext {
                 format,
                 language: mode_language,
@@ -403,8 +409,11 @@ async fn run_session(
                 .clone()
                 .filter(|k| !k.is_empty())
                 .ok_or_else(|| "API key not configured".to_string())?;
-            let corrections =
-                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
+            let corrections = compose_corrections(
+                &active_mode.correction_set_ids,
+                &settings.correction_sets,
+                &settings.learned_entries,
+            );
             let ctx = EngineContext {
                 format,
                 language: mode_language,
@@ -421,8 +430,11 @@ async fn run_session(
         }
         ProviderModel::AssemblyAi { model } => {
             let key = settings.assemblyai_api_key.clone().unwrap_or_default();
-            let corrections =
-                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
+            let corrections = compose_corrections(
+                &active_mode.correction_set_ids,
+                &settings.correction_sets,
+                &settings.learned_entries,
+            );
             let ctx = EngineContext {
                 format,
                 language: mode_language,
@@ -444,8 +456,11 @@ async fn run_session(
                 .app_data_dir()
                 .map_err(|e| format!("Cannot resolve app data directory: {e}"))?;
             let model_path = provider::local_model_path(&data_dir, *model);
-            let corrections =
-                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
+            let corrections = compose_corrections(
+                &active_mode.correction_set_ids,
+                &settings.correction_sets,
+                &settings.learned_entries,
+            );
             let ctx = EngineContext {
                 format,
                 language: mode_language,
@@ -466,8 +481,11 @@ async fn run_session(
                 .clone()
                 .filter(|k| !k.is_empty())
                 .ok_or_else(|| "API key not configured".to_string())?;
-            let corrections =
-                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
+            let corrections = compose_corrections(
+                &active_mode.correction_set_ids,
+                &settings.correction_sets,
+                &settings.learned_entries,
+            );
             let ctx = EngineContext {
                 format,
                 language: mode_language,
@@ -488,8 +506,11 @@ async fn run_session(
                 .clone()
                 .filter(|k| !k.is_empty())
                 .ok_or_else(|| "API key not configured".to_string())?;
-            let corrections =
-                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
+            let corrections = compose_corrections(
+                &active_mode.correction_set_ids,
+                &settings.correction_sets,
+                &settings.learned_entries,
+            );
             let ctx = EngineContext {
                 format,
                 language: mode_language,

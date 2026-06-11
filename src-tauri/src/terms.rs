@@ -1,4 +1,4 @@
-use crate::config::NamedTermSet;
+use crate::config::{LearnedEntry, LearnedEntryStatus, LearnedKind, NamedTermSet};
 
 /// 4 KB ceiling — Deepgram's documented maximum is ~8 KB; halving gives
 /// comfortable headroom for the base URL and engine parameters that precede
@@ -9,7 +9,14 @@ pub const DEEPGRAM_KEYTERM_BUDGET_BYTES: usize = 4096;
 /// stays well within that window for typical English vocabulary lists.
 pub const GROQ_PROMPT_BUDGET_CHARS: usize = 800;
 
-pub fn compose_term_hints(term_sets: &[NamedTermSet], set_ids: &[String]) -> Vec<String> {
+/// Merges manual term sets with promoted learned Terms. Manual entries are
+/// emitted first so budget-capping functions (deepgram_keyterms, etc.) drop
+/// learned terms before manual ones when the budget is exhausted.
+pub fn compose_term_hints(
+    term_sets: &[NamedTermSet],
+    set_ids: &[String],
+    learned: &[LearnedEntry],
+) -> Vec<String> {
     let mut result = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for id in set_ids {
@@ -18,6 +25,16 @@ pub fn compose_term_hints(term_sets: &[NamedTermSet], set_ids: &[String]) -> Vec
         };
         for entry in &set.entries {
             let trimmed = entry.trim().to_string();
+            if !trimmed.is_empty() && seen.insert(trimmed.clone()) {
+                result.push(trimmed);
+            }
+        }
+    }
+    for entry in learned {
+        if entry.status == LearnedEntryStatus::Promoted
+            && matches!(entry.kind, LearnedKind::Term)
+        {
+            let trimmed = entry.word.trim().to_string();
             if !trimmed.is_empty() && seen.insert(trimmed.clone()) {
                 result.push(trimmed);
             }
@@ -124,27 +141,27 @@ mod tests {
     #[test]
     fn compose_returns_empty_when_no_set_ids() {
         let sets = vec![make_set("s1", &["MongoDB"])];
-        assert!(compose_term_hints(&sets, &[]).is_empty());
+        assert!(compose_term_hints(&sets, &[], &[]).is_empty());
     }
 
     #[test]
     fn compose_returns_empty_when_set_id_not_found() {
         let sets = vec![make_set("s1", &["MongoDB"])];
-        let result = compose_term_hints(&sets, &["nonexistent".to_string()]);
+        let result = compose_term_hints(&sets, &["nonexistent".to_string()], &[]);
         assert!(result.is_empty());
     }
 
     #[test]
     fn compose_single_set_returns_its_entries() {
         let sets = vec![make_set("s1", &["MongoDB", "TypeScript"])];
-        let result = compose_term_hints(&sets, &["s1".to_string()]);
+        let result = compose_term_hints(&sets, &["s1".to_string()], &[]);
         assert_eq!(result, vec!["MongoDB", "TypeScript"]);
     }
 
     #[test]
     fn compose_multi_set_concatenates_in_order() {
         let sets = vec![make_set("a", &["alpha"]), make_set("b", &["beta"])];
-        let result = compose_term_hints(&sets, &["a".to_string(), "b".to_string()]);
+        let result = compose_term_hints(&sets, &["a".to_string(), "b".to_string()], &[]);
         assert_eq!(result, vec!["alpha", "beta"]);
     }
 
@@ -154,21 +171,21 @@ mod tests {
             make_set("a", &["MongoDB", "shared"]),
             make_set("b", &["shared", "TypeScript"]),
         ];
-        let result = compose_term_hints(&sets, &["a".to_string(), "b".to_string()]);
+        let result = compose_term_hints(&sets, &["a".to_string(), "b".to_string()], &[]);
         assert_eq!(result, vec!["MongoDB", "shared", "TypeScript"]);
     }
 
     #[test]
     fn compose_skips_blank_entries() {
         let sets = vec![make_set("s1", &["  ", "MongoDB", "\t"])];
-        let result = compose_term_hints(&sets, &["s1".to_string()]);
+        let result = compose_term_hints(&sets, &["s1".to_string()], &[]);
         assert_eq!(result, vec!["MongoDB"]);
     }
 
     #[test]
     fn compose_empty_set_ids_with_populated_sets_returns_empty() {
         let sets = vec![make_set("s1", &["MongoDB"])];
-        assert!(compose_term_hints(&sets, &[]).is_empty());
+        assert!(compose_term_hints(&sets, &[], &[]).is_empty());
     }
 
     #[test]

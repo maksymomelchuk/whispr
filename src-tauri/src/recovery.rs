@@ -109,9 +109,12 @@ fn build_outcome(
     if snapshot.use_snippets {
         final_text = expand_snippets(&final_text, &settings.snippets);
     }
-    if !snapshot.correction_set_ids.is_empty() {
-        let corrections =
-            compose_corrections(&snapshot.correction_set_ids, &settings.correction_sets);
+    if !snapshot.correction_set_ids.is_empty() || !settings.learned_entries.is_empty() {
+        let corrections = compose_corrections(
+            &snapshot.correction_set_ids,
+            &settings.correction_sets,
+            &settings.learned_entries,
+        );
         final_text = apply_corrections(&final_text, &corrections);
     }
 

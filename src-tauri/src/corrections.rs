@@ -1,4 +1,4 @@
-use crate::config::{CorrectionEntry, NamedCorrectionSet};
+use crate::config::{CorrectionEntry, LearnedEntry, LearnedEntryStatus, LearnedKind, NamedCorrectionSet};
 
 /// Punctuation whose replacement should glue to both neighbors with no spaces.
 /// Example: "test dot ts" → "test.ts".
@@ -9,11 +9,14 @@ const CLING_LEFT: &[char] = &[',', ';', ':', '?', '!'];
 
 /// Merges correction entries from the named sets identified by `set_ids`, in
 /// order. On `from` collision (case-insensitive), later-set entries win.
+/// Promoted learned corrections are appended after manual sets; manual entries
+/// always win on `from` collision.
 /// The first-occurrence position is preserved for each key so the output order
 /// is deterministic and matches the order entries appear across all sets.
 pub fn compose_corrections(
     set_ids: &[String],
     correction_sets: &[NamedCorrectionSet],
+    learned: &[LearnedEntry],
 ) -> Vec<CorrectionEntry> {
     let mut keys: Vec<String> = Vec::new();
     let mut map: std::collections::HashMap<String, CorrectionEntry> =
@@ -26,6 +29,23 @@ pub fn compose_corrections(
                     keys.push(key.clone());
                 }
                 map.insert(key, entry.clone());
+            }
+        }
+    }
+    for entry in learned {
+        if entry.status == LearnedEntryStatus::Promoted {
+            if let LearnedKind::Correction { from } = &entry.kind {
+                let key = from.to_lowercase();
+                if !map.contains_key(&key) {
+                    keys.push(key.clone());
+                    map.insert(
+                        key,
+                        CorrectionEntry {
+                            from: from.clone(),
+                            to: entry.word.clone(),
+                        },
+                    );
+                }
             }
         }
     }
@@ -303,14 +323,14 @@ mod tests {
     #[test]
     fn compose_empty_set_ids_returns_empty() {
         let sets = vec![named_set("a", &[("foo", "bar")])];
-        assert!(compose_corrections(&[], &sets).is_empty());
+        assert!(compose_corrections(&[], &sets, &[]).is_empty());
     }
 
     #[test]
     fn compose_unknown_set_id_silently_skipped() {
         let sets = vec![named_set("a", &[("foo", "bar")])];
         let ids = ["a".to_string(), "nonexistent".to_string()];
-        let result = compose_corrections(&ids, &sets);
+        let result = compose_corrections(&ids, &sets, &[]);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].from, "foo");
     }
@@ -322,7 +342,7 @@ mod tests {
             named_set("b", &[("ts", "TypeScript")]),
         ];
         let ids = ["a".to_string(), "b".to_string()];
-        let result = compose_corrections(&ids, &sets);
+        let result = compose_corrections(&ids, &sets, &[]);
         assert_eq!(result.len(), 3);
         let froms: Vec<&str> = result.iter().map(|e| e.from.as_str()).collect();
         assert!(froms.contains(&"mongo"));
@@ -337,7 +357,7 @@ mod tests {
             named_set("b", &[("foo", "bar-b")]),
         ];
         let ids = ["a".to_string(), "b".to_string()];
-        let result = compose_corrections(&ids, &sets);
+        let result = compose_corrections(&ids, &sets, &[]);
         assert_eq!(result.len(), 1, "collision deduplicates to one entry");
         assert_eq!(result[0].to, "bar-b", "later set wins");
     }
@@ -349,7 +369,7 @@ mod tests {
             named_set("b", &[("foo", "foo-b"), ("zzz", "ZZZ")]),
         ];
         let ids = ["a".to_string(), "b".to_string()];
-        let result = compose_corrections(&ids, &sets);
+        let result = compose_corrections(&ids, &sets, &[]);
         assert_eq!(result.len(), 3);
         assert_eq!(result[0].from, "aaa");
         assert_eq!(result[1].from, "foo");
