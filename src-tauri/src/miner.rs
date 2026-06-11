@@ -132,7 +132,7 @@ struct Substitution {
 
 #[derive(Clone)]
 enum DiffOp<'a> {
-    Equal(&'a str),
+    Equal,
     Delete(&'a str),
     Insert(&'a str),
 }
@@ -155,7 +155,7 @@ fn word_diff<'a>(before: &[&'a str], after: &[&'a str]) -> Vec<DiffOp<'a>> {
     let (mut i, mut j) = (n, m);
     while i > 0 || j > 0 {
         if i > 0 && j > 0 && before[i - 1] == after[j - 1] {
-            ops.push(DiffOp::Equal(before[i - 1]));
+            ops.push(DiffOp::Equal);
             i -= 1;
             j -= 1;
         } else if j > 0 && (i == 0 || dp[i][j - 1] >= dp[i - 1][j]) {
@@ -177,7 +177,7 @@ fn extract_substitutions(before: &[&str], after: &[&str]) -> Vec<Substitution> {
     let mut after_pos: usize = 0;
 
     while i < diff.len() {
-        if matches!(diff[i], DiffOp::Equal(_)) {
+        if matches!(diff[i], DiffOp::Equal) {
             after_pos += 1;
             i += 1;
             continue;
@@ -187,14 +187,14 @@ fn extract_substitutions(before: &[&str], after: &[&str]) -> Vec<Substitution> {
         let mut deletes = vec![];
         let mut inserts = vec![];
 
-        while i < diff.len() && !matches!(diff[i], DiffOp::Equal(_)) {
+        while i < diff.len() && !matches!(diff[i], DiffOp::Equal) {
             match &diff[i] {
                 DiffOp::Delete(w) => deletes.push(*w),
                 DiffOp::Insert(w) => {
                     inserts.push(*w);
                     after_pos += 1;
                 }
-                DiffOp::Equal(_) => unreachable!(),
+                DiffOp::Equal => unreachable!(),
             }
             i += 1;
         }
