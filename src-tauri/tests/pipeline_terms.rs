@@ -83,6 +83,6 @@ async fn multi_set_dedup_preserves_first_seen_order() {
         },
     ];
     let ids = vec!["a".to_string(), "b".to_string()];
-    let result = compose_term_hints(&sets, &ids);
+    let result = compose_term_hints(&sets, &ids, &[]);
     assert_eq!(result, vec!["MongoDB", "shared", "TypeScript"]);
 }
