@@ -1,3 +1,5 @@
+import { toast } from "sonner";
+
 import { SetManagementPage } from "@/components/SetManagementPage";
 import { Badge } from "@/components/ui/badge";
 
@@ -44,8 +46,12 @@ export function CorrectionsPage() {
     id: string,
     entries: CorrectionEntry[],
   ): Promise<void> {
-    const updated = await updateCorrectionSetEntries(id, entries);
-    setSettings(() => updated);
+    try {
+      const updated = await updateCorrectionSetEntries(id, entries);
+      setSettings(() => updated);
+    } catch (e) {
+      toast.error("Couldn't save entries", { description: String(e) });
+    }
   }
 
   return (
