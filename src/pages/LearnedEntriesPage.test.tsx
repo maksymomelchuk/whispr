@@ -38,6 +38,7 @@ const BASE_MODE: Mode = {
     model: "claude-haiku-4-5",
     paste_raw_on_failure: true,
     clipboard_context_enabled: false,
+    selected_text_context_enabled: false,
   },
   term_set_ids: [],
   correction_set_ids: [],

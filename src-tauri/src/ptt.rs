@@ -20,7 +20,7 @@ use crate::session::{Session, PTT_ERROR_EVENT, TRANSCRIPTION_ERROR_EVENT};
 use crate::state::{AppState, ModifierState};
 use crate::{
     cleanup, cleanup_invoke, cleanup_stats, clipboard_context, config, model_catalog, recovery,
-    stats, tone,
+    selected_text_context, stats, tone,
 };
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -319,6 +319,7 @@ async fn run_session(
     let cleanup_model = active_mode.ai_cleanup.model.clone();
     let paste_raw_on_failure = active_mode.ai_cleanup.paste_raw_on_failure;
     let clipboard_context_enabled = active_mode.ai_cleanup.clipboard_context_enabled;
+    let selected_text_context_enabled = active_mode.ai_cleanup.selected_text_context_enabled;
     let session_terms =
         crate::terms::compose_term_hints(&settings.term_sets, &active_mode.term_set_ids);
 
@@ -555,29 +556,55 @@ async fn run_session(
     #[cfg(not(target_os = "macos"))]
     let resolved_app: Option<target_app::FrontmostApp> = target_app::session_app();
 
-    let context: Option<cleanup::ContextBlocks> = if clipboard_context_enabled {
-        let rx = app
-            .state::<AppState>()
-            .pending_clipboard_rx
-            .lock()
-            .unwrap()
-            .take();
-        let clipboard_text = match rx {
-            Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
-                .await
-                .ok()
-                .and_then(|r| r.ok())
-                .flatten(),
-            None => None,
+    let context: Option<cleanup::ContextBlocks> =
+        if clipboard_context_enabled || selected_text_context_enabled {
+            let clipboard_text = if clipboard_context_enabled {
+                let rx = app
+                    .state::<AppState>()
+                    .pending_clipboard_rx
+                    .lock()
+                    .unwrap()
+                    .take();
+                match rx {
+                    Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
+                        .await
+                        .ok()
+                        .and_then(|r| r.ok())
+                        .flatten(),
+                    None => None,
+                }
+            } else {
+                None
+            };
+
+            let selected_text = if selected_text_context_enabled {
+                let rx = app
+                    .state::<AppState>()
+                    .pending_selected_text_rx
+                    .lock()
+                    .unwrap()
+                    .take();
+                match rx {
+                    Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
+                        .await
+                        .ok()
+                        .and_then(|r| r.ok())
+                        .flatten(),
+                    None => None,
+                }
+            } else {
+                None
+            };
+
+            Some(cleanup::ContextBlocks {
+                clipboard_text,
+                selected_text,
+                system_date: cleanup::system_date(),
+                system_user: cleanup::system_user(),
+            })
+        } else {
+            None
         };
-        Some(cleanup::ContextBlocks {
-            clipboard_text,
-            system_date: cleanup::system_date(),
-            system_user: cleanup::system_user(),
-        })
-    } else {
-        None
-    };
 
     let session_bundle_id = resolved_app.as_ref().map(|a| a.bundle_id.clone());
     let (replaced_text, cleanup_status, notice, context_channels) = maybe_cleanup(
@@ -713,6 +740,9 @@ async fn maybe_cleanup(
         None => vec![],
         Some(ctx) => {
             let mut channels = Vec::new();
+            if ctx.selected_text.is_some() {
+                channels.push("selected_text".to_string());
+            }
             if ctx.clipboard_text.is_some() {
                 channels.push("clipboard".to_string());
             }
@@ -782,16 +812,27 @@ fn start_ptt(
     *state.active_shortcut.lock().unwrap() = Some(shortcut.clone());
     let device = state.input_device.lock().unwrap().clone();
 
-    let clipboard_enabled = config::load(app)
+    let mode_settings = config::load(app)
         .modes
-        .iter()
-        .find(|m| m.id == mode_id)
+        .into_iter()
+        .find(|m| m.id == mode_id);
+    let clipboard_enabled = mode_settings
+        .as_ref()
         .map(|m| m.ai_cleanup.clipboard_context_enabled)
+        .unwrap_or(false);
+    let selected_text_enabled = mode_settings
+        .as_ref()
+        .map(|m| m.ai_cleanup.selected_text_context_enabled)
         .unwrap_or(false);
     if clipboard_enabled {
         clipboard_context::capture(app.clone());
     } else {
         *state.pending_clipboard_rx.lock().unwrap() = None;
+    }
+    if selected_text_enabled {
+        selected_text_context::capture(app.clone());
+    } else {
+        *state.pending_selected_text_rx.lock().unwrap() = None;
     }
 
     // Capture the target app before showing our overlay: show() can make the

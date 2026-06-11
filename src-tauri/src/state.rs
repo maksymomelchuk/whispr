@@ -84,4 +84,7 @@ pub struct AppState {
     /// Receives the clipboard text captured at PTT-down (or None if not recent).
     /// Populated by clipboard_context::capture; consumed once per session.
     pub pending_clipboard_rx: Arc<Mutex<Option<oneshot::Receiver<Option<String>>>>>,
+    /// Receives the selected text captured at PTT-down via the Accessibility API.
+    /// Populated by selected_text_context::capture; consumed once per session.
+    pub pending_selected_text_rx: Arc<Mutex<Option<oneshot::Receiver<Option<String>>>>>,
 }

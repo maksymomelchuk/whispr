@@ -71,6 +71,9 @@ pub struct ModeCleanup {
     // Defaults to false so existing behaviour is unchanged after upgrade.
     #[serde(default)]
     pub clipboard_context_enabled: bool,
+    // Defaults to false so existing behaviour is unchanged after upgrade.
+    #[serde(default)]
+    pub selected_text_context_enabled: bool,
 }
 
 impl Default for ModeCleanup {
@@ -82,6 +85,7 @@ impl Default for ModeCleanup {
             model: default_cleanup_model(),
             paste_raw_on_failure: true,
             clipboard_context_enabled: false,
+            selected_text_context_enabled: false,
         }
     }
 }
@@ -405,6 +409,7 @@ mod tests {
             model: "gpt-4o-mini".to_string(),
             paste_raw_on_failure: true,
             clipboard_context_enabled: false,
+            selected_text_context_enabled: false,
         };
         let json = serde_json::to_string(&c).unwrap();
         let decoded: ModeCleanup = serde_json::from_str(&json).unwrap();
@@ -423,6 +428,19 @@ mod tests {
         let json = r#"{"enabled":false,"prompt_override":null}"#;
         let c: ModeCleanup = serde_json::from_str(json).unwrap();
         assert!(c.paste_raw_on_failure);
+    }
+
+    #[test]
+    fn mode_cleanup_selected_text_context_defaults_to_false() {
+        let c = ModeCleanup::default();
+        assert!(!c.selected_text_context_enabled);
+    }
+
+    #[test]
+    fn mode_cleanup_selected_text_context_deserializes_to_false_when_absent() {
+        let json = r#"{"enabled":false,"prompt_override":null}"#;
+        let c: ModeCleanup = serde_json::from_str(json).unwrap();
+        assert!(!c.selected_text_context_enabled);
     }
 
     #[test]

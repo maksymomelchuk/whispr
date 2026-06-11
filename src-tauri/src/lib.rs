@@ -47,6 +47,7 @@ pub mod recovery;
 
 mod clipboard_context;
 mod miner;
+mod selected_text_context;
 mod tone;
 
 // media, overlay, and target_app expose platform-neutral public APIs and

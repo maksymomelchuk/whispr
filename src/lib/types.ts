@@ -190,6 +190,7 @@ export interface ModeCleanup {
   model: string;
   paste_raw_on_failure: boolean;
   clipboard_context_enabled: boolean;
+  selected_text_context_enabled: boolean;
 }
 
 export interface NamedTermSet {
