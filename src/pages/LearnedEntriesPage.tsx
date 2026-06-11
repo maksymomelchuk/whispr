@@ -56,7 +56,11 @@ export function LearnedEntriesPage() {
   const handlePromote = async (id: string) => {
     try {
       await promoteLearnedEntry(id);
-      setEntries((prev) => prev.filter((e) => e.id !== id));
+      setEntries((prev) =>
+        prev.map((entry) =>
+          entry.id === id ? { ...entry, status: "promoted" as const } : entry,
+        ),
+      );
       toast.success("Entry promoted to permanent dictionary");
     } catch (e) {
       toast.error("Couldn't promote entry", { description: String(e) });
@@ -103,7 +107,6 @@ export function LearnedEntriesPage() {
                         key={entry.id}
                         entry={entry}
                         onDelete={() => handleDelete(entry.id)}
-                        onPromote={() => handlePromote(entry.id)}
                       />
                     ))}
                   </div>
@@ -146,7 +149,7 @@ function LearnedEntryRow({
 }: {
   entry: LearnedEntry;
   onDelete: () => void;
-  onPromote: () => void;
+  onPromote?: () => void;
 }) {
   const isCorrection = entry.kind === "correction";
 
@@ -182,19 +185,21 @@ function LearnedEntryRow({
       </div>
 
       <div className="flex items-center gap-0.5 shrink-0">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Promote to permanent entry"
-              onClick={onPromote}
-            >
-              <ArrowUpIcon size={14} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Promote to permanent entry</TooltipContent>
-        </Tooltip>
+        {onPromote && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Promote to permanent entry"
+                onClick={onPromote}
+              >
+                <ArrowUpIcon size={14} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Promote to permanent entry</TooltipContent>
+          </Tooltip>
+        )}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
