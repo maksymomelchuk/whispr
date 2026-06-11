@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AiProviderId,
   ApiKeyValidation,
+  AppToneInfo,
   CleanupAuthMode,
   CleanupStats,
   HistoryEntry,
@@ -17,6 +18,7 @@ import type {
   Settings,
   Snippet,
   StatsRow,
+  TonePreset,
 } from "./types";
 
 export { formatShortcut } from "./shortcut";
@@ -126,6 +128,15 @@ export const setCleanupThresholds = (minWords: number, minDurationMs: number) =>
 
 export const setToneOverlayEnabled = (enabled: boolean) =>
   invoke<void>("set_tone_overlay_enabled", { enabled });
+
+export const getAppsSeenInHistory = () =>
+  invoke<AppToneInfo[]>("get_apps_seen_in_history");
+
+export const setToneAppOverride = (bundleId: string, preset: TonePreset) =>
+  invoke<void>("set_tone_app_override", { bundleId, preset });
+
+export const clearToneAppOverride = (bundleId: string) =>
+  invoke<void>("clear_tone_app_override", { bundleId });
 
 export const listInputDevices = () => invoke<string[]>("list_input_devices");
 

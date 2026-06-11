@@ -2,7 +2,7 @@ use crate::api_key_validation::{self, ApiKeyValidation};
 use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
 use crate::config::{
     self, CleanupAuthMode, HotkeyAction, HotkeyBinding, LocalWhisperIdleTimeout,
-    NamedCorrectionSet, NamedTermSet, Settings, SnippetEntry,
+    NamedCorrectionSet, NamedTermSet, Settings, SnippetEntry, TonePreset,
 };
 use crate::download::{
     self, LocalModelStatus, MODEL_DOWNLOAD_COMPLETE_EVENT, MODEL_DOWNLOAD_ERROR_EVENT,
@@ -15,7 +15,9 @@ use crate::provider::{local_model_path, GroqModel, LocalWhisperModel};
 use crate::recovery;
 use crate::state::AppState;
 use crate::stats::{self, StatsRow, STATS_UPDATED_EVENT};
+use crate::tone;
 use serde::Serialize;
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -45,6 +47,7 @@ pub struct SettingsView {
     pub ai_cleanup_min_words: usize,
     pub ai_cleanup_min_duration_ms: u64,
     pub ai_cleanup_tone_overlay_enabled: bool,
+    pub tone_app_overrides: BTreeMap<String, TonePreset>,
     pub input_device: Option<String>,
     pub pause_media_on_record: bool,
     pub history_limit: Option<usize>,
@@ -122,6 +125,7 @@ impl From<Settings> for SettingsView {
             ai_cleanup_min_words: s.ai_cleanup.min_words,
             ai_cleanup_min_duration_ms: s.ai_cleanup.min_duration_ms,
             ai_cleanup_tone_overlay_enabled: s.ai_cleanup.tone_overlay_enabled,
+            tone_app_overrides: s.ai_cleanup.tone_app_overrides,
             input_device: s.input_device,
             pause_media_on_record: s.pause_media_on_record,
             history_limit: s.history_limit,
@@ -445,6 +449,62 @@ pub fn set_cleanup_thresholds(
 #[tauri::command]
 pub fn set_tone_overlay_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
     config::update(&app, |s| s.ai_cleanup.tone_overlay_enabled = enabled)
+}
+
+#[derive(Debug, Serialize)]
+pub struct AppToneInfo {
+    pub bundle_id: String,
+    pub app_name: String,
+    pub tone_preset: TonePreset,
+    pub tone_override: Option<TonePreset>,
+}
+
+#[tauri::command]
+pub fn get_apps_seen_in_history(app: AppHandle) -> Vec<AppToneInfo> {
+    let settings = config::load(&app);
+    let entries = history::load(&app);
+
+    let mut seen: BTreeMap<String, String> = BTreeMap::new();
+    for entry in &entries {
+        if let (Some(bid), Some(name)) = (&entry.bundle_id, &entry.app_name) {
+            if !bid.is_empty() && !seen.contains_key(bid) {
+                seen.insert(bid.clone(), name.clone());
+            }
+        }
+    }
+
+    seen.into_iter()
+        .map(|(bid, name)| {
+            let override_preset = settings.ai_cleanup.tone_app_overrides.get(&bid).copied();
+            let resolved = override_preset.unwrap_or_else(|| {
+                tone::preset_for_category(tone::categorize_app(&bid))
+            });
+            AppToneInfo {
+                bundle_id: bid,
+                app_name: name,
+                tone_preset: resolved,
+                tone_override: override_preset,
+            }
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub fn set_tone_app_override(
+    app: AppHandle,
+    bundle_id: String,
+    preset: TonePreset,
+) -> Result<(), String> {
+    config::update(&app, |s| {
+        s.ai_cleanup.tone_app_overrides.insert(bundle_id, preset);
+    })
+}
+
+#[tauri::command]
+pub fn clear_tone_app_override(app: AppHandle, bundle_id: String) -> Result<(), String> {
+    config::update(&app, |s| {
+        s.ai_cleanup.tone_app_overrides.remove(&bundle_id);
+    })
 }
 
 #[tauri::command]

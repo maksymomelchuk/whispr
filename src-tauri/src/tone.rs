@@ -1,5 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::OnceLock;
+
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppCategory {
@@ -10,7 +12,8 @@ pub enum AppCategory {
     Other,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum TonePreset {
     Casual,
     Formal,
@@ -141,6 +144,18 @@ pub fn categorize_app(identifier: &str) -> AppCategory {
         .unwrap_or(AppCategory::Other)
 }
 
+/// Resolves the effective tone directive for a bundle ID, consulting per-app
+/// overrides before falling back to the built-in taxonomy.
+/// Returns `None` when `bundle_id` is `None` or the resolved preset has no directive.
+pub fn resolve_tone(bundle_id: Option<&str>, overrides: &BTreeMap<String, TonePreset>) -> Option<&'static str> {
+    let id = bundle_id?;
+    let preset = overrides
+        .get(id)
+        .copied()
+        .unwrap_or_else(|| preset_for_category(categorize_app(id)));
+    tone_directive(preset)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -239,5 +254,43 @@ mod tests {
     #[test]
     fn windows_outlook_exe_is_email() {
         assert_eq!(categorize_app("Outlook"), AppCategory::Email);
+    }
+
+    #[test]
+    fn override_preset_takes_precedence_over_taxonomy() {
+        let mut overrides = BTreeMap::new();
+        // email normally maps to Formal — override to Casual
+        overrides.insert("com.apple.mail".to_string(), TonePreset::Casual);
+
+        let default_dir = resolve_tone(Some("com.apple.mail"), &BTreeMap::new());
+        let override_dir = resolve_tone(Some("com.apple.mail"), &overrides);
+
+        assert!(default_dir.unwrap().contains("formal"), "taxonomy: email → formal");
+        assert!(override_dir.unwrap().contains("casual"), "override: email → casual");
+    }
+
+    #[test]
+    fn override_to_neutral_suppresses_directive() {
+        let mut overrides = BTreeMap::new();
+        overrides.insert("com.apple.mail".to_string(), TonePreset::Neutral);
+
+        assert!(resolve_tone(Some("com.apple.mail"), &overrides).is_none());
+    }
+
+    #[test]
+    fn resolve_tone_returns_none_for_missing_bundle_id() {
+        assert!(resolve_tone(None, &BTreeMap::new()).is_none());
+    }
+
+    #[test]
+    fn tone_preset_serializes_as_snake_case() {
+        assert_eq!(
+            serde_json::to_string(&TonePreset::TechnicalCasing).unwrap(),
+            "\"technical_casing\""
+        );
+        assert_eq!(
+            serde_json::to_string(&TonePreset::Casual).unwrap(),
+            "\"casual\""
+        );
     }
 }

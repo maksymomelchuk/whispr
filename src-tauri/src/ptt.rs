@@ -670,10 +670,7 @@ async fn maybe_cleanup(
     }
 
     let tone = if cleanup_settings.tone_overlay_enabled {
-        bundle_id
-            .map(tone::categorize_app)
-            .map(tone::preset_for_category)
-            .and_then(tone::tone_directive)
+        tone::resolve_tone(bundle_id, &cleanup_settings.tone_app_overrides)
     } else {
         None
     };

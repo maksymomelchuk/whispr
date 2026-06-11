@@ -152,6 +152,15 @@ export function providerModelLabel(pm: ProviderModel): string {
 /// `null` = unlimited, `0` = off, `n` = keep last n.
 export type HistoryLimit = number | null;
 
+export type TonePreset = "casual" | "formal" | "technical_casing" | "neutral";
+
+export interface AppToneInfo {
+  bundle_id: string;
+  app_name: string;
+  tone_preset: TonePreset;
+  tone_override: TonePreset | null;
+}
+
 export type CleanupAuthMode = "api_key" | "oauth";
 
 export type AiProviderId =
@@ -222,6 +231,7 @@ export interface Settings {
   ai_cleanup_min_words: number;
   ai_cleanup_min_duration_ms: number;
   ai_cleanup_tone_overlay_enabled: boolean;
+  tone_app_overrides: Record<string, TonePreset>;
   input_device: string | null;
   pause_media_on_record: boolean;
   history_limit: HistoryLimit;

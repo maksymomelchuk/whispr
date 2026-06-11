@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckFatIcon, GearIcon } from "@phosphor-icons/react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
@@ -32,6 +32,13 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +49,8 @@ import { useSettings } from "../context/SettingsContext";
 import { usePersistedToggle } from "../hooks/usePersistedToggle";
 import {
   clearCustomProvider,
+  clearToneAppOverride,
+  getAppsSeenInHistory,
   setAnthropicApiKey as persistApiKey,
   setCleanupAuthMode as persistAuthMode,
   setAnthropicOauthToken as persistOauthToken,
@@ -49,9 +58,23 @@ import {
   setToneOverlayEnabled as persistToneOverlay,
   setCustomProvider,
   setProviderKey,
+  setToneAppOverride,
 } from "../lib/api";
 import type { EngineDescriptor } from "../lib/speechModelCatalog";
-import type { AiProviderId, Settings } from "../lib/types";
+import type {
+  AiProviderId,
+  AppToneInfo,
+  Settings,
+  TonePreset,
+} from "../lib/types";
+
+const TONE_PRESET_OPTIONS: { value: TonePreset | "auto"; label: string }[] = [
+  { value: "auto", label: "Auto" },
+  { value: "casual", label: "Casual" },
+  { value: "formal", label: "Formal" },
+  { value: "technical_casing", label: "Technical" },
+  { value: "neutral", label: "Neutral" },
+];
 
 const ANTHROPIC_API_KEY_DESCRIPTOR: EngineDescriptor = {
   id: "anthropic",
@@ -460,6 +483,53 @@ export function AiProvidersPage() {
       setSettings((s) => ({ ...s, ai_cleanup_tone_overlay_enabled: next })),
   );
   const [openDialog, setOpenDialog] = useState<string | null>(null);
+  const [seenApps, setSeenApps] = useState<AppToneInfo[]>([]);
+
+  const loadSeenApps = useCallback(async () => {
+    try {
+      setSeenApps(await getAppsSeenInHistory());
+    } catch {
+      // non-fatal: list stays empty
+    }
+  }, []);
+
+  useEffect(() => {
+    if (settings.ai_cleanup_tone_overlay_enabled) loadSeenApps();
+  }, [settings.ai_cleanup_tone_overlay_enabled, loadSeenApps]);
+
+  const handleToneOverrideChange = async (
+    bundleId: string,
+    value: TonePreset | "auto",
+  ) => {
+    try {
+      if (value === "auto") {
+        await clearToneAppOverride(bundleId);
+        setSettings((s) => {
+          const overrides = { ...s.tone_app_overrides };
+          delete overrides[bundleId];
+          return { ...s, tone_app_overrides: overrides };
+        });
+        setSeenApps((prev) =>
+          prev.map((a) =>
+            a.bundle_id === bundleId ? { ...a, tone_override: null } : a,
+          ),
+        );
+      } else {
+        await setToneAppOverride(bundleId, value);
+        setSettings((s) => ({
+          ...s,
+          tone_app_overrides: { ...s.tone_app_overrides, [bundleId]: value },
+        }));
+        setSeenApps((prev) =>
+          prev.map((a) =>
+            a.bundle_id === bundleId ? { ...a, tone_override: value } : a,
+          ),
+        );
+      }
+    } catch (e) {
+      toast.error("Couldn't update tone override", { description: String(e) });
+    }
+  };
 
   const anthropicDescriptor =
     authMode === "api_key"
@@ -719,6 +789,43 @@ export function AiProvidersPage() {
             Tone adjusts punctuation, capitalization, and line breaks only —
             grammar, phrasing, and word choice are never touched.
           </p>
+          {settings.ai_cleanup_tone_overlay_enabled && seenApps.length > 0 && (
+            <div className="flex flex-col gap-1.5 pt-1">
+              <p className="text-xs font-medium text-foreground">
+                Per-app overrides
+              </p>
+              {seenApps.map((app) => (
+                <div
+                  key={app.bundle_id}
+                  className="flex items-center justify-between gap-2"
+                >
+                  <span className="text-sm truncate min-w-0">
+                    {app.app_name}
+                  </span>
+                  <Select
+                    value={app.tone_override ?? "auto"}
+                    onValueChange={(v) =>
+                      handleToneOverrideChange(
+                        app.bundle_id,
+                        v as TonePreset | "auto",
+                      )
+                    }
+                  >
+                    <SelectTrigger className="w-32 h-7 text-xs shrink-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TONE_PRESET_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </SectionCard>
     </div>

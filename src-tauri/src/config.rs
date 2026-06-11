@@ -1,5 +1,6 @@
 use crate::mode::{Mode, ModeId, SetId, SEED_MODE_UA_EN};
 pub use crate::provider::{AssemblyAiModel, GroqModel, ProviderModel, TranscriptionProvider};
+pub use crate::tone::TonePreset;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
@@ -282,6 +283,8 @@ pub struct AiCleanupSettings {
     // Defaults to false so existing behaviour is unchanged after upgrade.
     #[serde(default)]
     pub tone_overlay_enabled: bool,
+    #[serde(default)]
+    pub tone_app_overrides: BTreeMap<String, TonePreset>,
 }
 
 impl Default for AiCleanupSettings {
@@ -296,6 +299,7 @@ impl Default for AiCleanupSettings {
             min_words: DEFAULT_CLEANUP_MIN_WORDS,
             min_duration_ms: DEFAULT_CLEANUP_MIN_DURATION_MS,
             tone_overlay_enabled: false,
+            tone_app_overrides: BTreeMap::new(),
         }
     }
 }
@@ -735,6 +739,35 @@ pub fn save(app: &tauri::AppHandle, settings: &Settings) -> Result<(), String> {
 mod tests {
     use super::*;
     use crate::mode::SEED_MODE_DEFAULT_EN;
+
+    #[test]
+    fn tone_app_overrides_default_is_empty() {
+        let s = AiCleanupSettings::default();
+        assert!(s.tone_app_overrides.is_empty());
+    }
+
+    #[test]
+    fn tone_app_overrides_round_trips_through_json() {
+        let json = r#"{"ai_cleanup": {"tone_app_overrides": {"com.apple.mail": "casual"}}}"#;
+        let s: Settings = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            s.ai_cleanup.tone_app_overrides.get("com.apple.mail").copied(),
+            Some(TonePreset::Casual)
+        );
+        let reserialized = serde_json::to_string(&s).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
+        assert_eq!(
+            v["ai_cleanup"]["tone_app_overrides"]["com.apple.mail"],
+            serde_json::json!("casual")
+        );
+    }
+
+    #[test]
+    fn settings_without_tone_app_overrides_defaults_to_empty_map() {
+        let json = r#"{}"#;
+        let s: Settings = serde_json::from_str(json).unwrap();
+        assert!(s.ai_cleanup.tone_app_overrides.is_empty());
+    }
 
     #[test]
     fn default_settings_have_expected_provider_and_groq_defaults() {
