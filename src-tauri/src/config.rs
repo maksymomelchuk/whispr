@@ -442,6 +442,11 @@ pub struct Settings {
     pub learn_from_corrections: bool,
     #[serde(default)]
     pub learned_entries: Vec<LearnedEntry>,
+    /// from-words that have experienced an inconsistent mapping replacement.
+    /// Once a from-word is here, new observations for it never create a Correction
+    /// (only Terms), preventing replacement cycles.
+    #[serde(default)]
+    pub learned_inconsistent_from: Vec<String>,
 }
 
 impl Default for Settings {
@@ -478,6 +483,7 @@ impl Default for Settings {
             local_whisper: LocalWhisperSettings::default(),
             learn_from_corrections: false,
             learned_entries: vec![],
+            learned_inconsistent_from: vec![],
         }
     }
 }
