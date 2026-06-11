@@ -583,75 +583,77 @@ async fn run_session(
     #[cfg(not(target_os = "macos"))]
     let resolved_app: Option<target_app::FrontmostApp> = target_app::session_app();
 
-    let context: Option<cleanup::ContextBlocks> =
-        if clipboard_context_enabled || selected_text_context_enabled || focused_field_context_enabled {
-            let clipboard_text = if clipboard_context_enabled {
-                let rx = app
-                    .state::<AppState>()
-                    .pending_clipboard_rx
-                    .lock()
-                    .unwrap()
-                    .take();
-                match rx {
-                    Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
-                        .await
-                        .ok()
-                        .and_then(|r| r.ok())
-                        .flatten(),
-                    None => None,
-                }
-            } else {
-                None
-            };
-
-            let selected_text = if selected_text_context_enabled {
-                let rx = app
-                    .state::<AppState>()
-                    .pending_selected_text_rx
-                    .lock()
-                    .unwrap()
-                    .take();
-                match rx {
-                    Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
-                        .await
-                        .ok()
-                        .and_then(|r| r.ok())
-                        .flatten(),
-                    None => None,
-                }
-            } else {
-                None
-            };
-
-            let focused_field_text = if focused_field_context_enabled {
-                let rx = app
-                    .state::<AppState>()
-                    .pending_focused_field_rx
-                    .lock()
-                    .unwrap()
-                    .take();
-                match rx {
-                    Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
-                        .await
-                        .ok()
-                        .and_then(|r| r.ok())
-                        .flatten(),
-                    None => None,
-                }
-            } else {
-                None
-            };
-
-            Some(cleanup::ContextBlocks {
-                clipboard_text,
-                selected_text,
-                focused_field_text,
-                system_date: cleanup::system_date(),
-                system_user: cleanup::system_user(),
-            })
+    let context: Option<cleanup::ContextBlocks> = if clipboard_context_enabled
+        || selected_text_context_enabled
+        || focused_field_context_enabled
+    {
+        let clipboard_text = if clipboard_context_enabled {
+            let rx = app
+                .state::<AppState>()
+                .pending_clipboard_rx
+                .lock()
+                .unwrap()
+                .take();
+            match rx {
+                Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
+                    .await
+                    .ok()
+                    .and_then(|r| r.ok())
+                    .flatten(),
+                None => None,
+            }
         } else {
             None
         };
+
+        let selected_text = if selected_text_context_enabled {
+            let rx = app
+                .state::<AppState>()
+                .pending_selected_text_rx
+                .lock()
+                .unwrap()
+                .take();
+            match rx {
+                Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
+                    .await
+                    .ok()
+                    .and_then(|r| r.ok())
+                    .flatten(),
+                None => None,
+            }
+        } else {
+            None
+        };
+
+        let focused_field_text = if focused_field_context_enabled {
+            let rx = app
+                .state::<AppState>()
+                .pending_focused_field_rx
+                .lock()
+                .unwrap()
+                .take();
+            match rx {
+                Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
+                    .await
+                    .ok()
+                    .and_then(|r| r.ok())
+                    .flatten(),
+                None => None,
+            }
+        } else {
+            None
+        };
+
+        Some(cleanup::ContextBlocks {
+            clipboard_text,
+            selected_text,
+            focused_field_text,
+            system_date: cleanup::system_date(),
+            system_user: cleanup::system_user(),
+        })
+    } else {
+        None
+    };
 
     let session_bundle_id = resolved_app.as_ref().map(|a| a.bundle_id.clone());
     let glossary = selector::select_glossary_words(

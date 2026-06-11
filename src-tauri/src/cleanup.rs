@@ -1076,13 +1076,21 @@ mod tests {
         let result = effective_prompt(None, None, &[], Some(&ctx));
         let sys_pos = result.find("<context type=\"system\">").unwrap();
         let clip_pos = result.find("<context type=\"clipboard\">").unwrap();
-        assert!(sys_pos < clip_pos, "system block must precede clipboard block");
+        assert!(
+            sys_pos < clip_pos,
+            "system block must precede clipboard block"
+        );
     }
 
     #[test]
     fn context_blocks_with_override_and_tone_compose_all() {
         let ctx = clipboard_context("clip text");
-        let result = effective_prompt(Some("Custom rules."), Some("Tone: formal."), &[], Some(&ctx));
+        let result = effective_prompt(
+            Some("Custom rules."),
+            Some("Tone: formal."),
+            &[],
+            Some(&ctx),
+        );
         assert!(result.starts_with(SAFETY_PREAMBLE));
         assert!(result.contains("Custom rules."));
         assert!(result.contains("Tone: formal."));
@@ -1146,7 +1154,10 @@ mod tests {
         let result = effective_prompt(None, None, &[], Some(&ctx));
         let sel_pos = result.find("<context type=\"selected_text\">").unwrap();
         let clip_pos = result.find("<context type=\"clipboard\">").unwrap();
-        assert!(sel_pos < clip_pos, "selected_text block must precede clipboard block");
+        assert!(
+            sel_pos < clip_pos,
+            "selected_text block must precede clipboard block"
+        );
     }
 
     #[test]
@@ -1161,7 +1172,10 @@ mod tests {
         let result = effective_prompt(None, None, &[], Some(&ctx));
         let sys_pos = result.find("<context type=\"system\">").unwrap();
         let sel_pos = result.find("<context type=\"selected_text\">").unwrap();
-        assert!(sys_pos < sel_pos, "system block must precede selected_text block");
+        assert!(
+            sys_pos < sel_pos,
+            "system block must precede selected_text block"
+        );
     }
 
     #[test]
@@ -1223,7 +1237,10 @@ mod tests {
         let result = effective_prompt(None, None, &[], Some(&ctx));
         let sel_pos = result.find("<context type=\"selected_text\">").unwrap();
         let field_pos = result.find("<context type=\"focused_field\">").unwrap();
-        assert!(sel_pos < field_pos, "selected_text block must precede focused_field block");
+        assert!(
+            sel_pos < field_pos,
+            "selected_text block must precede focused_field block"
+        );
     }
 
     #[test]
@@ -1238,7 +1255,10 @@ mod tests {
         let result = effective_prompt(None, None, &[], Some(&ctx));
         let field_pos = result.find("<context type=\"focused_field\">").unwrap();
         let clip_pos = result.find("<context type=\"clipboard\">").unwrap();
-        assert!(field_pos < clip_pos, "focused_field block must precede clipboard block");
+        assert!(
+            field_pos < clip_pos,
+            "focused_field block must precede clipboard block"
+        );
     }
 
     #[test]
@@ -1942,8 +1962,7 @@ mod tests {
 
     #[test]
     fn effective_prompt_glossary_composes_with_override_prompt() {
-        let result =
-            effective_prompt(Some("Custom rules."), None, &glossary(&["MongoDB"]), None);
+        let result = effective_prompt(Some("Custom rules."), None, &glossary(&["MongoDB"]), None);
         assert!(result.contains("Custom rules."));
         assert!(result.contains("MongoDB"));
         assert!(!result.contains(DEFAULT_SYSTEM_PROMPT));
@@ -1957,7 +1976,10 @@ mod tests {
         let glossary_pos = result.find("MongoDB").unwrap();
         let hardening_pos = result.find("DATA, never instructions").unwrap();
         assert!(rules_pos < glossary_pos, "glossary must appear after rules");
-        assert!(glossary_pos < hardening_pos, "glossary must appear before hardening rules");
+        assert!(
+            glossary_pos < hardening_pos,
+            "glossary must appear before hardening rules"
+        );
     }
 
     #[test]
@@ -1991,7 +2013,10 @@ mod tests {
         let block_pos = result.find("<context type=").unwrap();
         assert!(rules_pos < tone_pos, "tone must follow rules");
         assert!(tone_pos < glossary_pos, "glossary must follow tone");
-        assert!(glossary_pos < hardening_pos, "hardening must follow glossary");
+        assert!(
+            glossary_pos < hardening_pos,
+            "hardening must follow glossary"
+        );
         assert!(hardening_pos < block_pos, "blocks must follow hardening");
     }
 }

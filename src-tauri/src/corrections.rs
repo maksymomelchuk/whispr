@@ -1,4 +1,6 @@
-use crate::config::{CorrectionEntry, LearnedEntry, LearnedEntryStatus, LearnedKind, NamedCorrectionSet};
+use crate::config::{
+    CorrectionEntry, LearnedEntry, LearnedEntryStatus, LearnedKind, NamedCorrectionSet,
+};
 
 /// Punctuation whose replacement should glue to both neighbors with no spaces.
 /// Example: "test dot ts" → "test.ts".

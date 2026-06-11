@@ -153,8 +153,10 @@ pub fn select_glossary_words(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{CorrectionEntry, LearnedEntry, LearnedEntryStatus, LearnedKind,
-                        NamedCorrectionSet, NamedTermSet};
+    use crate::config::{
+        CorrectionEntry, LearnedEntry, LearnedEntryStatus, LearnedKind, NamedCorrectionSet,
+        NamedTermSet,
+    };
 
     fn term_set(id: &str, words: &[&str]) -> NamedTermSet {
         NamedTermSet {
@@ -194,7 +196,13 @@ mod tests {
         }
     }
 
-    fn promoted_correction(word: &str, from: &str, app: Option<&str>, total: u32, last_ms: i64) -> LearnedEntry {
+    fn promoted_correction(
+        word: &str,
+        from: &str,
+        app: Option<&str>,
+        total: u32,
+        last_ms: i64,
+    ) -> LearnedEntry {
         let mut per_app = std::collections::BTreeMap::new();
         if let Some(id) = app {
             per_app.insert(id.to_string(), total);
@@ -202,7 +210,9 @@ mod tests {
         LearnedEntry {
             id: format!("id-{word}"),
             word: word.to_string(),
-            kind: LearnedKind::Correction { from: from.to_string() },
+            kind: LearnedKind::Correction {
+                from: from.to_string(),
+            },
             status: LearnedEntryStatus::Promoted,
             total_observations: total,
             last_observed_ms: last_ms,
@@ -253,7 +263,11 @@ mod tests {
             .map(|i| promoted_term(&format!("term{i}"), None, i as u32 + 1, NOW))
             .collect();
         let result = select_terms(&[], &[], &learned, None, NOW);
-        assert!(result.len() <= ENGINE_TERM_BUDGET, "budget exceeded: {}", result.len());
+        assert!(
+            result.len() <= ENGINE_TERM_BUDGET,
+            "budget exceeded: {}",
+            result.len()
+        );
     }
 
     #[test]
@@ -326,7 +340,13 @@ mod tests {
 
     #[test]
     fn select_glossary_includes_promoted_learned_corrections() {
-        let learned = vec![promoted_correction("TypeScript", "typescript", None, 5, NOW)];
+        let learned = vec![promoted_correction(
+            "TypeScript",
+            "typescript",
+            None,
+            5,
+            NOW,
+        )];
         let result = select_glossary_words(&[], &[], &[], &[], &learned, None, NOW);
         assert!(result.contains(&"TypeScript".to_string()));
     }
@@ -344,14 +364,19 @@ mod tests {
             .map(|i| promoted_term(&format!("word{i}"), None, i as u32 + 1, NOW))
             .collect();
         let result = select_glossary_words(&[], &[], &[], &[], &learned, None, NOW);
-        assert!(result.len() <= GLOSSARY_BUDGET, "budget exceeded: {}", result.len());
+        assert!(
+            result.len() <= GLOSSARY_BUDGET,
+            "budget exceeded: {}",
+            result.len()
+        );
     }
 
     #[test]
     fn select_glossary_manual_precedes_learned() {
         let sets = vec![term_set("s1", &["Manual"])];
         let learned = vec![promoted_term("Learned", None, 5, NOW)];
-        let result = select_glossary_words(&sets, &["s1".to_string()], &[], &[], &learned, None, NOW);
+        let result =
+            select_glossary_words(&sets, &["s1".to_string()], &[], &[], &learned, None, NOW);
         let manual_pos = result.iter().position(|w| w == "Manual").unwrap();
         let learned_pos = result.iter().position(|w| w == "Learned").unwrap();
         assert!(manual_pos < learned_pos);
@@ -361,7 +386,8 @@ mod tests {
     fn select_glossary_deduplicates() {
         let sets = vec![term_set("s1", &["TypeScript"])];
         let learned = vec![promoted_term("TypeScript", None, 5, NOW)];
-        let result = select_glossary_words(&sets, &["s1".to_string()], &[], &[], &learned, None, NOW);
+        let result =
+            select_glossary_words(&sets, &["s1".to_string()], &[], &[], &learned, None, NOW);
         assert_eq!(result.iter().filter(|w| *w == "TypeScript").count(), 1);
     }
 

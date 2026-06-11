@@ -31,9 +31,7 @@ pub fn compose_term_hints(
         }
     }
     for entry in learned {
-        if entry.status == LearnedEntryStatus::Promoted
-            && matches!(entry.kind, LearnedKind::Term)
-        {
+        if entry.status == LearnedEntryStatus::Promoted && matches!(entry.kind, LearnedKind::Term) {
             let trimmed = entry.word.trim().to_string();
             if !trimmed.is_empty() && seen.insert(trimmed.clone()) {
                 result.push(trimmed);

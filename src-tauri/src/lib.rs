@@ -49,8 +49,8 @@ mod clipboard_context;
 mod focused_field_context;
 mod miner;
 mod post_paste_observer;
-pub(crate) mod selector;
 mod selected_text_context;
+pub(crate) mod selector;
 mod tone;
 
 // media, overlay, and target_app expose platform-neutral public APIs and

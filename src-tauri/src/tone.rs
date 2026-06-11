@@ -62,7 +62,10 @@ fn taxonomy() -> &'static HashMap<&'static str, AppCategory> {
         m.insert("org.telegram.desktop", AppCategory::PersonalMessaging);
         m.insert("ru.keepcoder.Telegram", AppCategory::PersonalMessaging);
         m.insert("com.viber.desktop", AppCategory::PersonalMessaging);
-        m.insert("org.whispersystems.signal-desktop", AppCategory::PersonalMessaging);
+        m.insert(
+            "org.whispersystems.signal-desktop",
+            AppCategory::PersonalMessaging,
+        );
 
         // Personal messaging — Windows exe stems
         m.insert("WhatsApp", AppCategory::PersonalMessaging);
@@ -147,7 +150,10 @@ pub fn categorize_app(identifier: &str) -> AppCategory {
 /// Resolves the effective tone directive for a bundle ID, consulting per-app
 /// overrides before falling back to the built-in taxonomy.
 /// Returns `None` when `bundle_id` is `None` or the resolved preset has no directive.
-pub fn resolve_tone(bundle_id: Option<&str>, overrides: &BTreeMap<String, TonePreset>) -> Option<&'static str> {
+pub fn resolve_tone(
+    bundle_id: Option<&str>,
+    overrides: &BTreeMap<String, TonePreset>,
+) -> Option<&'static str> {
     let id = bundle_id?;
     let preset = overrides
         .get(id)
@@ -224,7 +230,11 @@ mod tests {
 
     #[test]
     fn non_neutral_directives_all_contain_untouchable_clause() {
-        for preset in [TonePreset::Casual, TonePreset::Formal, TonePreset::TechnicalCasing] {
+        for preset in [
+            TonePreset::Casual,
+            TonePreset::Formal,
+            TonePreset::TechnicalCasing,
+        ] {
             let d = tone_directive(preset).expect("non-neutral preset should have a directive");
             assert!(
                 d.contains(TONE_UNTOUCHABLE_CLAUSE),
@@ -265,8 +275,14 @@ mod tests {
         let default_dir = resolve_tone(Some("com.apple.mail"), &BTreeMap::new());
         let override_dir = resolve_tone(Some("com.apple.mail"), &overrides);
 
-        assert!(default_dir.unwrap().contains("formal"), "taxonomy: email → formal");
-        assert!(override_dir.unwrap().contains("casual"), "override: email → casual");
+        assert!(
+            default_dir.unwrap().contains("formal"),
+            "taxonomy: email → formal"
+        );
+        assert!(
+            override_dir.unwrap().contains("casual"),
+            "override: email → casual"
+        );
     }
 
     #[test]

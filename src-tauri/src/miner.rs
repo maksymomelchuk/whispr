@@ -26,10 +26,7 @@ pub fn mine(before: &str, after: &str) -> Vec<MinedCandidate> {
 
     extract_substitutions(&before_words, &after_words)
         .into_iter()
-        .filter(|s| {
-            s.from.split_whitespace().count() <= 3
-                && s.to.split_whitespace().count() <= 3
-        })
+        .filter(|s| s.from.split_whitespace().count() <= 3 && s.to.split_whitespace().count() <= 3)
         .filter(|s| {
             is_phonetically_similar(&s.from, &s.to)
                 || looks_like_proper_noun(&s.to, s.to_word_pos == 0)
@@ -59,7 +56,12 @@ pub fn observe_candidates(
 /// Default correction/term set is created if absent. The learned entry is
 /// removed after promotion regardless of its current status.
 pub fn promote_entry(settings: &mut Settings, id: &str) {
-    let entry = match settings.learned_entries.iter().find(|e| e.id == id).cloned() {
+    let entry = match settings
+        .learned_entries
+        .iter()
+        .find(|e| e.id == id)
+        .cloned()
+    {
         Some(e) => e,
         None => return,
     };
@@ -79,8 +81,8 @@ pub fn promote_entry(settings: &mut Settings, id: &str) {
                     .entries
                     .iter()
                     .any(|ce| ce.from == correction.from && ce.to == correction.to);
-                let has_conflict = !already_exact
-                    && cs.entries.iter().any(|ce| ce.from == correction.from);
+                let has_conflict =
+                    !already_exact && cs.entries.iter().any(|ce| ce.from == correction.from);
                 if has_conflict {
                     // A different mapping for the same `from` exists in the permanent set.
                     // Leave the learned entry in place so the user can resolve it manually.
@@ -371,7 +373,13 @@ const STALENESS_MS: i64 = 90 * 24 * 60 * 60 * 1000;
 const MAX_ENTRIES: usize = 1000;
 const PROMOTE_THRESHOLD: u32 = 2;
 
-fn observe_one(from: &str, to: &str, settings: &mut Settings, bundle_id: Option<&str>, now_ms: i64) {
+fn observe_one(
+    from: &str,
+    to: &str,
+    settings: &mut Settings,
+    bundle_id: Option<&str>,
+    now_ms: i64,
+) {
     let known_inconsistent = settings.learned_inconsistent_from.iter().any(|f| f == from);
 
     if known_inconsistent {
@@ -488,7 +496,10 @@ fn initial_app_obs(bundle_id: Option<&str>) -> std::collections::BTreeMap<String
 
 fn increment_app_obs(entry: &mut LearnedEntry, bundle_id: Option<&str>) {
     if let Some(id) = bundle_id {
-        *entry.per_app_observations.entry(id.to_string()).or_insert(0) += 1;
+        *entry
+            .per_app_observations
+            .entry(id.to_string())
+            .or_insert(0) += 1;
     }
 }
 
@@ -508,10 +519,7 @@ mod tests {
     use super::*;
 
     fn pairs(candidates: Vec<MinedCandidate>) -> Vec<(String, String)> {
-        candidates
-            .into_iter()
-            .map(|c| (c.from, c.to))
-            .collect()
+        candidates.into_iter().map(|c| (c.from, c.to)).collect()
     }
 
     // ── miner tests ────────────────────────────────────────────────────────
@@ -628,7 +636,10 @@ mod tests {
 
         // Old Correction for Tauri is removed (not kept as a Term).
         assert!(
-            s.learned_entries.iter().find(|e| e.word == "Tauri").is_none(),
+            s.learned_entries
+                .iter()
+                .find(|e| e.word == "Tauri")
+                .is_none(),
             "replaced entry must be removed"
         );
 
@@ -688,7 +699,11 @@ mod tests {
             .iter()
             .filter(|e| matches!(&e.kind, LearnedKind::Correction { from } if from == "tory"))
             .collect();
-        assert_eq!(corrections.len(), 1, "exactly one Correction must exist after replacement");
+        assert_eq!(
+            corrections.len(),
+            1,
+            "exactly one Correction must exist after replacement"
+        );
     }
 
     #[test]
@@ -723,7 +738,9 @@ mod tests {
         evict_lru(&mut entries);
         assert_eq!(entries.len(), MAX_ENTRIES);
         assert!(entries.iter().all(|e| e.last_observed_ms > 0));
-        assert!(entries.iter().any(|e| e.last_observed_ms == MAX_ENTRIES as i64));
+        assert!(entries
+            .iter()
+            .any(|e| e.last_observed_ms == MAX_ENTRIES as i64));
     }
 
     // ── promote_entry tests ────────────────────────────────────────────────
@@ -800,7 +817,10 @@ mod tests {
         promote_entry(&mut s, &id);
 
         // Learned entry is removed — it was effectively already promoted.
-        assert!(s.learned_entries.is_empty(), "learned entry removed for duplicate");
+        assert!(
+            s.learned_entries.is_empty(),
+            "learned entry removed for duplicate"
+        );
         // Permanent set unchanged — no duplicate pushed.
         let cs = s
             .correction_sets

@@ -790,7 +790,10 @@ mod tests {
         let json = r#"{"ai_cleanup": {"tone_app_overrides": {"com.apple.mail": "casual"}}}"#;
         let s: Settings = serde_json::from_str(json).unwrap();
         assert_eq!(
-            s.ai_cleanup.tone_app_overrides.get("com.apple.mail").copied(),
+            s.ai_cleanup
+                .tone_app_overrides
+                .get("com.apple.mail")
+                .copied(),
             Some(TonePreset::Casual)
         );
         let reserialized = serde_json::to_string(&s).unwrap();
