@@ -272,15 +272,12 @@ describe("SetManagementPage – delete", () => {
     expect(within(dialog).getByText(/Coding/)).toBeInTheDocument();
   });
 
-  it("applies cascade: both sets disappear when backend returns empty list", async () => {
+  it("removes only the deleted set, leaving others in place", async () => {
     const { Wrapper, mockDelete } = makeWrapper();
     const setA: GenericSet = { id: "s-1", name: "Set A", entryCount: 0 };
     const setB: GenericSet = { id: "s-2", name: "Set B", entryCount: 0 };
-    mockDelete.mockImplementation(async () => {
-      // simulate cascade: both sets gone
-    });
 
-    const { rerender } = render(<Wrapper initialSets={[setA, setB]} />);
+    render(<Wrapper initialSets={[setA, setB]} />);
 
     await userEvent.click(
       screen.getAllByRole("button", { name: "Delete set" })[0],
@@ -293,9 +290,7 @@ describe("SetManagementPage – delete", () => {
 
     await waitFor(() => expect(mockDelete).toHaveBeenCalledWith("s-1"));
     expect(screen.queryByText("Set A")).not.toBeInTheDocument();
-    // Set B disappears too because the mock removes it from local state as well
-    // (simulating backend cascade via returned Settings)
-    void rerender;
+    expect(screen.getByText("Set B")).toBeInTheDocument();
   });
 });
 
