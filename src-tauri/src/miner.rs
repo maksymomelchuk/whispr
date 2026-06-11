@@ -41,11 +41,12 @@ pub fn mine(before: &str, after: &str) -> Vec<MinedCandidate> {
         .collect()
 }
 
-/// Inconsistent mappings (same `from`, different `to`) demote existing
-/// Correction entries to Terms.
+/// When a `from` word has seen conflicting targets, the old rule is replaced
+/// by the new one and the `from` word is marked inconsistent — preventing
+/// replacement cycles on future observations.
 pub fn observe_candidates(candidates: &[MinedCandidate], settings: &mut Settings, now_ms: i64) {
     for candidate in candidates {
-        observe_one(&candidate.from, &candidate.to, &mut settings.learned_entries, now_ms);
+        observe_one(&candidate.from, &candidate.to, settings, now_ms);
     }
     evict_stale(&mut settings.learned_entries, now_ms);
 }
@@ -365,24 +366,56 @@ const STALENESS_MS: i64 = 90 * 24 * 60 * 60 * 1000;
 const MAX_ENTRIES: usize = 1000;
 const PROMOTE_THRESHOLD: u32 = 2;
 
-fn observe_one(from: &str, to: &str, entries: &mut Vec<LearnedEntry>, now_ms: i64) {
-    // If `from` already maps inconsistently to different targets, demote all
-    // existing Correction entries for `from` to Terms and add `to` as a Term.
-    let has_different_target = entries.iter().any(|e| {
+fn observe_one(from: &str, to: &str, settings: &mut Settings, now_ms: i64) {
+    let known_inconsistent = settings.learned_inconsistent_from.iter().any(|f| f == from);
+
+    if known_inconsistent {
+        // Reinforce the current rule if it still matches; otherwise fall through to
+        // Term — re-creating a Correction here would enable replacement cycles.
+        if let Some(e) = settings.learned_entries.iter_mut().find(|e| {
+            matches!(&e.kind, LearnedKind::Correction { from: f } if f == from) && e.word == to
+        }) {
+            e.total_observations += 1;
+            e.last_observed_ms = now_ms;
+            if e.total_observations >= PROMOTE_THRESHOLD {
+                e.status = LearnedEntryStatus::Promoted;
+            }
+            return;
+        }
+        observe_term(to, &mut settings.learned_entries, now_ms);
+        return;
+    }
+
+    let has_different_target = settings.learned_entries.iter().any(|e| {
         matches!(&e.kind, LearnedKind::Correction { from: f } if f == from) && e.word != to
     });
 
     if has_different_target {
-        for e in entries.iter_mut() {
-            if matches!(&e.kind, LearnedKind::Correction { from: f } if f == from) {
-                e.kind = LearnedKind::Term;
-            }
+        // Replace: remove the old Correction entirely (one rule per from-word).
+        settings
+            .learned_entries
+            .retain(|e| !matches!(&e.kind, LearnedKind::Correction { from: f } if f == from));
+        // Record the inconsistency so future observations never create a new Correction.
+        settings.learned_inconsistent_from.push(from.to_string());
+        // The new target starts fresh as a Correction candidate.
+        let id = format!("learned-{now_ms}-{}", settings.learned_entries.len());
+        settings.learned_entries.push(LearnedEntry {
+            id,
+            word: to.to_string(),
+            kind: LearnedKind::Correction {
+                from: from.to_string(),
+            },
+            status: LearnedEntryStatus::Candidate,
+            total_observations: 1,
+            last_observed_ms: now_ms,
+        });
+        if settings.learned_entries.len() > MAX_ENTRIES {
+            evict_lru(&mut settings.learned_entries);
         }
-        observe_term(to, entries, now_ms);
         return;
     }
 
-    if let Some(e) = entries.iter_mut().find(|e| {
+    if let Some(e) = settings.learned_entries.iter_mut().find(|e| {
         matches!(&e.kind, LearnedKind::Correction { from: f } if f == from) && e.word == to
     }) {
         e.total_observations += 1;
@@ -393,8 +426,8 @@ fn observe_one(from: &str, to: &str, entries: &mut Vec<LearnedEntry>, now_ms: i6
         return;
     }
 
-    let id = format!("learned-{now_ms}-{}", entries.len());
-    entries.push(LearnedEntry {
+    let id = format!("learned-{now_ms}-{}", settings.learned_entries.len());
+    settings.learned_entries.push(LearnedEntry {
         id,
         word: to.to_string(),
         kind: LearnedKind::Correction {
@@ -405,8 +438,8 @@ fn observe_one(from: &str, to: &str, entries: &mut Vec<LearnedEntry>, now_ms: i6
         last_observed_ms: now_ms,
     });
 
-    if entries.len() > MAX_ENTRIES {
-        evict_lru(entries);
+    if settings.learned_entries.len() > MAX_ENTRIES {
+        evict_lru(&mut settings.learned_entries);
     }
 }
 
@@ -531,7 +564,7 @@ mod tests {
     #[test]
     fn one_observation_stays_candidate() {
         let mut s = make_settings();
-        observe_one("tory", "Tauri", &mut s.learned_entries, 1000);
+        observe_one("tory", "Tauri", &mut s, 1000);
         assert_eq!(s.learned_entries.len(), 1);
         assert_eq!(s.learned_entries[0].status, LearnedEntryStatus::Candidate);
         assert_eq!(s.learned_entries[0].total_observations, 1);
@@ -544,8 +577,8 @@ mod tests {
     #[test]
     fn second_observation_promotes() {
         let mut s = make_settings();
-        observe_one("tory", "Tauri", &mut s.learned_entries, 1000);
-        observe_one("tory", "Tauri", &mut s.learned_entries, 2000);
+        observe_one("tory", "Tauri", &mut s, 1000);
+        observe_one("tory", "Tauri", &mut s, 2000);
         assert_eq!(s.learned_entries.len(), 1);
         assert_eq!(s.learned_entries[0].status, LearnedEntryStatus::Promoted);
         assert_eq!(s.learned_entries[0].total_observations, 2);
@@ -554,8 +587,8 @@ mod tests {
     #[test]
     fn consistent_fix_is_correction_kind() {
         let mut s = make_settings();
-        observe_one("tory", "Tauri", &mut s.learned_entries, 1000);
-        observe_one("tory", "Tauri", &mut s.learned_entries, 2000);
+        observe_one("tory", "Tauri", &mut s, 1000);
+        observe_one("tory", "Tauri", &mut s, 2000);
         assert!(matches!(
             &s.learned_entries[0].kind,
             LearnedKind::Correction { from } if from == "tory"
@@ -563,28 +596,74 @@ mod tests {
     }
 
     #[test]
-    fn inconsistent_mapping_demotes_to_term() {
+    fn inconsistent_mapping_replaces_existing_rule() {
         let mut s = make_settings();
-        // First: "tory" → "Tauri" (Correction candidate).
-        observe_one("tory", "Tauri", &mut s.learned_entries, 1000);
-        // Second: "tory" → "Toronto" (different target — inconsistency).
-        observe_one("tory", "Toronto", &mut s.learned_entries, 2000);
+        observe_one("tory", "Tauri", &mut s, 1000);
+        observe_one("tory", "Toronto", &mut s, 2000);
 
-        // The original Correction entry for "Tauri" must be demoted to Term.
-        let tauri_entry = s.learned_entries.iter().find(|e| e.word == "Tauri");
+        // Old Correction for Tauri is removed (not kept as a Term).
         assert!(
-            tauri_entry.is_some(),
-            "Tauri entry should still exist as a Term"
-        );
-        assert!(
-            matches!(tauri_entry.unwrap().kind, LearnedKind::Term),
-            "Tauri entry should be demoted to Term"
+            s.learned_entries.iter().find(|e| e.word == "Tauri").is_none(),
+            "replaced entry must be removed"
         );
 
-        // "Toronto" should be added as a Term candidate.
-        let toronto_entry = s.learned_entries.iter().find(|e| e.word == "Toronto");
-        assert!(toronto_entry.is_some());
-        assert!(matches!(toronto_entry.unwrap().kind, LearnedKind::Term));
+        // Toronto becomes the new Correction for the same from-word.
+        let toronto = s.learned_entries.iter().find(|e| e.word == "Toronto");
+        assert!(toronto.is_some(), "replacement entry must exist");
+        assert!(
+            matches!(&toronto.unwrap().kind, LearnedKind::Correction { from } if from == "tory"),
+            "replacement entry must be a Correction for the same from-word"
+        );
+
+        // from-word is marked inconsistent.
+        assert!(
+            s.learned_inconsistent_from.iter().any(|f| f == "tory"),
+            "from-word must be recorded as inconsistent"
+        );
+    }
+
+    #[test]
+    fn replacement_cycle_is_impossible() {
+        let mut s = make_settings();
+        observe_one("tory", "Tauri", &mut s, 1000);
+        // First inconsistency: Toronto replaces Tauri.
+        observe_one("tory", "Toronto", &mut s, 2000);
+        // Second observation re-introduces Tauri — must become a Term, not a new Correction.
+        observe_one("tory", "Tauri", &mut s, 3000);
+
+        let tauri = s.learned_entries.iter().find(|e| e.word == "Tauri");
+        assert!(tauri.is_some(), "Tauri entry must exist as a Term");
+        assert!(
+            matches!(tauri.unwrap().kind, LearnedKind::Term),
+            "re-introduced target must be a Term, not a Correction"
+        );
+
+        // Only one Correction for tory must remain (Toronto).
+        let corrections_for_tory: Vec<_> = s
+            .learned_entries
+            .iter()
+            .filter(|e| matches!(&e.kind, LearnedKind::Correction { from } if from == "tory"))
+            .collect();
+        assert_eq!(
+            corrections_for_tory.len(),
+            1,
+            "at most one Correction per from-word"
+        );
+        assert_eq!(corrections_for_tory[0].word, "Toronto");
+    }
+
+    #[test]
+    fn at_most_one_correction_per_from_word() {
+        let mut s = make_settings();
+        observe_one("tory", "Tauri", &mut s, 1000);
+        observe_one("tory", "Toronto", &mut s, 2000);
+
+        let corrections: Vec<_> = s
+            .learned_entries
+            .iter()
+            .filter(|e| matches!(&e.kind, LearnedKind::Correction { from } if from == "tory"))
+            .collect();
+        assert_eq!(corrections.len(), 1, "exactly one Correction must exist after replacement");
     }
 
     #[test]
@@ -625,8 +704,8 @@ mod tests {
     #[test]
     fn promote_correction_adds_to_default_set() {
         let mut s = make_settings();
-        observe_one("tory", "Tauri", &mut s.learned_entries, 1000);
-        observe_one("tory", "Tauri", &mut s.learned_entries, 2000);
+        observe_one("tory", "Tauri", &mut s, 1000);
+        observe_one("tory", "Tauri", &mut s, 2000);
         let id = s.learned_entries[0].id.clone();
         promote_entry(&mut s, &id);
 
@@ -646,8 +725,8 @@ mod tests {
     #[test]
     fn promote_correction_skipped_when_conflicting_from_exists() {
         let mut s = make_settings();
-        observe_one("tory", "Tauri", &mut s.learned_entries, 1000);
-        observe_one("tory", "Tauri", &mut s.learned_entries, 2000);
+        observe_one("tory", "Tauri", &mut s, 1000);
+        observe_one("tory", "Tauri", &mut s, 2000);
         let id = s.learned_entries[0].id.clone();
 
         // Manually plant a conflicting correction in the permanent set.
@@ -677,8 +756,8 @@ mod tests {
     #[test]
     fn promote_correction_noop_when_exact_duplicate_exists() {
         let mut s = make_settings();
-        observe_one("tory", "Tauri", &mut s.learned_entries, 1000);
-        observe_one("tory", "Tauri", &mut s.learned_entries, 2000);
+        observe_one("tory", "Tauri", &mut s, 1000);
+        observe_one("tory", "Tauri", &mut s, 2000);
         let id = s.learned_entries[0].id.clone();
 
         // Exact duplicate already in permanent set.
