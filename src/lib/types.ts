@@ -291,15 +291,13 @@ export type LearnedKind =
 
 export type LearnedEntryStatus = "candidate" | "promoted";
 
-export interface LearnedEntry {
+export type LearnedEntry = {
   id: string;
   word: string;
-  kind: LearnedKind["kind"];
-  from?: string;
   status: LearnedEntryStatus;
   total_observations: number;
   last_observed_ms: number;
-}
+} & LearnedKind;
 
 export interface AppUsage {
   name: string;

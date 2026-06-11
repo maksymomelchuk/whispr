@@ -79,7 +79,18 @@ pub fn promote_entry(settings: &mut Settings, id: &str) {
                 .iter_mut()
                 .find(|cs| cs.id == DEFAULT_CORRECTION_SET_ID)
             {
-                if !cs.entries.iter().any(|ce| ce.from == correction.from) {
+                let already_exact = cs
+                    .entries
+                    .iter()
+                    .any(|ce| ce.from == correction.from && ce.to == correction.to);
+                let has_conflict = !already_exact
+                    && cs.entries.iter().any(|ce| ce.from == correction.from);
+                if has_conflict {
+                    // A different mapping for the same `from` exists in the permanent set.
+                    // Leave the learned entry in place so the user can resolve it manually.
+                    return;
+                }
+                if !already_exact {
                     cs.entries.push(correction);
                 }
             } else {
@@ -389,7 +400,6 @@ fn observe_one(from: &str, to: &str, entries: &mut Vec<LearnedEntry>, now_ms: i6
         return;
     }
 
-    // Look for an existing (from → to) Correction entry.
     if let Some(e) = entries.iter_mut().find(|e| {
         matches!(&e.kind, LearnedKind::Correction { from: f } if f == from) && e.word == to
     }) {
@@ -401,7 +411,6 @@ fn observe_one(from: &str, to: &str, entries: &mut Vec<LearnedEntry>, now_ms: i6
         return;
     }
 
-    // New candidate correction.
     let id = format!("learned-{now_ms}-{}", entries.len());
     entries.push(LearnedEntry {
         id,
@@ -633,6 +642,67 @@ mod tests {
             .entries
             .iter()
             .any(|e| e.from == "tory" && e.to == "Tauri"));
+    }
+
+    #[test]
+    fn promote_correction_skipped_when_conflicting_from_exists() {
+        let mut s = make_settings();
+        observe_one("tory", "Tauri", &mut s.learned_entries, 1000);
+        observe_one("tory", "Tauri", &mut s.learned_entries, 2000);
+        let id = s.learned_entries[0].id.clone();
+
+        // Manually plant a conflicting correction in the permanent set.
+        s.correction_sets.push(NamedCorrectionSet {
+            id: DEFAULT_CORRECTION_SET_ID.to_string(),
+            name: "Default Corrections".to_string(),
+            entries: vec![CorrectionEntry {
+                from: "tory".to_string(),
+                to: "Toronto".to_string(),
+            }],
+        });
+
+        promote_entry(&mut s, &id);
+
+        // Learned entry must survive — it was not promoted.
+        assert_eq!(s.learned_entries.len(), 1, "learned entry kept on conflict");
+        // Permanent set must be unchanged.
+        let cs = s
+            .correction_sets
+            .iter()
+            .find(|cs| cs.id == DEFAULT_CORRECTION_SET_ID)
+            .unwrap();
+        assert_eq!(cs.entries.len(), 1);
+        assert_eq!(cs.entries[0].to, "Toronto");
+    }
+
+    #[test]
+    fn promote_correction_noop_when_exact_duplicate_exists() {
+        let mut s = make_settings();
+        observe_one("tory", "Tauri", &mut s.learned_entries, 1000);
+        observe_one("tory", "Tauri", &mut s.learned_entries, 2000);
+        let id = s.learned_entries[0].id.clone();
+
+        // Exact duplicate already in permanent set.
+        s.correction_sets.push(NamedCorrectionSet {
+            id: DEFAULT_CORRECTION_SET_ID.to_string(),
+            name: "Default Corrections".to_string(),
+            entries: vec![CorrectionEntry {
+                from: "tory".to_string(),
+                to: "Tauri".to_string(),
+            }],
+        });
+
+        promote_entry(&mut s, &id);
+
+        // Learned entry is removed — it was effectively already promoted.
+        assert!(s.learned_entries.is_empty(), "learned entry removed for duplicate");
+        // Permanent set unchanged — no duplicate pushed.
+        let cs = s
+            .correction_sets
+            .iter()
+            .find(|cs| cs.id == DEFAULT_CORRECTION_SET_ID)
+            .unwrap();
+        assert_eq!(cs.entries.len(), 1);
     }
 
     #[test]
