@@ -61,6 +61,7 @@ const MODE: Mode = {
     clipboard_context_enabled: false,
     selected_text_context_enabled: false,
     focused_field_context_enabled: false,
+    post_paste_observation_enabled: false,
   },
   term_set_ids: [],
   correction_set_ids: [],
@@ -562,6 +563,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
       clipboard_context_enabled: false,
       selected_text_context_enabled: false,
       focused_field_context_enabled: false,
+      post_paste_observation_enabled: false,
     },
   };
 
@@ -587,6 +589,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         clipboard_context_enabled: false,
         selected_text_context_enabled: false,
         focused_field_context_enabled: false,
+        post_paste_observation_enabled: false,
       },
     };
     render(
@@ -619,6 +622,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         clipboard_context_enabled: false,
         selected_text_context_enabled: false,
         focused_field_context_enabled: false,
+        post_paste_observation_enabled: false,
       },
     };
     render(
@@ -639,6 +643,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         clipboard_context_enabled: false,
         selected_text_context_enabled: false,
         focused_field_context_enabled: false,
+        post_paste_observation_enabled: false,
       },
     };
     render(<EditorWrapper mode={groqMode} configuredProviders={["groq"]} />);
@@ -657,6 +662,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         clipboard_context_enabled: false,
         selected_text_context_enabled: false,
         focused_field_context_enabled: false,
+        post_paste_observation_enabled: false,
       },
     };
     render(
@@ -677,6 +683,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         clipboard_context_enabled: false,
         selected_text_context_enabled: false,
         focused_field_context_enabled: false,
+        post_paste_observation_enabled: false,
       },
     };
     render(
@@ -697,6 +704,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         clipboard_context_enabled: false,
         selected_text_context_enabled: false,
         focused_field_context_enabled: false,
+        post_paste_observation_enabled: false,
       },
     };
     render(
@@ -720,6 +728,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         clipboard_context_enabled: false,
         selected_text_context_enabled: false,
         focused_field_context_enabled: false,
+        post_paste_observation_enabled: false,
       },
     };
     render(
@@ -744,6 +753,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         clipboard_context_enabled: false,
         selected_text_context_enabled: false,
         focused_field_context_enabled: false,
+        post_paste_observation_enabled: false,
       },
     };
     render(
@@ -770,6 +780,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         clipboard_context_enabled: false,
         selected_text_context_enabled: false,
         focused_field_context_enabled: false,
+        post_paste_observation_enabled: false,
       },
     };
     render(

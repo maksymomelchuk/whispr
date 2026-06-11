@@ -20,7 +20,8 @@ use crate::session::{Session, PTT_ERROR_EVENT, TRANSCRIPTION_ERROR_EVENT};
 use crate::state::{AppState, ModifierState};
 use crate::{
     cleanup, cleanup_invoke, cleanup_stats, clipboard_context, config, focused_field_context,
-    miner, model_catalog, recovery, selected_text_context, selector, stats, tone,
+    miner, model_catalog, post_paste_observer, recovery, selected_text_context, selector, stats,
+    tone,
 };
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -321,6 +322,7 @@ async fn run_session(
     let clipboard_context_enabled = active_mode.ai_cleanup.clipboard_context_enabled;
     let selected_text_context_enabled = active_mode.ai_cleanup.selected_text_context_enabled;
     let focused_field_context_enabled = active_mode.ai_cleanup.focused_field_context_enabled;
+    let post_paste_observation_enabled = active_mode.ai_cleanup.post_paste_observation_enabled;
     let hint_bundle_id = crate::target_app::session_app().map(|a| a.bundle_id);
     let session_terms = selector::select_terms(
         &settings.term_sets,
@@ -729,6 +731,13 @@ async fn run_session(
     if let Err(e) = paste_handle.await {
         eprintln!("[pipeline] paste worker failed: {e}");
         notify_error(app, format!("Paste failed: {e}"));
+    }
+
+    if settings.learn_from_corrections
+        && post_paste_observation_enabled
+        && paste_policy == pipeline::PastePolicy::PasteRaw
+    {
+        post_paste_observer::start(app.clone(), session_bundle_id.clone());
     }
 
     match notice {

@@ -192,6 +192,7 @@ export interface ModeCleanup {
   clipboard_context_enabled: boolean;
   selected_text_context_enabled: boolean;
   focused_field_context_enabled: boolean;
+  post_paste_observation_enabled: boolean;
 }
 
 export interface NamedTermSet {

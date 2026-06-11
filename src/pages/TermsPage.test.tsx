@@ -41,6 +41,7 @@ const BASE_MODE: Mode = {
     clipboard_context_enabled: false,
     selected_text_context_enabled: false,
     focused_field_context_enabled: false,
+    post_paste_observation_enabled: false,
   },
   term_set_ids: [],
   correction_set_ids: [],
