@@ -214,13 +214,17 @@ pub fn set_shortcut_capture_paused(state: State<'_, AppState>, paused: bool) {
 
 #[tauri::command]
 pub fn create_term_set(app: AppHandle, name: String) -> Result<SettingsView, String> {
+    let trimmed_name = name.trim();
+    if trimmed_name.is_empty() {
+        return Err(format!("Set name cannot be empty (got {name:?})"));
+    }
     let ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
     let set = NamedTermSet {
         id: format!("term-set-{ms}"),
-        name: name.trim().to_string(),
+        name: trimmed_name.to_string(),
         entries: vec![],
     };
     config::update(&app, |s| s.term_sets.push(set))?;
@@ -229,9 +233,13 @@ pub fn create_term_set(app: AppHandle, name: String) -> Result<SettingsView, Str
 
 #[tauri::command]
 pub fn rename_term_set(app: AppHandle, id: SetId, name: String) -> Result<SettingsView, String> {
+    let trimmed_name = name.trim();
+    if trimmed_name.is_empty() {
+        return Err(format!("Set name cannot be empty (got {name:?})"));
+    }
     config::update(&app, |s| {
         if let Some(ts) = s.term_sets.iter_mut().find(|ts| ts.id == id) {
-            ts.name = name.trim().to_string();
+            ts.name = trimmed_name.to_string();
         }
     })?;
     Ok(config::load(&app).into())
@@ -264,13 +272,17 @@ pub fn delete_term_set(app: AppHandle, id: SetId) -> Result<SettingsView, String
 
 #[tauri::command]
 pub fn create_correction_set(app: AppHandle, name: String) -> Result<SettingsView, String> {
+    let trimmed_name = name.trim();
+    if trimmed_name.is_empty() {
+        return Err(format!("Set name cannot be empty (got {name:?})"));
+    }
     let ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
     let set = NamedCorrectionSet {
         id: format!("correction-set-{ms}"),
-        name: name.trim().to_string(),
+        name: trimmed_name.to_string(),
         entries: vec![],
     };
     config::update(&app, |s| s.correction_sets.push(set))?;
@@ -283,9 +295,13 @@ pub fn rename_correction_set(
     id: SetId,
     name: String,
 ) -> Result<SettingsView, String> {
+    let trimmed_name = name.trim();
+    if trimmed_name.is_empty() {
+        return Err(format!("Set name cannot be empty (got {name:?})"));
+    }
     config::update(&app, |s| {
         if let Some(cs) = s.correction_sets.iter_mut().find(|cs| cs.id == id) {
-            cs.name = name.trim().to_string();
+            cs.name = trimmed_name.to_string();
         }
     })?;
     Ok(config::load(&app).into())
