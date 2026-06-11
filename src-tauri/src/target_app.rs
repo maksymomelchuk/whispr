@@ -25,8 +25,11 @@ fn set_session_app(app: Option<FrontmostApp>) {
     *session_app_cell().lock().unwrap() = app;
 }
 
-/// Returns the frontmost app captured at the most recent PTT-down. Returns
-/// `None` on Linux or when capture has not yet run.
+/// Returns the frontmost app captured at the most recent PTT-down. macOS
+/// resolves the app through the per-session oneshot instead, so this getter is
+/// only the resolution path on Windows/Linux. Returns `None` on Linux or when
+/// capture has not yet run.
+#[cfg(not(target_os = "macos"))]
 pub fn session_app() -> Option<FrontmostApp> {
     session_app_cell().lock().unwrap().clone()
 }

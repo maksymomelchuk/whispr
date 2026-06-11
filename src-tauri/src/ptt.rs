@@ -323,12 +323,38 @@ async fn run_session(
     let selected_text_context_enabled = active_mode.ai_cleanup.selected_text_context_enabled;
     let focused_field_context_enabled = active_mode.ai_cleanup.focused_field_context_enabled;
     let post_paste_observation_enabled = active_mode.ai_cleanup.post_paste_observation_enabled;
-    let hint_bundle_id = crate::target_app::session_app().map(|a| a.bundle_id);
+    // On macOS, pending_app_rx is the correct synchronization point: it's
+    // populated by the platform_capture spawn_blocking task (osascript) and
+    // awaited with a timeout. Reading session_app() directly would race if
+    // osascript hasn't finished yet. Resolve once before term selection so
+    // terms, glossary, tone overlay, and history attribution all agree on the
+    // same app for this session.
+    #[cfg(target_os = "macos")]
+    let resolved_app: Option<target_app::FrontmostApp> = {
+        let rx = app
+            .state::<crate::state::AppState>()
+            .pending_app_rx
+            .lock()
+            .unwrap()
+            .take();
+        match rx {
+            Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
+                .await
+                .ok()
+                .and_then(|r| r.ok())
+                .flatten(),
+            None => None,
+        }
+    };
+    #[cfg(not(target_os = "macos"))]
+    let resolved_app: Option<target_app::FrontmostApp> = target_app::session_app();
+
+    let session_bundle_id = resolved_app.as_ref().map(|a| a.bundle_id.clone());
     let session_terms = selector::select_terms(
         &settings.term_sets,
         &active_mode.term_set_ids,
         &settings.learned_entries,
-        hint_bundle_id.as_deref(),
+        session_bundle_id.as_deref(),
         miner::now_ms(),
     );
 
@@ -558,31 +584,6 @@ async fn run_session(
         return Ok(());
     }
 
-    // On macOS, pending_app_rx is the correct synchronization point: it's
-    // populated by the platform_capture spawn_blocking task (osascript) and
-    // awaited with a timeout. Reading session_app() directly would race if
-    // osascript hasn't finished yet. Resolve once and reuse for both tone
-    // overlay and history attribution.
-    #[cfg(target_os = "macos")]
-    let resolved_app: Option<target_app::FrontmostApp> = {
-        let rx = app
-            .state::<crate::state::AppState>()
-            .pending_app_rx
-            .lock()
-            .unwrap()
-            .take();
-        match rx {
-            Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
-                .await
-                .ok()
-                .and_then(|r| r.ok())
-                .flatten(),
-            None => None,
-        }
-    };
-    #[cfg(not(target_os = "macos"))]
-    let resolved_app: Option<target_app::FrontmostApp> = target_app::session_app();
-
     let context: Option<cleanup::ContextBlocks> = if clipboard_context_enabled
         || selected_text_context_enabled
         || focused_field_context_enabled
@@ -655,7 +656,6 @@ async fn run_session(
         None
     };
 
-    let session_bundle_id = resolved_app.as_ref().map(|a| a.bundle_id.clone());
     let glossary = selector::select_glossary_words(
         &settings.term_sets,
         &active_mode.term_set_ids,
