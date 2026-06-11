@@ -18,7 +18,7 @@ pub fn capture(app: tauri::AppHandle) {
 
 #[cfg(target_os = "macos")]
 fn platform_read_selected_text() -> Option<String> {
-    use core_foundation::base::{CFRelease, CFTypeRef};
+    use core_foundation::base::{CFRelease, CFTypeRef, TCFType};
     use core_foundation::string::{CFString, CFStringRef};
     use std::ptr;
 
@@ -125,7 +125,9 @@ fn platform_read_selected_text() -> Option<String> {
 
         let element = uia.GetFocusedElementBuildCache(&cache_req).ok()?;
 
-        let pw_variant = element.GetCachedPropertyValue(UIA_IsPasswordPropertyId).ok()?;
+        let pw_variant = element
+            .GetCachedPropertyValue(UIA_IsPasswordPropertyId)
+            .ok()?;
         let pw_inner = &*pw_variant.0.Anonymous;
         if pw_inner.vt == VT_BOOL && pw_inner.Anonymous.boolVal.0 != 0 {
             return None;

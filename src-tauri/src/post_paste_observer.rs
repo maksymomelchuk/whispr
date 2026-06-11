@@ -24,16 +24,16 @@ mod windows_impl {
     use crate::{config, miner};
     use std::sync::mpsc;
     use std::time::Duration;
+    use windows::core::implement;
     use windows::Win32::System::Com::{
         CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
     };
     use windows::Win32::System::Variant::{VT_BOOL, VT_BSTR};
     use windows::Win32::UI::Accessibility::{
-        CUIAutomation, IUIAutomation, IUIAutomationElement,
-        IUIAutomationFocusChangedEventHandler, IUIAutomationFocusChangedEventHandler_Impl,
-        UIA_IsPasswordPropertyId, UIA_ValueValuePropertyId,
+        CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationFocusChangedEventHandler,
+        IUIAutomationFocusChangedEventHandler_Impl, UIA_IsPasswordPropertyId,
+        UIA_ValueValuePropertyId,
     };
-    use windows::core::implement;
 
     const WATCH_TIMEOUT_SECS: u64 = 90;
 
@@ -69,7 +69,10 @@ mod windows_impl {
             let focus_handler: IUIAutomationFocusChangedEventHandler =
                 FocusChangedHandler(stop_tx).into();
 
-            if uia.AddFocusChangedEventHandler(None, &focus_handler).is_err() {
+            if uia
+                .AddFocusChangedEventHandler(None, &focus_handler)
+                .is_err()
+            {
                 return;
             }
 
@@ -95,21 +98,27 @@ mod windows_impl {
         }
     }
 
-    unsafe fn snapshot_focused_field(uia: &IUIAutomation) -> Option<(IUIAutomationElement, String)> {
+    unsafe fn snapshot_focused_field(
+        uia: &IUIAutomation,
+    ) -> Option<(IUIAutomationElement, String)> {
         let cache_req = uia.CreateCacheRequest().ok()?;
         cache_req.AddProperty(UIA_IsPasswordPropertyId).ok()?;
         cache_req.AddProperty(UIA_ValueValuePropertyId).ok()?;
 
         let element = uia.GetFocusedElementBuildCache(&cache_req).ok()?;
 
-        let pw_var = element.GetCachedPropertyValue(UIA_IsPasswordPropertyId).ok()?;
+        let pw_var = element
+            .GetCachedPropertyValue(UIA_IsPasswordPropertyId)
+            .ok()?;
         let pw_inner = &*pw_var.0.Anonymous;
         // Fail-closed: if we cannot confirm the field is not a password field, skip it.
         if pw_inner.vt != VT_BOOL || pw_inner.Anonymous.boolVal.0 != 0 {
             return None;
         }
 
-        let val_var = element.GetCachedPropertyValue(UIA_ValueValuePropertyId).ok()?;
+        let val_var = element
+            .GetCachedPropertyValue(UIA_ValueValuePropertyId)
+            .ok()?;
         let inner = &*val_var.0.Anonymous;
         if inner.vt != VT_BSTR {
             return None;
@@ -120,20 +129,26 @@ mod windows_impl {
     }
 
     unsafe fn read_current_value(element: &IUIAutomationElement) -> Option<String> {
-        let var = element.GetCurrentPropertyValue(UIA_ValueValuePropertyId).ok()?;
+        let var = element
+            .GetCurrentPropertyValue(UIA_ValueValuePropertyId)
+            .ok()?;
         let inner = &*var.0.Anonymous;
         if inner.vt != VT_BSTR {
             return None;
         }
         let text = (&*inner.Anonymous.bstrVal).to_string();
-        if text.is_empty() { None } else { Some(text) }
+        if text.is_empty() {
+            None
+        } else {
+            Some(text)
+        }
     }
 }
 
 #[cfg(target_os = "macos")]
 mod macos {
     use crate::{config, miner};
-    use core_foundation::base::{CFRelease, CFTypeRef};
+    use core_foundation::base::{CFRelease, CFTypeRef, TCFType};
     use core_foundation::string::{CFString, CFStringRef};
     use std::ffi::c_void;
     use std::os::raw::c_int;
@@ -150,12 +165,8 @@ mod macos {
     const AX_SECURE_TEXT_FIELD_ROLE: &str = "AXSecureTextField";
     const FIELD_READ_TIMEOUT_SECS: f32 = 0.2;
 
-    type AXObserverCallbackFn = unsafe extern "C" fn(
-        AXObserverRef,
-        AXUIElementRef,
-        *const c_void,
-        *mut c_void,
-    );
+    type AXObserverCallbackFn =
+        unsafe extern "C" fn(AXObserverRef, AXUIElementRef, *const c_void, *mut c_void);
 
     #[link(name = "ApplicationServices", kind = "framework")]
     extern "C" {
@@ -293,8 +304,7 @@ mod macos {
             if err != AX_ERROR_SUCCESS || final_val.is_null() {
                 return;
             }
-            let final_text =
-                CFString::wrap_under_create_rule(final_val as CFStringRef).to_string();
+            let final_text = CFString::wrap_under_create_rule(final_val as CFStringRef).to_string();
 
             let candidates = miner::mine(&snapshot, &final_text);
             if candidates.is_empty() {
@@ -331,11 +341,8 @@ mod macos {
 
         let role_attr = CFString::from_static_string("AXRole");
         let mut role_val: CFTypeRef = ptr::null();
-        let role_err = AXUIElementCopyAttributeValue(
-            focused,
-            role_attr.as_concrete_TypeRef(),
-            &mut role_val,
-        );
+        let role_err =
+            AXUIElementCopyAttributeValue(focused, role_attr.as_concrete_TypeRef(), &mut role_val);
         if role_err == AX_ERROR_SUCCESS && !role_val.is_null() {
             let role = CFString::wrap_under_create_rule(role_val as CFStringRef).to_string();
             if role == AX_SECURE_TEXT_FIELD_ROLE {

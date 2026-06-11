@@ -72,7 +72,7 @@ pub fn capture(app: tauri::AppHandle) {
 #[cfg(target_os = "macos")]
 pub fn platform_change_count() -> i64 {
     use objc2_app_kit::NSPasteboard;
-    NSPasteboard::generalPasteboard().changeCount()
+    NSPasteboard::generalPasteboard().changeCount() as i64
 }
 
 #[cfg(target_os = "macos")]

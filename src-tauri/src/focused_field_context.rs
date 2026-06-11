@@ -21,7 +21,7 @@ pub fn capture(app: tauri::AppHandle) {
 
 #[cfg(target_os = "macos")]
 fn platform_read_focused_field() -> Option<String> {
-    use core_foundation::base::{CFRelease, CFTypeRef};
+    use core_foundation::base::{CFRelease, CFTypeRef, TCFType};
     use core_foundation::boolean::CFBoolean;
     use core_foundation::string::{CFString, CFStringRef};
     use std::os::raw::c_int;
@@ -81,8 +81,7 @@ fn platform_read_focused_field() -> Option<String> {
         if AXUIElementGetPid(focused_element, &mut pid) == AX_ERROR_SUCCESS && pid > 0 {
             let app_element = AXUIElementCreateApplication(pid);
             if !app_element.is_null() {
-                let enhanced_attr =
-                    CFString::from_static_string("AXEnhancedUserInterface");
+                let enhanced_attr = CFString::from_static_string("AXEnhancedUserInterface");
                 let true_val = CFBoolean::true_value();
                 // Ignore result: not all apps support this attribute.
                 let _ = AXUIElementSetAttributeValue(
@@ -154,13 +153,17 @@ fn platform_read_focused_field() -> Option<String> {
 
         let element = uia.GetFocusedElementBuildCache(&cache_req).ok()?;
 
-        let pw_variant = element.GetCachedPropertyValue(UIA_IsPasswordPropertyId).ok()?;
+        let pw_variant = element
+            .GetCachedPropertyValue(UIA_IsPasswordPropertyId)
+            .ok()?;
         let pw_inner = &*pw_variant.0.Anonymous;
         if pw_inner.vt == VT_BOOL && pw_inner.Anonymous.boolVal.0 != 0 {
             return None;
         }
 
-        let val_variant = element.GetCachedPropertyValue(UIA_ValueValuePropertyId).ok()?;
+        let val_variant = element
+            .GetCachedPropertyValue(UIA_ValueValuePropertyId)
+            .ok()?;
         let inner = &*val_variant.0.Anonymous;
         if inner.vt != VT_BSTR {
             return None;
