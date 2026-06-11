@@ -58,6 +58,7 @@ const MODE: Mode = {
     provider: "anthropic",
     model: "claude-haiku-4-5",
     paste_raw_on_failure: true,
+    clipboard_context_enabled: false,
   },
   term_set_ids: [],
   correction_set_ids: [],
@@ -554,6 +555,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
       provider: "anthropic",
       model: "claude-haiku-4-5",
       paste_raw_on_failure: true,
+      clipboard_context_enabled: false,
     },
   };
 
@@ -576,6 +578,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         provider: "openai",
         model: "gpt-5.4-mini",
         paste_raw_on_failure: true,
+        clipboard_context_enabled: false,
       },
     };
     render(
@@ -605,6 +608,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         provider: "google",
         model: "gemini-2.5-flash",
         paste_raw_on_failure: true,
+        clipboard_context_enabled: false,
       },
     };
     render(
@@ -622,6 +626,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         provider: "groq",
         model: "llama-3.1-8b-instant",
         paste_raw_on_failure: true,
+        clipboard_context_enabled: false,
       },
     };
     render(<EditorWrapper mode={groqMode} configuredProviders={["groq"]} />);
@@ -637,6 +642,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         provider: "deepseek",
         model: "deepseek-v4-flash",
         paste_raw_on_failure: true,
+        clipboard_context_enabled: false,
       },
     };
     render(
@@ -654,6 +660,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         provider: "cerebras",
         model: "llama-3.3-70b",
         paste_raw_on_failure: true,
+        clipboard_context_enabled: false,
       },
     };
     render(
@@ -671,6 +678,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         provider: "openrouter",
         model: "anthropic/claude-haiku-4.5",
         paste_raw_on_failure: true,
+        clipboard_context_enabled: false,
       },
     };
     render(
@@ -691,6 +699,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         provider: "custom",
         model: "",
         paste_raw_on_failure: true,
+        clipboard_context_enabled: false,
       },
     };
     render(
@@ -712,6 +721,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         provider: "custom",
         model: "",
         paste_raw_on_failure: true,
+        clipboard_context_enabled: false,
       },
     };
     render(
@@ -735,6 +745,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         provider: "custom",
         model: "",
         paste_raw_on_failure: true,
+        clipboard_context_enabled: false,
       },
     };
     render(

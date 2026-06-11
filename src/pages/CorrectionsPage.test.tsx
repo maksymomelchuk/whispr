@@ -36,6 +36,7 @@ const BASE_MODE: Mode = {
     provider: "anthropic",
     model: "claude-haiku-4-5",
     paste_raw_on_failure: true,
+    clipboard_context_enabled: false,
   },
   term_set_ids: [],
   correction_set_ids: [],

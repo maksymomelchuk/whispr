@@ -18,7 +18,10 @@ use crate::provider::{self, LocalWhisperModel, ProviderModel, TranscriptionProvi
 use crate::recorder::Recorder;
 use crate::session::{Session, PTT_ERROR_EVENT, TRANSCRIPTION_ERROR_EVENT};
 use crate::state::{AppState, ModifierState};
-use crate::{cleanup, cleanup_invoke, cleanup_stats, config, model_catalog, recovery, stats, tone};
+use crate::{
+    cleanup, cleanup_invoke, cleanup_stats, clipboard_context, config, model_catalog, recovery,
+    stats, tone,
+};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
@@ -315,6 +318,7 @@ async fn run_session(
     let cleanup_provider = active_mode.ai_cleanup.provider;
     let cleanup_model = active_mode.ai_cleanup.model.clone();
     let paste_raw_on_failure = active_mode.ai_cleanup.paste_raw_on_failure;
+    let clipboard_context_enabled = active_mode.ai_cleanup.clipboard_context_enabled;
     let session_terms =
         crate::terms::compose_term_hints(&settings.term_sets, &active_mode.term_set_ids);
 
@@ -551,8 +555,27 @@ async fn run_session(
     #[cfg(not(target_os = "macos"))]
     let resolved_app: Option<target_app::FrontmostApp> = target_app::session_app();
 
+    let clipboard_text: Option<String> = if clipboard_context_enabled {
+        let rx = app
+            .state::<AppState>()
+            .pending_clipboard_rx
+            .lock()
+            .unwrap()
+            .take();
+        match rx {
+            Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
+                .await
+                .ok()
+                .and_then(|r| r.ok())
+                .flatten(),
+            None => None,
+        }
+    } else {
+        None
+    };
+
     let session_bundle_id = resolved_app.as_ref().map(|a| a.bundle_id.clone());
-    let (replaced_text, cleanup_status, notice) = maybe_cleanup(
+    let (replaced_text, cleanup_status, notice, context_channels) = maybe_cleanup(
         app,
         &settings,
         mode_cleanup_enabled,
@@ -562,6 +585,8 @@ async fn run_session(
         cleanup_provider,
         &cleanup_model,
         session_bundle_id.as_deref(),
+        clipboard_context_enabled,
+        clipboard_text,
     )
     .await;
 
@@ -586,6 +611,7 @@ async fn run_session(
         history_entry.app_name = resolved_app.as_ref().map(|a| a.name.clone());
         history_entry.bundle_id = resolved_app.map(|a| a.bundle_id);
     }
+    history_entry.context_channels = context_channels;
 
     let paste_policy =
         pipeline::resolve_paste_policy(&history_entry.cleanup_status, paste_raw_on_failure);
@@ -641,7 +667,9 @@ async fn maybe_cleanup(
     cleanup_provider: cleanup::AiProviderId,
     cleanup_model: &str,
     bundle_id: Option<&str>,
-) -> (String, CleanupStatus, Notice) {
+    clipboard_context_enabled: bool,
+    clipboard_text: Option<String>,
+) -> (String, CleanupStatus, Notice, Vec<String>) {
     let cleanup_settings = &settings.ai_cleanup;
 
     if !mode_cleanup_enabled {
@@ -649,6 +677,7 @@ async fn maybe_cleanup(
             transcript.to_string(),
             CleanupStatus::Disabled,
             Notice::None,
+            vec![],
         );
     }
 
@@ -658,6 +687,7 @@ async fn maybe_cleanup(
             transcript.to_string(),
             CleanupStatus::SkippedBelowMinWords,
             Notice::None,
+            vec![],
         );
     }
     let min_duration = Duration::from_millis(cleanup_settings.min_duration_ms);
@@ -666,6 +696,7 @@ async fn maybe_cleanup(
             transcript.to_string(),
             CleanupStatus::SkippedBelowMinDuration,
             Notice::None,
+            vec![],
         );
     }
 
@@ -678,6 +709,30 @@ async fn maybe_cleanup(
         None
     };
 
+    let context = if clipboard_context_enabled {
+        Some(cleanup::ContextBlocks {
+            clipboard_text,
+            system_date: cleanup::system_date(),
+            system_user: cleanup::system_user(),
+        })
+    } else {
+        None
+    };
+
+    let context_channels: Vec<String> = match context.as_ref() {
+        None => vec![],
+        Some(ctx) => {
+            let mut channels = Vec::new();
+            if ctx.clipboard_text.is_some() {
+                channels.push("clipboard".to_string());
+            }
+            if ctx.system_date.is_some() || ctx.system_user.is_some() {
+                channels.push("system".to_string());
+            }
+            channels
+        }
+    };
+
     let _ = app.emit(PTT_THINKING_EVENT, ());
 
     let result = cleanup_invoke::invoke(
@@ -686,6 +741,7 @@ async fn maybe_cleanup(
         cleanup_model,
         prompt_override,
         tone,
+        context.as_ref(),
         transcript,
     )
     .await;
@@ -693,7 +749,7 @@ async fn maybe_cleanup(
     match result {
         Ok((cleaned, usage)) => {
             cleanup_stats::record(app, usage.input_tokens, usage.output_tokens);
-            (cleaned, CleanupStatus::Ran, Notice::None)
+            (cleaned, CleanupStatus::Ran, Notice::None, context_channels)
         }
         Err(err) => {
             let message = format!("AI cleanup unavailable: {err}");
@@ -715,7 +771,7 @@ async fn maybe_cleanup(
                     (CleanupStatus::FailedTransient(m), Notice::Flash(message))
                 }
             };
-            (transcript.to_string(), status, notice)
+            (transcript.to_string(), status, notice, context_channels)
         }
     }
 }
@@ -735,6 +791,19 @@ fn start_ptt(
     state.session_cancelled.store(false, Ordering::Release);
     *state.active_shortcut.lock().unwrap() = Some(shortcut.clone());
     let device = state.input_device.lock().unwrap().clone();
+
+    let clipboard_enabled = config::load(app)
+        .modes
+        .iter()
+        .find(|m| m.id == mode_id)
+        .map(|m| m.ai_cleanup.clipboard_context_enabled)
+        .unwrap_or(false);
+    if clipboard_enabled {
+        clipboard_context::capture(app.clone());
+    } else {
+        *state.pending_clipboard_rx.lock().unwrap() = None;
+    }
+
     // Capture the target app before showing our overlay: show() can make the
     // overlay the frontmost window, and the capture would then attribute the
     // dictation to our own overlay instead of the app the user is typing into.
