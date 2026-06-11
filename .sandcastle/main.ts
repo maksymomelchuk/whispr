@@ -570,34 +570,18 @@ function finalizeCompletedWorksets(open: Set<string>): void {
 // so the per-issue `git branch -f` reset fails and the scheduler skips that
 // issue on every subsequent run.
 function removeStaleWorktrees() {
-  const registeredPaths = sh("git worktree list --porcelain")
+  const stalePaths = sh("git worktree list --porcelain")
     .split("\n")
     .filter((line) => line.startsWith("worktree "))
     .map((line) => line.slice("worktree ".length))
     .filter((path) => path.includes("/.sandcastle/worktrees/"));
-  for (const path of registeredPaths) {
+  for (const path of stalePaths) {
     try {
       sh(`git worktree remove --force ${shellQuote(path)}`);
-    } catch {
-      execSync(`rm -rf ${shellQuote(path)}`);
+      console.log(`Removed stale worktree: ${path}`);
+    } catch (error) {
+      console.warn(`Could not remove worktree ${path}: ${error}`);
     }
-    console.log(`Removed stale worktree: ${path}`);
-  }
-  // Also sweep for orphaned directories not registered as worktrees.
-  const worktreesDir = join(__dirname, "worktrees");
-  try {
-    const entries = execSync(`ls ${shellQuote(worktreesDir)} 2>/dev/null`, {
-      encoding: "utf-8",
-    }).trim();
-    for (const entry of entries.split("\n").filter(Boolean)) {
-      const fullPath = join(worktreesDir, entry);
-      if (!registeredPaths.includes(fullPath)) {
-        execSync(`rm -rf ${shellQuote(fullPath)}`);
-        console.log(`Removed orphaned worktree directory: ${fullPath}`);
-      }
-    }
-  } catch {
-    // worktrees dir doesn't exist yet — nothing to clean
   }
 }
 
