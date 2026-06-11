@@ -1,13 +1,14 @@
 use crate::api_key_validation::{self, ApiKeyValidation};
 use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
 use crate::config::{
-    self, CleanupAuthMode, HotkeyAction, HotkeyBinding, LocalWhisperIdleTimeout,
+    self, CleanupAuthMode, HotkeyAction, HotkeyBinding, LearnedEntry, LocalWhisperIdleTimeout,
     NamedCorrectionSet, NamedTermSet, Settings, SnippetEntry,
 };
 use crate::download::{
     self, LocalModelStatus, MODEL_DOWNLOAD_COMPLETE_EVENT, MODEL_DOWNLOAD_ERROR_EVENT,
 };
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
+use crate::miner;
 use crate::mode::{Mode, ModeId, SetId};
 use crate::model_catalog;
 use crate::permissions;
@@ -45,6 +46,7 @@ pub struct SettingsView {
     pub ai_cleanup_min_words: usize,
     pub ai_cleanup_min_duration_ms: u64,
     pub ai_cleanup_tone_overlay_enabled: bool,
+    pub learn_from_corrections: bool,
     pub input_device: Option<String>,
     pub pause_media_on_record: bool,
     pub history_limit: Option<usize>,
@@ -122,6 +124,7 @@ impl From<Settings> for SettingsView {
             ai_cleanup_min_words: s.ai_cleanup.min_words,
             ai_cleanup_min_duration_ms: s.ai_cleanup.min_duration_ms,
             ai_cleanup_tone_overlay_enabled: s.ai_cleanup.tone_overlay_enabled,
+            learn_from_corrections: s.learn_from_corrections,
             input_device: s.input_device,
             pause_media_on_record: s.pause_media_on_record,
             history_limit: s.history_limit,
@@ -537,9 +540,52 @@ pub fn update_history_entry(
     replaced_text: String,
     final_text: String,
 ) -> Result<(), String> {
-    history::update_by_id(&app, &id, replaced_text, final_text)?;
+    let original_final = history::load(&app)
+        .into_iter()
+        .find(|e| e.id == id)
+        .map(|e| e.final_text);
+
+    history::update_by_id(&app, &id, replaced_text, final_text.clone())?;
+
+    if let Some(original) = original_final {
+        let settings = config::load(&app);
+        if settings.learn_from_corrections {
+            let candidates = miner::mine(&original, &final_text);
+            if !candidates.is_empty() {
+                let now_ms = miner::now_ms();
+                config::update(&app, |s| {
+                    miner::observe_candidates(&candidates, s, now_ms);
+                })?;
+            }
+        }
+    }
+
     let _ = app.emit(HISTORY_UPDATED_EVENT, ());
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_learned_entries(app: AppHandle) -> Vec<LearnedEntry> {
+    config::load(&app).learned_entries
+}
+
+#[tauri::command]
+pub fn delete_learned_entry(app: AppHandle, id: String) -> Result<(), String> {
+    config::update(&app, |s| {
+        s.learned_entries.retain(|e| e.id != id);
+    })
+}
+
+#[tauri::command]
+pub fn promote_learned_entry(app: AppHandle, id: String) -> Result<(), String> {
+    config::update(&app, |s| {
+        miner::promote_entry(s, &id);
+    })
+}
+
+#[tauri::command]
+pub fn set_learn_from_corrections(app: AppHandle, enabled: bool) -> Result<(), String> {
+    config::update(&app, |s| s.learn_from_corrections = enabled)
 }
 
 #[tauri::command]

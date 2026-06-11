@@ -8,6 +8,7 @@ import type {
   HistoryEntry,
   HistoryLimit,
   HotkeyBinding,
+  LearnedEntry,
   LocalModelStatus,
   LocalWhisperIdleTimeout,
   LocalWhisperModel,
@@ -126,6 +127,18 @@ export const setCleanupThresholds = (minWords: number, minDurationMs: number) =>
 
 export const setToneOverlayEnabled = (enabled: boolean) =>
   invoke<void>("set_tone_overlay_enabled", { enabled });
+
+export const getLearnedEntries = () =>
+  invoke<LearnedEntry[]>("get_learned_entries");
+
+export const deleteLearnedEntry = (id: string) =>
+  invoke<void>("delete_learned_entry", { id });
+
+export const promoteLearnedEntry = (id: string) =>
+  invoke<void>("promote_learned_entry", { id });
+
+export const setLearnFromCorrections = (enabled: boolean) =>
+  invoke<void>("set_learn_from_corrections", { enabled });
 
 export const listInputDevices = () => invoke<string[]>("list_input_devices");
 

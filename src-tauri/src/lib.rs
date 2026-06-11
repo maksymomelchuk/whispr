@@ -45,6 +45,7 @@ mod cleanup_invoke;
 pub mod model_catalog;
 pub mod recovery;
 
+mod miner;
 mod tone;
 
 // media, overlay, and target_app expose platform-neutral public APIs and
@@ -265,6 +266,10 @@ pub fn run() {
             commands::clear_history,
             commands::set_history_limit,
             commands::update_history_entry,
+            commands::get_learned_entries,
+            commands::delete_learned_entry,
+            commands::promote_learned_entry,
+            commands::set_learn_from_corrections,
             commands::recover_cleanup,
             commands::get_stats,
             commands::clear_stats,

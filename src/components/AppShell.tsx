@@ -1,5 +1,6 @@
 import {
   ArrowsHorizontalIcon,
+  BrainIcon,
   ChartBarIcon,
   ClockCounterClockwiseIcon,
   GearIcon,
@@ -29,6 +30,7 @@ import { GeneralPage } from "../pages/GeneralPage";
 import { HistoryPage } from "../pages/HistoryPage";
 import { HomePage } from "../pages/HomePage";
 import { HotkeysPage } from "../pages/HotkeysPage";
+import { LearnedEntriesPage } from "../pages/LearnedEntriesPage";
 import { ModesPage } from "../pages/ModesPage";
 import { SnippetsPage } from "../pages/SnippetsPage";
 import { SpeechModelsPage } from "../pages/SpeechModelsPage";
@@ -75,6 +77,7 @@ const NAV_SECTIONS: NavSection[] = [
         icon: ArrowsHorizontalIcon,
         path: "/corrections",
       },
+      { label: "Auto-Learn", icon: BrainIcon, path: "/learned" },
       { label: "Snippets", icon: LightningIcon, path: "/snippets" },
     ],
   },
@@ -299,6 +302,7 @@ function ShellInner() {
               <Route path="/ai-providers" element={<AiProvidersPage />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/corrections" element={<CorrectionsPage />} />
+              <Route path="/learned" element={<LearnedEntriesPage />} />
               <Route path="/modes" element={<ModesPage />} />
               <Route path="/snippets" element={<SnippetsPage />} />
               <Route path="/history" element={<HistoryPage />} />

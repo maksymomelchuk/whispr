@@ -168,7 +168,7 @@ pub struct DictionaryEntry {
     pub to: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CorrectionEntry {
     pub from: String,
     pub to: String,
@@ -176,11 +176,36 @@ pub struct CorrectionEntry {
 
 pub const DEFAULT_CORRECTION_SET_ID: &str = "correction-set-default";
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NamedCorrectionSet {
     pub id: SetId,
     pub name: String,
     pub entries: Vec<CorrectionEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum LearnedKind {
+    Correction { from: String },
+    Term,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum LearnedEntryStatus {
+    Candidate,
+    Promoted,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LearnedEntry {
+    pub id: String,
+    pub word: String,
+    #[serde(flatten)]
+    pub kind: LearnedKind,
+    pub status: LearnedEntryStatus,
+    pub total_observations: u32,
+    pub last_observed_ms: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -409,6 +434,10 @@ pub struct Settings {
     pub show_live_preview: bool,
     #[serde(default)]
     pub local_whisper: LocalWhisperSettings,
+    #[serde(default)]
+    pub learn_from_corrections: bool,
+    #[serde(default)]
+    pub learned_entries: Vec<LearnedEntry>,
 }
 
 impl Default for Settings {
@@ -443,6 +472,8 @@ impl Default for Settings {
             start_at_login: false,
             show_live_preview: true,
             local_whisper: LocalWhisperSettings::default(),
+            learn_from_corrections: false,
+            learned_entries: vec![],
         }
     }
 }

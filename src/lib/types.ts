@@ -222,6 +222,7 @@ export interface Settings {
   ai_cleanup_min_words: number;
   ai_cleanup_min_duration_ms: number;
   ai_cleanup_tone_overlay_enabled: boolean;
+  learn_from_corrections: boolean;
   input_device: string | null;
   pause_media_on_record: boolean;
   history_limit: HistoryLimit;
@@ -282,6 +283,22 @@ export interface HistoryEntry {
   provider_model?: ProviderModel | null;
   app_name?: string | null;
   bundle_id?: string | null;
+}
+
+export type LearnedKind =
+  | { kind: "correction"; from: string }
+  | { kind: "term" };
+
+export type LearnedEntryStatus = "candidate" | "promoted";
+
+export interface LearnedEntry {
+  id: string;
+  word: string;
+  kind: LearnedKind["kind"];
+  from?: string;
+  status: LearnedEntryStatus;
+  total_observations: number;
+  last_observed_ms: number;
 }
 
 export interface AppUsage {
