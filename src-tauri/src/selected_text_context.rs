@@ -125,11 +125,10 @@ fn platform_read_selected_text() -> Option<String> {
 
         let element = uia.GetFocusedElementBuildCache(&cache_req).ok()?;
 
-        if let Ok(v) = element.GetCachedPropertyValue(UIA_IsPasswordPropertyId) {
-            let inner = &*v.0.Anonymous;
-            if inner.vt == VT_BOOL && inner.Anonymous.boolVal.0 != 0 {
-                return None;
-            }
+        let pw_variant = element.GetCachedPropertyValue(UIA_IsPasswordPropertyId).ok()?;
+        let pw_inner = &*pw_variant.0.Anonymous;
+        if pw_inner.vt == VT_BOOL && pw_inner.Anonymous.boolVal.0 != 0 {
+            return None;
         }
 
         let pattern = element.GetCachedPattern(UIA_TextPatternId).ok()?;
