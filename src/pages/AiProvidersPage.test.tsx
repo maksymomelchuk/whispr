@@ -21,6 +21,34 @@ vi.mock("../lib/api", () => ({
   clearToneAppOverride: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/components/ui/select", () => ({
+  Select: ({
+    value,
+    onValueChange,
+    children,
+  }: {
+    value?: string;
+    onValueChange?: (value: string) => void;
+    children?: React.ReactNode;
+  }) => (
+    <select value={value} onChange={(e) => onValueChange?.(e.target.value)}>
+      {children}
+    </select>
+  ),
+  SelectTrigger: () => null,
+  SelectValue: () => null,
+  SelectContent: ({ children }: { children?: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  SelectItem: ({
+    value,
+    children,
+  }: {
+    value: string;
+    children?: React.ReactNode;
+  }) => <option value={value}>{children}</option>,
+}));
+
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
     open ? <div>{children}</div> : null,
@@ -201,7 +229,7 @@ describe("AiProvidersPage", () => {
     });
   });
 
-  it("calls setToneAppOverride when global tone overlay is disabled for an app", async () => {
+  it("calls setToneAppOverride when user selects a tone preset for an app", async () => {
     const { getAppsSeenInHistory, setToneAppOverride } =
       await import("../lib/api");
     vi.mocked(getAppsSeenInHistory).mockResolvedValueOnce([
@@ -218,9 +246,29 @@ describe("AiProvidersPage", () => {
       />,
     );
     await waitFor(() => screen.getByText("Mail"));
-    // Select is rendered; simulate a programmatic value change via the handler
-    // by verifying the mock is accessible and callable
-    expect(setToneAppOverride).toBeDefined();
+    await userEvent.selectOptions(screen.getByRole("combobox"), "casual");
+    expect(setToneAppOverride).toHaveBeenCalledWith("com.apple.mail", "casual");
+  });
+
+  it("calls clearToneAppOverride when user selects Auto for an app with an override", async () => {
+    const { getAppsSeenInHistory, clearToneAppOverride } =
+      await import("../lib/api");
+    vi.mocked(getAppsSeenInHistory).mockResolvedValueOnce([
+      {
+        bundle_id: "com.apple.mail",
+        app_name: "Mail",
+        tone_preset: "formal",
+        tone_override: "formal",
+      },
+    ]);
+    render(
+      <Wrapper
+        settings={{ ...BASE_SETTINGS, ai_cleanup_tone_overlay_enabled: true }}
+      />,
+    );
+    await waitFor(() => screen.getByText("Mail"));
+    await userEvent.selectOptions(screen.getByRole("combobox"), "auto");
+    expect(clearToneAppOverride).toHaveBeenCalledWith("com.apple.mail");
   });
 });
 
