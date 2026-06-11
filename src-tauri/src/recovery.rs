@@ -134,7 +134,7 @@ fn build_outcome(
         provider_model: entry.provider_model.clone(),
         app_name: entry.app_name.clone(),
         bundle_id: entry.bundle_id.clone(),
-        context_channels: vec![],
+        context_channels: entry.context_channels.clone(),
     };
 
     Outcome {
