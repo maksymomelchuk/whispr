@@ -629,7 +629,16 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
       console.error(`  ✗ ${issue.id} (${ws.name}) failed: ${outcome.reason}`);
       continue;
     }
-    if (outcome.value.commits.length === 0) continue;
+    const issueBranch = `sandcastle/issue-${issue.id}`;
+    const needsMerge =
+      outcome.value.commits.length > 0 ||
+      commitsAhead(issueBranch, ws.branch) > 0;
+    // Branch already merged into workset but GitHub issue still open —
+    // no merge needed, but merger must still close the issue.
+    const mergedNeedsClose =
+      commitsAhead(issueBranch, ws.branch) === 0 &&
+      commitsAhead(issueBranch, SOURCE_BRANCH) > 0;
+    if (!needsMerge && !mergedNeedsClose) continue;
     completedByWorkset.set(ws.name, [
       ...(completedByWorkset.get(ws.name) ?? []),
       issue,
