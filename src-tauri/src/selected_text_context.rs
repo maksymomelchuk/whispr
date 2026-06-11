@@ -101,9 +101,57 @@ fn platform_read_selected_text() -> Option<String> {
     }
 }
 
-// ── Linux / Windows (no-op) ───────────────────────────────────────────────────
+// ── Windows ───────────────────────────────────────────────────────────────────
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+fn platform_read_selected_text() -> Option<String> {
+    use windows::Win32::System::Com::{
+        CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
+    };
+    use windows::Win32::System::Variant::VT_BOOL;
+    use windows::Win32::UI::Accessibility::{
+        CUIAutomation, IUIAutomation, IUIAutomationTextPattern, UIA_IsPasswordPropertyId,
+        UIA_TextPatternId,
+    };
+
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+
+        let uia: IUIAutomation =
+            CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER).ok()?;
+        let cache_req = uia.CreateCacheRequest().ok()?;
+        cache_req.AddProperty(UIA_IsPasswordPropertyId).ok()?;
+        cache_req.AddPattern(UIA_TextPatternId).ok()?;
+
+        let element = uia.GetFocusedElementBuildCache(&cache_req).ok()?;
+
+        if let Ok(v) = element.GetCachedPropertyValue(UIA_IsPasswordPropertyId) {
+            let inner = &*v.0.Anonymous;
+            if inner.vt == VT_BOOL && inner.Anonymous.boolVal.0 != 0 {
+                return None;
+            }
+        }
+
+        let pattern = element.GetCachedPattern(UIA_TextPatternId).ok()?;
+        let text_pattern: IUIAutomationTextPattern = pattern.cast().ok()?;
+        let ranges = text_pattern.GetSelection().ok()?;
+        if ranges.Length().ok()? == 0 {
+            return None;
+        }
+        let range = ranges.GetElement(0).ok()?;
+        let bstr = range.GetText(-1).ok()?;
+        let s = bstr.to_string();
+        if s.is_empty() {
+            None
+        } else {
+            Some(s)
+        }
+    }
+}
+
+// ── Linux (no-op) ─────────────────────────────────────────────────────────────
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn platform_read_selected_text() -> Option<String> {
     None
 }
