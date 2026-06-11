@@ -233,6 +233,7 @@ export interface Settings {
   ai_cleanup_min_duration_ms: number;
   ai_cleanup_tone_overlay_enabled: boolean;
   tone_app_overrides: Record<string, TonePreset>;
+  learn_from_corrections: boolean;
   input_device: string | null;
   pause_media_on_record: boolean;
   history_limit: HistoryLimit;
@@ -295,6 +296,20 @@ export interface HistoryEntry {
   bundle_id?: string | null;
   context_channels?: string[];
 }
+
+export type LearnedKind =
+  | { kind: "correction"; from: string }
+  | { kind: "term" };
+
+export type LearnedEntryStatus = "candidate" | "promoted";
+
+export type LearnedEntry = {
+  id: string;
+  word: string;
+  status: LearnedEntryStatus;
+  total_observations: number;
+  last_observed_ms: number;
+} & LearnedKind;
 
 export interface AppUsage {
   name: string;
