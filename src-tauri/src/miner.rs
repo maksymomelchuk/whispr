@@ -439,7 +439,7 @@ fn evict_stale(entries: &mut Vec<LearnedEntry>, now_ms: i64) {
 }
 
 fn evict_lru(entries: &mut Vec<LearnedEntry>) {
-    entries.sort_by_key(|e| e.last_observed_ms);
+    entries.sort_by(|a, b| b.last_observed_ms.cmp(&a.last_observed_ms));
     entries.truncate(MAX_ENTRIES);
 }
 
@@ -600,6 +600,24 @@ mod tests {
         let now = STALENESS_MS + 1;
         evict_stale(&mut entries, now);
         assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn evict_lru_keeps_newest_entries() {
+        let mut entries: Vec<LearnedEntry> = (0..=(MAX_ENTRIES as i64))
+            .map(|i| LearnedEntry {
+                id: format!("e{i}"),
+                word: format!("w{i}"),
+                kind: LearnedKind::Term,
+                status: LearnedEntryStatus::Candidate,
+                total_observations: 1,
+                last_observed_ms: i,
+            })
+            .collect();
+        evict_lru(&mut entries);
+        assert_eq!(entries.len(), MAX_ENTRIES);
+        assert!(entries.iter().all(|e| e.last_observed_ms > 0));
+        assert!(entries.iter().any(|e| e.last_observed_ms == MAX_ENTRIES as i64));
     }
 
     // ── promote_entry tests ────────────────────────────────────────────────

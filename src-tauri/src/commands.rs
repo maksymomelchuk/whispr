@@ -553,9 +553,9 @@ pub fn update_history_entry(
             let candidates = miner::mine(&original, &final_text);
             if !candidates.is_empty() {
                 let now_ms = miner::now_ms();
-                config::update(&app, |s| {
+                let _ = config::update(&app, |s| {
                     miner::observe_candidates(&candidates, s, now_ms);
-                })?;
+                });
             }
         }
     }
