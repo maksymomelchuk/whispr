@@ -189,6 +189,7 @@ export interface ModeCleanup {
   provider: AiProviderId;
   model: string;
   paste_raw_on_failure: boolean;
+  clipboard_context_enabled: boolean;
 }
 
 export interface NamedTermSet {
@@ -292,6 +293,7 @@ export interface HistoryEntry {
   provider_model?: ProviderModel | null;
   app_name?: string | null;
   bundle_id?: string | null;
+  context_channels?: string[];
 }
 
 export interface AppUsage {

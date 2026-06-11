@@ -46,6 +46,7 @@ pub async fn recover_entry(
         &snapshot.cleanup_model,
         snapshot.cleanup_prompt_override.as_deref(),
         None,
+        None,
         &entry.raw_text,
     )
     .await?;
@@ -74,6 +75,7 @@ pub(crate) async fn recover_entry_with_transport<T: Transport>(
         snapshot.cleanup_provider.clone(),
         &snapshot.cleanup_model,
         snapshot.cleanup_prompt_override.as_deref(),
+        None,
         None,
         &entry.raw_text,
         transport,
@@ -127,6 +129,7 @@ fn build_outcome(
         provider_model: entry.provider_model.clone(),
         app_name: entry.app_name.clone(),
         bundle_id: entry.bundle_id.clone(),
+        context_channels: vec![],
     };
 
     Outcome {
@@ -220,6 +223,7 @@ mod tests {
             provider_model: None,
             app_name: None,
             bundle_id: None,
+            context_channels: vec![],
         }
     }
 

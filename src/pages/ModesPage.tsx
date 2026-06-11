@@ -567,6 +567,12 @@ export function ModeEditor({
       ai_cleanup: { ...d.ai_cleanup, paste_raw_on_failure },
     }));
 
+  const setClipboardContextEnabled = (clipboard_context_enabled: boolean) =>
+    setDraft((d) => ({
+      ...d,
+      ai_cleanup: { ...d.ai_cleanup, clipboard_context_enabled },
+    }));
+
   const cleanupProvider = draft.ai_cleanup.provider;
   const cleanupProviderConfigured = (configuredProviders ?? []).includes(
     cleanupProvider,
@@ -1009,6 +1015,13 @@ export function ModeEditor({
                 checked={draft.ai_cleanup.paste_raw_on_failure}
                 onCheckedChange={setPasteRawOnFailure}
               />
+              <ToggleRow
+                id="clipboard-context"
+                label="Clipboard context"
+                info="When on, the clipboard contents at the time of recording are sent to the AI as context for spelling and disambiguation. The content is never stored."
+                checked={draft.ai_cleanup.clipboard_context_enabled}
+                onCheckedChange={setClipboardContextEnabled}
+              />
             </>
           )}
           <div className="flex items-center gap-3 mt-3 mb-1">
@@ -1098,6 +1111,7 @@ export function ModesPage() {
         provider: "anthropic",
         model: "claude-haiku-4-5",
         paste_raw_on_failure: true,
+        clipboard_context_enabled: false,
       },
       term_set_ids: [],
       correction_set_ids: [],

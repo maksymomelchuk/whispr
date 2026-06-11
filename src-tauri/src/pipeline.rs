@@ -135,6 +135,7 @@ pub fn run_stages(
         provider_model: Some(mode.provider_model.clone()),
         app_name: None,
         bundle_id: None,
+        context_channels: vec![],
     };
 
     Outcome {

@@ -68,6 +68,9 @@ pub struct ModeCleanup {
     pub model: String,
     #[serde(default = "default_true")]
     pub paste_raw_on_failure: bool,
+    // Defaults to false so existing behaviour is unchanged after upgrade.
+    #[serde(default)]
+    pub clipboard_context_enabled: bool,
 }
 
 impl Default for ModeCleanup {
@@ -78,6 +81,7 @@ impl Default for ModeCleanup {
             provider: AiProviderId::default(),
             model: default_cleanup_model(),
             paste_raw_on_failure: true,
+            clipboard_context_enabled: false,
         }
     }
 }
@@ -400,6 +404,7 @@ mod tests {
             provider: AiProviderId::OpenAi,
             model: "gpt-4o-mini".to_string(),
             paste_raw_on_failure: true,
+            clipboard_context_enabled: false,
         };
         let json = serde_json::to_string(&c).unwrap();
         let decoded: ModeCleanup = serde_json::from_str(&json).unwrap();

@@ -47,10 +47,11 @@ pub async fn invoke(
     model: &str,
     prompt_override: Option<&str>,
     tone_directive: Option<&str>,
+    context: Option<&cleanup::ContextBlocks>,
     transcript: &str,
 ) -> Result<(String, cleanup::Usage), cleanup::CleanupError> {
     use cleanup::AiProviderId;
-    let prompt = cleanup::effective_prompt(prompt_override, tone_directive);
+    let prompt = cleanup::effective_prompt(prompt_override, tone_directive, context);
     match provider {
         AiProviderId::Anthropic => {
             let credential = resolve_anthropic_credential(cleanup_settings)?;
@@ -87,12 +88,13 @@ pub(crate) async fn invoke_with_transport<T: cleanup::Transport>(
     model: &str,
     prompt_override: Option<&str>,
     tone_directive: Option<&str>,
+    context: Option<&cleanup::ContextBlocks>,
     transcript: &str,
     transport: &T,
     timeout: Duration,
 ) -> Result<(String, cleanup::Usage), cleanup::CleanupError> {
     use cleanup::AiProviderId;
-    let prompt = cleanup::effective_prompt(prompt_override, tone_directive);
+    let prompt = cleanup::effective_prompt(prompt_override, tone_directive, context);
     match provider {
         AiProviderId::Anthropic => {
             let credential = resolve_anthropic_credential(cleanup_settings)?;
@@ -362,6 +364,7 @@ mod tests {
             "claude-haiku-4-5",
             None,
             None,
+            None,
             "raw transcript",
             &transport,
             FIVE_SECS,
@@ -381,6 +384,7 @@ mod tests {
             "claude-haiku-4-5",
             None,
             None,
+            None,
             "raw transcript",
             &transport,
             FIVE_SECS,
@@ -398,6 +402,7 @@ mod tests {
             &settings,
             AiProviderId::Anthropic,
             "claude-haiku-4-5",
+            None,
             None,
             None,
             "raw transcript",
@@ -422,6 +427,7 @@ mod tests {
             "claude-haiku-4-5",
             None,
             None,
+            None,
             "raw transcript",
             &transport,
             FIVE_SECS,
@@ -443,6 +449,7 @@ mod tests {
             "gpt-4o-mini",
             None,
             None,
+            None,
             "raw transcript",
             &transport,
             FIVE_SECS,
@@ -460,6 +467,7 @@ mod tests {
             &settings,
             AiProviderId::OpenAi,
             "gpt-4o-mini",
+            None,
             None,
             None,
             "raw transcript",
@@ -483,6 +491,7 @@ mod tests {
             "ignored-model",
             None,
             None,
+            None,
             "raw transcript",
             &transport,
             FIVE_SECS,
@@ -500,6 +509,7 @@ mod tests {
             &settings,
             AiProviderId::Custom,
             "model",
+            None,
             None,
             None,
             "raw transcript",
@@ -524,6 +534,7 @@ mod tests {
             "claude-haiku-4-5",
             None,
             None,
+            None,
             "raw transcript",
             &HangingTransport,
             Duration::from_millis(50),
@@ -543,6 +554,7 @@ mod tests {
             &settings,
             AiProviderId::Anthropic,
             "claude-haiku-4-5",
+            None,
             None,
             None,
             "raw transcript",
@@ -566,6 +578,7 @@ mod tests {
             "claude-haiku-4-5",
             None,
             None,
+            None,
             "raw transcript",
             &transport,
             FIVE_SECS,
@@ -585,6 +598,7 @@ mod tests {
             &settings,
             AiProviderId::Anthropic,
             "claude-haiku-4-5",
+            None,
             None,
             None,
             "raw transcript",

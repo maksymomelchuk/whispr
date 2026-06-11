@@ -45,6 +45,7 @@ mod cleanup_invoke;
 pub mod model_catalog;
 pub mod recovery;
 
+mod clipboard_context;
 mod tone;
 
 // media, overlay, and target_app expose platform-neutral public APIs and
@@ -152,6 +153,7 @@ pub fn run() {
             }
 
             let app_state = AppState::default();
+            clipboard_context::start_sampler(app_state.clipboard_window.clone());
             *app_state.hotkey_bindings.lock().unwrap() = settings.hotkey_bindings;
             *app_state.input_device.lock().unwrap() = settings.input_device;
             *app_state.pause_media_on_record.lock().unwrap() = settings.pause_media_on_record;
