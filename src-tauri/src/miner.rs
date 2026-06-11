@@ -5,15 +5,12 @@ use crate::config::{
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// A candidate vocabulary correction extracted from a (before, after) text pair.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MinedCandidate {
     pub from: String,
     pub to: String,
 }
 
-/// Extract vocabulary correction candidates from a (before, after) text pair.
-///
 /// Filter chain (in order):
 /// 1. Whole-text word-edit ratio < 0.30 — rewrites discard everything.
 /// 2. Each substitution span ≤ 3 words on both sides.
@@ -44,10 +41,6 @@ pub fn mine(before: &str, after: &str) -> Vec<MinedCandidate> {
         .collect()
 }
 
-/// Apply a batch of mined candidates to the learned entry store.
-///
-/// Each candidate is looked up by (from, to) pair. If a consistent match
-/// exists, its observation count is incremented and it may be promoted.
 /// Inconsistent mappings (same `from`, different `to`) demote existing
 /// Correction entries to Terms.
 pub fn observe_candidates(candidates: &[MinedCandidate], settings: &mut Settings, now_ms: i64) {
@@ -57,11 +50,8 @@ pub fn observe_candidates(candidates: &[MinedCandidate], settings: &mut Settings
     evict_stale(&mut settings.learned_entries, now_ms);
 }
 
-/// Promote a learned entry into the permanent correction or term store.
-///
-/// Correction entries are added to the default correction set (created if
-/// absent). Term entries are added to the default term set. The learned entry
-/// is removed after promotion regardless of its current status.
+/// Default correction/term set is created if absent. The learned entry is
+/// removed after promotion regardless of its current status.
 pub fn promote_entry(settings: &mut Settings, id: &str) {
     let entry = match settings.learned_entries.iter().find(|e| e.id == id).cloned() {
         Some(e) => e,
@@ -258,11 +248,7 @@ fn word_edit_distance(a: &[&str], b: &[&str]) -> usize {
 
 // ── phonetic filter ────────────────────────────────────────────────────────
 
-/// Returns true if `from` and `to` sound phonetically similar.
-///
-/// Soundex encoding gates the check; character edit distance confirms it.
-/// Pure case changes are excluded — those are proper-noun candidates, not
-/// phonetic ones.
+// Pure case changes are excluded — those are proper-noun candidates, not phonetic ones.
 fn is_phonetically_similar(from: &str, to: &str) -> bool {
     if from.contains(' ') || to.contains(' ') {
         return false;
@@ -281,7 +267,6 @@ fn is_phonetically_similar(from: &str, to: &str) -> bool {
     max_len > 0 && (dist as f64 / max_len as f64) < 0.5
 }
 
-/// Soundex encoding (ABCD standard four-character code).
 fn soundex(s: &str) -> String {
     #[rustfmt::skip]
     const TABLE: [u8; 26] = [
@@ -346,11 +331,8 @@ fn char_edit_distance(a: &str, b: &str) -> usize {
 
 // ── proper-noun filter ─────────────────────────────────────────────────────
 
-/// Returns true if `to` (the corrected form) looks like a proper noun or
-/// technical term that an ASR would likely mishear.
-///
-/// Mixed case anywhere (camelCase, PascalCase, etc.) is always a signal.
-/// Simple title case is only a signal mid-sentence (`!at_sentence_start`).
+// Mixed case anywhere (camelCase, PascalCase, etc.) is always a signal.
+// Simple title case is only a signal mid-sentence (`!at_sentence_start`).
 fn looks_like_proper_noun(to: &str, at_sentence_start: bool) -> bool {
     let has_upper = to.chars().any(|c| c.is_uppercase());
     let has_lower = to.chars().any(|c| c.is_lowercase());
@@ -467,7 +449,6 @@ fn evict_lru(entries: &mut Vec<LearnedEntry>) {
 mod tests {
     use super::*;
 
-    // Helper: collect (from, to) pairs from candidates.
     fn pairs(candidates: Vec<MinedCandidate>) -> Vec<(String, String)> {
         candidates
             .into_iter()
