@@ -197,21 +197,24 @@ describe("LearnedEntriesPage – delete", () => {
 });
 
 describe("LearnedEntriesPage – promote", () => {
-  it("removes promoted entry from list and shows success toast", async () => {
+  it("moves a promoted candidate into the Ready to use section and shows success toast", async () => {
     const { toast } = await import("sonner");
-    vi.mocked(mockGetLearnedEntries).mockResolvedValue([PROMOTED_TERM]);
+    vi.mocked(mockGetLearnedEntries).mockResolvedValue([CANDIDATE_CORRECTION]);
     render(<Wrapper initial={{ ...BASE, learn_from_corrections: true }} />);
 
-    await waitFor(() => expect(screen.getByText("GitHub")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Candidates")).toBeInTheDocument(),
+    );
 
     await userEvent.click(
       screen.getByRole("button", { name: "Promote to permanent entry" }),
     );
 
     await waitFor(() =>
-      expect(mockPromoteLearnedEntry).toHaveBeenCalledWith("learned-2"),
+      expect(mockPromoteLearnedEntry).toHaveBeenCalledWith("learned-1"),
     );
-    expect(screen.queryByText("GitHub")).not.toBeInTheDocument();
+    expect(screen.getByText("Ready to use")).toBeInTheDocument();
+    expect(screen.queryByText("Candidates")).not.toBeInTheDocument();
     expect(toast.success).toHaveBeenCalledWith(
       "Entry promoted to permanent dictionary",
     );
