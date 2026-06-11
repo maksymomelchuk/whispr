@@ -8,7 +8,6 @@ use crate::config::{
 /// on the most relevant words for the current app.
 pub const ENGINE_TERM_BUDGET: usize = 40;
 
-/// Maximum entries in the spell-exactly glossary block sent to the cleanup AI.
 pub const GLOSSARY_BUDGET: usize = 200;
 
 /// Half-life for recency decay: an entry last observed this many days ago
@@ -31,8 +30,6 @@ fn app_frequency_ratio(entry: &LearnedEntry, bundle_id: &str) -> f64 {
     app_obs as f64 / entry.total_observations as f64
 }
 
-/// Score in [0, 2]: base 1.0 scaled by recency, doubled when the entry is
-/// observed exclusively in the current app.
 fn score(entry: &LearnedEntry, bundle_id: Option<&str>, now_ms: i64) -> f64 {
     let recency = recency_score(entry.last_observed_ms, now_ms);
     let app_freq = bundle_id
@@ -41,12 +38,9 @@ fn score(entry: &LearnedEntry, bundle_id: Option<&str>, now_ms: i64) -> f64 {
     (1.0 + app_freq) * recency
 }
 
-/// Selects up to `ENGINE_TERM_BUDGET` terms for STT Engine recognition hints.
-///
-/// Manual entries (from named term sets) are always emitted first and fill the
-/// budget before any learned entries are considered — they win all budget ties.
-/// Among learned entries, those observed most frequently in `bundle_id`'s app
-/// and most recently are ranked highest.
+/// Manual entries (from named term sets) always fill the budget before any
+/// learned entries — they win all budget ties. Among learned entries, those
+/// observed most frequently in `bundle_id`'s app and most recently rank highest.
 pub fn select_terms(
     term_sets: &[NamedTermSet],
     set_ids: &[String],
@@ -92,10 +86,8 @@ pub fn select_terms(
     result
 }
 
-/// Selects up to `GLOSSARY_BUDGET` words for the cleanup AI's spell-exactly
-/// glossary. Includes manual terms, manual correction targets, and promoted
-/// learned entries (both Terms and Corrections). Manual entries always precede
-/// learned entries so the budget is spent on user-managed vocabulary first.
+/// Manual entries always precede learned entries so the budget is spent on
+/// user-managed vocabulary first.
 pub fn select_glossary_words(
     term_sets: &[NamedTermSet],
     set_ids: &[String],
