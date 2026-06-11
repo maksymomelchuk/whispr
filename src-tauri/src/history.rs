@@ -74,8 +74,7 @@ pub struct HistoryEntry {
     pub app_name: Option<String>,
     #[serde(default)]
     pub bundle_id: Option<String>,
-    /// Which context channels contributed to the cleanup prompt for this
-    /// dictation. Channel flags only — captured content is never persisted.
+    /// Channel flags only — captured content is never persisted.
     #[serde(default)]
     pub context_channels: Vec<String>,
 }

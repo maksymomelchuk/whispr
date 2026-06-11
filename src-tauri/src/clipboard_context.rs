@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use tauri::Manager;
 
 const RECENCY_WINDOW: Duration = Duration::from_secs(3);
 const SAMPLE_INTERVAL: Duration = Duration::from_millis(500);
@@ -11,9 +12,7 @@ pub fn new_window() -> SamplerWindow {
     Arc::new(Mutex::new(VecDeque::new()))
 }
 
-/// Spawns a background thread that polls the clipboard change count every
-/// 500 ms and stores samples in `window`. Only the change-count integer is
-/// read in the background — clipboard content is never accessed here.
+/// Only the change-count integer is stored — clipboard content is never read here.
 pub fn start_sampler(window: SamplerWindow) {
     std::thread::Builder::new()
         .name("clipboard-sampler".into())
@@ -34,9 +33,6 @@ pub fn start_sampler(window: SamplerWindow) {
         .ok();
 }
 
-/// Returns true when `current_count` differs from the count recorded
-/// ~`RECENCY_WINDOW` ago, indicating the clipboard changed recently.
-/// Returns false when the window is empty (not enough history yet).
 pub fn is_recent_change(window: &SamplerWindow, current_count: i64) -> bool {
     let w = window.lock().unwrap();
     if w.is_empty() {
@@ -55,9 +51,6 @@ pub fn is_recent_change(window: &SamplerWindow, current_count: i64) -> bool {
     current_count != baseline
 }
 
-/// Initiates an async clipboard capture at PTT-down. Sends the captured text
-/// (or `None` if the clipboard is stale or empty) through `pending_clipboard_rx`
-/// in `AppState` so the session task can retrieve it after STT completes.
 pub fn capture(app: tauri::AppHandle) {
     use crate::state::AppState;
     let window = app.state::<AppState>().clipboard_window.clone();

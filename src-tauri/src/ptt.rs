@@ -555,21 +555,26 @@ async fn run_session(
     #[cfg(not(target_os = "macos"))]
     let resolved_app: Option<target_app::FrontmostApp> = target_app::session_app();
 
-    let clipboard_text: Option<String> = if clipboard_context_enabled {
+    let context: Option<cleanup::ContextBlocks> = if clipboard_context_enabled {
         let rx = app
             .state::<AppState>()
             .pending_clipboard_rx
             .lock()
             .unwrap()
             .take();
-        match rx {
+        let clipboard_text = match rx {
             Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
                 .await
                 .ok()
                 .and_then(|r| r.ok())
                 .flatten(),
             None => None,
-        }
+        };
+        Some(cleanup::ContextBlocks {
+            clipboard_text,
+            system_date: cleanup::system_date(),
+            system_user: cleanup::system_user(),
+        })
     } else {
         None
     };
@@ -585,8 +590,7 @@ async fn run_session(
         cleanup_provider,
         &cleanup_model,
         session_bundle_id.as_deref(),
-        clipboard_context_enabled,
-        clipboard_text,
+        context.as_ref(),
     )
     .await;
 
@@ -667,8 +671,7 @@ async fn maybe_cleanup(
     cleanup_provider: cleanup::AiProviderId,
     cleanup_model: &str,
     bundle_id: Option<&str>,
-    clipboard_context_enabled: bool,
-    clipboard_text: Option<String>,
+    context: Option<&cleanup::ContextBlocks>,
 ) -> (String, CleanupStatus, Notice, Vec<String>) {
     let cleanup_settings = &settings.ai_cleanup;
 
@@ -709,17 +712,7 @@ async fn maybe_cleanup(
         None
     };
 
-    let context = if clipboard_context_enabled {
-        Some(cleanup::ContextBlocks {
-            clipboard_text,
-            system_date: cleanup::system_date(),
-            system_user: cleanup::system_user(),
-        })
-    } else {
-        None
-    };
-
-    let context_channels: Vec<String> = match context.as_ref() {
+    let context_channels: Vec<String> = match context {
         None => vec![],
         Some(ctx) => {
             let mut channels = Vec::new();
@@ -741,7 +734,7 @@ async fn maybe_cleanup(
         cleanup_model,
         prompt_override,
         tone,
-        context.as_ref(),
+        context,
         transcript,
     )
     .await;

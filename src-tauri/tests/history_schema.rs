@@ -100,6 +100,7 @@ fn pasted_text_recovered_manually_returns_final_text() {
         provider_model: None,
         app_name: None,
         bundle_id: None,
+        context_channels: vec![],
     };
     assert_eq!(pasted_text(&entry), "final recovered");
 }
