@@ -46,6 +46,7 @@ pub async fn recover_entry(
         &snapshot.cleanup_model,
         snapshot.cleanup_prompt_override.as_deref(),
         None,
+        &[],
         None,
         &entry.raw_text,
     )
@@ -76,6 +77,7 @@ pub(crate) async fn recover_entry_with_transport<T: Transport>(
         &snapshot.cleanup_model,
         snapshot.cleanup_prompt_override.as_deref(),
         None,
+        &[],
         None,
         &entry.raw_text,
         transport,

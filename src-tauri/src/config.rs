@@ -207,6 +207,8 @@ pub struct LearnedEntry {
     pub status: LearnedEntryStatus,
     pub total_observations: u32,
     pub last_observed_ms: i64,
+    #[serde(default)]
+    pub per_app_observations: std::collections::BTreeMap<String, u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

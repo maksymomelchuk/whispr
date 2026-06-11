@@ -47,6 +47,7 @@ pub mod recovery;
 
 mod clipboard_context;
 mod miner;
+pub mod selector;
 mod selected_text_context;
 mod tone;
 

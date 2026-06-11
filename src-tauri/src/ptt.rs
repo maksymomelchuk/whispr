@@ -19,8 +19,8 @@ use crate::recorder::Recorder;
 use crate::session::{Session, PTT_ERROR_EVENT, TRANSCRIPTION_ERROR_EVENT};
 use crate::state::{AppState, ModifierState};
 use crate::{
-    cleanup, cleanup_invoke, cleanup_stats, clipboard_context, config, model_catalog, recovery,
-    selected_text_context, stats, tone,
+    cleanup, cleanup_invoke, cleanup_stats, clipboard_context, config, miner, model_catalog,
+    recovery, selected_text_context, selector, stats, tone,
 };
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -320,10 +320,13 @@ async fn run_session(
     let paste_raw_on_failure = active_mode.ai_cleanup.paste_raw_on_failure;
     let clipboard_context_enabled = active_mode.ai_cleanup.clipboard_context_enabled;
     let selected_text_context_enabled = active_mode.ai_cleanup.selected_text_context_enabled;
-    let session_terms = crate::terms::compose_term_hints(
+    let hint_bundle_id = crate::target_app::session_app().map(|a| a.bundle_id);
+    let session_terms = selector::select_terms(
         &settings.term_sets,
         &active_mode.term_set_ids,
         &settings.learned_entries,
+        hint_bundle_id.as_deref(),
+        miner::now_ms(),
     );
 
     let missing_key = match active_mode.provider_model.provider() {
@@ -628,6 +631,15 @@ async fn run_session(
         };
 
     let session_bundle_id = resolved_app.as_ref().map(|a| a.bundle_id.clone());
+    let glossary = selector::select_glossary_words(
+        &settings.term_sets,
+        &active_mode.term_set_ids,
+        &settings.correction_sets,
+        &active_mode.correction_set_ids,
+        &settings.learned_entries,
+        session_bundle_id.as_deref(),
+        miner::now_ms(),
+    );
     let (replaced_text, cleanup_status, notice, context_channels) = maybe_cleanup(
         app,
         &settings,
@@ -638,6 +650,7 @@ async fn run_session(
         cleanup_provider,
         &cleanup_model,
         session_bundle_id.as_deref(),
+        &glossary,
         context.as_ref(),
     )
     .await;
@@ -719,6 +732,7 @@ async fn maybe_cleanup(
     cleanup_provider: cleanup::AiProviderId,
     cleanup_model: &str,
     bundle_id: Option<&str>,
+    glossary: &[String],
     context: Option<&cleanup::ContextBlocks>,
 ) -> (String, CleanupStatus, Notice, Vec<String>) {
     let cleanup_settings = &settings.ai_cleanup;
@@ -782,6 +796,7 @@ async fn maybe_cleanup(
         cleanup_model,
         prompt_override,
         tone,
+        glossary,
         context,
         transcript,
     )

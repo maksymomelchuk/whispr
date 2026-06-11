@@ -47,11 +47,12 @@ pub async fn invoke(
     model: &str,
     prompt_override: Option<&str>,
     tone_directive: Option<&str>,
+    glossary: &[String],
     context: Option<&cleanup::ContextBlocks>,
     transcript: &str,
 ) -> Result<(String, cleanup::Usage), cleanup::CleanupError> {
     use cleanup::AiProviderId;
-    let prompt = cleanup::effective_prompt(prompt_override, tone_directive, context);
+    let prompt = cleanup::effective_prompt(prompt_override, tone_directive, glossary, context);
     match provider {
         AiProviderId::Anthropic => {
             let credential = resolve_anthropic_credential(cleanup_settings)?;
@@ -88,13 +89,14 @@ pub(crate) async fn invoke_with_transport<T: cleanup::Transport>(
     model: &str,
     prompt_override: Option<&str>,
     tone_directive: Option<&str>,
+    glossary: &[String],
     context: Option<&cleanup::ContextBlocks>,
     transcript: &str,
     transport: &T,
     timeout: Duration,
 ) -> Result<(String, cleanup::Usage), cleanup::CleanupError> {
     use cleanup::AiProviderId;
-    let prompt = cleanup::effective_prompt(prompt_override, tone_directive, context);
+    let prompt = cleanup::effective_prompt(prompt_override, tone_directive, glossary, context);
     match provider {
         AiProviderId::Anthropic => {
             let credential = resolve_anthropic_credential(cleanup_settings)?;
@@ -364,6 +366,7 @@ mod tests {
             "claude-haiku-4-5",
             None,
             None,
+            &[],
             None,
             "raw transcript",
             &transport,
@@ -384,6 +387,7 @@ mod tests {
             "claude-haiku-4-5",
             None,
             None,
+            &[],
             None,
             "raw transcript",
             &transport,
@@ -404,6 +408,7 @@ mod tests {
             "claude-haiku-4-5",
             None,
             None,
+            &[],
             None,
             "raw transcript",
             &transport,
@@ -427,6 +432,7 @@ mod tests {
             "claude-haiku-4-5",
             None,
             None,
+            &[],
             None,
             "raw transcript",
             &transport,
@@ -449,6 +455,7 @@ mod tests {
             "gpt-4o-mini",
             None,
             None,
+            &[],
             None,
             "raw transcript",
             &transport,
@@ -469,6 +476,7 @@ mod tests {
             "gpt-4o-mini",
             None,
             None,
+            &[],
             None,
             "raw transcript",
             &transport,
@@ -491,6 +499,7 @@ mod tests {
             "ignored-model",
             None,
             None,
+            &[],
             None,
             "raw transcript",
             &transport,
@@ -511,6 +520,7 @@ mod tests {
             "model",
             None,
             None,
+            &[],
             None,
             "raw transcript",
             &transport,
@@ -534,6 +544,7 @@ mod tests {
             "claude-haiku-4-5",
             None,
             None,
+            &[],
             None,
             "raw transcript",
             &HangingTransport,
@@ -556,6 +567,7 @@ mod tests {
             "claude-haiku-4-5",
             None,
             None,
+            &[],
             None,
             "raw transcript",
             &transport,
@@ -578,6 +590,7 @@ mod tests {
             "claude-haiku-4-5",
             None,
             None,
+            &[],
             None,
             "raw transcript",
             &transport,
@@ -600,6 +613,7 @@ mod tests {
             "claude-haiku-4-5",
             None,
             None,
+            &[],
             None,
             "raw transcript",
             &transport,

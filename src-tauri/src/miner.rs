@@ -44,9 +44,14 @@ pub fn mine(before: &str, after: &str) -> Vec<MinedCandidate> {
 /// When a `from` word has seen conflicting targets, the old rule is replaced
 /// by the new one and the `from` word is marked inconsistent — preventing
 /// replacement cycles on future observations.
-pub fn observe_candidates(candidates: &[MinedCandidate], settings: &mut Settings, now_ms: i64) {
+pub fn observe_candidates(
+    candidates: &[MinedCandidate],
+    settings: &mut Settings,
+    bundle_id: Option<&str>,
+    now_ms: i64,
+) {
     for candidate in candidates {
-        observe_one(&candidate.from, &candidate.to, settings, now_ms);
+        observe_one(&candidate.from, &candidate.to, settings, bundle_id, now_ms);
     }
     evict_stale(&mut settings.learned_entries, now_ms);
 }
@@ -366,7 +371,7 @@ const STALENESS_MS: i64 = 90 * 24 * 60 * 60 * 1000;
 const MAX_ENTRIES: usize = 1000;
 const PROMOTE_THRESHOLD: u32 = 2;
 
-fn observe_one(from: &str, to: &str, settings: &mut Settings, now_ms: i64) {
+fn observe_one(from: &str, to: &str, settings: &mut Settings, bundle_id: Option<&str>, now_ms: i64) {
     let known_inconsistent = settings.learned_inconsistent_from.iter().any(|f| f == from);
 
     if known_inconsistent {
@@ -377,12 +382,13 @@ fn observe_one(from: &str, to: &str, settings: &mut Settings, now_ms: i64) {
         }) {
             e.total_observations += 1;
             e.last_observed_ms = now_ms;
+            increment_app_obs(e, bundle_id);
             if e.total_observations >= PROMOTE_THRESHOLD {
                 e.status = LearnedEntryStatus::Promoted;
             }
             return;
         }
-        observe_term(to, &mut settings.learned_entries, now_ms);
+        observe_term(to, &mut settings.learned_entries, bundle_id, now_ms);
         return;
     }
 
@@ -408,6 +414,7 @@ fn observe_one(from: &str, to: &str, settings: &mut Settings, now_ms: i64) {
             status: LearnedEntryStatus::Candidate,
             total_observations: 1,
             last_observed_ms: now_ms,
+            per_app_observations: initial_app_obs(bundle_id),
         });
         if settings.learned_entries.len() > MAX_ENTRIES {
             evict_lru(&mut settings.learned_entries);
@@ -420,6 +427,7 @@ fn observe_one(from: &str, to: &str, settings: &mut Settings, now_ms: i64) {
     }) {
         e.total_observations += 1;
         e.last_observed_ms = now_ms;
+        increment_app_obs(e, bundle_id);
         if e.total_observations >= PROMOTE_THRESHOLD {
             e.status = LearnedEntryStatus::Promoted;
         }
@@ -436,6 +444,7 @@ fn observe_one(from: &str, to: &str, settings: &mut Settings, now_ms: i64) {
         status: LearnedEntryStatus::Candidate,
         total_observations: 1,
         last_observed_ms: now_ms,
+        per_app_observations: initial_app_obs(bundle_id),
     });
 
     if settings.learned_entries.len() > MAX_ENTRIES {
@@ -443,13 +452,14 @@ fn observe_one(from: &str, to: &str, settings: &mut Settings, now_ms: i64) {
     }
 }
 
-fn observe_term(to: &str, entries: &mut Vec<LearnedEntry>, now_ms: i64) {
+fn observe_term(to: &str, entries: &mut Vec<LearnedEntry>, bundle_id: Option<&str>, now_ms: i64) {
     if let Some(e) = entries
         .iter_mut()
         .find(|e| matches!(&e.kind, LearnedKind::Term) && e.word == to)
     {
         e.total_observations += 1;
         e.last_observed_ms = now_ms;
+        increment_app_obs(e, bundle_id);
         if e.total_observations >= PROMOTE_THRESHOLD {
             e.status = LearnedEntryStatus::Promoted;
         }
@@ -464,7 +474,22 @@ fn observe_term(to: &str, entries: &mut Vec<LearnedEntry>, now_ms: i64) {
         status: LearnedEntryStatus::Candidate,
         total_observations: 1,
         last_observed_ms: now_ms,
+        per_app_observations: initial_app_obs(bundle_id),
     });
+}
+
+fn initial_app_obs(bundle_id: Option<&str>) -> std::collections::BTreeMap<String, u32> {
+    let mut map = std::collections::BTreeMap::new();
+    if let Some(id) = bundle_id {
+        map.insert(id.to_string(), 1);
+    }
+    map
+}
+
+fn increment_app_obs(entry: &mut LearnedEntry, bundle_id: Option<&str>) {
+    if let Some(id) = bundle_id {
+        *entry.per_app_observations.entry(id.to_string()).or_insert(0) += 1;
+    }
 }
 
 fn evict_stale(entries: &mut Vec<LearnedEntry>, now_ms: i64) {
@@ -564,7 +589,7 @@ mod tests {
     #[test]
     fn one_observation_stays_candidate() {
         let mut s = make_settings();
-        observe_one("tory", "Tauri", &mut s, 1000);
+        observe_one("tory", "Tauri", &mut s, None, 1000);
         assert_eq!(s.learned_entries.len(), 1);
         assert_eq!(s.learned_entries[0].status, LearnedEntryStatus::Candidate);
         assert_eq!(s.learned_entries[0].total_observations, 1);
@@ -577,8 +602,8 @@ mod tests {
     #[test]
     fn second_observation_promotes() {
         let mut s = make_settings();
-        observe_one("tory", "Tauri", &mut s, 1000);
-        observe_one("tory", "Tauri", &mut s, 2000);
+        observe_one("tory", "Tauri", &mut s, None, 1000);
+        observe_one("tory", "Tauri", &mut s, None, 2000);
         assert_eq!(s.learned_entries.len(), 1);
         assert_eq!(s.learned_entries[0].status, LearnedEntryStatus::Promoted);
         assert_eq!(s.learned_entries[0].total_observations, 2);
@@ -587,8 +612,8 @@ mod tests {
     #[test]
     fn consistent_fix_is_correction_kind() {
         let mut s = make_settings();
-        observe_one("tory", "Tauri", &mut s, 1000);
-        observe_one("tory", "Tauri", &mut s, 2000);
+        observe_one("tory", "Tauri", &mut s, None, 1000);
+        observe_one("tory", "Tauri", &mut s, None, 2000);
         assert!(matches!(
             &s.learned_entries[0].kind,
             LearnedKind::Correction { from } if from == "tory"
@@ -598,8 +623,8 @@ mod tests {
     #[test]
     fn inconsistent_mapping_replaces_existing_rule() {
         let mut s = make_settings();
-        observe_one("tory", "Tauri", &mut s, 1000);
-        observe_one("tory", "Toronto", &mut s, 2000);
+        observe_one("tory", "Tauri", &mut s, None, 1000);
+        observe_one("tory", "Toronto", &mut s, None, 2000);
 
         // Old Correction for Tauri is removed (not kept as a Term).
         assert!(
@@ -625,11 +650,11 @@ mod tests {
     #[test]
     fn replacement_cycle_is_impossible() {
         let mut s = make_settings();
-        observe_one("tory", "Tauri", &mut s, 1000);
+        observe_one("tory", "Tauri", &mut s, None, 1000);
         // First inconsistency: Toronto replaces Tauri.
-        observe_one("tory", "Toronto", &mut s, 2000);
+        observe_one("tory", "Toronto", &mut s, None, 2000);
         // Second observation re-introduces Tauri — must become a Term, not a new Correction.
-        observe_one("tory", "Tauri", &mut s, 3000);
+        observe_one("tory", "Tauri", &mut s, None, 3000);
 
         let tauri = s.learned_entries.iter().find(|e| e.word == "Tauri");
         assert!(tauri.is_some(), "Tauri entry must exist as a Term");
@@ -655,8 +680,8 @@ mod tests {
     #[test]
     fn at_most_one_correction_per_from_word() {
         let mut s = make_settings();
-        observe_one("tory", "Tauri", &mut s, 1000);
-        observe_one("tory", "Toronto", &mut s, 2000);
+        observe_one("tory", "Tauri", &mut s, None, 1000);
+        observe_one("tory", "Toronto", &mut s, None, 2000);
 
         let corrections: Vec<_> = s
             .learned_entries
@@ -675,6 +700,7 @@ mod tests {
             status: LearnedEntryStatus::Candidate,
             total_observations: 1,
             last_observed_ms: 0,
+            per_app_observations: Default::default(),
         }];
         let now = STALENESS_MS + 1;
         evict_stale(&mut entries, now);
@@ -691,6 +717,7 @@ mod tests {
                 status: LearnedEntryStatus::Candidate,
                 total_observations: 1,
                 last_observed_ms: i,
+                per_app_observations: Default::default(),
             })
             .collect();
         evict_lru(&mut entries);
@@ -704,8 +731,8 @@ mod tests {
     #[test]
     fn promote_correction_adds_to_default_set() {
         let mut s = make_settings();
-        observe_one("tory", "Tauri", &mut s, 1000);
-        observe_one("tory", "Tauri", &mut s, 2000);
+        observe_one("tory", "Tauri", &mut s, None, 1000);
+        observe_one("tory", "Tauri", &mut s, None, 2000);
         let id = s.learned_entries[0].id.clone();
         promote_entry(&mut s, &id);
 
@@ -725,8 +752,8 @@ mod tests {
     #[test]
     fn promote_correction_skipped_when_conflicting_from_exists() {
         let mut s = make_settings();
-        observe_one("tory", "Tauri", &mut s, 1000);
-        observe_one("tory", "Tauri", &mut s, 2000);
+        observe_one("tory", "Tauri", &mut s, None, 1000);
+        observe_one("tory", "Tauri", &mut s, None, 2000);
         let id = s.learned_entries[0].id.clone();
 
         // Manually plant a conflicting correction in the permanent set.
@@ -756,8 +783,8 @@ mod tests {
     #[test]
     fn promote_correction_noop_when_exact_duplicate_exists() {
         let mut s = make_settings();
-        observe_one("tory", "Tauri", &mut s, 1000);
-        observe_one("tory", "Tauri", &mut s, 2000);
+        observe_one("tory", "Tauri", &mut s, None, 1000);
+        observe_one("tory", "Tauri", &mut s, None, 2000);
         let id = s.learned_entries[0].id.clone();
 
         // Exact duplicate already in permanent set.
@@ -786,8 +813,8 @@ mod tests {
     #[test]
     fn promote_term_adds_to_default_set() {
         let mut s = make_settings();
-        observe_term("Tauri", &mut s.learned_entries, 1000);
-        observe_term("Tauri", &mut s.learned_entries, 2000);
+        observe_term("Tauri", &mut s.learned_entries, None, 1000);
+        observe_term("Tauri", &mut s.learned_entries, None, 2000);
         let id = s.learned_entries[0].id.clone();
         promote_entry(&mut s, &id);
 
