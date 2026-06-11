@@ -131,9 +131,52 @@ fn platform_read_focused_field() -> Option<String> {
     }
 }
 
-// ── Linux / Windows (no-op) ───────────────────────────────────────────────────
+// ── Windows ───────────────────────────────────────────────────────────────────
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+fn platform_read_focused_field() -> Option<String> {
+    use windows::Win32::System::Com::{
+        CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
+    };
+    use windows::Win32::System::Variant::{VT_BOOL, VT_BSTR};
+    use windows::Win32::UI::Accessibility::{
+        CUIAutomation, IUIAutomation, UIA_IsPasswordPropertyId, UIA_ValueValuePropertyId,
+    };
+
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+
+        let uia: IUIAutomation =
+            CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER).ok()?;
+        let cache_req = uia.CreateCacheRequest().ok()?;
+        cache_req.AddProperty(UIA_IsPasswordPropertyId).ok()?;
+        cache_req.AddProperty(UIA_ValueValuePropertyId).ok()?;
+
+        let element = uia.GetFocusedElementBuildCache(&cache_req).ok()?;
+
+        let pw_variant = element.GetCachedPropertyValue(UIA_IsPasswordPropertyId).ok()?;
+        let pw_inner = &*pw_variant.0.Anonymous;
+        if pw_inner.vt == VT_BOOL && pw_inner.Anonymous.boolVal.0 != 0 {
+            return None;
+        }
+
+        let val_variant = element.GetCachedPropertyValue(UIA_ValueValuePropertyId).ok()?;
+        let inner = &*val_variant.0.Anonymous;
+        if inner.vt != VT_BSTR {
+            return None;
+        }
+        let text = (&*inner.Anonymous.bstrVal).to_string();
+        if text.is_empty() {
+            None
+        } else {
+            Some(text)
+        }
+    }
+}
+
+// ── Linux (no-op) ─────────────────────────────────────────────────────────────
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn platform_read_focused_field() -> Option<String> {
     None
 }
