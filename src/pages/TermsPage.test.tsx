@@ -98,156 +98,77 @@ function Wrapper({ initial = BASE }: { initial?: Settings }) {
 }
 
 beforeEach(() => {
-  vi.mocked(mockRenameTermSet).mockResolvedValue(undefined);
-  vi.mocked(mockUpdateTermSetEntries).mockResolvedValue(undefined);
-  vi.mocked(mockDeleteTermSet).mockResolvedValue(undefined);
+  vi.mocked(mockRenameTermSet).mockResolvedValue(BASE);
+  vi.mocked(mockUpdateTermSetEntries).mockResolvedValue(BASE);
+  vi.mocked(mockDeleteTermSet).mockResolvedValue(BASE);
 });
 
 afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("TermsPage – empty state", () => {
-  it("shows empty card when no term sets exist", () => {
+describe("TermsPage – vocabulary-specific", () => {
+  it("renders the Vocabulary title", () => {
+    render(<Wrapper />);
+    expect(screen.getByText("Vocabulary")).toBeInTheDocument();
+  });
+
+  it("empty state shows 'No term sets yet'", () => {
     render(<Wrapper />);
     expect(screen.getByText(/no term sets yet/i)).toBeInTheDocument();
   });
-});
 
-describe("TermsPage – create", () => {
-  it("creates a term set and shows it in the list", async () => {
-    const created: NamedTermSet = {
-      id: "ts-new",
-      name: "Medical",
-      entries: [],
-    };
-    vi.mocked(mockCreateTermSet).mockResolvedValue(created);
-
+  it("calls createTermSet with the entered name", async () => {
+    vi.mocked(mockCreateTermSet).mockResolvedValue({
+      ...BASE,
+      term_sets: [{ id: "ts-new", name: "Medical", entries: [] }],
+    });
     render(<Wrapper />);
     await userEvent.type(
       screen.getByPlaceholderText("New set name"),
       "Medical",
     );
     await userEvent.click(screen.getByRole("button", { name: /create set/i }));
-
     await waitFor(() =>
       expect(mockCreateTermSet).toHaveBeenCalledWith("Medical"),
     );
-    expect(screen.getByText("Medical")).toBeInTheDocument();
   });
 
-  it("clears the name input after creation", async () => {
-    const created: NamedTermSet = { id: "ts-1", name: "Legal", entries: [] };
-    vi.mocked(mockCreateTermSet).mockResolvedValue(created);
-
-    render(<Wrapper />);
-    const input = screen.getByPlaceholderText("New set name");
-    await userEvent.type(input, "Legal");
-    await userEvent.click(screen.getByRole("button", { name: /create set/i }));
-
-    await waitFor(() => expect(input).toHaveValue(""));
-  });
-
-  it("create button is disabled when name is empty", () => {
-    render(<Wrapper />);
-    expect(screen.getByRole("button", { name: /create set/i })).toBeDisabled();
-  });
-});
-
-describe("TermsPage – rename", () => {
-  it("renames a set on Enter", async () => {
-    const set: NamedTermSet = { id: "ts-1", name: "Originals", entries: [] };
-    render(<Wrapper initial={{ ...BASE, term_sets: [set] }} />);
-
-    await userEvent.click(screen.getByRole("button", { name: /rename set/i }));
-    const input = screen.getByDisplayValue("Originals");
-    await userEvent.clear(input);
-    await userEvent.type(input, "Renamed{Enter}");
-
-    await waitFor(() =>
-      expect(mockRenameTermSet).toHaveBeenCalledWith("ts-1", "Renamed"),
-    );
-    expect(screen.getByText("Renamed")).toBeInTheDocument();
-  });
-});
-
-describe("TermsPage – delete", () => {
-  it("shows confirmation dialog and deletes on confirm", async () => {
-    const set: NamedTermSet = { id: "ts-1", name: "Old Set", entries: [] };
-    render(<Wrapper initial={{ ...BASE, term_sets: [set] }} />);
-
-    await userEvent.click(screen.getByRole("button", { name: /delete set/i }));
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-
-    await userEvent.click(
-      within(screen.getByRole("dialog")).getByRole("button", {
-        name: /delete/i,
-      }),
-    );
-
-    await waitFor(() => expect(mockDeleteTermSet).toHaveBeenCalledWith("ts-1"));
-    expect(screen.queryByText("Old Set")).not.toBeInTheDocument();
-  });
-
-  it("cancel on dialog keeps the set", async () => {
-    const set: NamedTermSet = { id: "ts-1", name: "Keep Me", entries: [] };
-    render(<Wrapper initial={{ ...BASE, term_sets: [set] }} />);
-
-    await userEvent.click(screen.getByRole("button", { name: /delete set/i }));
-    await userEvent.click(
-      within(screen.getByRole("dialog")).getByRole("button", {
-        name: /cancel/i,
-      }),
-    );
-
-    expect(mockDeleteTermSet).not.toHaveBeenCalled();
-    expect(screen.getByText("Keep Me")).toBeInTheDocument();
-  });
-
-  it("shows affected mode names in the delete dialog", async () => {
+  it("shows affected profile names from term_set_ids", async () => {
     const set: NamedTermSet = { id: "ts-1", name: "Tech Terms", entries: [] };
     const modeWithSet: Mode = { ...BASE_MODE, term_set_ids: ["ts-1"] };
     render(
-      <Wrapper
-        initial={{
-          ...BASE,
-          term_sets: [set],
-          modes: [modeWithSet],
-        }}
-      />,
+      <Wrapper initial={{ ...BASE, term_sets: [set], modes: [modeWithSet] }} />,
     );
-
-    await userEvent.click(screen.getByRole("button", { name: /delete set/i }));
-
+    await userEvent.click(screen.getByRole("button", { name: "Delete set" }));
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText(/Default/)).toBeInTheDocument();
   });
-});
 
-describe("TermsPage – expand and edit entries", () => {
-  it("expands row to show entry input on click", async () => {
+  it("shows TermChipInput when a set is expanded", async () => {
     const set: NamedTermSet = { id: "ts-1", name: "My Set", entries: [] };
     render(<Wrapper initial={{ ...BASE, term_sets: [set] }} />);
-
     await userEvent.click(screen.getByText("My Set"));
-
     expect(screen.getByPlaceholderText(/type a term/i)).toBeInTheDocument();
   });
 
   it("saves entries when a term is committed", async () => {
     const set: NamedTermSet = { id: "ts-1", name: "My Set", entries: [] };
+    vi.mocked(mockUpdateTermSetEntries).mockResolvedValue({
+      ...BASE,
+      term_sets: [{ id: "ts-1", name: "My Set", entries: ["MongoDB"] }],
+    });
     render(<Wrapper initial={{ ...BASE, term_sets: [set] }} />);
-
     await userEvent.click(screen.getByText("My Set"));
     await userEvent.type(
       screen.getByPlaceholderText(/type a term/i),
       "MongoDB{Enter}",
     );
-
     await waitFor(() =>
       expect(mockUpdateTermSetEntries).toHaveBeenCalledWith("ts-1", [
         "MongoDB",
       ]),
     );
+    expect(screen.getByText("MongoDB")).toBeInTheDocument();
   });
 });

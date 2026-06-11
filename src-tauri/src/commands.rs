@@ -1,7 +1,7 @@
 use crate::api_key_validation::{self, ApiKeyValidation};
 use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
 use crate::config::{
-    self, CleanupAuthMode, HotkeyAction, HotkeyBinding, LocalWhisperIdleTimeout,
+    self, CleanupAuthMode, CorrectionEntry, HotkeyAction, HotkeyBinding, LocalWhisperIdleTimeout,
     NamedCorrectionSet, NamedTermSet, Settings, SnippetEntry,
 };
 use crate::download::{
@@ -213,28 +213,36 @@ pub fn set_shortcut_capture_paused(state: State<'_, AppState>, paused: bool) {
 }
 
 #[tauri::command]
-pub fn create_term_set(app: AppHandle, name: String) -> Result<NamedTermSet, String> {
+pub fn create_term_set(app: AppHandle, name: String) -> Result<SettingsView, String> {
+    let trimmed_name = name.trim();
+    if trimmed_name.is_empty() {
+        return Err(format!("Set name cannot be empty (got {name:?})"));
+    }
     let ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
     let set = NamedTermSet {
         id: format!("term-set-{ms}"),
-        name: name.trim().to_string(),
+        name: trimmed_name.to_string(),
         entries: vec![],
     };
-    let result = set.clone();
     config::update(&app, |s| s.term_sets.push(set))?;
-    Ok(result)
+    Ok(config::load(&app).into())
 }
 
 #[tauri::command]
-pub fn rename_term_set(app: AppHandle, id: SetId, name: String) -> Result<(), String> {
+pub fn rename_term_set(app: AppHandle, id: SetId, name: String) -> Result<SettingsView, String> {
+    let trimmed_name = name.trim();
+    if trimmed_name.is_empty() {
+        return Err(format!("Set name cannot be empty (got {name:?})"));
+    }
     config::update(&app, |s| {
         if let Some(ts) = s.term_sets.iter_mut().find(|ts| ts.id == id) {
-            ts.name = name.trim().to_string();
+            ts.name = trimmed_name.to_string();
         }
-    })
+    })?;
+    Ok(config::load(&app).into())
 }
 
 #[tauri::command]
@@ -242,46 +250,86 @@ pub fn update_term_set_entries(
     app: AppHandle,
     id: SetId,
     entries: Vec<String>,
-) -> Result<(), String> {
+) -> Result<SettingsView, String> {
     config::update(&app, |s| {
         if let Some(ts) = s.term_sets.iter_mut().find(|ts| ts.id == id) {
             ts.entries = entries;
         }
-    })
+    })?;
+    Ok(config::load(&app).into())
 }
 
 #[tauri::command]
-pub fn delete_term_set(app: AppHandle, id: SetId) -> Result<(), String> {
+pub fn delete_term_set(app: AppHandle, id: SetId) -> Result<SettingsView, String> {
     config::update(&app, |s| {
         s.term_sets.retain(|ts| ts.id != id);
         for mode in s.modes.iter_mut() {
             mode.term_set_ids.retain(|tsid| *tsid != id);
         }
-    })
+    })?;
+    Ok(config::load(&app).into())
 }
 
 #[tauri::command]
-pub fn add_correction_set(app: AppHandle, set: NamedCorrectionSet) -> Result<(), String> {
-    config::update(&app, |s| s.correction_sets.push(set))
+pub fn create_correction_set(app: AppHandle, name: String) -> Result<SettingsView, String> {
+    let trimmed_name = name.trim();
+    if trimmed_name.is_empty() {
+        return Err(format!("Set name cannot be empty (got {name:?})"));
+    }
+    let ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let set = NamedCorrectionSet {
+        id: format!("correction-set-{ms}"),
+        name: trimmed_name.to_string(),
+        entries: vec![],
+    };
+    config::update(&app, |s| s.correction_sets.push(set))?;
+    Ok(config::load(&app).into())
 }
 
 #[tauri::command]
-pub fn update_correction_set(app: AppHandle, set: NamedCorrectionSet) -> Result<(), String> {
+pub fn rename_correction_set(
+    app: AppHandle,
+    id: SetId,
+    name: String,
+) -> Result<SettingsView, String> {
+    let trimmed_name = name.trim();
+    if trimmed_name.is_empty() {
+        return Err(format!("Set name cannot be empty (got {name:?})"));
+    }
     config::update(&app, |s| {
-        if let Some(cs) = s.correction_sets.iter_mut().find(|cs| cs.id == set.id) {
-            *cs = set;
+        if let Some(cs) = s.correction_sets.iter_mut().find(|cs| cs.id == id) {
+            cs.name = trimmed_name.to_string();
         }
-    })
+    })?;
+    Ok(config::load(&app).into())
 }
 
 #[tauri::command]
-pub fn delete_correction_set(app: AppHandle, set_id: String) -> Result<(), String> {
+pub fn update_correction_set_entries(
+    app: AppHandle,
+    id: SetId,
+    entries: Vec<CorrectionEntry>,
+) -> Result<SettingsView, String> {
     config::update(&app, |s| {
-        s.correction_sets.retain(|cs| cs.id != set_id);
+        if let Some(cs) = s.correction_sets.iter_mut().find(|cs| cs.id == id) {
+            cs.entries = entries;
+        }
+    })?;
+    Ok(config::load(&app).into())
+}
+
+#[tauri::command]
+pub fn delete_correction_set(app: AppHandle, id: SetId) -> Result<SettingsView, String> {
+    config::update(&app, |s| {
+        s.correction_sets.retain(|cs| cs.id != id);
         for mode in s.modes.iter_mut() {
-            mode.correction_set_ids.retain(|id| id != &set_id);
+            mode.correction_set_ids.retain(|csid| *csid != id);
         }
-    })
+    })?;
+    Ok(config::load(&app).into())
 }
 
 #[tauri::command]

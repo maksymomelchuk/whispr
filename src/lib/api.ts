@@ -13,7 +13,6 @@ import type {
   LocalWhisperModel,
   Mode,
   NamedCorrectionSet,
-  NamedTermSet,
   Settings,
   Snippet,
   StatsRow,
@@ -60,25 +59,30 @@ export const setShortcutCapturePaused = (paused: boolean) =>
   invoke<void>("set_shortcut_capture_paused", { paused });
 
 export const createTermSet = (name: string) =>
-  invoke<NamedTermSet>("create_term_set", { name });
+  invoke<Settings>("create_term_set", { name });
 
 export const renameTermSet = (id: string, name: string) =>
-  invoke<void>("rename_term_set", { id, name });
+  invoke<Settings>("rename_term_set", { id, name });
 
 export const updateTermSetEntries = (id: string, entries: string[]) =>
-  invoke<void>("update_term_set_entries", { id, entries });
+  invoke<Settings>("update_term_set_entries", { id, entries });
 
 export const deleteTermSet = (id: string) =>
-  invoke<void>("delete_term_set", { id });
+  invoke<Settings>("delete_term_set", { id });
 
-export const addCorrectionSet = (set: NamedCorrectionSet) =>
-  invoke<void>("add_correction_set", { set });
+export const createCorrectionSet = (name: string) =>
+  invoke<Settings>("create_correction_set", { name });
 
-export const updateCorrectionSet = (set: NamedCorrectionSet) =>
-  invoke<void>("update_correction_set", { set });
+export const renameCorrectionSet = (id: string, name: string) =>
+  invoke<Settings>("rename_correction_set", { id, name });
 
-export const deleteCorrectionSet = (setId: string) =>
-  invoke<void>("delete_correction_set", { setId });
+export const updateCorrectionSetEntries = (
+  id: string,
+  entries: NamedCorrectionSet["entries"],
+) => invoke<Settings>("update_correction_set_entries", { id, entries });
+
+export const deleteCorrectionSet = (id: string) =>
+  invoke<Settings>("delete_correction_set", { id });
 
 export const setSnippets = (snippets: Snippet[]) =>
   invoke<void>("set_snippets", { snippets });
