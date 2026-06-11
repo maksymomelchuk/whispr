@@ -84,3 +84,11 @@ An alternate way to authenticate the Anthropic [[AI Provider]]: a Claude Pro/Max
 ## Model Idle Timeout
 
 A global setting that controls how long after the last PTT session a loaded local model stays in memory before being unloaded. Configurable: 5 min / 15 min / 30 min / 1 hour / Never. Default: 15 minutes. The timer resets on every successful transcription regardless of which Profile triggered it.
+
+## License
+
+A purchased key ($39 one-time, per major version) that gates **updates and signed-build downloads — never features**. An unlicensed build keeps working forever; compiling from source is a legitimate free path. One License covers all platforms (macOS, Windows, Linux) and up to **3 Activations**; resets go through support. Issued by the license Worker from Paddle webhooks, delivered inline post-checkout and by email.
+
+## Activation
+
+Binding a [[License]] to one device via the Worker's validation API. Soft enforcement: exceeding the 3-device limit blocks new Activations, not the app itself. The same validation endpoint backs in-app activation and the site's key-gated download page.

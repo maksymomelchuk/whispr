@@ -54,7 +54,12 @@ reviewer is fast and shallow — assume they may have missed adjacent issues.
 If you find improvements to make:
 
 1. Make the changes on the current branch.
-2. Run tests and type checking; do not commit a broken state.
+2. Verify your change: run `pnpm typecheck`, `npx vitest run`, and `cargo
+check`. Run `cargo test --lib` **only if your change altered Rust
+   logic/behavior** — not for pure refactors the compiler already guards.
+   Never run `cargo test` without `--lib` (the full suite links large binaries
+   that exhaust container memory and hangs). Don't re-run the implementer's
+   suite to re-verify code you didn't touch.
 3. Commit with a message that says what was wrong and why the fix is right.
 
 If everything checks out (including the tier-1 concerns being false alarms),

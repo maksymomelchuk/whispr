@@ -32,9 +32,11 @@ not failure — it is the correct action when a careful read is needed.
 - Removing trailing whitespace, fixing obvious formatting
 - Removing stray `console.log` / `dbg!()` / `println!()` left from debugging
 
-Run `pnpm typecheck` (or the project's equivalent) after committing any fix
-to make sure nothing breaks. Commit message should describe the refinement
-crisply — no narration about the review process itself.
+After committing a fix, run `pnpm typecheck`; if the fix touched any `.rs`
+file, also run `cargo check` (fast, no link). Do NOT run the Rust test suite —
+the implementer already ran `cargo test --lib`, and re-running it here links
+large binaries that exhaust container memory. Commit message should describe
+the refinement crisply — no narration about the review process itself.
 
 ## Things you MUST escalate (do NOT try to fix)
 

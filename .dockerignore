@@ -1,0 +1,13 @@
+# Build context for .sandcastle/Dockerfile (sent only when sandcastle is
+# invoked with --dockerfile, which roots the context here). Keep the daemon
+# upload small — the Dockerfile copies just package.json, pnpm-lock.yaml, and
+# src-tauri; everything heavy or generated is excluded.
+**/node_modules
+**/target
+.git
+.pnpm-store
+dist
+.sandcastle/worktrees
+.sandcastle/logs
+**/*.log
+**/.DS_Store
