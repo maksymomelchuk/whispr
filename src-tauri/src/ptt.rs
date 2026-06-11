@@ -286,6 +286,19 @@ fn spawn_session(app: AppHandle, recorder: Recorder, device: Option<String>, mod
     });
 }
 
+const CONTEXT_CAPTURE_DEADLINE: Duration = Duration::from_millis(500);
+
+async fn await_context_capture(
+    rx: Option<tokio::sync::oneshot::Receiver<Option<String>>>,
+) -> Option<String> {
+    let rx = rx?;
+    tokio::time::timeout(CONTEXT_CAPTURE_DEADLINE, rx)
+        .await
+        .ok()
+        .and_then(|r| r.ok())
+        .flatten()
+}
+
 async fn run_session(
     app: &AppHandle,
     recorder: Recorder,
@@ -588,62 +601,32 @@ async fn run_session(
         || selected_text_context_enabled
         || focused_field_context_enabled
     {
-        let clipboard_text = if clipboard_context_enabled {
-            let rx = app
-                .state::<AppState>()
-                .pending_clipboard_rx
-                .lock()
-                .unwrap()
-                .take();
-            match rx {
-                Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
-                    .await
-                    .ok()
-                    .and_then(|r| r.ok())
-                    .flatten(),
-                None => None,
-            }
+        let state = app.state::<AppState>();
+        let clipboard_rx = if clipboard_context_enabled {
+            state.pending_clipboard_rx.lock().unwrap().take()
+        } else {
+            None
+        };
+        let selected_text_rx = if selected_text_context_enabled {
+            state.pending_selected_text_rx.lock().unwrap().take()
+        } else {
+            None
+        };
+        let focused_field_rx = if focused_field_context_enabled {
+            state.pending_focused_field_rx.lock().unwrap().take()
         } else {
             None
         };
 
-        let selected_text = if selected_text_context_enabled {
-            let rx = app
-                .state::<AppState>()
-                .pending_selected_text_rx
-                .lock()
-                .unwrap()
-                .take();
-            match rx {
-                Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
-                    .await
-                    .ok()
-                    .and_then(|r| r.ok())
-                    .flatten(),
-                None => None,
-            }
-        } else {
-            None
-        };
-
-        let focused_field_text = if focused_field_context_enabled {
-            let rx = app
-                .state::<AppState>()
-                .pending_focused_field_rx
-                .lock()
-                .unwrap()
-                .take();
-            match rx {
-                Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
-                    .await
-                    .ok()
-                    .and_then(|r| r.ok())
-                    .flatten(),
-                None => None,
-            }
-        } else {
-            None
-        };
+        // Captures run on background workers from PTT-down, so they've usually
+        // resolved by now. Await all three concurrently under one deadline so a
+        // single hung backend can't stack timeouts — serial awaits could reach
+        // 3×CONTEXT_CAPTURE_DEADLINE before paste.
+        let (clipboard_text, selected_text, focused_field_text) = tokio::join!(
+            await_context_capture(clipboard_rx),
+            await_context_capture(selected_text_rx),
+            await_context_capture(focused_field_rx),
+        );
 
         Some(cleanup::ContextBlocks {
             clipboard_text,
