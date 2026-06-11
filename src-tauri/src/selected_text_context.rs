@@ -105,10 +105,10 @@ fn platform_read_selected_text() -> Option<String> {
 
 #[cfg(target_os = "windows")]
 fn platform_read_selected_text() -> Option<String> {
+    use windows::core::Interface;
     use windows::Win32::System::Com::{
         CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
     };
-    use windows::Win32::System::Variant::VT_BOOL;
     use windows::Win32::UI::Accessibility::{
         CUIAutomation, IUIAutomation, IUIAutomationTextPattern, UIA_IsPasswordPropertyId,
         UIA_TextPatternId,
@@ -128,8 +128,7 @@ fn platform_read_selected_text() -> Option<String> {
         let pw_variant = element
             .GetCachedPropertyValue(UIA_IsPasswordPropertyId)
             .ok()?;
-        let pw_inner = &*pw_variant.0.Anonymous;
-        if pw_inner.vt == VT_BOOL && pw_inner.Anonymous.boolVal.0 != 0 {
+        if bool::try_from(&pw_variant).unwrap_or(false) {
             return None;
         }
 

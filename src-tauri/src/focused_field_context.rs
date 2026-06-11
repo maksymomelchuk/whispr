@@ -134,10 +134,10 @@ fn platform_read_focused_field() -> Option<String> {
 
 #[cfg(target_os = "windows")]
 fn platform_read_focused_field() -> Option<String> {
+    use windows::core::BSTR;
     use windows::Win32::System::Com::{
         CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
     };
-    use windows::Win32::System::Variant::{VT_BOOL, VT_BSTR};
     use windows::Win32::UI::Accessibility::{
         CUIAutomation, IUIAutomation, UIA_IsPasswordPropertyId, UIA_ValueValuePropertyId,
     };
@@ -156,19 +156,14 @@ fn platform_read_focused_field() -> Option<String> {
         let pw_variant = element
             .GetCachedPropertyValue(UIA_IsPasswordPropertyId)
             .ok()?;
-        let pw_inner = &*pw_variant.0.Anonymous;
-        if pw_inner.vt == VT_BOOL && pw_inner.Anonymous.boolVal.0 != 0 {
+        if bool::try_from(&pw_variant).unwrap_or(false) {
             return None;
         }
 
         let val_variant = element
             .GetCachedPropertyValue(UIA_ValueValuePropertyId)
             .ok()?;
-        let inner = &*val_variant.0.Anonymous;
-        if inner.vt != VT_BSTR {
-            return None;
-        }
-        let text = (&*inner.Anonymous.bstrVal).to_string();
+        let text = BSTR::try_from(&val_variant).ok()?.to_string();
         if text.is_empty() {
             None
         } else {

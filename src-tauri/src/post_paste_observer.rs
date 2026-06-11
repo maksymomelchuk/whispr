@@ -25,10 +25,10 @@ mod windows_impl {
     use std::sync::mpsc;
     use std::time::Duration;
     use windows::core::implement;
+    use windows::core::BSTR;
     use windows::Win32::System::Com::{
         CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
     };
-    use windows::Win32::System::Variant::{VT_BOOL, VT_BSTR};
     use windows::Win32::UI::Accessibility::{
         CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationFocusChangedEventHandler,
         IUIAutomationFocusChangedEventHandler_Impl, UIA_IsPasswordPropertyId,
@@ -40,7 +40,7 @@ mod windows_impl {
     #[implement(IUIAutomationFocusChangedEventHandler)]
     struct FocusChangedHandler(mpsc::SyncSender<()>);
 
-    impl IUIAutomationFocusChangedEventHandler_Impl for FocusChangedHandler {
+    impl IUIAutomationFocusChangedEventHandler_Impl for FocusChangedHandler_Impl {
         fn HandleFocusChangedEvent(
             &self,
             _sender: Option<&IUIAutomationElement>,
@@ -110,20 +110,15 @@ mod windows_impl {
         let pw_var = element
             .GetCachedPropertyValue(UIA_IsPasswordPropertyId)
             .ok()?;
-        let pw_inner = &*pw_var.0.Anonymous;
-        // Fail-closed: if we cannot confirm the field is not a password field, skip it.
-        if pw_inner.vt != VT_BOOL || pw_inner.Anonymous.boolVal.0 != 0 {
+        // Fail-closed: skip unless we can confirm the field is not a password field.
+        if bool::try_from(&pw_var).unwrap_or(true) {
             return None;
         }
 
         let val_var = element
             .GetCachedPropertyValue(UIA_ValueValuePropertyId)
             .ok()?;
-        let inner = &*val_var.0.Anonymous;
-        if inner.vt != VT_BSTR {
-            return None;
-        }
-        let snapshot = (&*inner.Anonymous.bstrVal).to_string();
+        let snapshot = BSTR::try_from(&val_var).ok()?.to_string();
 
         Some((element, snapshot))
     }
@@ -132,11 +127,7 @@ mod windows_impl {
         let var = element
             .GetCurrentPropertyValue(UIA_ValueValuePropertyId)
             .ok()?;
-        let inner = &*var.0.Anonymous;
-        if inner.vt != VT_BSTR {
-            return None;
-        }
-        let text = (&*inner.Anonymous.bstrVal).to_string();
+        let text = BSTR::try_from(&var).ok()?.to_string();
         if text.is_empty() {
             None
         } else {
