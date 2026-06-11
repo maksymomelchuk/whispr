@@ -18,7 +18,7 @@ pub fn capture(app: tauri::AppHandle) {
 
 #[cfg(target_os = "macos")]
 fn platform_read_selected_text() -> Option<String> {
-    use core_foundation::base::{CFRelease, CFTypeRef, TCFType};
+    use core_foundation::base::{CFRelease, CFTypeRef};
     use core_foundation::string::{CFString, CFStringRef};
     use std::ptr;
 
@@ -63,7 +63,6 @@ fn platform_read_selected_text() -> Option<String> {
             return None;
         }
 
-        // Exclude password fields unconditionally.
         let role_attr = CFString::from_static_string("AXRole");
         let mut role_value: CFTypeRef = ptr::null();
         let role_err = AXUIElementCopyAttributeValue(
