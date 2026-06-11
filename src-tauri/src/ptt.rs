@@ -883,20 +883,18 @@ fn start_ptt(
     *state.active_shortcut.lock().unwrap() = Some(shortcut.clone());
     let device = state.input_device.lock().unwrap().clone();
 
-    let mode_settings = config::load(app)
-        .modes
-        .into_iter()
-        .find(|m| m.id == mode_id);
+    let modes = config::load(app).modes;
+    let mode_settings = modes
+        .iter()
+        .find(|m| m.id == mode_id)
+        .or_else(|| modes.first());
     let clipboard_enabled = mode_settings
-        .as_ref()
         .map(|m| m.ai_cleanup.clipboard_context_enabled)
         .unwrap_or(false);
     let selected_text_enabled = mode_settings
-        .as_ref()
         .map(|m| m.ai_cleanup.selected_text_context_enabled)
         .unwrap_or(false);
     let focused_field_enabled = mode_settings
-        .as_ref()
         .map(|m| m.ai_cleanup.focused_field_context_enabled)
         .unwrap_or(false);
     if clipboard_enabled {
