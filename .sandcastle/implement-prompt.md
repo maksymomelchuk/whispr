@@ -35,7 +35,7 @@ If applicable, use RGR to complete the task.
 
 # FEEDBACK LOOPS
 
-Before committing, run `npm run typecheck`, `npm run check`, and `npm run test` to ensure the frontend type-checks, the Rust crate builds, and all tests pass.
+Before committing, run `npm run typecheck`, `npm run check`, and `npx vitest run` to ensure the frontend type-checks, the Rust crate builds, and all frontend tests pass. For Rust tests, run `cargo test --lib` (not `cargo test` or `npm run test` — the full integration suite links large binaries that exhaust container memory and hang silently).
 
 # COMMIT
 

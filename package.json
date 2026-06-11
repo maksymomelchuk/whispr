@@ -15,7 +15,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "sandcastle": "npx tsx .sandcastle/main.ts",
-    "sandcastle:build": "sandcastle docker build-image"
+    "sandcastle:build": "sandcastle docker build-image --dockerfile .sandcastle/Dockerfile --image-name wispr-sandcastle"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

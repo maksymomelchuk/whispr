@@ -8,7 +8,7 @@ For each branch:
 
 1. Run `git merge <branch> --no-edit`
 2. If there are merge conflicts, resolve them intelligently by reading both sides and choosing the correct resolution
-3. After resolving conflicts, run `npm run typecheck` and `npm run test` to verify everything works
+3. After resolving conflicts, run `npm run typecheck`, `npx vitest run`, and `cargo test --lib` to verify everything works. Do NOT run `cargo test` without `--lib` or `npm run test` — the full Rust test suite links large binaries that exhaust container memory and hang silently.
 4. If tests fail, fix the issues before proceeding to the next branch
 
 After all branches are merged, make a single commit summarizing the merge.

@@ -29,7 +29,8 @@
 //   npx tsx .sandcastle/main.ts
 
 import { execSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as sandcastle from "@ai-hero/sandcastle";
@@ -43,25 +44,136 @@ import { z } from "zod";
 // Maximum number of plan→execute→merge cycles before stopping.
 const MAX_ITERATIONS = 10;
 
+// cargo test linking and vitest runs in the resource-limited container can
+// stay silent well past sandcastle's 600s default without being stuck.
+const AGENT_IDLE_TIMEOUT_SECONDS = 1800;
+
+// Each issue pipeline runs cargo build/test in the Docker VM, so this bounds
+// how many native-dep compiles run at once. The ceiling is the VM's memory
+// allocation (Docker Desktop), not host RAM — too high OOMs/swaps the VM
+// regardless of host size. 4 assumes the VM is sized well above the 8 GB the
+// mold / VITEST_MAX_FORKS workarounds were tuned for.
+const MAX_PARALLEL_ISSUES = 4;
+
 function sh(command: string): string {
   return execSync(command, { encoding: "utf-8" }).trim();
+}
+
+// Promise.allSettled with a worker-pool ceiling: preserves the settled-result
+// shape callers depend on while bounding how many tasks run at once.
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  task: (item: T) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  const results = new Array<PromiseSettledResult<R>>(items.length);
+  let next = 0;
+  async function worker(): Promise<void> {
+    while (next < items.length) {
+      const index = next++;
+      try {
+        results[index] = {
+          status: "fulfilled",
+          value: await task(items[index]!),
+        };
+      } catch (reason) {
+        results[index] = { status: "rejected", reason };
+      }
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, worker),
+  );
+  return results;
 }
 
 // Resolved once at startup so an external checkout switch mid-run can't shift
 // the fork point of workset branches or the base of their PRs.
 const SOURCE_BRANCH = sh("git rev-parse --abbrev-ref HEAD");
 
-// timeoutMs override: sandcastle's per-hook default is 60s. A cold install
-// of this Tauri tree in a fresh container has no warm store to draw from
-// and routinely exceeds that. Warm runs finish in seconds; the ceiling is
-// just slack for the first boot.
-const hooks = {
+// Implementer/reviewer/merger sandboxes build the project, so they need the
+// workspace's node_modules; planner/grouper only touch git + gh and skip this
+// entirely. The image bakes a warm pnpm store (see .sandcastle/Dockerfile), so
+// --prefer-offline links from the store instead of resolving the registry cold.
+//
+// The bind-mounted worktree shadows the image's baked dist/, and dist/ is
+// gitignored so fresh worktrees lack it — recreate the empty placeholder Tauri's
+// generate_context! (frontendDist: "../dist") needs to compile, byte-identical
+// to the image build so the app crate's fingerprint doesn't churn.
+//
+// 180s is a ceiling, not a wait: the store sits on overlayfs while node_modules
+// lands on a VirtioFS bind mount, so install full-copies (no cross-fs hardlink)
+// and can run slow on Docker Desktop. The slack costs nothing on warm runs.
+const hooksWithNode = {
   sandbox: {
-    onSandboxReady: [{ command: "pnpm install", timeoutMs: 180_000 }],
+    onSandboxReady: [
+      { command: "mkdir -p dist && touch dist/index.html", timeoutMs: 10_000 },
+      {
+        command: "pnpm install --frozen-lockfile --prefer-offline",
+        timeoutMs: 180_000,
+      },
+    ],
   },
 };
 
 const copyToWorktree = ["pnpm-lock.yaml"];
+
+// ---------------------------------------------------------------------------
+// Sandbox image preflight
+// ---------------------------------------------------------------------------
+
+// Pinned so the preflight can find the image by name and so manual
+// `pnpm sandcastle:build` runs agree with these runs. Must match the
+// --image-name in package.json's sandcastle:build script.
+const IMAGE_NAME = "wispr-sandcastle";
+
+// Records the lockfile hash the current image was built from. Local +
+// gitignored; paired with an image-existence check so a deleted image forces a
+// rebuild even when the stamp is stale.
+const IMAGE_STAMP_FILE = ".sandcastle/.image-lockhash";
+
+// Bumping a dependency invalidates the baked pnpm store / cargo registry /
+// compiled target; a pure source edit does not — the warm target is a starting
+// point, not a source of truth, and cargo recompiles changed crates at runtime.
+// So rebuild only when these move, not on every run.
+const IMAGE_LOCKFILES = ["pnpm-lock.yaml", "src-tauri/Cargo.lock"];
+
+function dockerSandbox() {
+  return docker({ imageName: IMAGE_NAME });
+}
+
+function lockfileHash(): string {
+  const hash = createHash("sha256");
+  for (const file of IMAGE_LOCKFILES) hash.update(readFileSync(file));
+  return hash.digest("hex");
+}
+
+function imageExists(): boolean {
+  try {
+    execSync(`docker image inspect ${IMAGE_NAME}`, { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Build the image when it's missing or a dependency lockfile changed since it
+// was built. Source-only changes skip the rebuild. A rebuild after a manual
+// `pnpm sandcastle:build` is Docker-layer-cached and near-instant, which also
+// self-heals the stamp.
+function ensureImage(): void {
+  const hash = lockfileHash();
+  const stamp = existsSync(IMAGE_STAMP_FILE)
+    ? readFileSync(IMAGE_STAMP_FILE, "utf-8").trim()
+    : "";
+  const exists = imageExists();
+  if (exists && stamp === hash) return;
+
+  const reason = exists ? "lockfiles changed" : "image missing";
+  console.log(`Building sandbox image '${IMAGE_NAME}' (${reason})...`);
+  execSync("pnpm sandcastle:build", { stdio: "inherit" });
+  writeFileSync(IMAGE_STAMP_FILE, hash);
+}
 
 // ---------------------------------------------------------------------------
 // Backlog discovery
@@ -157,8 +269,7 @@ const CLUSTERS_OUTPUT = sandcastle.Output.object({
 // re-run of the agent's whole analysis.
 async function runGrouper(parentless: IssueRef[]) {
   const options = {
-    hooks,
-    sandbox: docker(),
+    sandbox: dockerSandbox(),
     name: "grouper",
     maxIterations: 1,
     agent: sandcastle.claudeCode("claude-opus-4-8"),
@@ -298,8 +409,7 @@ const PLAN_OUTPUT = sandcastle.Output.object({
 
 async function runPlanner(pending: Workset[], open: Set<string>) {
   const options = {
-    hooks,
-    sandbox: docker(),
+    sandbox: dockerSandbox(),
     name: "planner",
     maxIterations: 1,
     // Opus for planning: dependency analysis benefits from deeper reasoning.
@@ -384,8 +494,8 @@ async function runIssuePipeline(issue: IssueRef, workset: Workset) {
 
   const sandbox = await sandcastle.createSandbox({
     branch,
-    sandbox: docker(),
-    hooks,
+    sandbox: dockerSandbox(),
+    hooks: hooksWithNode,
     copyToWorktree,
   });
 
@@ -393,6 +503,7 @@ async function runIssuePipeline(issue: IssueRef, workset: Workset) {
     const implement = await sandbox.run({
       name: "implementer",
       maxIterations: 100,
+      idleTimeoutSeconds: AGENT_IDLE_TIMEOUT_SECONDS,
       agent: sandcastle.claudeCode("claude-sonnet-4-6"),
       promptFile: "./.sandcastle/implement-prompt.md",
       promptArgs: {
@@ -416,6 +527,7 @@ async function runIssuePipeline(issue: IssueRef, workset: Workset) {
     const tier1 = await sandbox.run({
       name: "reviewer-tier1",
       maxIterations: 1,
+      idleTimeoutSeconds: AGENT_IDLE_TIMEOUT_SECONDS,
       agent: sandcastle.claudeCode("claude-haiku-4-5"),
       promptFile: "./.sandcastle/review-prompt-tier1.md",
       // BASE_BRANCH is explicit because 0.7's built-in TARGET_BRANCH is the
@@ -440,6 +552,7 @@ async function runIssuePipeline(issue: IssueRef, workset: Workset) {
       const tier2 = await sandbox.run({
         name: "reviewer-tier2",
         maxIterations: 1,
+        idleTimeoutSeconds: AGENT_IDLE_TIMEOUT_SECONDS,
         agent: sandcastle.claudeCode("claude-sonnet-4-6"),
         promptFile: "./.sandcastle/review-prompt-tier2.md",
         promptArgs: {
@@ -469,14 +582,15 @@ async function runIssuePipeline(issue: IssueRef, workset: Workset) {
 async function mergeWorkset(workset: Workset, completed: IssueRef[]) {
   const sandbox = await sandcastle.createSandbox({
     branch: workset.branch,
-    sandbox: docker(),
-    hooks,
+    sandbox: dockerSandbox(),
+    hooks: hooksWithNode,
     copyToWorktree,
   });
   try {
     await sandbox.run({
       name: `merger-${workset.name}`,
-      maxIterations: 1,
+      maxIterations: 5,
+      idleTimeoutSeconds: AGENT_IDLE_TIMEOUT_SECONDS,
       agent: sandcastle.claudeCode("claude-opus-4-8"),
       promptFile: "./.sandcastle/merge-prompt.md",
       promptArgs: {
@@ -526,6 +640,8 @@ function openPullRequest(workset: Workset): void {
 
 console.log(`Sandcastle starting from ${SOURCE_BRANCH}`);
 
+ensureImage();
+
 const worksets = await buildWorksets();
 if (worksets.length === 0) {
   console.log("No open Sandcastle issues. Exiting.");
@@ -557,6 +673,27 @@ function finalizeCompletedWorksets(open: Set<string>): void {
     }
   }
 }
+
+// A worktree left behind by an interrupted run keeps its branch checked out,
+// so the per-issue `git branch -f` reset fails and the scheduler skips that
+// issue on every subsequent run.
+function removeStaleWorktrees() {
+  const stalePaths = sh("git worktree list --porcelain")
+    .split("\n")
+    .filter((line) => line.startsWith("worktree "))
+    .map((line) => line.slice("worktree ".length))
+    .filter((path) => path.includes("/.sandcastle/worktrees/"));
+  for (const path of stalePaths) {
+    try {
+      sh(`git worktree remove --force ${shellQuote(path)}`);
+      console.log(`Removed stale worktree: ${path}`);
+    } catch (error) {
+      console.warn(`Could not remove worktree ${path}: ${error}`);
+    }
+  }
+}
+
+removeStaleWorktrees();
 
 for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   console.log(`\n=== Iteration ${iteration}/${MAX_ITERATIONS} ===\n`);
@@ -593,8 +730,10 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     console.log(`  ${issue.id} [${ws.name}]: ${issue.title}`);
   }
 
-  const settled = await Promise.allSettled(
-    selected.map(({ issue, ws }) => runIssuePipeline(issue, ws)),
+  const settled = await mapWithConcurrency(
+    selected,
+    MAX_PARALLEL_ISSUES,
+    ({ issue, ws }) => runIssuePipeline(issue, ws),
   );
 
   const completedByWorkset = new Map<string, IssueRef[]>();
@@ -604,7 +743,16 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
       console.error(`  ✗ ${issue.id} (${ws.name}) failed: ${outcome.reason}`);
       continue;
     }
-    if (outcome.value.commits.length === 0) continue;
+    const issueBranch = `sandcastle/issue-${issue.id}`;
+    const needsMerge =
+      outcome.value.commits.length > 0 ||
+      commitsAhead(issueBranch, ws.branch) > 0;
+    // Branch already merged into workset but GitHub issue still open —
+    // no merge needed, but merger must still close the issue.
+    const mergedNeedsClose =
+      commitsAhead(issueBranch, ws.branch) === 0 &&
+      commitsAhead(issueBranch, SOURCE_BRANCH) > 0;
+    if (!needsMerge && !mergedNeedsClose) continue;
     completedByWorkset.set(ws.name, [
       ...(completedByWorkset.get(ws.name) ?? []),
       issue,
