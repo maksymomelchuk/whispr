@@ -48,6 +48,7 @@ pub mod recovery;
 mod clipboard_context;
 mod focused_field_context;
 mod miner;
+pub(crate) mod selector;
 mod selected_text_context;
 mod tone;
 

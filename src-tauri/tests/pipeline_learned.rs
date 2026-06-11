@@ -15,6 +15,7 @@ fn promoted_correction(id: &str, from: &str, word: &str) -> LearnedEntry {
         status: LearnedEntryStatus::Promoted,
         total_observations: 2,
         last_observed_ms: 1_000_000,
+        per_app_observations: Default::default(),
     }
 }
 
@@ -28,6 +29,7 @@ fn candidate_correction(id: &str, from: &str, word: &str) -> LearnedEntry {
         status: LearnedEntryStatus::Candidate,
         total_observations: 1,
         last_observed_ms: 1_000_000,
+        per_app_observations: Default::default(),
     }
 }
 
@@ -39,6 +41,7 @@ fn promoted_term(id: &str, word: &str) -> LearnedEntry {
         status: LearnedEntryStatus::Promoted,
         total_observations: 2,
         last_observed_ms: 1_000_000,
+        per_app_observations: Default::default(),
     }
 }
 
@@ -50,6 +53,7 @@ fn candidate_term(id: &str, word: &str) -> LearnedEntry {
         status: LearnedEntryStatus::Candidate,
         total_observations: 1,
         last_observed_ms: 1_000_000,
+        per_app_observations: Default::default(),
     }
 }
 

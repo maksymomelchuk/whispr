@@ -600,10 +600,9 @@ pub fn update_history_entry(
     replaced_text: String,
     final_text: String,
 ) -> Result<(), String> {
-    let original_final = history::load(&app)
-        .into_iter()
-        .find(|e| e.id == id)
-        .map(|e| e.final_text);
+    let entry = history::load(&app).into_iter().find(|e| e.id == id);
+    let original_final = entry.as_ref().map(|e| e.final_text.clone());
+    let entry_bundle_id = entry.and_then(|e| e.bundle_id);
 
     history::update_by_id(&app, &id, replaced_text, final_text.clone())?;
 
@@ -613,8 +612,9 @@ pub fn update_history_entry(
             let candidates = miner::mine(&original, &final_text);
             if !candidates.is_empty() {
                 let now_ms = miner::now_ms();
+                let bundle_ref = entry_bundle_id.as_deref();
                 let _ = config::update(&app, |s| {
-                    miner::observe_candidates(&candidates, s, now_ms);
+                    miner::observe_candidates(&candidates, s, bundle_ref, now_ms);
                 });
             }
         }
