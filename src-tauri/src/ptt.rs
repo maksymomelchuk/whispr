@@ -19,8 +19,8 @@ use crate::recorder::Recorder;
 use crate::session::{Session, PTT_ERROR_EVENT, TRANSCRIPTION_ERROR_EVENT};
 use crate::state::{AppState, ModifierState};
 use crate::{
-    cleanup, cleanup_invoke, cleanup_stats, clipboard_context, config, model_catalog, recovery,
-    selected_text_context, stats, tone,
+    cleanup, cleanup_invoke, cleanup_stats, clipboard_context, config, focused_field_context,
+    model_catalog, recovery, selected_text_context, stats, tone,
 };
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -320,6 +320,7 @@ async fn run_session(
     let paste_raw_on_failure = active_mode.ai_cleanup.paste_raw_on_failure;
     let clipboard_context_enabled = active_mode.ai_cleanup.clipboard_context_enabled;
     let selected_text_context_enabled = active_mode.ai_cleanup.selected_text_context_enabled;
+    let focused_field_context_enabled = active_mode.ai_cleanup.focused_field_context_enabled;
     let session_terms = crate::terms::compose_term_hints(
         &settings.term_sets,
         &active_mode.term_set_ids,
@@ -578,7 +579,7 @@ async fn run_session(
     let resolved_app: Option<target_app::FrontmostApp> = target_app::session_app();
 
     let context: Option<cleanup::ContextBlocks> =
-        if clipboard_context_enabled || selected_text_context_enabled {
+        if clipboard_context_enabled || selected_text_context_enabled || focused_field_context_enabled {
             let clipboard_text = if clipboard_context_enabled {
                 let rx = app
                     .state::<AppState>()
@@ -617,9 +618,29 @@ async fn run_session(
                 None
             };
 
+            let focused_field_text = if focused_field_context_enabled {
+                let rx = app
+                    .state::<AppState>()
+                    .pending_focused_field_rx
+                    .lock()
+                    .unwrap()
+                    .take();
+                match rx {
+                    Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
+                        .await
+                        .ok()
+                        .and_then(|r| r.ok())
+                        .flatten(),
+                    None => None,
+                }
+            } else {
+                None
+            };
+
             Some(cleanup::ContextBlocks {
                 clipboard_text,
                 selected_text,
+                focused_field_text,
                 system_date: cleanup::system_date(),
                 system_user: cleanup::system_user(),
             })
@@ -764,6 +785,9 @@ async fn maybe_cleanup(
             if ctx.selected_text.is_some() {
                 channels.push("selected_text".to_string());
             }
+            if ctx.focused_field_text.is_some() {
+                channels.push("focused_field".to_string());
+            }
             if ctx.clipboard_text.is_some() {
                 channels.push("clipboard".to_string());
             }
@@ -845,6 +869,10 @@ fn start_ptt(
         .as_ref()
         .map(|m| m.ai_cleanup.selected_text_context_enabled)
         .unwrap_or(false);
+    let focused_field_enabled = mode_settings
+        .as_ref()
+        .map(|m| m.ai_cleanup.focused_field_context_enabled)
+        .unwrap_or(false);
     if clipboard_enabled {
         clipboard_context::capture(app.clone());
     } else {
@@ -854,6 +882,11 @@ fn start_ptt(
         selected_text_context::capture(app.clone());
     } else {
         *state.pending_selected_text_rx.lock().unwrap() = None;
+    }
+    if focused_field_enabled {
+        focused_field_context::capture(app.clone());
+    } else {
+        *state.pending_focused_field_rx.lock().unwrap() = None;
     }
 
     // Capture the target app before showing our overlay: show() can make the

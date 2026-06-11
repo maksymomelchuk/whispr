@@ -87,4 +87,7 @@ pub struct AppState {
     /// Receives the selected text captured at PTT-down via the Accessibility API.
     /// Populated by selected_text_context::capture; consumed once per session.
     pub pending_selected_text_rx: Arc<Mutex<Option<oneshot::Receiver<Option<String>>>>>,
+    /// Receives the focused field's text captured concurrently with recording.
+    /// Populated by focused_field_context::capture; consumed once per session.
+    pub pending_focused_field_rx: Arc<Mutex<Option<oneshot::Receiver<Option<String>>>>>,
 }

@@ -74,6 +74,9 @@ pub struct ModeCleanup {
     // Defaults to false so existing behaviour is unchanged after upgrade.
     #[serde(default)]
     pub selected_text_context_enabled: bool,
+    // Defaults to false so existing behaviour is unchanged after upgrade.
+    #[serde(default)]
+    pub focused_field_context_enabled: bool,
 }
 
 impl Default for ModeCleanup {
@@ -86,6 +89,7 @@ impl Default for ModeCleanup {
             paste_raw_on_failure: true,
             clipboard_context_enabled: false,
             selected_text_context_enabled: false,
+            focused_field_context_enabled: false,
         }
     }
 }
@@ -410,6 +414,7 @@ mod tests {
             paste_raw_on_failure: true,
             clipboard_context_enabled: false,
             selected_text_context_enabled: false,
+            focused_field_context_enabled: false,
         };
         let json = serde_json::to_string(&c).unwrap();
         let decoded: ModeCleanup = serde_json::from_str(&json).unwrap();
@@ -441,6 +446,19 @@ mod tests {
         let json = r#"{"enabled":false,"prompt_override":null}"#;
         let c: ModeCleanup = serde_json::from_str(json).unwrap();
         assert!(!c.selected_text_context_enabled);
+    }
+
+    #[test]
+    fn mode_cleanup_focused_field_context_defaults_to_false() {
+        let c = ModeCleanup::default();
+        assert!(!c.focused_field_context_enabled);
+    }
+
+    #[test]
+    fn mode_cleanup_focused_field_context_deserializes_to_false_when_absent() {
+        let json = r#"{"enabled":false,"prompt_override":null}"#;
+        let c: ModeCleanup = serde_json::from_str(json).unwrap();
+        assert!(!c.focused_field_context_enabled);
     }
 
     #[test]

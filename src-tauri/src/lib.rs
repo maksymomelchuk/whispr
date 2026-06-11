@@ -46,6 +46,7 @@ pub mod model_catalog;
 pub mod recovery;
 
 mod clipboard_context;
+mod focused_field_context;
 mod miner;
 mod selected_text_context;
 mod tone;

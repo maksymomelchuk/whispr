@@ -60,6 +60,7 @@ const MODE: Mode = {
     paste_raw_on_failure: true,
     clipboard_context_enabled: false,
     selected_text_context_enabled: false,
+    focused_field_context_enabled: false,
   },
   term_set_ids: [],
   correction_set_ids: [],
@@ -560,6 +561,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
       paste_raw_on_failure: true,
       clipboard_context_enabled: false,
       selected_text_context_enabled: false,
+      focused_field_context_enabled: false,
     },
   };
 
@@ -584,6 +586,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         paste_raw_on_failure: true,
         clipboard_context_enabled: false,
         selected_text_context_enabled: false,
+        focused_field_context_enabled: false,
       },
     };
     render(
@@ -615,6 +618,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         paste_raw_on_failure: true,
         clipboard_context_enabled: false,
         selected_text_context_enabled: false,
+        focused_field_context_enabled: false,
       },
     };
     render(
@@ -634,6 +638,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         paste_raw_on_failure: true,
         clipboard_context_enabled: false,
         selected_text_context_enabled: false,
+        focused_field_context_enabled: false,
       },
     };
     render(<EditorWrapper mode={groqMode} configuredProviders={["groq"]} />);
@@ -651,6 +656,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         paste_raw_on_failure: true,
         clipboard_context_enabled: false,
         selected_text_context_enabled: false,
+        focused_field_context_enabled: false,
       },
     };
     render(
@@ -670,6 +676,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         paste_raw_on_failure: true,
         clipboard_context_enabled: false,
         selected_text_context_enabled: false,
+        focused_field_context_enabled: false,
       },
     };
     render(
@@ -689,6 +696,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         paste_raw_on_failure: true,
         clipboard_context_enabled: false,
         selected_text_context_enabled: false,
+        focused_field_context_enabled: false,
       },
     };
     render(
@@ -711,6 +719,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         paste_raw_on_failure: true,
         clipboard_context_enabled: false,
         selected_text_context_enabled: false,
+        focused_field_context_enabled: false,
       },
     };
     render(
@@ -734,6 +743,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         paste_raw_on_failure: true,
         clipboard_context_enabled: false,
         selected_text_context_enabled: false,
+        focused_field_context_enabled: false,
       },
     };
     render(
@@ -759,6 +769,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         paste_raw_on_failure: true,
         clipboard_context_enabled: false,
         selected_text_context_enabled: false,
+        focused_field_context_enabled: false,
       },
     };
     render(
