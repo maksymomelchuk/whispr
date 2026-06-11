@@ -97,6 +97,13 @@ pub fn apply_corrections(text: &str, entries: &[CorrectionEntry]) -> String {
         let mut search_from = 0;
         loop {
             let lower = padded.to_lowercase();
+            // find_word_match indexes `lower`; its byte offsets only map onto
+            // `padded` when case-folding preserves byte length. A length-changing
+            // fold (e.g. learned-rule text containing İ → i̇) would shift them and
+            // make replace_range split a codepoint or hit the wrong slice.
+            if lower.len() != padded.len() {
+                break;
+            }
             match find_word_match(&lower, from_lc, search_from) {
                 Some((start, end)) => {
                     padded.replace_range(start..end, &replacement);
@@ -110,6 +117,10 @@ pub fn apply_corrections(text: &str, entries: &[CorrectionEntry]) -> String {
     const MAX_PASSES: usize = 32;
     for _ in 0..MAX_PASSES {
         let lower = padded.to_lowercase();
+        // same byte-length guard as the case-only sweep above.
+        if lower.len() != padded.len() {
+            break;
+        }
         let mut changed = false;
         for (e, from_lc) in &cascade {
             if let Some((start, end)) = find_word_match(&lower, from_lc, 0) {
@@ -204,6 +215,21 @@ mod tests {
             from: from.to_string(),
             to: to.to_string(),
         }
+    }
+
+    #[test]
+    fn transcript_with_length_changing_fold_does_not_panic() {
+        // İ (U+0130) lowercases to a 2-char sequence, so the lowercased copy
+        // diverges in byte length from the original — the guard must bail
+        // rather than feed shifted offsets into replace_range.
+        let out = apply_corrections("İ test", &[entry("test", "best")]);
+        assert!(out.contains("İ"));
+    }
+
+    #[test]
+    fn learned_rule_emitting_length_changing_fold_does_not_panic() {
+        let out = apply_corrections("hi i there", &[entry("i", "İ")]);
+        assert!(out.contains("İ"));
     }
 
     #[test]
