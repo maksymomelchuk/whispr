@@ -30,20 +30,26 @@ pub fn preset_for_category(category: AppCategory) -> TonePreset {
     }
 }
 
-pub const TONE_UNTOUCHABLE_CLAUSE: &str =
-    "Grammar, phrasing, and word choice are untouchable — adjust punctuation, capitalization, and line breaks only.";
+macro_rules! tone_untouchable_clause {
+    () => {
+        "Grammar, phrasing, and word choice are untouchable — adjust punctuation, capitalization, and line breaks only."
+    };
+}
 
 pub fn tone_directive(preset: TonePreset) -> Option<&'static str> {
     match preset {
-        TonePreset::Casual => Some(
-            "Tone: casual. Omit the terminal period on short messages. Do not capitalize sentence fragments. Contractions preferred. Grammar, phrasing, and word choice are untouchable — adjust punctuation, capitalization, and line breaks only.",
-        ),
-        TonePreset::Formal => Some(
-            "Tone: formal. End each sentence with a period. Capitalize the first word of every sentence. Use complete sentences. Grammar, phrasing, and word choice are untouchable — adjust punctuation, capitalization, and line breaks only.",
-        ),
-        TonePreset::TechnicalCasing => Some(
-            "Tone: technical. Preserve all technical identifiers exactly as spoken, including camelCase, snake_case, PascalCase, and ALL_CAPS. Do not add punctuation after identifiers or code tokens. Grammar, phrasing, and word choice are untouchable — adjust punctuation, capitalization, and line breaks only.",
-        ),
+        TonePreset::Casual => Some(concat!(
+            "Tone: casual. Omit the terminal period on short messages. Do not capitalize sentence fragments. Contractions preferred. ",
+            tone_untouchable_clause!(),
+        )),
+        TonePreset::Formal => Some(concat!(
+            "Tone: formal. End each sentence with a period. Capitalize the first word of every sentence. Use complete sentences. ",
+            tone_untouchable_clause!(),
+        )),
+        TonePreset::TechnicalCasing => Some(concat!(
+            "Tone: technical. Preserve all technical identifiers exactly as spoken, including camelCase, snake_case, PascalCase, and ALL_CAPS. Do not add punctuation after identifiers or code tokens. ",
+            tone_untouchable_clause!(),
+        )),
         TonePreset::Neutral => None,
     }
 }
@@ -176,7 +182,7 @@ mod tests {
         assert!(directive.is_some());
         let d = directive.unwrap();
         assert!(d.contains("formal") || d.contains("Tone: formal"));
-        assert!(d.contains(TONE_UNTOUCHABLE_CLAUSE));
+        assert!(d.contains(tone_untouchable_clause!()));
     }
 
     #[test]
@@ -189,7 +195,7 @@ mod tests {
         assert!(directive.is_some());
         let d = directive.unwrap();
         assert!(d.contains("casual") || d.contains("Tone: casual"));
-        assert!(d.contains(TONE_UNTOUCHABLE_CLAUSE));
+        assert!(d.contains(tone_untouchable_clause!()));
     }
 
     #[test]
@@ -202,7 +208,7 @@ mod tests {
         assert!(directive.is_some());
         let d = directive.unwrap();
         assert!(d.contains("technical") || d.contains("Tone: technical"));
-        assert!(d.contains(TONE_UNTOUCHABLE_CLAUSE));
+        assert!(d.contains(tone_untouchable_clause!()));
     }
 
     #[test]
@@ -237,7 +243,7 @@ mod tests {
         ] {
             let d = tone_directive(preset).expect("non-neutral preset should have a directive");
             assert!(
-                d.contains(TONE_UNTOUCHABLE_CLAUSE),
+                d.contains(tone_untouchable_clause!()),
                 "{preset:?} directive missing untouchable clause"
             );
         }

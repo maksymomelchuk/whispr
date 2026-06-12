@@ -8,10 +8,6 @@ const SAMPLE_INTERVAL: Duration = Duration::from_millis(500);
 
 pub type SamplerWindow = Arc<Mutex<VecDeque<(i64, Instant)>>>;
 
-pub fn new_window() -> SamplerWindow {
-    Arc::new(Mutex::new(VecDeque::new()))
-}
-
 /// Only the change-count integer is stored — clipboard content is never read here.
 pub fn start_sampler(window: SamplerWindow) {
     std::thread::Builder::new()
@@ -137,7 +133,7 @@ mod tests {
 
     #[test]
     fn empty_window_returns_false() {
-        let w = new_window();
+        let w = SamplerWindow::default();
         assert!(!is_recent_change(&w, 5));
     }
 
