@@ -36,19 +36,34 @@ macro_rules! tone_untouchable_clause {
     };
 }
 
+// Without this, a recognizer that already punctuates (e.g. Whisper) leaves the
+// cleanup model nothing to "add", and the preservation rules keep it from
+// stripping anything — so tone silently no-ops. The directive must claim
+// precedence and explicitly license reformatting already-formatted input.
+macro_rules! tone_override_clause {
+    () => {
+        "This overrides the punctuation and capitalization guidance in the rules above, and applies even when the transcript already contains punctuation."
+    };
+}
+
 pub fn tone_directive(preset: TonePreset) -> Option<&'static str> {
     match preset {
         TonePreset::Casual => Some(concat!(
-            "Tone: casual. Omit the terminal period on short messages. Do not capitalize sentence fragments. Contractions preferred. ",
+            "Tone: casual. ",
+            tone_override_clause!(),
+            " Drop a trailing period on short one- or two-sentence messages, even if one is already present — but keep question marks and exclamation marks; they carry meaning. Lowercase the first word — even if the input capitalizes it — unless it is a proper noun or \"I\". Always keep proper nouns (names, places, brands) and \"I\" capitalized wherever they appear; never lowercase them. Prefer contractions. ",
             tone_untouchable_clause!(),
         )),
         TonePreset::Formal => Some(concat!(
-            "Tone: formal. End each sentence with a period. Capitalize the first word of every sentence. Use complete sentences. ",
+            "Tone: formal. ",
+            tone_override_clause!(),
+            " End every sentence with a period and capitalize its first word, adding them if missing. Prefer complete sentences over fragments. ",
             tone_untouchable_clause!(),
         )),
         TonePreset::TechnicalCasing => Some(concat!(
-            "Tone: technical. Preserve all technical identifiers exactly as spoken, including camelCase, snake_case, PascalCase, and ALL_CAPS. Do not add punctuation after identifiers or code tokens. ",
-            tone_untouchable_clause!(),
+            "Tone: technical. ",
+            tone_override_clause!(),
+            " Interpret spoken casing cues literally inside identifiers: \"underscore\" becomes _ (\"user underscore id\" -> user_id), \"dot\" becomes . (\"config dot ts\" -> config.ts), and \"dash\" or \"hyphen\" becomes - inside a compound identifier (\"feature dash auth\" -> feature-auth). These spoken cues take priority over the default camelCase rule: \"user underscore id\" is user_id, never userId. Preserve any identifier already in camelCase, snake_case, PascalCase, ALL_CAPS, a dotted.path, or file/branch form exactly. Treat shell commands and code expressions as code, not prose: keep a leading command lowercase and add no trailing period (\"git commit -m ...\" stays \"git commit -m ...\", never \"Git commit ... .\"). This overrides the default sentence-capitalization and terminal-punctuation rules. Apply these edits to identifiers and code only — leave ordinary prose wording untouched.",
         )),
         TonePreset::Neutral => None,
     }
@@ -153,19 +168,37 @@ pub fn categorize_app(identifier: &str) -> AppCategory {
         .unwrap_or(AppCategory::Other)
 }
 
-/// Resolves the effective tone directive for a bundle ID, consulting per-app
-/// overrides before falling back to the built-in taxonomy.
-/// Returns `None` when `bundle_id` is `None` or the resolved preset has no directive.
+/// Wraps a user-authored per-app prompt with a precedence preamble so a weak
+/// cleanup model still honors it over the base formatting rules. Unlike the
+/// presets, a custom prompt carries no "untouchable" guardrail — the user
+/// owns the risk of it rewriting content.
+fn custom_directive(prompt: &str) -> String {
+    format!(
+        "Style instruction (this overrides the punctuation, capitalization, and formatting guidance in the rules above, and applies even when the transcript is already formatted): {}",
+        prompt.trim()
+    )
+}
+
+/// Resolves the effective tone directive for a bundle ID. A non-empty per-app
+/// custom prompt wins; otherwise a per-app preset override; otherwise the
+/// built-in taxonomy. Returns `None` when `bundle_id` is `None` or the resolved
+/// preset has no directive (Neutral).
 pub fn resolve_tone(
     bundle_id: Option<&str>,
     overrides: &BTreeMap<String, TonePreset>,
-) -> Option<&'static str> {
+    custom_prompts: &BTreeMap<String, String>,
+) -> Option<String> {
     let id = bundle_id?;
+    if let Some(prompt) = custom_prompts.get(id) {
+        if !prompt.trim().is_empty() {
+            return Some(custom_directive(prompt));
+        }
+    }
     let preset = overrides
         .get(id)
         .copied()
         .unwrap_or_else(|| preset_for_category(categorize_app(id)));
-    tone_directive(preset)
+    tone_directive(preset).map(|d| d.to_string())
 }
 
 #[cfg(test)]
@@ -199,6 +232,20 @@ mod tests {
     }
 
     #[test]
+    fn casual_tone_drops_period_but_keeps_question_and_exclamation_marks() {
+        let directive = tone_directive(TonePreset::Casual).unwrap();
+        assert!(directive.contains("trailing period"));
+        assert!(directive.contains("question marks and exclamation marks"));
+    }
+
+    #[test]
+    fn casual_tone_keeps_proper_nouns_capitalized() {
+        let directive = tone_directive(TonePreset::Casual).unwrap();
+        assert!(directive.contains("Lowercase the first word"));
+        assert!(directive.contains("keep proper nouns"));
+    }
+
+    #[test]
     fn code_editor_maps_to_technical_casing_tone() {
         let category = categorize_app("com.microsoft.VSCode");
         assert_eq!(category, AppCategory::Code);
@@ -208,7 +255,23 @@ mod tests {
         assert!(directive.is_some());
         let d = directive.unwrap();
         assert!(d.contains("technical") || d.contains("Tone: technical"));
-        assert!(d.contains(tone_untouchable_clause!()));
+    }
+
+    #[test]
+    fn technical_tone_interprets_spoken_casing_cues() {
+        let d = tone_directive(TonePreset::TechnicalCasing).unwrap();
+        assert!(d.contains("user_id"));
+        assert!(d.contains("config.ts"));
+        assert!(d.contains("leave ordinary prose wording untouched"));
+    }
+
+    #[test]
+    fn technical_tone_drops_unreliable_all_caps_cue() {
+        // The all-caps cue leaked literal "in all caps" into output and corrupted
+        // adjacent cues across models; ALL_CAPS identifiers go through Vocabulary.
+        let d = tone_directive(TonePreset::TechnicalCasing).unwrap();
+        assert!(!d.contains("all caps"));
+        assert!(!d.contains("uppercase"));
     }
 
     #[test]
@@ -235,12 +298,10 @@ mod tests {
     }
 
     #[test]
-    fn non_neutral_directives_all_contain_untouchable_clause() {
-        for preset in [
-            TonePreset::Casual,
-            TonePreset::Formal,
-            TonePreset::TechnicalCasing,
-        ] {
+    fn casual_and_formal_directives_contain_untouchable_clause() {
+        // Technical is excluded: it deliberately edits identifiers (e.g. "user
+        // underscore id" -> user_id), which the untouchable clause forbids.
+        for preset in [TonePreset::Casual, TonePreset::Formal] {
             let d = tone_directive(preset).expect("non-neutral preset should have a directive");
             assert!(
                 d.contains(tone_untouchable_clause!()),
@@ -278,8 +339,8 @@ mod tests {
         // email normally maps to Formal — override to Casual
         overrides.insert("com.apple.mail".to_string(), TonePreset::Casual);
 
-        let default_dir = resolve_tone(Some("com.apple.mail"), &BTreeMap::new());
-        let override_dir = resolve_tone(Some("com.apple.mail"), &overrides);
+        let default_dir = resolve_tone(Some("com.apple.mail"), &BTreeMap::new(), &BTreeMap::new());
+        let override_dir = resolve_tone(Some("com.apple.mail"), &overrides, &BTreeMap::new());
 
         assert!(
             default_dir.unwrap().contains("formal"),
@@ -296,12 +357,38 @@ mod tests {
         let mut overrides = BTreeMap::new();
         overrides.insert("com.apple.mail".to_string(), TonePreset::Neutral);
 
-        assert!(resolve_tone(Some("com.apple.mail"), &overrides).is_none());
+        assert!(resolve_tone(Some("com.apple.mail"), &overrides, &BTreeMap::new()).is_none());
     }
 
     #[test]
     fn resolve_tone_returns_none_for_missing_bundle_id() {
-        assert!(resolve_tone(None, &BTreeMap::new()).is_none());
+        assert!(resolve_tone(None, &BTreeMap::new(), &BTreeMap::new()).is_none());
+    }
+
+    #[test]
+    fn custom_prompt_takes_precedence_over_preset_and_taxonomy() {
+        let mut overrides = BTreeMap::new();
+        overrides.insert("com.apple.mail".to_string(), TonePreset::Formal);
+        let mut custom = BTreeMap::new();
+        custom.insert(
+            "com.apple.mail".to_string(),
+            "write in pirate speak".to_string(),
+        );
+
+        let dir = resolve_tone(Some("com.apple.mail"), &overrides, &custom)
+            .expect("custom prompt should produce a directive");
+        assert!(dir.contains("write in pirate speak"));
+        assert!(!dir.contains("Tone: formal"));
+    }
+
+    #[test]
+    fn blank_custom_prompt_falls_back_to_preset() {
+        let mut custom = BTreeMap::new();
+        custom.insert("com.apple.mail".to_string(), "   ".to_string());
+
+        let dir = resolve_tone(Some("com.apple.mail"), &BTreeMap::new(), &custom)
+            .expect("blank custom falls back to taxonomy preset");
+        assert!(dir.contains("formal"));
     }
 
     #[test]

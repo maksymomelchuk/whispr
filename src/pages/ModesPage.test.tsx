@@ -239,6 +239,7 @@ const BASE_SETTINGS: Settings = {
   ai_cleanup_min_duration_ms: 3000,
   ai_cleanup_tone_overlay_enabled: false,
   tone_app_overrides: {},
+  tone_app_custom_prompts: {},
   learn_from_corrections: false,
   input_device: null,
   pause_media_on_record: true,

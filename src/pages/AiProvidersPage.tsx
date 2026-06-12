@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckFatIcon, GearIcon } from "@phosphor-icons/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
@@ -32,49 +32,23 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
 import { ProviderSetupDialog } from "../components/ProviderSetupDialog";
 import { SectionCard } from "../components/SectionCard";
-import { ToggleRow } from "../components/ToggleRow";
 import { useSettings } from "../context/SettingsContext";
-import { usePersistedToggle } from "../hooks/usePersistedToggle";
 import {
   clearCustomProvider,
-  clearToneAppOverride,
-  getAppsSeenInHistory,
   setAnthropicApiKey as persistApiKey,
   setCleanupAuthMode as persistAuthMode,
   setAnthropicOauthToken as persistOauthToken,
   setCleanupThresholds as persistThresholds,
-  setToneOverlayEnabled as persistToneOverlay,
   setCustomProvider,
   setProviderKey,
-  setToneAppOverride,
 } from "../lib/api";
 import type { EngineDescriptor } from "../lib/speechModelCatalog";
-import type {
-  AiProviderId,
-  AppToneInfo,
-  Settings,
-  TonePreset,
-} from "../lib/types";
-
-const TONE_PRESET_OPTIONS: { value: TonePreset | "auto"; label: string }[] = [
-  { value: "auto", label: "Auto" },
-  { value: "casual", label: "Casual" },
-  { value: "formal", label: "Formal" },
-  { value: "technical_casing", label: "Technical" },
-  { value: "neutral", label: "Neutral" },
-];
+import type { AiProviderId, Settings } from "../lib/types";
 
 const ANTHROPIC_API_KEY_DESCRIPTOR: EngineDescriptor = {
   id: "anthropic",
@@ -273,14 +247,16 @@ function CustomProviderDialog({
   isConfigured,
   currentBaseUrl,
   currentModel,
-  onConfiguredChange,
+  onSaved,
+  onDisconnected,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   isConfigured: boolean;
   currentBaseUrl: string | null;
   currentModel: string;
-  onConfiguredChange: (configured: boolean) => void;
+  onSaved: (baseUrl: string, model: string) => void;
+  onDisconnected: () => void;
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -305,13 +281,11 @@ function CustomProviderDialog({
   const handleSave = form.handleSubmit(async (values) => {
     setSaving(true);
     setError(null);
+    const baseUrl = values.baseUrl.trim().replace(/\/$/, "");
+    const model = values.model.trim();
     try {
-      await setCustomProvider(
-        values.baseUrl.trim().replace(/\/$/, ""),
-        values.model.trim(),
-        values.apiKey.trim(),
-      );
-      onConfiguredChange(true);
+      await setCustomProvider(baseUrl, model, values.apiKey.trim());
+      onSaved(baseUrl, model);
       onOpenChange(false);
     } catch (e) {
       setError(`Couldn't save: ${String(e)}`);
@@ -325,7 +299,7 @@ function CustomProviderDialog({
     setError(null);
     try {
       await clearCustomProvider();
-      onConfiguredChange(false);
+      onDisconnected();
       onOpenChange(false);
     } catch (e) {
       setError(`Couldn't disconnect: ${String(e)}`);
@@ -476,60 +450,7 @@ export function AiProvidersPage() {
     ai_cleanup_min_duration_ms: minDurationMs,
   } = settings;
 
-  const toneOverlay = usePersistedToggle(
-    settings.ai_cleanup_tone_overlay_enabled,
-    persistToneOverlay,
-    (next) =>
-      setSettings((s) => ({ ...s, ai_cleanup_tone_overlay_enabled: next })),
-  );
   const [openDialog, setOpenDialog] = useState<string | null>(null);
-  const [seenApps, setSeenApps] = useState<AppToneInfo[]>([]);
-
-  const loadSeenApps = useCallback(async () => {
-    try {
-      setSeenApps(await getAppsSeenInHistory());
-    } catch {
-      // non-fatal: list stays empty
-    }
-  }, []);
-
-  useEffect(() => {
-    if (settings.ai_cleanup_tone_overlay_enabled) loadSeenApps();
-  }, [settings.ai_cleanup_tone_overlay_enabled, loadSeenApps]);
-
-  const handleToneOverrideChange = async (
-    bundleId: string,
-    value: TonePreset | "auto",
-  ) => {
-    try {
-      if (value === "auto") {
-        await clearToneAppOverride(bundleId);
-        setSettings((s) => {
-          const overrides = { ...s.tone_app_overrides };
-          delete overrides[bundleId];
-          return { ...s, tone_app_overrides: overrides };
-        });
-        setSeenApps((prev) =>
-          prev.map((a) =>
-            a.bundle_id === bundleId ? { ...a, tone_override: null } : a,
-          ),
-        );
-      } else {
-        await setToneAppOverride(bundleId, value);
-        setSettings((s) => ({
-          ...s,
-          tone_app_overrides: { ...s.tone_app_overrides, [bundleId]: value },
-        }));
-        setSeenApps((prev) =>
-          prev.map((a) =>
-            a.bundle_id === bundleId ? { ...a, tone_override: value } : a,
-          ),
-        );
-      }
-    } catch (e) {
-      toast.error("Couldn't update tone override", { description: String(e) });
-    }
-  };
 
   const anthropicDescriptor =
     authMode === "api_key"
@@ -569,10 +490,21 @@ export function AiProvidersPage() {
     }));
   };
 
-  const handleCustomConfiguredChange = (configured: boolean) => {
+  const handleCustomSaved = (baseUrl: string, model: string) => {
     setSettings((s) => ({
       ...s,
-      custom_provider_configured: configured,
+      custom_provider_configured: true,
+      custom_provider_base_url: baseUrl,
+      custom_provider_model: model,
+    }));
+  };
+
+  const handleCustomDisconnected = () => {
+    setSettings((s) => ({
+      ...s,
+      custom_provider_configured: false,
+      custom_provider_base_url: null,
+      custom_provider_model: "",
     }));
   };
 
@@ -715,7 +647,8 @@ export function AiProvidersPage() {
         isConfigured={settings.custom_provider_configured}
         currentBaseUrl={settings.custom_provider_base_url}
         currentModel={settings.custom_provider_model}
-        onConfiguredChange={handleCustomConfiguredChange}
+        onSaved={handleCustomSaved}
+        onDisconnected={handleCustomDisconnected}
       />
 
       <SectionCard title="Cleanup Thresholds">
@@ -773,59 +706,6 @@ export function AiProvidersPage() {
             per-Profile in the Profiles page. There is no global toggle — enable
             cleanup per-Profile under Profiles.
           </p>
-        </div>
-      </SectionCard>
-
-      <SectionCard title="Tone Overlay">
-        <div className="flex flex-col gap-3">
-          <ToggleRow
-            id="tone-overlay-enabled"
-            label="Adapt tone to app"
-            info="Appends a tone directive to the cleanup prompt based on the frontmost app. Email → formal, messaging → casual, code → technical."
-            checked={settings.ai_cleanup_tone_overlay_enabled}
-            onCheckedChange={toneOverlay.toggle}
-          />
-          <p className="text-xs text-muted-foreground">
-            Tone adjusts punctuation, capitalization, and line breaks only —
-            grammar, phrasing, and word choice are never touched.
-          </p>
-          {settings.ai_cleanup_tone_overlay_enabled && seenApps.length > 0 && (
-            <div className="flex flex-col gap-1.5 pt-1">
-              <p className="text-xs font-medium text-foreground">
-                Per-app overrides
-              </p>
-              {seenApps.map((app) => (
-                <div
-                  key={app.bundle_id}
-                  className="flex items-center justify-between gap-2"
-                >
-                  <span className="text-sm truncate min-w-0">
-                    {app.app_name}
-                  </span>
-                  <Select
-                    value={app.tone_override ?? "auto"}
-                    onValueChange={(v) =>
-                      handleToneOverrideChange(
-                        app.bundle_id,
-                        v as TonePreset | "auto",
-                      )
-                    }
-                  >
-                    <SelectTrigger className="w-32 h-7 text-xs shrink-0">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TONE_PRESET_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </SectionCard>
     </div>

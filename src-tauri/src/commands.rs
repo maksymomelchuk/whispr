@@ -18,7 +18,7 @@ use crate::state::AppState;
 use crate::stats::{self, StatsRow, STATS_UPDATED_EVENT};
 use crate::tone;
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -508,32 +508,54 @@ pub struct AppToneInfo {
     pub app_name: String,
     pub tone_preset: TonePreset,
     pub tone_override: Option<TonePreset>,
+    pub custom_prompt: Option<String>,
+    pub icon_data_url: Option<String>,
 }
 
 #[tauri::command]
 pub fn get_apps_seen_in_history(app: AppHandle) -> Vec<AppToneInfo> {
     let settings = config::load(&app);
-    let entries = history::load(&app);
+    let own_id = app.config().identifier.clone();
 
-    let mut seen: BTreeMap<String, String> = BTreeMap::new();
-    for entry in &entries {
-        if let (Some(bid), Some(name)) = (&entry.bundle_id, &entry.app_name) {
-            if !bid.is_empty() && !seen.contains_key(bid) {
-                seen.insert(bid.clone(), name.clone());
+    // Source the app list from the long-lived stats aggregate, not the
+    // history log (which is truncated to history_limit). Rows arrive sorted
+    // ascending by date, so the last name written for a bundle id wins.
+    let mut usage: HashMap<String, (String, u32)> = HashMap::new();
+    for row in stats::load(&app) {
+        for (bid, app_usage) in row.app_counts {
+            if bid.is_empty() || bid == own_id || app_usage.name.trim().is_empty() {
+                continue;
             }
+            let entry = usage.entry(bid).or_insert_with(|| (String::new(), 0));
+            entry.0 = app_usage.name;
+            entry.1 = entry.1.saturating_add(app_usage.count);
         }
     }
 
-    seen.into_iter()
-        .map(|(bid, name)| {
+    let mut apps: Vec<(String, String, u32)> = usage
+        .into_iter()
+        .map(|(bid, (name, count))| (bid, name, count))
+        .collect();
+    apps.sort_by(|a, b| b.2.cmp(&a.2).then_with(|| a.1.cmp(&b.1)));
+
+    apps.into_iter()
+        .map(|(bid, name, _count)| {
             let override_preset = settings.ai_cleanup.tone_app_overrides.get(&bid).copied();
             let resolved = override_preset
                 .unwrap_or_else(|| tone::preset_for_category(tone::categorize_app(&bid)));
+            let custom_prompt = settings
+                .ai_cleanup
+                .tone_app_custom_prompts
+                .get(&bid)
+                .cloned();
+            let icon_data_url = crate::target_app::resolve_icon(&bid);
             AppToneInfo {
                 bundle_id: bid,
                 app_name: name,
                 tone_preset: resolved,
                 tone_override: override_preset,
+                custom_prompt,
+                icon_data_url,
             }
         })
         .collect()
@@ -546,7 +568,22 @@ pub fn set_tone_app_override(
     preset: TonePreset,
 ) -> Result<(), String> {
     config::update(&app, |s| {
+        s.ai_cleanup.tone_app_custom_prompts.remove(&bundle_id);
         s.ai_cleanup.tone_app_overrides.insert(bundle_id, preset);
+    })
+}
+
+#[tauri::command]
+pub fn set_tone_app_custom_prompt(
+    app: AppHandle,
+    bundle_id: String,
+    prompt: String,
+) -> Result<(), String> {
+    config::update(&app, |s| {
+        s.ai_cleanup.tone_app_overrides.remove(&bundle_id);
+        s.ai_cleanup
+            .tone_app_custom_prompts
+            .insert(bundle_id, prompt);
     })
 }
 
@@ -554,6 +591,7 @@ pub fn set_tone_app_override(
 pub fn clear_tone_app_override(app: AppHandle, bundle_id: String) -> Result<(), String> {
     config::update(&app, |s| {
         s.ai_cleanup.tone_app_overrides.remove(&bundle_id);
+        s.ai_cleanup.tone_app_custom_prompts.remove(&bundle_id);
     })
 }
 

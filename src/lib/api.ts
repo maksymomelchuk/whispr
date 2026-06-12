@@ -140,6 +140,9 @@ export const getAppsSeenInHistory = () =>
 export const setToneAppOverride = (bundleId: string, preset: TonePreset) =>
   invoke<void>("set_tone_app_override", { bundleId, preset });
 
+export const setToneAppCustomPrompt = (bundleId: string, prompt: string) =>
+  invoke<void>("set_tone_app_custom_prompt", { bundleId, prompt });
+
 export const clearToneAppOverride = (bundleId: string) =>
   invoke<void>("clear_tone_app_override", { bundleId });
 

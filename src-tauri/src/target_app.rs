@@ -129,6 +129,11 @@ fn resolve_bundle() -> Option<FrontmostApp> {
     Some(FrontmostApp { bundle_id, name })
 }
 
+#[cfg(not(target_os = "macos"))]
+pub fn resolve_icon(_bundle_id: &str) -> Option<String> {
+    None
+}
+
 #[cfg(target_os = "macos")]
 pub fn resolve_icon(bundle_id: &str) -> Option<String> {
     use objc2::runtime::AnyObject;

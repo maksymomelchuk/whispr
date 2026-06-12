@@ -312,6 +312,8 @@ pub struct AiCleanupSettings {
     pub tone_overlay_enabled: bool,
     #[serde(default)]
     pub tone_app_overrides: BTreeMap<String, TonePreset>,
+    #[serde(default)]
+    pub tone_app_custom_prompts: BTreeMap<String, String>,
 }
 
 impl Default for AiCleanupSettings {
@@ -327,6 +329,7 @@ impl Default for AiCleanupSettings {
             min_duration_ms: DEFAULT_CLEANUP_MIN_DURATION_MS,
             tone_overlay_enabled: false,
             tone_app_overrides: BTreeMap::new(),
+            tone_app_custom_prompts: BTreeMap::new(),
         }
     }
 }

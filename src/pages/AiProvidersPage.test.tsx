@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -14,11 +14,7 @@ vi.mock("../lib/api", () => ({
   setAnthropicOauthToken: vi.fn(),
   setCleanupAuthMode: vi.fn(),
   setCleanupThresholds: vi.fn(),
-  setToneOverlayEnabled: vi.fn(),
   setProviderKey: vi.fn(),
-  getAppsSeenInHistory: vi.fn().mockResolvedValue([]),
-  setToneAppOverride: vi.fn().mockResolvedValue(undefined),
-  clearToneAppOverride: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/components/ui/select", () => ({
@@ -102,6 +98,7 @@ const BASE_SETTINGS: Settings = {
   ai_cleanup_min_duration_ms: 3000,
   ai_cleanup_tone_overlay_enabled: false,
   tone_app_overrides: {},
+  tone_app_custom_prompts: {},
   learn_from_corrections: false,
   input_device: null,
   pause_media_on_record: true,
@@ -202,81 +199,6 @@ describe("AiProvidersPage", () => {
   it("states that cleanup is enabled per-Profile", () => {
     render(<Wrapper />);
     expect(screen.getByText(/per-profile/i)).toBeInTheDocument();
-  });
-
-  it("hides per-app overrides section when tone overlay is disabled", () => {
-    render(<Wrapper />);
-    expect(screen.queryByText("Per-app overrides")).not.toBeInTheDocument();
-  });
-
-  it("shows per-app overrides section when tone overlay is enabled and apps exist", async () => {
-    const { getAppsSeenInHistory } = await import("../lib/api");
-    vi.mocked(getAppsSeenInHistory).mockResolvedValueOnce([
-      {
-        bundle_id: "com.apple.mail",
-        app_name: "Mail",
-        tone_preset: "formal",
-        tone_override: null,
-      },
-    ]);
-    render(
-      <Wrapper
-        settings={{ ...BASE_SETTINGS, ai_cleanup_tone_overlay_enabled: true }}
-      />,
-    );
-    await waitFor(() => {
-      expect(screen.getByText("Per-app overrides")).toBeInTheDocument();
-      expect(screen.getByText("Mail")).toBeInTheDocument();
-    });
-  });
-
-  it("calls setToneAppOverride when user selects a tone preset for an app", async () => {
-    const { getAppsSeenInHistory, setToneAppOverride } =
-      await import("../lib/api");
-    vi.mocked(getAppsSeenInHistory).mockResolvedValueOnce([
-      {
-        bundle_id: "com.apple.mail",
-        app_name: "Mail",
-        tone_preset: "formal",
-        tone_override: null,
-      },
-    ]);
-    render(
-      <Wrapper
-        settings={{ ...BASE_SETTINGS, ai_cleanup_tone_overlay_enabled: true }}
-      />,
-    );
-    await waitFor(() => screen.getByText("Mail"));
-    await userEvent.selectOptions(screen.getByRole("combobox"), "casual");
-    await waitFor(() => {
-      expect(setToneAppOverride).toHaveBeenCalledWith(
-        "com.apple.mail",
-        "casual",
-      );
-    });
-  });
-
-  it("calls clearToneAppOverride when user selects Auto for an app with an override", async () => {
-    const { getAppsSeenInHistory, clearToneAppOverride } =
-      await import("../lib/api");
-    vi.mocked(getAppsSeenInHistory).mockResolvedValueOnce([
-      {
-        bundle_id: "com.apple.mail",
-        app_name: "Mail",
-        tone_preset: "formal",
-        tone_override: "formal",
-      },
-    ]);
-    render(
-      <Wrapper
-        settings={{ ...BASE_SETTINGS, ai_cleanup_tone_overlay_enabled: true }}
-      />,
-    );
-    await waitFor(() => screen.getByText("Mail"));
-    await userEvent.selectOptions(screen.getByRole("combobox"), "auto");
-    await waitFor(() => {
-      expect(clearToneAppOverride).toHaveBeenCalledWith("com.apple.mail");
-    });
   });
 });
 

@@ -781,7 +781,11 @@ async fn maybe_cleanup(
     }
 
     let tone = if cleanup_settings.tone_overlay_enabled {
-        tone::resolve_tone(bundle_id, &cleanup_settings.tone_app_overrides)
+        tone::resolve_tone(
+            bundle_id,
+            &cleanup_settings.tone_app_overrides,
+            &cleanup_settings.tone_app_custom_prompts,
+        )
     } else {
         None
     };
@@ -813,7 +817,7 @@ async fn maybe_cleanup(
         cleanup_provider,
         cleanup_model,
         prompt_override,
-        tone,
+        tone.as_deref(),
         glossary,
         context,
         transcript,

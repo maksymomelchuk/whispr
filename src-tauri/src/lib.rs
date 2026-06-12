@@ -265,6 +265,7 @@ pub fn run() {
             commands::set_tone_overlay_enabled,
             commands::get_apps_seen_in_history,
             commands::set_tone_app_override,
+            commands::set_tone_app_custom_prompt,
             commands::clear_tone_app_override,
             commands::list_input_devices,
             commands::set_input_device,

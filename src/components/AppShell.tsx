@@ -9,6 +9,7 @@ import {
   LightningIcon,
   SlidersIcon,
   SparkleIcon,
+  TextAaIcon,
   TextTIcon,
   WaveformIcon,
 } from "@phosphor-icons/react";
@@ -36,6 +37,7 @@ import { SnippetsPage } from "../pages/SnippetsPage";
 import { SpeechModelsPage } from "../pages/SpeechModelsPage";
 import { StatsPage } from "../pages/StatsPage";
 import { TermsPage } from "../pages/TermsPage";
+import { ToneOverlayPage } from "../pages/ToneOverlayPage";
 import {
   Sidebar,
   SidebarContent,
@@ -71,6 +73,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: "Profiles", icon: SlidersIcon, path: "/modes" },
       { label: "Speech models", icon: WaveformIcon, path: "/speech-models" },
       { label: "AI Providers", icon: SparkleIcon, path: "/ai-providers" },
+      { label: "Tone of voice", icon: TextAaIcon, path: "/tone" },
       { label: "Vocabulary", icon: TextTIcon, path: "/terms" },
       {
         label: "Corrections",
@@ -300,6 +303,7 @@ function ShellInner() {
               <Route path="/hotkeys" element={<HotkeysPage />} />
               <Route path="/speech-models" element={<SpeechModelsPage />} />
               <Route path="/ai-providers" element={<AiProvidersPage />} />
+              <Route path="/tone" element={<ToneOverlayPage />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/corrections" element={<CorrectionsPage />} />
               <Route path="/learned" element={<LearnedEntriesPage />} />

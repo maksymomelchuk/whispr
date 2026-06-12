@@ -159,6 +159,8 @@ export interface AppToneInfo {
   app_name: string;
   tone_preset: TonePreset;
   tone_override: TonePreset | null;
+  custom_prompt: string | null;
+  icon_data_url: string | null;
 }
 
 export type CleanupAuthMode = "api_key" | "oauth";
@@ -236,6 +238,7 @@ export interface Settings {
   ai_cleanup_min_duration_ms: number;
   ai_cleanup_tone_overlay_enabled: boolean;
   tone_app_overrides: Record<string, TonePreset>;
+  tone_app_custom_prompts: Record<string, string>;
   learn_from_corrections: boolean;
   input_device: string | null;
   pause_media_on_record: boolean;
