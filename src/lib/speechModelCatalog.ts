@@ -5,6 +5,7 @@ import { DeepgramLogo } from "@/assets/DeepgramLogo";
 import { ElevenLabsLogo } from "@/assets/ElevenLabsLogo";
 import { GroqLogo } from "@/assets/GroqLogo";
 import { OpenAiLogo } from "@/assets/OpenAiLogo";
+import { SonioxLogo } from "@/assets/SonioxLogo";
 
 import {
   setAssemblyAiApiKey,
@@ -12,11 +13,13 @@ import {
   setElevenLabsApiKey,
   setGroqApiKey,
   setOpenaiApiKey,
+  setSonioxApiKey,
   validateAssemblyAiApiKey,
   validateDeepgramApiKey,
   validateElevenLabsApiKey,
   validateGroqApiKey,
   validateOpenaiApiKey,
+  validateSonioxApiKey,
 } from "./api";
 import type { ApiKeyValidation, Settings } from "./types";
 
@@ -102,10 +105,10 @@ export const SPEECH_MODEL_CATALOG: EngineDescriptor[] = [
     id: "elevenlabs",
     name: "ElevenLabs",
     logo: ElevenLabsLogo,
-    description: "Batch transcription with ElevenLabs Scribe v2.",
+    description: "Scribe v2 batch or Scribe v2 Realtime streaming.",
     metadata: {
       languages: "99+ languages",
-      streaming: "No",
+      streaming: "Yes",
       diarization: "No",
     },
     keyPlaceholder: "xi_...",
@@ -113,5 +116,22 @@ export const SPEECH_MODEL_CATALOG: EngineDescriptor[] = [
     selectConfigured: (s) => s.elevenlabs_api_key_configured,
     persist: setElevenLabsApiKey,
     validate: validateElevenLabsApiKey,
+  },
+  {
+    id: "soniox",
+    name: "Soniox",
+    logo: SonioxLogo,
+    description:
+      "Real-time stt-rt-v4 with mid-sentence code-switching and one-way translation.",
+    metadata: {
+      languages: "60+ languages",
+      streaming: "Yes",
+      diarization: "No",
+    },
+    keyPlaceholder: "soniox_...",
+    helpUrl: "https://console.soniox.com/",
+    selectConfigured: (s) => s.soniox_api_key_configured,
+    persist: setSonioxApiKey,
+    validate: validateSonioxApiKey,
   },
 ];

@@ -61,6 +61,7 @@ import {
 import type {
   AiProviderId,
   AssemblyAiModel,
+  ElevenLabsModel,
   GroqModel,
   HotkeyBinding,
   LocalModelStatus,
@@ -81,8 +82,74 @@ const PROVIDER_OPTIONS: { value: ProviderModel["provider"]; label: string }[] =
     { value: "assembly_ai", label: "AssemblyAI" },
     { value: "open_ai", label: "OpenAI" },
     { value: "eleven_labs", label: "ElevenLabs" },
+    { value: "soniox", label: "Soniox" },
     { value: "local", label: "Local" },
   ];
+
+const SONIOX_VERBATIM = "none";
+
+const SONIOX_TRANSLATE_LANGUAGES: { code: string; name: string }[] = [
+  { code: "af", name: "Afrikaans" },
+  { code: "sq", name: "Albanian" },
+  { code: "ar", name: "Arabic" },
+  { code: "az", name: "Azerbaijani" },
+  { code: "eu", name: "Basque" },
+  { code: "be", name: "Belarusian" },
+  { code: "bn", name: "Bengali" },
+  { code: "bs", name: "Bosnian" },
+  { code: "bg", name: "Bulgarian" },
+  { code: "ca", name: "Catalan" },
+  { code: "zh", name: "Chinese" },
+  { code: "hr", name: "Croatian" },
+  { code: "cs", name: "Czech" },
+  { code: "da", name: "Danish" },
+  { code: "nl", name: "Dutch" },
+  { code: "en", name: "English" },
+  { code: "et", name: "Estonian" },
+  { code: "fi", name: "Finnish" },
+  { code: "fr", name: "French" },
+  { code: "gl", name: "Galician" },
+  { code: "de", name: "German" },
+  { code: "el", name: "Greek" },
+  { code: "gu", name: "Gujarati" },
+  { code: "he", name: "Hebrew" },
+  { code: "hi", name: "Hindi" },
+  { code: "hu", name: "Hungarian" },
+  { code: "id", name: "Indonesian" },
+  { code: "it", name: "Italian" },
+  { code: "ja", name: "Japanese" },
+  { code: "kn", name: "Kannada" },
+  { code: "kk", name: "Kazakh" },
+  { code: "ko", name: "Korean" },
+  { code: "lv", name: "Latvian" },
+  { code: "lt", name: "Lithuanian" },
+  { code: "mk", name: "Macedonian" },
+  { code: "ms", name: "Malay" },
+  { code: "ml", name: "Malayalam" },
+  { code: "mr", name: "Marathi" },
+  { code: "no", name: "Norwegian" },
+  { code: "fa", name: "Persian" },
+  { code: "pl", name: "Polish" },
+  { code: "pt", name: "Portuguese" },
+  { code: "pa", name: "Punjabi" },
+  { code: "ro", name: "Romanian" },
+  { code: "ru", name: "Russian" },
+  { code: "sr", name: "Serbian" },
+  { code: "sk", name: "Slovak" },
+  { code: "sl", name: "Slovenian" },
+  { code: "es", name: "Spanish" },
+  { code: "sw", name: "Swahili" },
+  { code: "sv", name: "Swedish" },
+  { code: "tl", name: "Tagalog" },
+  { code: "ta", name: "Tamil" },
+  { code: "te", name: "Telugu" },
+  { code: "th", name: "Thai" },
+  { code: "tr", name: "Turkish" },
+  { code: "uk", name: "Ukrainian" },
+  { code: "ur", name: "Urdu" },
+  { code: "vi", name: "Vietnamese" },
+  { code: "cy", name: "Welsh" },
+];
 
 const LOCAL_MODEL_OPTIONS: { value: LocalWhisperModel; label: string }[] = [
   { value: "large_v3_turbo", label: "Whisper Large v3 Turbo" },
@@ -101,6 +168,11 @@ const OPENAI_TRANSCRIBE_MODEL_OPTIONS: {
 }[] = [
   { value: "gpt4o_transcribe", label: "GPT-4o Transcribe" },
   { value: "gpt4o_mini_transcribe", label: "GPT-4o mini Transcribe" },
+];
+
+const ELEVENLABS_MODEL_OPTIONS: { value: ElevenLabsModel; label: string }[] = [
+  { value: "scribe_v2", label: "Scribe v2" },
+  { value: "scribe_v2_realtime", label: "Scribe v2 Realtime" },
 ];
 
 const ASSEMBLYAI_MODEL_OPTIONS: { value: AssemblyAiModel; label: string }[] = [
@@ -122,7 +194,9 @@ function defaultProviderModel(
     return { provider: "assembly_ai", model: "universal_pro_streaming" };
   if (provider === "open_ai")
     return { provider: "open_ai", model: "gpt4o_transcribe" };
-  if (provider === "eleven_labs") return { provider: "eleven_labs" };
+  if (provider === "eleven_labs")
+    return { provider: "eleven_labs", model: "scribe_v2" };
+  if (provider === "soniox") return { provider: "soniox", translate_to: null };
   if (provider === "local")
     return { provider: "local", model: "large_v3_turbo" };
   return { provider: "deepgram" };
@@ -515,6 +589,15 @@ export function ModeEditor({
   const setOpenAiModel = (model: OpenAiTranscribeModel) =>
     setProviderModel({ provider: "open_ai", model });
 
+  const setElevenLabsModel = (model: ElevenLabsModel) =>
+    setProviderModel({ provider: "eleven_labs", model });
+
+  const setSonioxTranslateTo = (value: string) =>
+    setProviderModel({
+      provider: "soniox",
+      translate_to: value === SONIOX_VERBATIM ? null : value,
+    });
+
   const setLocalModel = (model: LocalWhisperModel) =>
     setProviderModel({ provider: "local", model });
 
@@ -780,6 +863,55 @@ export function ModeEditor({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+        )}
+
+        {draft.provider_model.provider === "eleven_labs" && (
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[13px]">Model</Label>
+            <Select
+              value={draft.provider_model.model}
+              onValueChange={(v) => setElevenLabsModel(v as ElevenLabsModel)}
+            >
+              <SelectTrigger size="sm" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ELEVENLABS_MODEL_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {draft.provider_model.provider === "soniox" && (
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[13px]">Translate to</Label>
+            <Select
+              value={draft.provider_model.translate_to ?? SONIOX_VERBATIM}
+              onValueChange={setSonioxTranslateTo}
+            >
+              <SelectTrigger size="sm" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SONIOX_VERBATIM}>
+                  Off (verbatim — keep code-switching)
+                </SelectItem>
+                {SONIOX_TRANSLATE_LANGUAGES.map((lang) => (
+                  <SelectItem key={lang.code} value={lang.code}>
+                    {lang.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[12px] text-muted-foreground">
+              Off transcribes verbatim, preserving mixed languages. Selecting a
+              target translates speech into that language as you dictate.
+            </p>
           </div>
         )}
 
@@ -1181,7 +1313,8 @@ export function ModesPage() {
                 !settings.assemblyai_api_key_configured) ||
               (provider === "open_ai" && !settings.openai_api_key_configured) ||
               (provider === "eleven_labs" &&
-                !settings.elevenlabs_api_key_configured);
+                !settings.elevenlabs_api_key_configured) ||
+              (provider === "soniox" && !settings.soniox_api_key_configured);
             return (
               <ModeRow
                 key={mode.id}

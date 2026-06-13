@@ -398,6 +398,8 @@ pub struct Settings {
     pub openai_api_key: Option<String>,
     #[serde(default)]
     pub elevenlabs_api_key: Option<String>,
+    #[serde(default)]
+    pub soniox_api_key: Option<String>,
     /// Legacy single-shortcut field; converted to a HotkeyBinding on first load.
     #[serde(rename = "shortcut", default, skip_serializing)]
     pub legacy_shortcut: Shortcut,
@@ -466,6 +468,7 @@ impl Default for Settings {
             assemblyai_api_key: None,
             openai_api_key: None,
             elevenlabs_api_key: None,
+            soniox_api_key: None,
             legacy_shortcut: Shortcut::default(),
             hotkey_bindings: vec![],
             legacy_dictionary: vec![],

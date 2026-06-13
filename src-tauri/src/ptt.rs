@@ -2,7 +2,7 @@ use crate::assemblyai_session::AssemblyAiEngine;
 use crate::config::{HotkeyAction, HotkeyBinding, Shortcut};
 use crate::corrections::compose_corrections;
 use crate::deepgram_session::DeepgramEngine;
-use crate::elevenlabs_session::ElevenLabsEngine;
+use crate::elevenlabs_session::{ElevenLabsEngine, ElevenLabsRealtimeEngine};
 use crate::engine::EngineContext;
 use crate::groq_session::GroqEngine;
 use crate::history::{self, CleanupStatus, HISTORY_UPDATED_EVENT};
@@ -14,9 +14,12 @@ use crate::hotkey::{
 use crate::local_engine::LocalWhisperEngine;
 use crate::openai_transcribe_session::OpenAiTranscribeEngine;
 use crate::pipeline::{self, CleanupOutput, Notice};
-use crate::provider::{self, LocalWhisperModel, ProviderModel, TranscriptionProvider};
+use crate::provider::{
+    self, ElevenLabsModel, LocalWhisperModel, ProviderModel, TranscriptionProvider,
+};
 use crate::recorder::Recorder;
 use crate::session::{Session, PTT_ERROR_EVENT, TRANSCRIPTION_ERROR_EVENT};
+use crate::soniox_session::SonioxRealtimeEngine;
 use crate::state::{AppState, ModifierState};
 use crate::{
     cleanup, cleanup_invoke, cleanup_stats, clipboard_context, config, focused_field_context,
@@ -390,6 +393,10 @@ async fn run_session(
             .elevenlabs_api_key
             .as_deref()
             .is_none_or(|k| k.is_empty()),
+        TranscriptionProvider::Soniox => settings
+            .soniox_api_key
+            .as_deref()
+            .is_none_or(|k| k.is_empty()),
         TranscriptionProvider::Local => false,
     };
     if missing_key {
@@ -400,6 +407,7 @@ async fn run_session(
             TranscriptionProvider::AssemblyAi => "AssemblyAI",
             TranscriptionProvider::OpenAi => "OpenAI",
             TranscriptionProvider::ElevenLabs => "ElevenLabs",
+            TranscriptionProvider::Soniox => "Soniox",
             TranscriptionProvider::Local => unreachable!(),
         };
         return Err(format!("API key missing for {name}"));
@@ -543,7 +551,7 @@ async fn run_session(
             .run(chunk_rx, ctx)
             .await
         }
-        ProviderModel::ElevenLabs => {
+        ProviderModel::ElevenLabs { model } => {
             let key = settings
                 .elevenlabs_api_key
                 .clone()
@@ -559,8 +567,47 @@ async fn run_session(
                 language: mode_language,
                 terms: session_terms,
             };
+            match model {
+                ElevenLabsModel::ScribeV2 => {
+                    Session::new(
+                        ElevenLabsEngine::new(key),
+                        app.clone(),
+                        settings.show_live_preview,
+                        corrections,
+                    )
+                    .run(chunk_rx, ctx)
+                    .await
+                }
+                ElevenLabsModel::ScribeV2Realtime => {
+                    Session::new(
+                        ElevenLabsRealtimeEngine::new(key),
+                        app.clone(),
+                        settings.show_live_preview,
+                        corrections,
+                    )
+                    .run(chunk_rx, ctx)
+                    .await
+                }
+            }
+        }
+        ProviderModel::Soniox { translate_to } => {
+            let key = settings
+                .soniox_api_key
+                .clone()
+                .filter(|k| !k.is_empty())
+                .ok_or_else(|| "API key not configured".to_string())?;
+            let corrections = compose_corrections(
+                &active_mode.correction_set_ids,
+                &settings.correction_sets,
+                &settings.learned_entries,
+            );
+            let ctx = EngineContext {
+                format,
+                language: mode_language,
+                terms: session_terms,
+            };
             Session::new(
-                ElevenLabsEngine::new(key),
+                SonioxRealtimeEngine::new(key, translate_to.clone()),
                 app.clone(),
                 settings.show_live_preview,
                 corrections,

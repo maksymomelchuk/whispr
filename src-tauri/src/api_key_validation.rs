@@ -21,6 +21,12 @@ const GROQ_TRANSCRIBE_URL: &str = "https://api.groq.com/openai/v1/audio/transcri
 const OPENAI_MODELS_URL: &str = "https://api.openai.com/v1/models";
 const ELEVENLABS_USER_URL: &str = "https://api.elevenlabs.io/v1/user";
 
+/// `/v1/models` is a cheap authenticated GET (no transcription billed) that
+/// authenticates with the same `Authorization: Bearer <key>` the realtime
+/// WebSocket carries in its config message, so a 200 here means dictation auth
+/// will pass.
+const SONIOX_MODELS_URL: &str = "https://api.soniox.com/v1/models";
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ApiKeyValidation {
@@ -115,6 +121,24 @@ pub async fn validate_elevenlabs(api_key: &str) -> ApiKeyValidation {
     match client
         .get(ELEVENLABS_USER_URL)
         .header("xi-api-key", api_key)
+        .send()
+        .await
+    {
+        Ok(resp) => status_to_validation(resp.status()),
+        Err(e) => ApiKeyValidation::Error {
+            message: format!("Network error: {e}"),
+        },
+    }
+}
+
+pub async fn validate_soniox(api_key: &str) -> ApiKeyValidation {
+    if api_key.is_empty() {
+        return ApiKeyValidation::Invalid;
+    }
+    let client = reqwest::Client::new();
+    match client
+        .get(SONIOX_MODELS_URL)
+        .bearer_auth(api_key)
         .send()
         .await
     {
@@ -258,6 +282,12 @@ mod tests {
     #[tokio::test]
     async fn validate_elevenlabs_short_circuits_on_empty_key() {
         let v = validate_elevenlabs("").await;
+        assert_eq!(v, ApiKeyValidation::Invalid);
+    }
+
+    #[tokio::test]
+    async fn validate_soniox_short_circuits_on_empty_key() {
+        let v = validate_soniox("").await;
         assert_eq!(v, ApiKeyValidation::Invalid);
     }
 }

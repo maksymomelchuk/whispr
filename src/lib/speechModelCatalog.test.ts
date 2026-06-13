@@ -9,6 +9,7 @@ const BASE_SETTINGS: Settings = {
   assemblyai_api_key_configured: false,
   openai_api_key_configured: false,
   elevenlabs_api_key_configured: false,
+  soniox_api_key_configured: false,
   hotkey_bindings: [],
   term_sets: [],
   correction_sets: [],
@@ -37,8 +38,8 @@ const BASE_SETTINGS: Settings = {
 };
 
 describe("speechModelCatalog", () => {
-  it("contains exactly five engines", () => {
-    expect(SPEECH_MODEL_CATALOG).toHaveLength(5);
+  it("contains exactly six engines", () => {
+    expect(SPEECH_MODEL_CATALOG).toHaveLength(6);
   });
 
   it("every descriptor has a non-empty key placeholder and a help URL", () => {

@@ -52,6 +52,7 @@ const BASE: Settings = {
   assemblyai_api_key_configured: false,
   openai_api_key_configured: false,
   elevenlabs_api_key_configured: false,
+  soniox_api_key_configured: false,
   hotkey_bindings: [],
   term_sets: [],
   correction_sets: [],

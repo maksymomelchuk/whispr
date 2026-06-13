@@ -40,6 +40,9 @@ export const setOpenaiApiKey = (apiKey: string) =>
 export const setElevenLabsApiKey = (apiKey: string) =>
   invoke<void>("set_elevenlabs_api_key", { apiKey });
 
+export const setSonioxApiKey = (apiKey: string) =>
+  invoke<void>("set_soniox_api_key", { apiKey });
+
 export const validateAssemblyAiApiKey = (apiKey: string) =>
   invoke<ApiKeyValidation>("validate_assemblyai_api_key", { apiKey });
 
@@ -48,6 +51,9 @@ export const validateOpenaiApiKey = (apiKey: string) =>
 
 export const validateElevenLabsApiKey = (apiKey: string) =>
   invoke<ApiKeyValidation>("validate_elevenlabs_api_key", { apiKey });
+
+export const validateSonioxApiKey = (apiKey: string) =>
+  invoke<ApiKeyValidation>("validate_soniox_api_key", { apiKey });
 
 export const validateDeepgramApiKey = (apiKey: string) =>
   invoke<ApiKeyValidation>("validate_deepgram_api_key", { apiKey });

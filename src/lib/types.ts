@@ -61,13 +61,16 @@ export type TranscriptionProvider =
   | "assembly_ai"
   | "local"
   | "open_ai"
-  | "eleven_labs";
+  | "eleven_labs"
+  | "soniox";
 
 export type GroqModel = "whisper_large_v3" | "whisper_large_v3_turbo";
 
 export type OpenAiTranscribeModel =
   | "gpt4o_transcribe"
   | "gpt4o_mini_transcribe";
+
+export type ElevenLabsModel = "scribe_v2" | "scribe_v2_realtime";
 
 export type AssemblyAiModel =
   | "universal_pro_streaming"
@@ -100,7 +103,8 @@ export type ProviderModel =
   | { provider: "assembly_ai"; model: AssemblyAiModel }
   | { provider: "local"; model: LocalWhisperModel }
   | { provider: "open_ai"; model: OpenAiTranscribeModel }
-  | { provider: "eleven_labs" };
+  | { provider: "eleven_labs"; model: ElevenLabsModel }
+  | { provider: "soniox"; translate_to: string | null };
 
 export function providerModelLanguageCodes(pm: ProviderModel): string[] | null {
   if (pm.provider !== "assembly_ai") return null;
@@ -130,6 +134,11 @@ const LOCAL_MODEL_LABELS: Record<LocalWhisperModel, string> = {
   parakeet: "Parakeet TDT",
 };
 
+const ELEVENLABS_MODEL_LABELS: Record<ElevenLabsModel, string> = {
+  scribe_v2: "Scribe v2",
+  scribe_v2_realtime: "Scribe v2 Realtime",
+};
+
 export function providerModelLabel(pm: ProviderModel): string {
   switch (pm.provider) {
     case "deepgram":
@@ -145,7 +154,11 @@ export function providerModelLabel(pm: ProviderModel): string {
     case "open_ai":
       return `OpenAI · ${OPENAI_TRANSCRIBE_MODEL_LABELS[pm.model]}`;
     case "eleven_labs":
-      return "ElevenLabs";
+      return `ElevenLabs · ${ELEVENLABS_MODEL_LABELS[pm.model]}`;
+    case "soniox":
+      return pm.translate_to
+        ? `Soniox · → ${pm.translate_to.toUpperCase()}`
+        : "Soniox";
   }
 }
 
@@ -219,6 +232,7 @@ export interface Settings {
   assemblyai_api_key_configured: boolean;
   openai_api_key_configured: boolean;
   elevenlabs_api_key_configured: boolean;
+  soniox_api_key_configured: boolean;
   hotkey_bindings: HotkeyBinding[];
   term_sets: NamedTermSet[];
   correction_sets: NamedCorrectionSet[];

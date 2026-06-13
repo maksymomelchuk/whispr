@@ -37,6 +37,7 @@ mod openai_transcribe_session;
 mod preview_throttle;
 pub(crate) mod recorder;
 mod session;
+mod soniox_session;
 
 // cleanup is cross-platform HTTP (reqwest + serde_json, no OS APIs).
 pub mod cleanup;
@@ -233,11 +234,13 @@ pub fn run() {
             commands::set_assemblyai_api_key,
             commands::set_openai_api_key,
             commands::set_elevenlabs_api_key,
+            commands::set_soniox_api_key,
             commands::validate_deepgram_api_key,
             commands::validate_groq_api_key,
             commands::validate_assemblyai_api_key,
             commands::validate_openai_api_key,
             commands::validate_elevenlabs_api_key,
+            commands::validate_soniox_api_key,
             commands::set_hotkey_bindings,
             commands::set_shortcut_capture_paused,
             commands::create_term_set,
