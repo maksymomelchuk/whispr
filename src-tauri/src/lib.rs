@@ -12,7 +12,6 @@ pub(crate) mod keysym;
 pub mod mode;
 mod permissions;
 pub mod pipeline;
-#[cfg(target_os = "linux")]
 pub(crate) mod platform;
 pub mod provider;
 mod snippets;
@@ -47,6 +46,7 @@ pub mod recovery;
 
 mod clipboard_context;
 mod focused_field_context;
+mod focused_window_context;
 mod miner;
 mod post_paste_observer;
 mod selected_text_context;

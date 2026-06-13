@@ -90,4 +90,10 @@ pub struct AppState {
     /// Receives the focused field's text captured concurrently with recording.
     /// Populated by focused_field_context::capture; consumed once per session.
     pub pending_focused_field_rx: Arc<Mutex<Option<oneshot::Receiver<Option<String>>>>>,
+    /// Receives the frontmost window's visible text captured via AX traversal.
+    /// Populated by focused_window_context::capture; consumed once per session.
+    pub pending_focused_window_rx: Arc<Mutex<Option<oneshot::Receiver<Option<String>>>>>,
+    /// Clipboard change count recorded at PTT-down; consumed once per session
+    /// by the mid-dictation copy check.
+    pub clipboard_count_at_ptt_down: Arc<Mutex<Option<i64>>>,
 }

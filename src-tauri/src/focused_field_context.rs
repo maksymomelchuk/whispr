@@ -53,6 +53,10 @@ fn platform_read_focused_field() -> Option<String> {
         fn AXUIElementGetPid(element: AXUIElementRef, pid: *mut c_int) -> AXError;
     }
 
+    if crate::platform::is_secure_input_active() {
+        return None;
+    }
+
     unsafe {
         let system_wide = AXUIElementCreateSystemWide();
         if system_wide.is_null() {

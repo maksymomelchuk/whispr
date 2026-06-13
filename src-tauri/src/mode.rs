@@ -70,13 +70,14 @@ pub struct ModeCleanup {
     pub paste_raw_on_failure: bool,
     // Defaults to false so existing behaviour is unchanged after upgrade.
     #[serde(default)]
-    pub clipboard_context_enabled: bool,
-    // Defaults to false so existing behaviour is unchanged after upgrade.
-    #[serde(default)]
-    pub selected_text_context_enabled: bool,
-    // Defaults to false so existing behaviour is unchanged after upgrade.
-    #[serde(default)]
-    pub focused_field_context_enabled: bool,
+    pub context_capture_enabled: bool,
+    /// Legacy per-channel flags; folded into context_capture_enabled on load.
+    #[serde(rename = "clipboard_context_enabled", default, skip_serializing)]
+    pub legacy_clipboard_context_enabled: Option<bool>,
+    #[serde(rename = "selected_text_context_enabled", default, skip_serializing)]
+    pub legacy_selected_text_context_enabled: Option<bool>,
+    #[serde(rename = "focused_field_context_enabled", default, skip_serializing)]
+    pub legacy_focused_field_context_enabled: Option<bool>,
     // Defaults to false so existing behaviour is unchanged after upgrade.
     #[serde(default)]
     pub post_paste_observation_enabled: bool,
@@ -90,9 +91,10 @@ impl Default for ModeCleanup {
             provider: AiProviderId::default(),
             model: default_cleanup_model(),
             paste_raw_on_failure: true,
-            clipboard_context_enabled: false,
-            selected_text_context_enabled: false,
-            focused_field_context_enabled: false,
+            context_capture_enabled: false,
+            legacy_clipboard_context_enabled: None,
+            legacy_selected_text_context_enabled: None,
+            legacy_focused_field_context_enabled: None,
             post_paste_observation_enabled: false,
         }
     }
@@ -416,9 +418,10 @@ mod tests {
             provider: AiProviderId::OpenAi,
             model: "gpt-4o-mini".to_string(),
             paste_raw_on_failure: true,
-            clipboard_context_enabled: false,
-            selected_text_context_enabled: false,
-            focused_field_context_enabled: false,
+            context_capture_enabled: false,
+            legacy_clipboard_context_enabled: None,
+            legacy_selected_text_context_enabled: None,
+            legacy_focused_field_context_enabled: None,
             post_paste_observation_enabled: false,
         };
         let json = serde_json::to_string(&c).unwrap();
@@ -441,29 +444,35 @@ mod tests {
     }
 
     #[test]
-    fn mode_cleanup_selected_text_context_defaults_to_false() {
+    fn mode_cleanup_context_capture_defaults_to_false() {
         let c = ModeCleanup::default();
-        assert!(!c.selected_text_context_enabled);
+        assert!(!c.context_capture_enabled);
     }
 
     #[test]
-    fn mode_cleanup_selected_text_context_deserializes_to_false_when_absent() {
+    fn mode_cleanup_context_capture_deserializes_to_false_when_absent() {
         let json = r#"{"enabled":false,"prompt_override":null}"#;
         let c: ModeCleanup = serde_json::from_str(json).unwrap();
-        assert!(!c.selected_text_context_enabled);
+        assert!(!c.context_capture_enabled);
     }
 
     #[test]
-    fn mode_cleanup_focused_field_context_defaults_to_false() {
-        let c = ModeCleanup::default();
-        assert!(!c.focused_field_context_enabled);
-    }
-
-    #[test]
-    fn mode_cleanup_focused_field_context_deserializes_to_false_when_absent() {
-        let json = r#"{"enabled":false,"prompt_override":null}"#;
+    fn legacy_per_channel_flags_deserialize_into_legacy_fields() {
+        let json = r#"{"enabled":false,"prompt_override":null,"clipboard_context_enabled":true,"selected_text_context_enabled":false,"focused_field_context_enabled":false}"#;
         let c: ModeCleanup = serde_json::from_str(json).unwrap();
-        assert!(!c.focused_field_context_enabled);
+        assert_eq!(c.legacy_clipboard_context_enabled, Some(true));
+        assert_eq!(c.legacy_selected_text_context_enabled, Some(false));
+        assert_eq!(c.legacy_focused_field_context_enabled, Some(false));
+        assert!(!c.context_capture_enabled);
+    }
+
+    #[test]
+    fn mode_cleanup_does_not_serialize_legacy_context_flags() {
+        let json = serde_json::to_string(&ModeCleanup::default()).unwrap();
+        assert!(!json.contains("clipboard_context_enabled"));
+        assert!(!json.contains("selected_text_context_enabled"));
+        assert!(!json.contains("focused_field_context_enabled"));
+        assert!(json.contains("context_capture_enabled"));
     }
 
     #[test]

@@ -191,9 +191,7 @@ export interface ModeCleanup {
   provider: AiProviderId;
   model: string;
   paste_raw_on_failure: boolean;
-  clipboard_context_enabled: boolean;
-  selected_text_context_enabled: boolean;
-  focused_field_context_enabled: boolean;
+  context_capture_enabled: boolean;
   post_paste_observation_enabled: boolean;
 }
 

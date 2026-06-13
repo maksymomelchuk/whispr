@@ -20,8 +20,8 @@ use crate::session::{Session, PTT_ERROR_EVENT, TRANSCRIPTION_ERROR_EVENT};
 use crate::state::{AppState, ModifierState};
 use crate::{
     cleanup, cleanup_invoke, cleanup_stats, clipboard_context, config, focused_field_context,
-    miner, model_catalog, post_paste_observer, recovery, selected_text_context, selector, stats,
-    tone,
+    focused_window_context, miner, model_catalog, post_paste_observer, recovery,
+    selected_text_context, selector, stats, tone,
 };
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -332,9 +332,7 @@ async fn run_session(
     let cleanup_provider = active_mode.ai_cleanup.provider;
     let cleanup_model = active_mode.ai_cleanup.model.clone();
     let paste_raw_on_failure = active_mode.ai_cleanup.paste_raw_on_failure;
-    let clipboard_context_enabled = active_mode.ai_cleanup.clipboard_context_enabled;
-    let selected_text_context_enabled = active_mode.ai_cleanup.selected_text_context_enabled;
-    let focused_field_context_enabled = active_mode.ai_cleanup.focused_field_context_enabled;
+    let context_capture_enabled = active_mode.ai_cleanup.context_capture_enabled;
     let post_paste_observation_enabled = active_mode.ai_cleanup.post_paste_observation_enabled;
     // On macOS, pending_app_rx is the correct synchronization point: it's
     // populated by the platform_capture spawn_blocking task (osascript) and
@@ -597,41 +595,34 @@ async fn run_session(
         return Ok(());
     }
 
-    let context: Option<cleanup::ContextBlocks> = if clipboard_context_enabled
-        || selected_text_context_enabled
-        || focused_field_context_enabled
-    {
+    let context: Option<cleanup::ContextBlocks> = if context_capture_enabled {
         let state = app.state::<AppState>();
-        let clipboard_rx = if clipboard_context_enabled {
-            state.pending_clipboard_rx.lock().unwrap().take()
-        } else {
-            None
-        };
-        let selected_text_rx = if selected_text_context_enabled {
-            state.pending_selected_text_rx.lock().unwrap().take()
-        } else {
-            None
-        };
-        let focused_field_rx = if focused_field_context_enabled {
-            state.pending_focused_field_rx.lock().unwrap().take()
-        } else {
-            None
-        };
+        let clipboard_rx = state.pending_clipboard_rx.lock().unwrap().take();
+        let selected_text_rx = state.pending_selected_text_rx.lock().unwrap().take();
+        let focused_field_rx = state.pending_focused_field_rx.lock().unwrap().take();
+        let focused_window_rx = state.pending_focused_window_rx.lock().unwrap().take();
 
         // Captures run on background workers from PTT-down, so they've usually
-        // resolved by now. Await all three concurrently under one deadline so a
-        // single hung backend can't stack timeouts — serial awaits could reach
-        // 3×CONTEXT_CAPTURE_DEADLINE before paste.
-        let (clipboard_text, selected_text, focused_field_text) = tokio::join!(
+        // resolved by now. Await all concurrently under one deadline so a single
+        // hung backend can't stack timeouts — serial awaits could reach
+        // N×CONTEXT_CAPTURE_DEADLINE before paste.
+        let (clipboard_text, selected_text, focused_field_text, focused_window_text) = tokio::join!(
             await_context_capture(clipboard_rx),
             await_context_capture(selected_text_rx),
             await_context_capture(focused_field_rx),
+            await_context_capture(focused_window_rx),
         );
+
+        let clipboard_text = match clipboard_text {
+            Some(text) => Some(text),
+            None => clipboard_context::read_if_copied_mid_session(app).await,
+        };
 
         Some(cleanup::ContextBlocks {
             clipboard_text,
             selected_text,
             focused_field_text,
+            focused_window_text,
             system_date: cleanup::system_date(),
             system_user: cleanup::system_user(),
         })
@@ -800,6 +791,9 @@ async fn maybe_cleanup(
             if ctx.focused_field_text.is_some() {
                 channels.push("focused_field".to_string());
             }
+            if ctx.focused_window_text.is_some() {
+                channels.push("focused_window".to_string());
+            }
             if ctx.clipboard_text.is_some() {
                 channels.push("clipboard".to_string());
             }
@@ -875,29 +869,20 @@ fn start_ptt(
         .iter()
         .find(|m| m.id == mode_id)
         .or_else(|| modes.first());
-    let clipboard_enabled = mode_settings
-        .map(|m| m.ai_cleanup.clipboard_context_enabled)
+    let context_capture_enabled = mode_settings
+        .map(|m| m.ai_cleanup.context_capture_enabled)
         .unwrap_or(false);
-    let selected_text_enabled = mode_settings
-        .map(|m| m.ai_cleanup.selected_text_context_enabled)
-        .unwrap_or(false);
-    let focused_field_enabled = mode_settings
-        .map(|m| m.ai_cleanup.focused_field_context_enabled)
-        .unwrap_or(false);
-    if clipboard_enabled {
+    if context_capture_enabled {
         clipboard_context::capture(app.clone());
+        selected_text_context::capture(app.clone());
+        focused_field_context::capture(app.clone());
+        focused_window_context::capture(app.clone());
     } else {
         *state.pending_clipboard_rx.lock().unwrap() = None;
-    }
-    if selected_text_enabled {
-        selected_text_context::capture(app.clone());
-    } else {
         *state.pending_selected_text_rx.lock().unwrap() = None;
-    }
-    if focused_field_enabled {
-        focused_field_context::capture(app.clone());
-    } else {
         *state.pending_focused_field_rx.lock().unwrap() = None;
+        *state.pending_focused_window_rx.lock().unwrap() = None;
+        *state.clipboard_count_at_ptt_down.lock().unwrap() = None;
     }
 
     // Capture the target app before showing our overlay: show() can make the

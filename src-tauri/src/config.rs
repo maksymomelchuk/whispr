@@ -584,6 +584,21 @@ fn migrate(s: &mut Settings) -> bool {
         }
     }
 
+    for mode in s.modes.iter_mut() {
+        let cleanup = &mut mode.ai_cleanup;
+        let legacy_flags = [
+            cleanup.legacy_clipboard_context_enabled.take(),
+            cleanup.legacy_selected_text_context_enabled.take(),
+            cleanup.legacy_focused_field_context_enabled.take(),
+        ];
+        if legacy_flags.iter().any(Option::is_some) {
+            if legacy_flags.contains(&Some(true)) {
+                cleanup.context_capture_enabled = true;
+            }
+            changed = true;
+        }
+    }
+
     // Only runs when the global provider was explicitly non-default (Groq or
     // AssemblyAI) AND a mode still has the default Deepgram — which means it
     // was loaded from old JSON that predates per-mode providers.
@@ -1233,6 +1248,40 @@ mod tests {
 
         let ids: Vec<&str> = s.modes.iter().map(|m| m.id.as_str()).collect();
         assert_eq!(ids, vec!["a", "b"], "neither dropped nor backfilled");
+    }
+
+    #[test]
+    fn migrate_folds_any_true_legacy_context_flag_into_unified_switch() {
+        let json = r#"{
+            "modes": [
+                {"id":"a","name":"A","language":{"kind":"auto"},"ai_cleanup":{"enabled":true,"prompt_override":null,"clipboard_context_enabled":true,"selected_text_context_enabled":false,"focused_field_context_enabled":false},"use_snippets":true},
+                {"id":"b","name":"B","language":{"kind":"auto"},"ai_cleanup":{"enabled":true,"prompt_override":null,"clipboard_context_enabled":false,"selected_text_context_enabled":false,"focused_field_context_enabled":false},"use_snippets":true}
+            ]
+        }"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+
+        assert!(
+            migrate(&mut s),
+            "legacy flags present must trigger a re-save"
+        );
+
+        assert!(s.modes[0].ai_cleanup.context_capture_enabled);
+        assert!(!s.modes[1].ai_cleanup.context_capture_enabled);
+        assert!(s.modes[0]
+            .ai_cleanup
+            .legacy_clipboard_context_enabled
+            .is_none());
+    }
+
+    #[test]
+    fn migrate_without_legacy_context_flags_leaves_unified_switch_untouched() {
+        let json = r#"{
+            "modes": [{"id":"a","name":"A","language":{"kind":"auto"},"ai_cleanup":{"enabled":true,"prompt_override":null,"context_capture_enabled":true},"use_snippets":true}]
+        }"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        migrate(&mut s);
+
+        assert!(s.modes[0].ai_cleanup.context_capture_enabled);
     }
 
     #[test]

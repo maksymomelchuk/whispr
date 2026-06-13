@@ -1,6 +1,10 @@
 use tauri::Manager;
 
-const CAPTURE_TIMEOUT_SECS: f32 = 0.05;
+// AXUIElementSetMessagingTimeout on the system-wide element is process-global,
+// and focused_field_context sets 0.2 concurrently — a lower value here would
+// race to clobber it mid-capture. 50 ms also loses to first-query AX latency
+// while both captures hit the same app's serial AX server.
+const CAPTURE_TIMEOUT_SECS: f32 = 0.2;
 
 pub fn capture(app: tauri::AppHandle) {
     use crate::state::AppState;
@@ -25,6 +29,8 @@ fn platform_read_selected_text() -> Option<String> {
     type AXUIElementRef = CFTypeRef;
     type AXError = i32;
     const AX_ERROR_SUCCESS: AXError = 0;
+    // kAXErrorNoValue: nothing is selected — the normal quiet path.
+    const AX_ERROR_NO_VALUE: AXError = -25212;
     const AX_SECURE_TEXT_FIELD_ROLE: &str = "AXSecureTextField";
 
     #[link(name = "ApplicationServices", kind = "framework")]
@@ -41,13 +47,17 @@ fn platform_read_selected_text() -> Option<String> {
         ) -> AXError;
     }
 
+    if crate::platform::is_secure_input_active() {
+        return None;
+    }
+
     unsafe {
         let system_wide = AXUIElementCreateSystemWide();
         if system_wide.is_null() {
             return None;
         }
-        // Bound all AX calls from this process to 50 ms so an unresponsive
-        // target app cannot stall the session.
+        // Bound all AX calls from this process so an unresponsive target app
+        // cannot stall the session.
         AXUIElementSetMessagingTimeout(system_wide, CAPTURE_TIMEOUT_SECS);
 
         let focused_attr = CFString::from_static_string("AXFocusedUIElement");
@@ -88,6 +98,9 @@ fn platform_read_selected_text() -> Option<String> {
         CFRelease(focused_element);
 
         if sel_err != AX_ERROR_SUCCESS || sel_value.is_null() {
+            if sel_err != AX_ERROR_SUCCESS && sel_err != AX_ERROR_NO_VALUE {
+                eprintln!("[context] selected-text AX read failed: {sel_err}");
+            }
             return None;
         }
 

@@ -3,8 +3,18 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::Manager;
 
-const RECENCY_WINDOW: Duration = Duration::from_secs(3);
+// Copy → refocus the target field → think → press PTT routinely exceeds a
+// few seconds; 3 s (superwhisper's window) loses that race.
+const RECENCY_WINDOW: Duration = Duration::from_secs(10);
 const SAMPLE_INTERVAL: Duration = Duration::from_millis(500);
+// Must exceed RECENCY_WINDOW or no baseline sample survives past the cutoff.
+const SAMPLE_RETENTION: Duration = Duration::from_secs(12);
+
+// nspasteboard.org convention; set by 1Password, Bitwarden, etc.
+#[cfg(target_os = "macos")]
+const CONCEALED_PASTEBOARD_TYPE: &str = "org.nspasteboard.ConcealedType";
+#[cfg(target_os = "windows")]
+const CONCEALED_CLIPBOARD_FORMAT: &str = "ExcludeClipboardContentFromMonitorProcessing";
 
 pub type SamplerWindow = Arc<Mutex<VecDeque<(i64, Instant)>>>;
 
@@ -18,7 +28,7 @@ pub fn start_sampler(window: SamplerWindow) {
             {
                 let mut w = window.lock().unwrap();
                 w.push_back((count, now));
-                if let Some(cutoff) = now.checked_sub(Duration::from_secs(5)) {
+                if let Some(cutoff) = now.checked_sub(SAMPLE_RETENTION) {
                     while w.front().is_some_and(|&(_, t)| t < cutoff) {
                         w.pop_front();
                     }
@@ -49,18 +59,49 @@ pub fn is_recent_change(window: &SamplerWindow, current_count: i64) -> bool {
 
 pub fn capture(app: tauri::AppHandle) {
     use crate::state::AppState;
-    let window = app.state::<AppState>().clipboard_window.clone();
+    let state = app.state::<AppState>();
+    let window = state.clipboard_window.clone();
+    let baseline = state.clipboard_count_at_ptt_down.clone();
     let (tx, rx) = tokio::sync::oneshot::channel();
-    *app.state::<AppState>().pending_clipboard_rx.lock().unwrap() = Some(rx);
+    *state.pending_clipboard_rx.lock().unwrap() = Some(rx);
     tauri::async_runtime::spawn_blocking(move || {
         let current_count = platform_change_count();
+        *baseline.lock().unwrap() = Some(current_count);
         let text = if is_recent_change(&window, current_count) {
-            platform_read_text()
+            read_text_unless_concealed()
         } else {
             None
         };
         let _ = tx.send(text);
     });
+}
+
+/// Covers text copied while the user was speaking: the PTT-down capture has
+/// already missed it, so re-check the change count after STT completes.
+pub async fn read_if_copied_mid_session(app: &tauri::AppHandle) -> Option<String> {
+    use crate::state::AppState;
+    let baseline = app
+        .state::<AppState>()
+        .clipboard_count_at_ptt_down
+        .lock()
+        .unwrap()
+        .take()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        if platform_change_count() == baseline {
+            return None;
+        }
+        read_text_unless_concealed()
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
+fn read_text_unless_concealed() -> Option<String> {
+    if platform_is_concealed() {
+        return None;
+    }
+    platform_read_text()
 }
 
 // ── macOS ─────────────────────────────────────────────────────────────────────
@@ -69,6 +110,20 @@ pub fn capture(app: tauri::AppHandle) {
 pub fn platform_change_count() -> i64 {
     use objc2_app_kit::NSPasteboard;
     NSPasteboard::generalPasteboard().changeCount() as i64
+}
+
+#[cfg(target_os = "macos")]
+fn platform_is_concealed() -> bool {
+    use objc2_app_kit::NSPasteboard;
+    let pb = NSPasteboard::generalPasteboard();
+    let Some(items) = pb.pasteboardItems() else {
+        return false;
+    };
+    items.iter().any(|item| {
+        item.types()
+            .iter()
+            .any(|t| t.to_string() == CONCEALED_PASTEBOARD_TYPE)
+    })
 }
 
 #[cfg(target_os = "macos")]
@@ -97,6 +152,19 @@ pub fn platform_change_count() -> i64 {
 }
 
 #[cfg(target_os = "windows")]
+fn platform_is_concealed() -> bool {
+    use windows_sys::Win32::System::DataExchange::{
+        IsClipboardFormatAvailable, RegisterClipboardFormatW,
+    };
+    let mut name: Vec<u16> = CONCEALED_CLIPBOARD_FORMAT.encode_utf16().collect();
+    name.push(0);
+    unsafe {
+        let format = RegisterClipboardFormatW(name.as_ptr());
+        format != 0 && IsClipboardFormatAvailable(format) != 0
+    }
+}
+
+#[cfg(target_os = "windows")]
 pub fn platform_read_text() -> Option<String> {
     clipboard_win::get_clipboard_string().ok()
 }
@@ -106,6 +174,11 @@ pub fn platform_read_text() -> Option<String> {
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn platform_change_count() -> i64 {
     0
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn platform_is_concealed() -> bool {
+    false
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]

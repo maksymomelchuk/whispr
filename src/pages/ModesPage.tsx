@@ -567,10 +567,10 @@ export function ModeEditor({
       ai_cleanup: { ...d.ai_cleanup, paste_raw_on_failure },
     }));
 
-  const setClipboardContextEnabled = (clipboard_context_enabled: boolean) =>
+  const setContextCaptureEnabled = (context_capture_enabled: boolean) =>
     setDraft((d) => ({
       ...d,
-      ai_cleanup: { ...d.ai_cleanup, clipboard_context_enabled },
+      ai_cleanup: { ...d.ai_cleanup, context_capture_enabled },
     }));
 
   const cleanupProvider = draft.ai_cleanup.provider;
@@ -1016,11 +1016,11 @@ export function ModeEditor({
                 onCheckedChange={setPasteRawOnFailure}
               />
               <ToggleRow
-                id="clipboard-context"
-                label="Clipboard context"
-                info="When on, the clipboard contents at the time of recording are sent to the AI as context for spelling and disambiguation. The content is never stored."
-                checked={draft.ai_cleanup.clipboard_context_enabled}
-                onCheckedChange={setClipboardContextEnabled}
+                id="context-capture"
+                label="Context awareness"
+                info="When on, nearby context is sent to your AI provider for spelling and disambiguation: selected text, the focused field, on-screen window text, and your most recently copied text (copied within ~10s before, or during, dictation). Secure password fields are never read, and clipboard items that password managers tag as concealed are skipped — but other recently copied text, including secrets, may be read, so avoid copying sensitive values right before dictating. Context is used only for that cleanup and is never stored."
+                checked={draft.ai_cleanup.context_capture_enabled}
+                onCheckedChange={setContextCaptureEnabled}
               />
             </>
           )}
@@ -1111,9 +1111,7 @@ export function ModesPage() {
         provider: "anthropic",
         model: "claude-haiku-4-5",
         paste_raw_on_failure: true,
-        clipboard_context_enabled: false,
-        selected_text_context_enabled: false,
-        focused_field_context_enabled: false,
+        context_capture_enabled: false,
         post_paste_observation_enabled: false,
       },
       term_set_ids: [],
