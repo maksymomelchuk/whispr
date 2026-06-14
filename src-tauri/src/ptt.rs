@@ -1,4 +1,4 @@
-use crate::assemblyai_session::AssemblyAiEngine;
+use crate::assemblyai_session::{AssemblyAiEngine, AssemblyAiUniversalEngine};
 use crate::config::{HotkeyAction, HotkeyBinding, Shortcut};
 use crate::corrections::compose_corrections;
 use crate::deepgram_session::DeepgramEngine;
@@ -15,7 +15,7 @@ use crate::local_engine::LocalWhisperEngine;
 use crate::openai_transcribe_session::OpenAiTranscribeEngine;
 use crate::pipeline::{self, CleanupOutput, Notice};
 use crate::provider::{
-    self, ElevenLabsModel, LocalWhisperModel, ProviderModel, TranscriptionProvider,
+    self, AssemblyAiModel, ElevenLabsModel, LocalWhisperModel, ProviderModel, TranscriptionProvider,
 };
 use crate::recorder::Recorder;
 use crate::session::{Session, PTT_ERROR_EVENT, TRANSCRIPTION_ERROR_EVENT};
@@ -490,14 +490,28 @@ async fn run_session(
                 language: mode_language,
                 terms: session_terms,
             };
-            Session::new(
-                AssemblyAiEngine::new(*model, key),
-                app.clone(),
-                settings.show_live_preview,
-                corrections,
-            )
-            .run(chunk_rx, ctx)
-            .await
+            match model {
+                AssemblyAiModel::Universal2 => {
+                    Session::new(
+                        AssemblyAiUniversalEngine::new(key),
+                        app.clone(),
+                        settings.show_live_preview,
+                        corrections,
+                    )
+                    .run(chunk_rx, ctx)
+                    .await
+                }
+                _ => {
+                    Session::new(
+                        AssemblyAiEngine::new(*model, key),
+                        app.clone(),
+                        settings.show_live_preview,
+                        corrections,
+                    )
+                    .run(chunk_rx, ctx)
+                    .await
+                }
+            }
         }
         ProviderModel::Local { model } => {
             let cache = app.state::<AppState>().model_cache.clone();

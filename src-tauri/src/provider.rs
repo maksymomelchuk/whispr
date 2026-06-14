@@ -73,6 +73,10 @@ pub enum AssemblyAiModel {
     UniversalStreamingEnglish,
     UniversalStreamingMultilingual,
     WhisperStreaming,
+    // Async-only (no streaming endpoint); the only AssemblyAI model that covers
+    // Ukrainian and the full 99-language set.
+    #[serde(rename = "universal_2")]
+    Universal2,
 }
 
 impl AssemblyAiModel {
@@ -82,6 +86,7 @@ impl AssemblyAiModel {
             Self::UniversalStreamingEnglish => "universal-streaming-english",
             Self::UniversalStreamingMultilingual => "universal-streaming-multilingual",
             Self::WhisperStreaming => "whisper-rt",
+            Self::Universal2 => "universal-2",
         }
     }
 
@@ -91,7 +96,7 @@ impl AssemblyAiModel {
             Self::UniversalProStreaming | Self::UniversalStreamingMultilingual => {
                 matches!(code, "en" | "es" | "de" | "fr" | "pt" | "it")
             }
-            Self::WhisperStreaming => true,
+            Self::WhisperStreaming | Self::Universal2 => true,
         }
     }
 
@@ -101,7 +106,7 @@ impl AssemblyAiModel {
             Self::UniversalProStreaming | Self::UniversalStreamingMultilingual => {
                 Some(vec!["en", "es", "de", "fr", "pt", "it"])
             }
-            Self::WhisperStreaming => None,
+            Self::WhisperStreaming | Self::Universal2 => None,
         }
     }
 }
@@ -231,6 +236,12 @@ mod tests {
         let v: serde_json::Value = serde_json::to_value(&m).unwrap();
         assert_eq!(v["provider"], "assembly_ai");
         assert_eq!(v["model"], "universal_pro_streaming");
+    }
+
+    #[test]
+    fn assemblyai_universal_2_serializes_with_explicit_tag() {
+        let v = serde_json::to_value(AssemblyAiModel::Universal2).unwrap();
+        assert_eq!(v, "universal_2");
     }
 
     #[test]

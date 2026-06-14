@@ -65,12 +65,17 @@ pub fn deepgram_keyterms(terms: &[String], remaining_budget: usize) -> Vec<Strin
     result
 }
 
-pub fn assemblyai_keyterms_prompt(terms: &[String]) -> Option<String> {
-    let filtered: Vec<&str> = terms
+pub fn assemblyai_keyterms(terms: &[String]) -> Vec<String> {
+    terms
         .iter()
         .map(|t| t.trim())
         .filter(|t| !t.is_empty())
-        .collect();
+        .map(str::to_string)
+        .collect()
+}
+
+pub fn assemblyai_keyterms_prompt(terms: &[String]) -> Option<String> {
+    let filtered = assemblyai_keyterms(terms);
     if filtered.is_empty() {
         return None;
     }
