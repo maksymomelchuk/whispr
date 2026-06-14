@@ -357,8 +357,7 @@ fn platform_read_focused_window() -> Option<String> {
         }
     }
 
-    // Native (non-web) fallback: walk the window tree collecting on-screen text,
-    // sorted top-to-bottom. Web content uses web_text instead.
+    // Non-web fallback; web content goes through web_text instead.
     unsafe fn native_window_text(
         root: CFTypeRef,
         role: &CFString,

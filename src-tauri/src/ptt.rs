@@ -76,7 +76,7 @@ fn notify_silent(app: &AppHandle, message: impl Into<String>) {
     let _ = app.emit(TRANSCRIPTION_ERROR_EVENT, &message);
 }
 
-/// Pops main window. Only safe after any pending paste has gone out.
+/// Only safe after any pending paste has gone out: set_focus would steal focus mid-paste.
 fn notify_error(app: &AppHandle, message: impl Into<String>) {
     let message = message.into();
     eprintln!("[notify focus] {message}");
@@ -236,8 +236,7 @@ fn update_modifier_state(state: &AppState, code: &str, is_press: bool, sides: &m
 }
 
 /// The downstream short-circuit in run_session is what skips paste / history /
-/// stats / cleanup — this function only handles the immediate
-/// mic-and-overlay teardown that mirrors a normal release.
+/// stats / cleanup; this only does the immediate mic-and-overlay teardown.
 fn cancel_session(app: &AppHandle, state: &AppState, recorder: &Recorder) {
     state.session_cancelled.store(true, Ordering::Release);
     *state.ptt_active.lock().unwrap() = false;
@@ -255,7 +254,6 @@ fn maybe_pause_media(state: &AppState) {
     }
 }
 
-/// Unmutes only if this session was the one that applied the mute.
 fn maybe_resume_media(state: &AppState) {
     let mut flag = state.did_pause_media.lock().unwrap();
     if !*flag {
