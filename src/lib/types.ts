@@ -76,7 +76,8 @@ export type AssemblyAiModel =
   | "universal_pro_streaming"
   | "universal_streaming_english"
   | "universal_streaming_multilingual"
-  | "whisper_streaming";
+  | "whisper_streaming"
+  | "universal_2";
 
 export const ASSEMBLYAI_MODEL_SUPPORTED_LANGUAGES: Record<
   AssemblyAiModel,
@@ -86,6 +87,7 @@ export const ASSEMBLYAI_MODEL_SUPPORTED_LANGUAGES: Record<
   universal_streaming_english: ["en"],
   universal_streaming_multilingual: ["en", "es", "de", "fr", "pt", "it"],
   whisper_streaming: null,
+  universal_2: null,
 };
 
 export type LocalWhisperModel = "large_v3" | "large_v3_turbo" | "parakeet";
@@ -126,6 +128,7 @@ const ASSEMBLYAI_MODEL_LABELS: Record<AssemblyAiModel, string> = {
   universal_streaming_english: "Universal English",
   universal_streaming_multilingual: "Universal Multilingual",
   whisper_streaming: "Whisper Streaming",
+  universal_2: "Universal-2 (multilingual)",
 };
 
 const LOCAL_MODEL_LABELS: Record<LocalWhisperModel, string> = {
@@ -205,7 +208,6 @@ export interface ModeCleanup {
   model: string;
   paste_raw_on_failure: boolean;
   context_capture_enabled: boolean;
-  post_paste_observation_enabled: boolean;
 }
 
 export interface NamedTermSet {

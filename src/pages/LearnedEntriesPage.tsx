@@ -1,5 +1,6 @@
 import { ArrowUpIcon, TrashIcon } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyPanel } from "@/components/EmptyPanel";
@@ -28,12 +29,28 @@ export function LearnedEntriesPage() {
   const [entries, setEntries] = useState<LearnedEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
     getLearnedEntries()
       .then(setEntries)
       .catch(() => setEntries([]))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    listen("learned-updated", () => refresh())
+      .then((u) => {
+        unlisten = u;
+      })
+      .catch((e) => console.error("learned-updated listen failed", e));
+    return () => {
+      unlisten?.();
+    };
+  }, [refresh]);
 
   const handleToggleLearning = async (enabled: boolean) => {
     await setSetting(

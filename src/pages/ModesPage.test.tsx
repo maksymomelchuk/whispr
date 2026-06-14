@@ -59,7 +59,6 @@ const MODE: Mode = {
     model: "claude-haiku-4-5",
     paste_raw_on_failure: true,
     context_capture_enabled: false,
-    post_paste_observation_enabled: false,
   },
   term_set_ids: [],
   correction_set_ids: [],
@@ -561,7 +560,6 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
       model: "claude-haiku-4-5",
       paste_raw_on_failure: true,
       context_capture_enabled: false,
-      post_paste_observation_enabled: false,
     },
   };
 
@@ -585,7 +583,6 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         model: "gpt-5.4-mini",
         paste_raw_on_failure: true,
         context_capture_enabled: false,
-        post_paste_observation_enabled: false,
       },
     };
     render(
@@ -616,7 +613,6 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         model: "gemini-2.5-flash",
         paste_raw_on_failure: true,
         context_capture_enabled: false,
-        post_paste_observation_enabled: false,
       },
     };
     render(
@@ -635,7 +631,6 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         model: "llama-3.1-8b-instant",
         paste_raw_on_failure: true,
         context_capture_enabled: false,
-        post_paste_observation_enabled: false,
       },
     };
     render(<EditorWrapper mode={groqMode} configuredProviders={["groq"]} />);
@@ -652,7 +647,6 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         model: "deepseek-v4-flash",
         paste_raw_on_failure: true,
         context_capture_enabled: false,
-        post_paste_observation_enabled: false,
       },
     };
     render(
@@ -671,7 +665,6 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         model: "llama-3.3-70b",
         paste_raw_on_failure: true,
         context_capture_enabled: false,
-        post_paste_observation_enabled: false,
       },
     };
     render(
@@ -690,7 +683,6 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         model: "anthropic/claude-haiku-4.5",
         paste_raw_on_failure: true,
         context_capture_enabled: false,
-        post_paste_observation_enabled: false,
       },
     };
     render(
@@ -712,7 +704,6 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         model: "",
         paste_raw_on_failure: true,
         context_capture_enabled: false,
-        post_paste_observation_enabled: false,
       },
     };
     render(
@@ -735,7 +726,6 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         model: "",
         paste_raw_on_failure: true,
         context_capture_enabled: false,
-        post_paste_observation_enabled: false,
       },
     };
     render(
@@ -760,7 +750,6 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         model: "",
         paste_raw_on_failure: true,
         context_capture_enabled: false,
-        post_paste_observation_enabled: false,
       },
     };
     render(

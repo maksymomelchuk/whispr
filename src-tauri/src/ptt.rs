@@ -336,7 +336,6 @@ async fn run_session(
     let cleanup_model = active_mode.ai_cleanup.model.clone();
     let paste_raw_on_failure = active_mode.ai_cleanup.paste_raw_on_failure;
     let context_capture_enabled = active_mode.ai_cleanup.context_capture_enabled;
-    let post_paste_observation_enabled = active_mode.ai_cleanup.post_paste_observation_enabled;
     // On macOS, pending_app_rx is the correct synchronization point: it's
     // populated by the platform_capture spawn_blocking task (osascript) and
     // awaited with a timeout. Reading session_app() directly would race if
@@ -756,10 +755,7 @@ async fn run_session(
         notify_error(app, format!("Paste failed: {e}"));
     }
 
-    if settings.learn_from_corrections
-        && post_paste_observation_enabled
-        && paste_policy == pipeline::PastePolicy::PasteRaw
-    {
+    if settings.learn_from_corrections && paste_policy == pipeline::PastePolicy::PasteRaw {
         post_paste_observer::start(app.clone(), session_bundle_id.clone());
     }
 

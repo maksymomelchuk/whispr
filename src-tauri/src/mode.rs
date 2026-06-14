@@ -78,9 +78,6 @@ pub struct ModeCleanup {
     pub legacy_selected_text_context_enabled: Option<bool>,
     #[serde(rename = "focused_field_context_enabled", default, skip_serializing)]
     pub legacy_focused_field_context_enabled: Option<bool>,
-    // Defaults to false so existing behaviour is unchanged after upgrade.
-    #[serde(default)]
-    pub post_paste_observation_enabled: bool,
 }
 
 impl Default for ModeCleanup {
@@ -95,7 +92,6 @@ impl Default for ModeCleanup {
             legacy_clipboard_context_enabled: None,
             legacy_selected_text_context_enabled: None,
             legacy_focused_field_context_enabled: None,
-            post_paste_observation_enabled: false,
         }
     }
 }
@@ -422,7 +418,6 @@ mod tests {
             legacy_clipboard_context_enabled: None,
             legacy_selected_text_context_enabled: None,
             legacy_focused_field_context_enabled: None,
-            post_paste_observation_enabled: false,
         };
         let json = serde_json::to_string(&c).unwrap();
         let decoded: ModeCleanup = serde_json::from_str(&json).unwrap();
@@ -473,19 +468,6 @@ mod tests {
         assert!(!json.contains("selected_text_context_enabled"));
         assert!(!json.contains("focused_field_context_enabled"));
         assert!(json.contains("context_capture_enabled"));
-    }
-
-    #[test]
-    fn mode_cleanup_post_paste_observation_defaults_to_false() {
-        let c = ModeCleanup::default();
-        assert!(!c.post_paste_observation_enabled);
-    }
-
-    #[test]
-    fn mode_cleanup_post_paste_observation_deserializes_to_false_when_absent() {
-        let json = r#"{"enabled":false,"prompt_override":null}"#;
-        let c: ModeCleanup = serde_json::from_str(json).unwrap();
-        assert!(!c.post_paste_observation_enabled);
     }
 
     #[test]

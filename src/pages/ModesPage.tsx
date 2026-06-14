@@ -183,6 +183,7 @@ const ASSEMBLYAI_MODEL_OPTIONS: { value: AssemblyAiModel; label: string }[] = [
     label: "Universal Multilingual",
   },
   { value: "whisper_streaming", label: "Whisper Streaming" },
+  { value: "universal_2", label: "Universal-2 (multilingual)" },
 ];
 
 function defaultProviderModel(
@@ -1244,7 +1245,6 @@ export function ModesPage() {
         model: "claude-haiku-4-5",
         paste_raw_on_failure: true,
         context_capture_enabled: false,
-        post_paste_observation_enabled: false,
       },
       term_set_ids: [],
       correction_set_ids: [],
