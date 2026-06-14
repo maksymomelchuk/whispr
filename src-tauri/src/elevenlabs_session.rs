@@ -22,10 +22,16 @@ const SCRIBE_V2_REALTIME_MODEL_ID: &str = "scribe_v2_realtime";
 /// and/or stereo) is downmixed and resampled before it goes on the wire.
 const REALTIME_SAMPLE_RATE: u32 = 16_000;
 
-/// Cap on how long we wait for ElevenLabs to flush remaining committed
-/// transcripts after we send the final `commit` chunk, so a hung WS never
-/// blocks the paste indefinitely.
+/// Hard ceiling on the post-commit drain, so a flush that never starts can't
+/// block the paste indefinitely.
 const FINAL_RESULTS_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// ElevenLabs realtime sends no terminal/"finished" message and keeps the
+/// socket open after a commit, so there's no close to wait for. Once the
+/// committed flush has gone quiet for this long we treat it as complete. This
+/// bounds the post-release tail to the idle window instead of always hitting
+/// FINAL_RESULTS_TIMEOUT.
+const POST_COMMIT_IDLE: Duration = Duration::from_millis(600);
 
 pub struct ElevenLabsEngine {
     pub key: String,
@@ -156,28 +162,45 @@ impl Engine for ElevenLabsRealtimeEngine {
             eprintln!("[stream] ElevenLabs commit send failed: {e}");
         }
 
-        // Preview emission is skipped while draining — the overlay holds the
-        // last preview until the final transcript is ready.
-        let _ = tokio::time::timeout(FINAL_RESULTS_TIMEOUT, async {
-            while let Some(msg) = stream.next().await {
-                match msg {
-                    Ok(Message::Text(t)) => {
-                        if let Ok(Some((true, piece))) = extract_realtime_message(&t) {
-                            if !piece.is_empty() {
-                                transcript_pieces.push(piece);
+        // No end-of-results signal and no server close after commit, so exit
+        // once the committed flush goes idle rather than waiting on a Close that
+        // never arrives. Preview emission is skipped while draining — the overlay
+        // holds the last preview until the final transcript is ready.
+        let deadline = tokio::time::sleep(FINAL_RESULTS_TIMEOUT);
+        tokio::pin!(deadline);
+        let mut got_committed = false;
+        loop {
+            tokio::select! {
+                _ = &mut deadline => break,
+                next = tokio::time::timeout(POST_COMMIT_IDLE, stream.next()) => {
+                    match next {
+                        // Idle window elapsed with no message: done once the first
+                        // committed piece has arrived; otherwise keep waiting for
+                        // the flush to start, up to the hard deadline.
+                        Err(_) => {
+                            if got_committed {
+                                break;
                             }
                         }
+                        Ok(None) => break,
+                        Ok(Some(Ok(Message::Text(t)))) => {
+                            if let Ok(Some((true, piece))) = extract_realtime_message(&t) {
+                                got_committed = true;
+                                if !piece.is_empty() {
+                                    transcript_pieces.push(piece);
+                                }
+                            }
+                        }
+                        Ok(Some(Ok(Message::Close(_)))) => break,
+                        Ok(Some(Err(e))) => {
+                            eprintln!("[stream] ElevenLabs post-commit recv error: {e}");
+                            break;
+                        }
+                        Ok(Some(_)) => {}
                     }
-                    Ok(Message::Close(_)) => break,
-                    Err(e) => {
-                        eprintln!("[stream] ElevenLabs post-commit recv error: {e}");
-                        break;
-                    }
-                    _ => {}
                 }
             }
-        })
-        .await;
+        }
 
         let transcript = transcript_pieces.join(" ").trim().to_string();
 
