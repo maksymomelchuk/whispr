@@ -296,30 +296,9 @@ fn build_system_block(date: Option<&str>, user: Option<&str>) -> Option<String> 
     ))
 }
 
-fn build_selected_text_block(text: &str) -> String {
+fn build_context_block(kind: &str, text: &str) -> String {
     format!(
-        "<context type=\"selected_text\">\n{}\n</context>",
-        sanitize_context_value(text)
-    )
-}
-
-fn build_focused_field_block(text: &str) -> String {
-    format!(
-        "<context type=\"focused_field\">\n{}\n</context>",
-        sanitize_context_value(text)
-    )
-}
-
-fn build_focused_window_block(text: &str) -> String {
-    format!(
-        "<context type=\"focused_window\">\n{}\n</context>",
-        sanitize_context_value(text)
-    )
-}
-
-fn build_clipboard_block(text: &str) -> String {
-    format!(
-        "<context type=\"clipboard\">\n{}\n</context>",
+        "<context type=\"{kind}\">\n{}\n</context>",
         sanitize_context_value(text)
     )
 }
@@ -363,41 +342,36 @@ pub fn effective_prompt(
     let glossary_section = build_glossary_block(glossary)
         .map(|b| format!("\n\n{b}"))
         .unwrap_or_default();
+    let base_with_glossary = format!("{base}{glossary_section}");
 
-    let ctx = match context.filter(|c| c.has_any()) {
-        None => {
-            if glossary_section.is_empty() {
-                return base;
-            }
-            return format!("{base}{glossary_section}");
-        }
-        Some(c) => c,
+    let Some(ctx) = context.filter(|c| c.has_any()) else {
+        return base_with_glossary;
     };
 
-    let mut parts: Vec<String> = Vec::new();
-    if let Some(sys) = build_system_block(ctx.system_date.as_deref(), ctx.system_user.as_deref()) {
-        parts.push(sys);
-    }
-    if let Some(ref sel) = ctx.selected_text {
-        parts.push(build_selected_text_block(sel));
-    }
-    if let Some(ref field) = ctx.focused_field_text {
-        parts.push(build_focused_field_block(field));
-    }
-    if let Some(ref window) = ctx.focused_window_text {
-        parts.push(build_focused_window_block(window));
-    }
-    if let Some(ref clip) = ctx.clipboard_text {
-        parts.push(build_clipboard_block(clip));
-    }
+    let parts: Vec<String> = [
+        build_system_block(ctx.system_date.as_deref(), ctx.system_user.as_deref()),
+        ctx.selected_text
+            .as_deref()
+            .map(|t| build_context_block("selected_text", t)),
+        ctx.focused_field_text
+            .as_deref()
+            .map(|t| build_context_block("focused_field", t)),
+        ctx.focused_window_text
+            .as_deref()
+            .map(|t| build_context_block("focused_window", t)),
+        ctx.clipboard_text
+            .as_deref()
+            .map(|t| build_context_block("clipboard", t)),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+
     if parts.is_empty() {
-        if glossary_section.is_empty() {
-            return base;
-        }
-        return format!("{base}{glossary_section}");
+        return base_with_glossary;
     }
     format!(
-        "{base}{glossary_section}\n\n{CONTEXT_HARDENING_RULES}\n\n{}",
+        "{base_with_glossary}\n\n{CONTEXT_HARDENING_RULES}\n\n{}",
         parts.join("\n\n")
     )
 }

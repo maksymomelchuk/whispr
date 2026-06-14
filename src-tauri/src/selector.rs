@@ -38,6 +38,42 @@ fn score(entry: &LearnedEntry, bundle_id: Option<&str>, now_ms: i64) -> f64 {
     (1.0 + app_freq) * recency
 }
 
+/// Trims and dedups `words` into `result`, stopping once `budget` is reached.
+/// Returns `true` when the budget is full so callers can stop feeding sources.
+fn push_words<'a>(
+    words: impl Iterator<Item = &'a str>,
+    budget: usize,
+    result: &mut Vec<String>,
+    seen: &mut std::collections::HashSet<String>,
+) -> bool {
+    for raw in words {
+        let word = raw.trim();
+        if word.is_empty() || !seen.insert(word.to_string()) {
+            continue;
+        }
+        result.push(word.to_string());
+        if result.len() >= budget {
+            return true;
+        }
+    }
+    false
+}
+
+fn scored_words<'a>(
+    learned: &'a [LearnedEntry],
+    keep: impl Fn(&LearnedEntry) -> bool,
+    bundle_id: Option<&str>,
+    now_ms: i64,
+) -> Vec<&'a str> {
+    let mut scored: Vec<(&LearnedEntry, f64)> = learned
+        .iter()
+        .filter(|e| e.status == LearnedEntryStatus::Promoted && keep(e))
+        .map(|e| (e, score(e, bundle_id, now_ms)))
+        .collect();
+    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    scored.iter().map(|(e, _)| e.word.as_str()).collect()
+}
+
 /// Manual entries (from named term sets) always fill the budget before any
 /// learned entries — they win all budget ties. Among learned entries, those
 /// observed most frequently in `bundle_id`'s app and most recently rank highest.
@@ -55,33 +91,28 @@ pub fn select_terms(
         let Some(set) = term_sets.iter().find(|ts| &ts.id == id) else {
             continue;
         };
-        for entry in &set.entries {
-            let word = entry.trim().to_string();
-            if !word.is_empty() && seen.insert(word.clone()) {
-                result.push(word);
-                if result.len() >= ENGINE_TERM_BUDGET {
-                    return result;
-                }
-            }
+        if push_words(
+            set.entries.iter().map(String::as_str),
+            ENGINE_TERM_BUDGET,
+            &mut result,
+            &mut seen,
+        ) {
+            return result;
         }
     }
 
-    let mut scored: Vec<(&LearnedEntry, f64)> = learned
-        .iter()
-        .filter(|e| e.status == LearnedEntryStatus::Promoted && matches!(e.kind, LearnedKind::Term))
-        .map(|e| (e, score(e, bundle_id, now_ms)))
-        .collect();
-    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-
-    for (entry, _) in scored {
-        let word = entry.word.trim().to_string();
-        if !word.is_empty() && seen.insert(word.clone()) {
-            result.push(word);
-            if result.len() >= ENGINE_TERM_BUDGET {
-                break;
-            }
-        }
-    }
+    let learned_words = scored_words(
+        learned,
+        |e| matches!(e.kind, LearnedKind::Term),
+        bundle_id,
+        now_ms,
+    );
+    push_words(
+        learned_words.into_iter(),
+        ENGINE_TERM_BUDGET,
+        &mut result,
+        &mut seen,
+    );
 
     result
 }
@@ -104,14 +135,13 @@ pub fn select_glossary_words(
         let Some(set) = term_sets.iter().find(|ts| &ts.id == id) else {
             continue;
         };
-        for entry in &set.entries {
-            let word = entry.trim().to_string();
-            if !word.is_empty() && seen.insert(word.clone()) {
-                result.push(word);
-                if result.len() >= GLOSSARY_BUDGET {
-                    return result;
-                }
-            }
+        if push_words(
+            set.entries.iter().map(String::as_str),
+            GLOSSARY_BUDGET,
+            &mut result,
+            &mut seen,
+        ) {
+            return result;
         }
     }
 
@@ -119,33 +149,23 @@ pub fn select_glossary_words(
         let Some(set) = correction_sets.iter().find(|cs| &cs.id == id) else {
             continue;
         };
-        for entry in &set.entries {
-            let word = entry.to.trim().to_string();
-            if !word.is_empty() && seen.insert(word.clone()) {
-                result.push(word);
-                if result.len() >= GLOSSARY_BUDGET {
-                    return result;
-                }
-            }
+        if push_words(
+            set.entries.iter().map(|e| e.to.as_str()),
+            GLOSSARY_BUDGET,
+            &mut result,
+            &mut seen,
+        ) {
+            return result;
         }
     }
 
-    let mut scored: Vec<(&LearnedEntry, f64)> = learned
-        .iter()
-        .filter(|e| e.status == LearnedEntryStatus::Promoted)
-        .map(|e| (e, score(e, bundle_id, now_ms)))
-        .collect();
-    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-
-    for (entry, _) in scored {
-        let word = entry.word.trim().to_string();
-        if !word.is_empty() && seen.insert(word.clone()) {
-            result.push(word);
-            if result.len() >= GLOSSARY_BUDGET {
-                break;
-            }
-        }
-    }
+    let learned_words = scored_words(learned, |_| true, bundle_id, now_ms);
+    push_words(
+        learned_words.into_iter(),
+        GLOSSARY_BUDGET,
+        &mut result,
+        &mut seen,
+    );
 
     result
 }
