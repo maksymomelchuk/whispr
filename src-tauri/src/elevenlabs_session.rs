@@ -30,8 +30,10 @@ const FINAL_RESULTS_TIMEOUT: Duration = Duration::from_secs(3);
 /// socket open after a commit, so there's no close to wait for. Once the
 /// committed flush has gone quiet for this long we treat it as complete. This
 /// bounds the post-release tail to the idle window instead of always hitting
-/// FINAL_RESULTS_TIMEOUT.
-const POST_COMMIT_IDLE: Duration = Duration::from_millis(600);
+/// FINAL_RESULTS_TIMEOUT. The commit-to-first-segment latency is covered
+/// separately by the `got_committed` guard, so this only needs to outlast the
+/// gap between segments of a split final flush.
+const POST_COMMIT_IDLE: Duration = Duration::from_millis(250);
 
 pub struct ElevenLabsEngine {
     pub key: String,
