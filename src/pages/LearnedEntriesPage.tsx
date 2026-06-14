@@ -78,7 +78,7 @@ export function LearnedEntriesPage() {
           entry.id === id ? { ...entry, status: "promoted" as const } : entry,
         ),
       );
-      toast.success("Entry promoted to permanent dictionary");
+      toast.success("Entry activated");
     } catch (e) {
       toast.error("Couldn't promote entry", { description: String(e) });
     }

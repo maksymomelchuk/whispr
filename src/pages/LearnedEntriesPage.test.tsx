@@ -214,8 +214,6 @@ describe("LearnedEntriesPage – promote", () => {
     );
     expect(screen.getByText("Ready to use")).toBeInTheDocument();
     expect(screen.queryByText("Candidates")).not.toBeInTheDocument();
-    expect(toast.success).toHaveBeenCalledWith(
-      "Entry promoted to permanent dictionary",
-    );
+    expect(toast.success).toHaveBeenCalledWith("Entry activated");
   });
 });

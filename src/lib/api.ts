@@ -195,8 +195,8 @@ export const updateHistoryEntry = (
 ) =>
   invoke<void>("update_history_entry", {
     id,
-    replaced_text: replacedText,
-    final_text: finalText,
+    replacedText,
+    finalText,
   });
 
 export const recoverCleanup = (id: string) =>

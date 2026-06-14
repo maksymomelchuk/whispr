@@ -710,10 +710,13 @@ pub fn update_history_entry(
             if !candidates.is_empty() {
                 let now_ms = miner::now_ms();
                 let bundle_ref = entry_bundle_id.as_deref();
-                if let Err(e) = config::update(&app, |s| {
+                match config::update(&app, |s| {
                     miner::observe_candidates(&candidates, s, bundle_ref, now_ms);
                 }) {
-                    eprintln!("[miner] persisting learned candidates failed: {e}");
+                    Ok(_) => {
+                        let _ = app.emit(crate::post_paste_observer::LEARNED_UPDATED_EVENT, ());
+                    }
+                    Err(e) => eprintln!("[miner] persisting learned candidates failed: {e}"),
                 }
             }
         }

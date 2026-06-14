@@ -1,7 +1,4 @@
-use crate::config::{
-    CorrectionEntry, LearnedEntry, LearnedEntryStatus, LearnedKind, NamedCorrectionSet,
-    NamedTermSet, Settings, DEFAULT_CORRECTION_SET_ID, SEED_TERM_SET_DEFAULT_ID,
-};
+use crate::config::{LearnedEntry, LearnedEntryStatus, LearnedKind, Settings};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -27,15 +24,23 @@ pub fn mine(before: &str, after: &str) -> Vec<MinedCandidate> {
     extract_substitutions(&before_words, &after_words)
         .into_iter()
         .filter(|s| s.from.split_whitespace().count() <= 3 && s.to.split_whitespace().count() <= 3)
-        .filter(|s| {
-            is_phonetically_similar(&s.from, &s.to)
-                || looks_like_proper_noun(&s.to, s.to_word_pos == 0)
-        })
-        .map(|s| MinedCandidate {
-            from: s.from,
-            to: s.to,
+        .filter_map(|s| {
+            let from = trim_to_word_bounds(&s.from).to_string();
+            let to = trim_to_word_bounds(&s.to).to_string();
+            if from.is_empty() || to.is_empty() || from == to {
+                return None;
+            }
+            let accept = is_phonetically_similar(&from, &to)
+                || looks_like_proper_noun(&to, s.to_word_pos == 0);
+            accept.then_some(MinedCandidate { from, to })
         })
         .collect()
+}
+
+// Strip boundary punctuation so a sentence-final mishearing ("Postgres.") maps
+// to the same `from` the whole-word matcher uses — keeping word-internal `'-_`.
+fn trim_to_word_bounds(token: &str) -> &str {
+    token.trim_matches(|c: char| !crate::corrections::is_word_char(c))
 }
 
 /// When a `from` word has seen conflicting targets, the old rule is replaced
@@ -53,72 +58,13 @@ pub fn observe_candidates(
     evict_stale(&mut settings.learned_entries, now_ms);
 }
 
-/// Default correction/term set is created if absent. The learned entry is
-/// removed after promotion regardless of its current status.
+/// Promotes a candidate in place. Promoted entries stay in `learned_entries`
+/// (subject to staleness/LRU) and are applied directly by the correction/term
+/// selectors — the same state auto-promotion produces at PROMOTE_THRESHOLD.
 pub fn promote_entry(settings: &mut Settings, id: &str) {
-    let entry = match settings
-        .learned_entries
-        .iter()
-        .find(|e| e.id == id)
-        .cloned()
-    {
-        Some(e) => e,
-        None => return,
-    };
-
-    match &entry.kind {
-        LearnedKind::Correction { from } => {
-            let correction = CorrectionEntry {
-                from: from.clone(),
-                to: entry.word.clone(),
-            };
-            if let Some(cs) = settings
-                .correction_sets
-                .iter_mut()
-                .find(|cs| cs.id == DEFAULT_CORRECTION_SET_ID)
-            {
-                let already_exact = cs
-                    .entries
-                    .iter()
-                    .any(|ce| ce.from == correction.from && ce.to == correction.to);
-                let has_conflict =
-                    !already_exact && cs.entries.iter().any(|ce| ce.from == correction.from);
-                if has_conflict {
-                    // A different mapping for the same `from` exists in the permanent set.
-                    // Leave the learned entry in place so the user can resolve it manually.
-                    return;
-                }
-                if !already_exact {
-                    cs.entries.push(correction);
-                }
-            } else {
-                settings.correction_sets.push(NamedCorrectionSet {
-                    id: DEFAULT_CORRECTION_SET_ID.to_string(),
-                    name: "Default Corrections".to_string(),
-                    entries: vec![correction],
-                });
-            }
-        }
-        LearnedKind::Term => {
-            if let Some(ts) = settings
-                .term_sets
-                .iter_mut()
-                .find(|ts| ts.id == SEED_TERM_SET_DEFAULT_ID)
-            {
-                if !ts.entries.contains(&entry.word) {
-                    ts.entries.push(entry.word.clone());
-                }
-            } else {
-                settings.term_sets.push(NamedTermSet {
-                    id: SEED_TERM_SET_DEFAULT_ID.to_string(),
-                    name: "Default Terms".to_string(),
-                    entries: vec![entry.word.clone()],
-                });
-            }
-        }
+    if let Some(entry) = settings.learned_entries.iter_mut().find(|e| e.id == id) {
+        entry.status = LearnedEntryStatus::Promoted;
     }
-
-    settings.learned_entries.retain(|e| e.id != id);
 }
 
 pub fn now_ms() -> i64 {
@@ -400,6 +346,31 @@ fn observe_one(
         return;
     }
 
+    // Inverse contradiction: an existing `to → from` rule makes this a 2-cycle
+    // that oscillates under apply_corrections. Drop the existing rule, skip the
+    // new one, and mark both from-words inconsistent so neither side recreates.
+    let from_lc = from.to_lowercase();
+    let to_lc = to.to_lowercase();
+    let inverse_from = settings.learned_entries.iter().find_map(|e| match &e.kind {
+        LearnedKind::Correction { from: f }
+            if f.to_lowercase() == to_lc && e.word.to_lowercase() == from_lc =>
+        {
+            Some(f.clone())
+        }
+        _ => None,
+    });
+    if let Some(inverse_from) = inverse_from {
+        settings.learned_entries.retain(
+            |e| !matches!(&e.kind, LearnedKind::Correction { from: f } if *f == inverse_from),
+        );
+        for word in [from.to_string(), inverse_from] {
+            if !settings.learned_inconsistent_from.contains(&word) {
+                settings.learned_inconsistent_from.push(word);
+            }
+        }
+        return;
+    }
+
     let has_different_target = settings.learned_entries.iter().any(|e| {
         matches!(&e.kind, LearnedKind::Correction { from: f } if f == from) && e.word != to
     });
@@ -588,6 +559,25 @@ mod tests {
         assert!(candidates.is_empty());
     }
 
+    #[test]
+    fn trailing_punctuation_is_trimmed_from_candidates() {
+        // Sentence-final period must not glue onto the `from` word.
+        let candidates = mine("i really like postgres.", "i really like PostgreSQL.");
+        assert_eq!(
+            pairs(candidates),
+            vec![("postgres".into(), "PostgreSQL".into())]
+        );
+    }
+
+    #[test]
+    fn punctuation_only_change_yields_no_candidate() {
+        let candidates = mine(
+            "i really love using postgres",
+            "i really love using postgres.",
+        );
+        assert!(candidates.is_empty());
+    }
+
     // ── lifecycle / store tests ────────────────────────────────────────────
 
     fn make_settings() -> Settings {
@@ -689,6 +679,28 @@ mod tests {
     }
 
     #[test]
+    fn inverse_correction_drops_both_and_marks_inconsistent() {
+        let mut s = make_settings();
+        observe_one("postgres", "PostgreSQL", &mut s, None, 1000);
+        observe_one("PostgreSQL", "Postgres", &mut s, None, 2000);
+
+        let corrections: Vec<_> = s
+            .learned_entries
+            .iter()
+            .filter(|e| matches!(&e.kind, LearnedKind::Correction { .. }))
+            .collect();
+        assert!(
+            corrections.is_empty(),
+            "both directions of an inverse pair are dropped"
+        );
+        assert!(s.learned_inconsistent_from.iter().any(|f| f == "postgres"));
+        assert!(s
+            .learned_inconsistent_from
+            .iter()
+            .any(|f| f == "PostgreSQL"));
+    }
+
+    #[test]
     fn at_most_one_correction_per_from_word() {
         let mut s = make_settings();
         observe_one("tory", "Tauri", &mut s, None, 1000);
@@ -746,104 +758,26 @@ mod tests {
     // ── promote_entry tests ────────────────────────────────────────────────
 
     #[test]
-    fn promote_correction_adds_to_default_set() {
+    fn promote_marks_candidate_promoted_in_place() {
         let mut s = make_settings();
         observe_one("tory", "Tauri", &mut s, None, 1000);
-        observe_one("tory", "Tauri", &mut s, None, 2000);
         let id = s.learned_entries[0].id.clone();
         promote_entry(&mut s, &id);
 
-        assert!(s.learned_entries.is_empty(), "entry removed after promote");
-        let default_cs = s
-            .correction_sets
-            .iter()
-            .find(|cs| cs.id == DEFAULT_CORRECTION_SET_ID);
-        assert!(default_cs.is_some());
-        assert!(default_cs
-            .unwrap()
-            .entries
-            .iter()
-            .any(|e| e.from == "tory" && e.to == "Tauri"));
-    }
-
-    #[test]
-    fn promote_correction_skipped_when_conflicting_from_exists() {
-        let mut s = make_settings();
-        observe_one("tory", "Tauri", &mut s, None, 1000);
-        observe_one("tory", "Tauri", &mut s, None, 2000);
-        let id = s.learned_entries[0].id.clone();
-
-        // Manually plant a conflicting correction in the permanent set.
-        s.correction_sets.push(NamedCorrectionSet {
-            id: DEFAULT_CORRECTION_SET_ID.to_string(),
-            name: "Default Corrections".to_string(),
-            entries: vec![CorrectionEntry {
-                from: "tory".to_string(),
-                to: "Toronto".to_string(),
-            }],
-        });
-
-        promote_entry(&mut s, &id);
-
-        // Learned entry must survive — it was not promoted.
-        assert_eq!(s.learned_entries.len(), 1, "learned entry kept on conflict");
-        // Permanent set must be unchanged.
-        let cs = s
-            .correction_sets
-            .iter()
-            .find(|cs| cs.id == DEFAULT_CORRECTION_SET_ID)
-            .unwrap();
-        assert_eq!(cs.entries.len(), 1);
-        assert_eq!(cs.entries[0].to, "Toronto");
-    }
-
-    #[test]
-    fn promote_correction_noop_when_exact_duplicate_exists() {
-        let mut s = make_settings();
-        observe_one("tory", "Tauri", &mut s, None, 1000);
-        observe_one("tory", "Tauri", &mut s, None, 2000);
-        let id = s.learned_entries[0].id.clone();
-
-        // Exact duplicate already in permanent set.
-        s.correction_sets.push(NamedCorrectionSet {
-            id: DEFAULT_CORRECTION_SET_ID.to_string(),
-            name: "Default Corrections".to_string(),
-            entries: vec![CorrectionEntry {
-                from: "tory".to_string(),
-                to: "Tauri".to_string(),
-            }],
-        });
-
-        promote_entry(&mut s, &id);
-
-        // Learned entry is removed — it was effectively already promoted.
+        assert_eq!(s.learned_entries.len(), 1, "entry stays in learned_entries");
+        assert_eq!(s.learned_entries[0].status, LearnedEntryStatus::Promoted);
         assert!(
-            s.learned_entries.is_empty(),
-            "learned entry removed for duplicate"
+            s.correction_sets.is_empty(),
+            "promote no longer ejects into a named set"
         );
-        // Permanent set unchanged — no duplicate pushed.
-        let cs = s
-            .correction_sets
-            .iter()
-            .find(|cs| cs.id == DEFAULT_CORRECTION_SET_ID)
-            .unwrap();
-        assert_eq!(cs.entries.len(), 1);
     }
 
     #[test]
-    fn promote_term_adds_to_default_set() {
+    fn promote_unknown_id_is_noop() {
         let mut s = make_settings();
-        observe_term("Tauri", &mut s.learned_entries, None, 1000);
-        observe_term("Tauri", &mut s.learned_entries, None, 2000);
-        let id = s.learned_entries[0].id.clone();
-        promote_entry(&mut s, &id);
+        observe_one("tory", "Tauri", &mut s, None, 1000);
+        promote_entry(&mut s, "no-such-id");
 
-        assert!(s.learned_entries.is_empty());
-        let default_ts = s
-            .term_sets
-            .iter()
-            .find(|ts| ts.id == SEED_TERM_SET_DEFAULT_ID);
-        assert!(default_ts.is_some());
-        assert!(default_ts.unwrap().entries.contains(&"Tauri".to_string()));
+        assert_eq!(s.learned_entries[0].status, LearnedEntryStatus::Candidate);
     }
 }
