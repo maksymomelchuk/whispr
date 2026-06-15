@@ -89,13 +89,16 @@ export function ToneOverlayPage() {
 
   useEffect(() => {
     if (!settings.ai_cleanup_tone_overlay_enabled) return;
+    let cancelled = false;
     let unlisten: (() => void) | null = null;
     listen("stats-updated", () => loadSeenApps())
       .then((u) => {
-        unlisten = u;
+        if (cancelled) u();
+        else unlisten = u;
       })
       .catch((e) => console.error("stats-updated listen failed", e));
     return () => {
+      cancelled = true;
       unlisten?.();
     };
   }, [settings.ai_cleanup_tone_overlay_enabled, loadSeenApps]);
