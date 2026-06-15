@@ -219,7 +219,7 @@ export function HistoryTab() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-start justify-between gap-3 pb-1 border-b border-border/40">
+      <div className="flex items-start justify-between gap-3 pb-1">
         <p className="text-xs text-muted-foreground">
           {limitHint(historyLimit, entries.length)}
         </p>
