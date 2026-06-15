@@ -211,7 +211,7 @@ function ProviderCard({
           weight="fill"
           role="img"
           aria-label="Configured"
-          className="shrink-0 text-green-600 dark:text-green-500"
+          className="shrink-0 text-muted-foreground"
         />
       ) : (
         <GearIcon
@@ -588,7 +588,7 @@ export function AiProvidersPage() {
                 weight="fill"
                 role="img"
                 aria-label="Configured"
-                className="shrink-0 text-green-600 dark:text-green-500"
+                className="shrink-0 text-muted-foreground"
               />
             ) : (
               <GearIcon

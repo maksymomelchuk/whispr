@@ -142,6 +142,20 @@ describe("HomePage — pending state (permissions not granted)", () => {
       expect(screen.queryByText("Set up dictation")).not.toBeInTheDocument();
     });
   });
+
+  it("Granted text uses muted token, not green", async () => {
+    vi.mocked(checkPermissions).mockResolvedValue({
+      microphone: true,
+      accessibility: false,
+    });
+    render(<Wrapper />);
+    await waitFor(() => {
+      const granted = screen.getByText("Granted");
+      const classes = granted.getAttribute("class") ?? "";
+      expect(classes).not.toMatch(/text-green/);
+      expect(classes).toMatch(/text-muted-foreground/);
+    });
+  });
 });
 
 describe("HomePage — activating state (permissions granted, no history)", () => {

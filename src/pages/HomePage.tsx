@@ -291,7 +291,7 @@ function PermissionRow({
       {granted === undefined ? (
         <span className="text-[12px] text-muted-foreground/40">—</span>
       ) : granted ? (
-        <span className="text-[12px] font-medium text-green-600 dark:text-green-500">
+        <span className="text-[12px] font-medium text-muted-foreground">
           Granted
         </span>
       ) : (
