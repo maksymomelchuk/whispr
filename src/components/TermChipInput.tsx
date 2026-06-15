@@ -68,6 +68,7 @@ export function TermChipInput({ value, onChange }: TermChipInputProps) {
           <Chip
             key={term}
             label={term}
+            removeLabel={`Remove ${term}`}
             onRemove={() => onChange(value.filter((t) => t !== term))}
           />
         ))}

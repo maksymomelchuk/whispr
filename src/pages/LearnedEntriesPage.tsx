@@ -3,11 +3,11 @@ import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { Chip } from "@/components/Chip";
 import { EmptyPanel } from "@/components/EmptyPanel";
 import { RowCard } from "@/components/RowCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { ToggleRow } from "@/components/ToggleRow";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -118,12 +118,13 @@ export function LearnedEntriesPage() {
                     title="Ready to use"
                     trailing={`${promotedEntries.length}`}
                   />
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-wrap gap-1.5 items-center p-2 rounded-lg bg-card border border-border shadow-xs">
                     {promotedEntries.map((entry) => (
-                      <LearnedEntryRow
+                      <Chip
                         key={entry.id}
-                        entry={entry}
-                        onDelete={() => handleDelete(entry.id)}
+                        label={<LearnedChipLabel entry={entry} />}
+                        removeLabel={`Delete ${entry.word}`}
+                        onRemove={() => handleDelete(entry.id)}
                       />
                     ))}
                   </div>
@@ -168,34 +169,10 @@ function LearnedEntryRow({
   onDelete: () => void;
   onPromote?: () => void;
 }) {
-  const isCorrection = entry.kind === "correction";
-
   return (
     <RowCard>
       <div className="flex flex-1 min-w-0 items-center gap-2">
-        <Badge
-          variant="neutral"
-          className="text-[10px] shrink-0 font-mono uppercase"
-        >
-          {isCorrection ? "correction" : "term"}
-        </Badge>
-        <Badge
-          variant={entry.status === "promoted" ? "accent" : "neutral"}
-          className="text-[10px] shrink-0"
-        >
-          {entry.status === "promoted" ? "active" : "candidate"}
-        </Badge>
-        {isCorrection && entry.from ? (
-          <span className="text-sm font-mono text-muted-foreground truncate">
-            {entry.from}
-            <span className="mx-1 text-muted-foreground/50">→</span>
-            <span className="text-foreground font-semibold">{entry.word}</span>
-          </span>
-        ) : (
-          <span className="text-sm font-mono text-foreground font-semibold truncate">
-            {entry.word}
-          </span>
-        )}
+        <LearnedRowLabel entry={entry} />
         <span className="ml-auto text-[11px] text-muted-foreground/60 shrink-0 tabular-nums">
           {entry.total_observations}×
         </span>
@@ -234,4 +211,34 @@ function LearnedEntryRow({
       </div>
     </RowCard>
   );
+}
+
+function LearnedRowLabel({ entry }: { entry: LearnedEntry }) {
+  if (entry.kind === "correction" && entry.from) {
+    return (
+      <span className="text-sm font-mono text-muted-foreground truncate">
+        {entry.from}
+        <span className="mx-1 text-muted-foreground/50">→</span>
+        <span className="text-foreground font-semibold">{entry.word}</span>
+      </span>
+    );
+  }
+  return (
+    <span className="text-sm font-mono text-foreground font-semibold truncate">
+      {entry.word}
+    </span>
+  );
+}
+
+function LearnedChipLabel({ entry }: { entry: LearnedEntry }) {
+  if (entry.kind === "correction" && entry.from) {
+    return (
+      <span className="font-mono">
+        <span className="text-primary/60">{entry.from}</span>
+        <span className="mx-1 text-primary/40">→</span>
+        <span className="font-semibold">{entry.word}</span>
+      </span>
+    );
+  }
+  return <span className="font-mono font-semibold">{entry.word}</span>;
 }
