@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
+import { EmptyRowCard } from "@/components/EmptyRowCard";
 import { PageShell } from "@/components/PageShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1306,9 +1307,16 @@ export function ModesPage() {
       description="Each profile pairs a speech model with cleanup and vocabulary. Bind a hotkey to switch between them."
     >
       {settings.modes.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No profiles yet. Add one to start dictating.
-        </p>
+        <EmptyRowCard
+          preview={
+            <span className="text-sm font-medium text-muted-foreground/50">
+              Profile name
+            </span>
+          }
+          hint="Profiles pair a speech model with AI cleanup. Bind a hotkey to activate one mid-session."
+          action="Add profile"
+          onClick={handleAddMode}
+        />
       ) : (
         <div className="flex flex-col gap-2">
           {settings.modes.map((mode, index) => {
