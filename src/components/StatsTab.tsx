@@ -31,7 +31,7 @@ import { InfoTip } from "./InfoTip";
 import { SectionHeader } from "./SectionHeader";
 
 type LoadState = "loading" | "ready" | "error";
-type Period = "week" | "month" | "all";
+export type Period = "week" | "month" | "all";
 
 interface PeriodSpec {
   id: Period;
@@ -179,8 +179,11 @@ function formatCount(n: number): string {
   return n.toLocaleString();
 }
 
-export function StatsTab() {
-  const [period, setPeriod] = useState<Period>("week");
+interface StatsTabProps {
+  period: Period;
+}
+
+export function StatsTab({ period }: StatsTabProps) {
   const [rows, setRows] = useState<StatsRow[]>([]);
   const [cleanup, setCleanup] = useState<CleanupStats | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
@@ -272,23 +275,17 @@ export function StatsTab() {
 
   return (
     <section className="flex flex-col gap-5">
-      <SectionHeader
-        title="Dictation stats"
-        control={
-          <div className="flex items-center gap-2">
-            {hasAny && (
-              <Button
-                variant={confirmingClear ? "destructive" : "ghost"}
-                size="xs"
-                onClick={handleClear}
-              >
-                {confirmingClear ? "Click to confirm" : "Clear stats"}
-              </Button>
-            )}
-            <PeriodToggle value={period} onChange={setPeriod} />
-          </div>
-        }
-      />
+      {hasAny && (
+        <div className="flex items-center justify-end">
+          <Button
+            variant={confirmingClear ? "destructive" : "ghost"}
+            size="xs"
+            onClick={handleClear}
+          >
+            {confirmingClear ? "Click to confirm" : "Clear stats"}
+          </Button>
+        </div>
+      )}
 
       {!hasAny && <EmptyState />}
 
@@ -333,7 +330,7 @@ export function StatsTab() {
   );
 }
 
-function PeriodToggle({
+export function PeriodToggle({
   value,
   onChange,
 }: {
