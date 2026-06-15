@@ -32,8 +32,9 @@ const FINAL_RESULTS_TIMEOUT: Duration = Duration::from_secs(3);
 /// bounds the post-release tail to the idle window instead of always hitting
 /// FINAL_RESULTS_TIMEOUT. The commit-to-first-segment latency is covered
 /// separately by the `got_committed` guard, so this only needs to outlast the
-/// gap between segments of a split final flush.
-const POST_COMMIT_IDLE: Duration = Duration::from_millis(250);
+/// gap between segments of a split final flush — those arrive in a sub-100ms
+/// burst, so the window sits just above that to keep the post-release tail low.
+const POST_COMMIT_IDLE: Duration = Duration::from_millis(120);
 
 pub struct ElevenLabsEngine {
     pub key: String,
