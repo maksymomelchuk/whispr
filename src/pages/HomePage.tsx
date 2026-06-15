@@ -25,6 +25,25 @@ import {
 } from "../lib/api";
 import type { LocalModelStatus, Settings } from "../lib/types";
 
+const GUIDE_DISMISSED_KEY = "whispr.setup-guide-dismissed";
+
+function readGuideDismissed(): boolean {
+  try {
+    return localStorage.getItem(GUIDE_DISMISSED_KEY) === "true";
+  } catch {
+    /* localStorage may be unavailable in some webview contexts */
+    return false;
+  }
+}
+
+function writeGuideDismissed() {
+  try {
+    localStorage.setItem(GUIDE_DISMISSED_KEY, "true");
+  } catch {
+    /* localStorage may be unavailable in some webview contexts */
+  }
+}
+
 function timeGreeting(): string {
   const h = new Date().getHours();
   if (h < 12) return "Good morning.";
@@ -67,7 +86,7 @@ export function HomePage() {
   );
   const [localStatuses, setLocalStatuses] = useState<LocalModelStatus[]>([]);
   const [hasDictated, setHasDictated] = useState<boolean | null>(null);
-  const [guideDismissed, setGuideDismissed] = useState(false);
+  const [guideDismissed, setGuideDismissed] = useState(readGuideDismissed);
 
   useEffect(() => {
     let cancelled = false;
@@ -215,7 +234,10 @@ export function HomePage() {
                   control={
                     <button
                       type="button"
-                      onClick={() => setGuideDismissed(true)}
+                      onClick={() => {
+                        writeGuideDismissed();
+                        setGuideDismissed(true);
+                      }}
                       aria-label="Dismiss setup guide"
                       className="text-muted-foreground/50 hover:text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
                     >

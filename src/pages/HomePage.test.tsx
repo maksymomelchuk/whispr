@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsContext } from "../context/SettingsContext";
 import {
@@ -101,6 +101,10 @@ function Wrapper({ settings = BASE_SETTINGS }: { settings?: Settings }) {
     </MemoryRouter>
   );
 }
+
+beforeEach(() => {
+  localStorage.clear();
+});
 
 describe("HomePage — pending state (permissions not granted)", () => {
   it("shows 'Grant permissions below' subtitle when permissions denied", async () => {
@@ -279,6 +283,30 @@ describe("HomePage — activating state (permissions granted, no history)", () =
     });
 
     await user.click(screen.getByRole("button", { name: /dismiss/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/set up dictation/i)).not.toBeInTheDocument();
+      expect(screen.getByText("Finish setting up.")).toBeInTheDocument();
+    });
+  });
+
+  it("guide stays dismissed after remount (navigating away and back)", async () => {
+    vi.mocked(checkPermissions).mockResolvedValue({
+      microphone: true,
+      accessibility: true,
+    });
+    vi.mocked(getHistory).mockResolvedValue([]);
+    const user = userEvent.setup();
+    const { unmount } = render(<Wrapper />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/set up dictation/i)).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /dismiss/i }));
+    unmount();
+
+    render(<Wrapper />);
 
     await waitFor(() => {
       expect(screen.queryByText(/set up dictation/i)).not.toBeInTheDocument();
