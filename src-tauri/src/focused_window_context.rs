@@ -22,19 +22,22 @@ pub fn capture(app: tauri::AppHandle) {
 /// accessibility tree. Used by the native (non-web) traversal fallback.
 fn assemble(fragments: Vec<String>, max_chars: usize) -> Option<String> {
     let mut out = String::new();
+    let mut char_count = 0;
     let mut last: Option<&str> = None;
     for fragment in &fragments {
         let trimmed = fragment.trim();
         if trimmed.is_empty() || last == Some(trimmed) {
             continue;
         }
-        if out.len() + trimmed.len() + 1 > max_chars {
+        let separator = usize::from(!out.is_empty());
+        if char_count + trimmed.chars().count() + separator > max_chars {
             break;
         }
         if !out.is_empty() {
             out.push('\n');
         }
         out.push_str(trimmed);
+        char_count += trimmed.chars().count() + separator;
         last = Some(trimmed);
     }
     if out.is_empty() {
@@ -51,14 +54,10 @@ fn cap_text(text: String, max_chars: usize) -> Option<String> {
     if trimmed.is_empty() {
         return None;
     }
-    if trimmed.len() <= max_chars {
+    if trimmed.chars().count() <= max_chars {
         return Some(trimmed.to_string());
     }
-    let mut end = max_chars;
-    while end > 0 && !trimmed.is_char_boundary(end) {
-        end -= 1;
-    }
-    Some(trimmed[..end].to_string())
+    Some(trimmed.chars().take(max_chars).collect())
 }
 
 /// Slices a `max_chars`-wide window from `text` centered on `center_fraction`
@@ -543,10 +542,18 @@ mod tests {
     }
 
     #[test]
-    fn cap_text_truncates_on_char_boundary() {
-        // 'é' is two bytes; a cap landing mid-char must back off to a boundary.
-        let text = "aé".to_string(); // bytes: a(1) é(2) = 3 bytes
-        assert_eq!(cap_text(text, 2), Some("a".to_string()));
+    fn cap_text_caps_by_characters_not_bytes() {
+        // "aéb" is 3 chars / 4 bytes. A char cap of 2 keeps the first two chars;
+        // a byte cap would have stopped after "a".
+        assert_eq!(cap_text("aéb".to_string(), 2), Some("aé".to_string()));
+    }
+
+    #[test]
+    fn assemble_counts_multibyte_chars_not_bytes() {
+        // Each Cyrillic char is 2 bytes; a byte budget would drop the second
+        // fragment that a 9-char budget comfortably fits.
+        let fragments = vec!["привіт".to_string(), "світ".to_string()];
+        assert_eq!(assemble(fragments, 11), Some("привіт\nсвіт".to_string()));
     }
 
     #[test]
