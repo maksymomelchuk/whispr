@@ -242,6 +242,8 @@ pub async fn validate_google_key(api_key: &str) -> ApiKeyValidation {
                 || status == reqwest::StatusCode::UNAUTHORIZED
                 || status == reqwest::StatusCode::FORBIDDEN
             {
+                // Google returns 400 (not 401) for a missing or malformed key;
+                // 401/403 cover revoked/restricted keys. All three mean Invalid.
                 ApiKeyValidation::Invalid
             } else {
                 ApiKeyValidation::Error {

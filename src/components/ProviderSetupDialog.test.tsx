@@ -150,12 +150,8 @@ describe("ProviderSetupDialog", () => {
   });
 
   it("shows Validating… while validate() is pending", async () => {
-    let resolveValidate: ((v: { kind: "valid" }) => void) | undefined;
     vi.mocked(mockDescriptor.validate).mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveValidate = resolve;
-        }),
+      () => new Promise(() => {}),
     );
     const user = userEvent.setup();
     renderDialog();
@@ -164,12 +160,26 @@ describe("ProviderSetupDialog", () => {
     expect(
       screen.getByRole("button", { name: "Validating…" }),
     ).toBeInTheDocument();
-    resolveValidate?.({ kind: "valid" });
   });
 
-  describe("connected state", () => {
+  it("validation failure resets save button and preserves key", async () => {
+    vi.mocked(mockDescriptor.validate).mockResolvedValue({
+      kind: "invalid",
+    });
+    const user = userEvent.setup();
+    renderDialog();
+    await user.type(screen.getByLabelText("API Key"), "bad-key");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(screen.getByText(/rejected by the provider/i)).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+    expect(screen.getByLabelText("API Key")).toHaveValue("bad-key");
+  });
+
+  describe("auto-close after connect", () => {
     beforeEach(() => {
-      vi.useFakeTimers();
+      vi.useFakeTimers({ shouldAdvanceTime: true });
     });
     afterEach(() => {
       vi.useRealTimers();
@@ -190,23 +200,6 @@ describe("ProviderSetupDialog", () => {
       );
       vi.advanceTimersByTime(900);
       expect(onOpenChange).toHaveBeenCalledWith(false);
-    });
-
-    it("validation failure resets save button and preserves key", async () => {
-      vi.mocked(mockDescriptor.validate).mockResolvedValue({
-        kind: "invalid",
-      });
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-      renderDialog();
-      await user.type(screen.getByLabelText("API Key"), "bad-key");
-      await user.click(screen.getByRole("button", { name: "Save" }));
-      await waitFor(() =>
-        expect(
-          screen.getByText(/rejected by the provider/i),
-        ).toBeInTheDocument(),
-      );
-      expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
-      expect(screen.getByLabelText("API Key")).toHaveValue("bad-key");
     });
   });
 });

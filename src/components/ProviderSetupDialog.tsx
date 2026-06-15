@@ -17,6 +17,15 @@ import type { EngineDescriptor } from "../lib/speechModelCatalog";
 
 const MASKED_PLACEHOLDER = "••••••••••••";
 
+type SavePhase = "idle" | "validating" | "saving" | "connected";
+
+const SAVE_PHASE_LABELS: Record<SavePhase, string> = {
+  idle: "Save",
+  validating: "Validating…",
+  saving: "Saving…",
+  connected: "Connected",
+};
+
 interface Props {
   descriptor: EngineDescriptor;
   isConfigured: boolean;
@@ -34,8 +43,6 @@ export function ProviderSetupDialog({
   onOpenChange,
   children,
 }: Props) {
-  type SavePhase = "idle" | "validating" | "saving" | "connected";
-
   const [keyValue, setKeyValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [savePhase, setSavePhase] = useState<SavePhase>("idle");
@@ -106,14 +113,7 @@ export function ProviderSetupDialog({
   const busy = savePhase !== "idle";
   const isSaveDisabled = keyValue.trim() === "" || busy;
 
-  const saveLabel =
-    savePhase === "validating"
-      ? "Validating…"
-      : savePhase === "saving"
-        ? "Saving…"
-        : savePhase === "connected"
-          ? "Connected"
-          : "Save";
+  const saveLabel = SAVE_PHASE_LABELS[savePhase];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
