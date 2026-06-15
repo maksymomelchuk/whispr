@@ -227,11 +227,12 @@ fn platform_read_focused_window() -> Option<String> {
         role: &CFString,
         children: &CFString,
     ) -> Option<CFTypeRef> {
+        use std::collections::VecDeque;
         CFRetain(root);
-        let mut queue: Vec<CFTypeRef> = vec![root];
+        let mut queue: VecDeque<CFTypeRef> = VecDeque::from([root]);
         let mut found: Option<CFTypeRef> = None;
         let mut seen = 0usize;
-        while let Some(element) = queue.pop() {
+        while let Some(element) = queue.pop_front() {
             seen += 1;
             if found.is_none() && seen <= WEB_AREA_SEARCH_BUDGET {
                 let is_web = copy_attr(element, role)
@@ -248,7 +249,7 @@ fn platform_read_focused_window() -> Option<String> {
                         let child = CFArrayGetValueAtIndex(array, i) as CFTypeRef;
                         if !child.is_null() {
                             CFRetain(child);
-                            queue.push(child);
+                            queue.push_back(child);
                         }
                     }
                     CFRelease(kids);
