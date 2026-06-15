@@ -20,8 +20,8 @@ vi.mock("../lib/api", () => ({
 
 const EMPTY_CLEANUP = {
   today: { period: "2026-06-15", input_tokens: 0, output_tokens: 0 },
-  week: { input_tokens: 0, output_tokens: 0 },
-  month: { input_tokens: 0, output_tokens: 0 },
+  week: { period: "2026-06", input_tokens: 0, output_tokens: 0 },
+  month: { period: "2026-06", input_tokens: 0, output_tokens: 0 },
   overall: { input_tokens: 0, output_tokens: 0 },
 };
 
