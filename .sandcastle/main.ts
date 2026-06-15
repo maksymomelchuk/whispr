@@ -413,7 +413,7 @@ async function runPlanner(pending: Workset[], open: Set<string>) {
     name: "planner",
     maxIterations: 1,
     // Opus for planning: dependency analysis benefits from deeper reasoning.
-    agent: sandcastle.claudeCode("claude-fable-5"),
+    agent: sandcastle.claudeCode("claude-opus-4-8"),
     output: PLAN_OUTPUT,
   };
   const worksetsJson = JSON.stringify(
