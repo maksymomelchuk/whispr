@@ -119,14 +119,15 @@ impl Engine for SonioxRealtimeEngine {
         let _ = tokio::time::timeout(FINAL_RESULTS_TIMEOUT, async {
             while let Some(msg) = stream.next().await {
                 match msg {
-                    Ok(Message::Text(t)) => {
-                        if let Ok(update) = extract_soniox_message(&t, translating) {
+                    Ok(Message::Text(t)) => match extract_soniox_message(&t, translating) {
+                        Ok(update) => {
                             committed.push_str(&update.final_text);
                             if update.finished {
                                 break;
                             }
                         }
-                    }
+                        Err(e) => eprintln!("[stream] Soniox post-finalize parse error: {e}"),
+                    },
                     Ok(Message::Close(_)) => break,
                     Err(e) => {
                         eprintln!("[stream] Soniox post-finalize recv error: {e}");
