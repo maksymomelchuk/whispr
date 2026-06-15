@@ -53,7 +53,7 @@ export function ListSurface({
   children,
 }: ListSurfaceProps) {
   return (
-    <PageShell title={title} description={description} count={count}>
+    <PageShell title={title} description={description} trailing={count}>
       {search && <ListSearch {...search} />}
       {children}
     </PageShell>
