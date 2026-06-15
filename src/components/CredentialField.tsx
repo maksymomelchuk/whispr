@@ -1,7 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { toast } from "sonner";
 import * as z from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -15,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
+import { toastRetry } from "../lib/toastRetry";
 import type { ApiKeyValidation } from "../lib/types";
 import { InfoTip } from "./InfoTip";
 
@@ -72,7 +72,16 @@ export function CredentialField({
       form.reset({ value: "" });
       setEditing(false);
     } catch (e) {
-      toast.error(`Couldn't save ${label}`, { description: String(e) });
+      toastRetry(
+        `Couldn't save ${label}`,
+        async () => {
+          await persist(trimmed);
+          onConfiguredChange(true);
+          form.reset({ value: "" });
+          setEditing(false);
+        },
+        String(e),
+      );
     } finally {
       setSaving(false);
     }
@@ -86,7 +95,16 @@ export function CredentialField({
       form.reset({ value: "" });
       setEditing(true);
     } catch (e) {
-      toast.error(`Couldn't remove ${label}`, { description: String(e) });
+      toastRetry(
+        `Couldn't remove ${label}`,
+        async () => {
+          await persist("");
+          onConfiguredChange(false);
+          form.reset({ value: "" });
+          setEditing(true);
+        },
+        String(e),
+      );
     } finally {
       setSaving(false);
     }

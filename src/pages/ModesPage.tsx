@@ -59,6 +59,7 @@ import {
   reorderModes,
   updateMode,
 } from "../lib/api";
+import { toastRetry } from "../lib/toastRetry";
 import type {
   AiProviderId,
   AssemblyAiModel,
@@ -697,7 +698,14 @@ export function ModeEditor({
       updateMode(normalized)
         .then(() => onPersistRef.current(normalized, false))
         .catch((e) => {
-          toast.error("Couldn't save profile", { description: String(e) });
+          toastRetry(
+            "Couldn't save profile",
+            () =>
+              updateMode(normalized).then(() =>
+                onPersistRef.current(normalized, false),
+              ),
+            String(e),
+          );
         });
     }, 450);
 
@@ -716,7 +724,14 @@ export function ModeEditor({
       updateMode(current)
         .then(() => onPersistRef.current(current, false))
         .catch((e) => {
-          toast.error("Couldn't save profile", { description: String(e) });
+          toastRetry(
+            "Couldn't save profile",
+            () =>
+              updateMode(current).then(() =>
+                onPersistRef.current(current, false),
+              ),
+            String(e),
+          );
         });
     };
   }, [isNew]);

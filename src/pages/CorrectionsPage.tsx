@@ -1,5 +1,3 @@
-import { toast } from "sonner";
-
 import { SetManagementPage } from "@/components/SetManagementPage";
 import { Badge } from "@/components/ui/badge";
 
@@ -10,6 +8,7 @@ import {
   renameCorrectionSet,
   updateCorrectionSetEntries,
 } from "../lib/api";
+import { toastRetry } from "../lib/toastRetry";
 import type { CorrectionEntry } from "../lib/types";
 import { EntriesEditor } from "./CorrectionEntriesEditor";
 
@@ -50,7 +49,14 @@ export function CorrectionsPage() {
       const updated = await updateCorrectionSetEntries(id, entries);
       setSettings(() => updated);
     } catch (e) {
-      toast.error("Couldn't save entries", { description: String(e) });
+      toastRetry(
+        "Couldn't save entries",
+        () =>
+          updateCorrectionSetEntries(id, entries).then((updated) =>
+            setSettings(() => updated),
+          ),
+        String(e),
+      );
     }
   }
 

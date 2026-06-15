@@ -50,6 +50,7 @@ import {
   validateCleanupProviderKey,
 } from "../lib/api";
 import type { EngineDescriptor } from "../lib/speechModelCatalog";
+import { toastRetry } from "../lib/toastRetry";
 import type { AiProviderId, Settings } from "../lib/types";
 
 const ANTHROPIC_API_KEY_DESCRIPTOR: EngineDescriptor = {
@@ -544,7 +545,22 @@ export function AiProvidersPage() {
           ai_cleanup_min_duration_ms: ms,
         }));
       } catch (e) {
-        toast.error("Couldn't save thresholds", { description: String(e) });
+        toastRetry(
+          "Couldn't save thresholds",
+          async () => {
+            await persistThresholds(wordsNum, ms);
+            lastPersistedRef.current = {
+              minWords: wordsNum,
+              minDurationMs: ms,
+            };
+            setSettings((s) => ({
+              ...s,
+              ai_cleanup_min_words: wordsNum,
+              ai_cleanup_min_duration_ms: ms,
+            }));
+          },
+          String(e),
+        );
       }
     }, 450);
     return () => clearTimeout(t);

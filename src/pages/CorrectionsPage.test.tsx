@@ -24,7 +24,7 @@ vi.mock("../lib/api", () => ({
 }));
 
 vi.mock("sonner", () => ({
-  toast: { error: vi.fn() },
+  toast: { error: vi.fn().mockReturnValue("toast-id"), dismiss: vi.fn() },
 }));
 
 const BASE_MODE: Mode = {
@@ -179,6 +179,29 @@ describe("CorrectionsPage – corrections-specific", () => {
     expect(
       screen.getByRole("button", { name: /add rule/i }),
     ).toBeInTheDocument();
+  });
+
+  it("shows a Retry action on entries save failure", async () => {
+    vi.mocked(mockUpdateCorrectionSetEntries).mockRejectedValueOnce(
+      new Error("network error"),
+    );
+    const set: NamedCorrectionSet = { id: "cs-1", name: "Tech", entries: [] };
+    render(<Wrapper initial={{ ...BASE, correction_sets: [set] }} />);
+    await userEvent.click(screen.getByRole("button", { name: "Open" }));
+    await userEvent.click(screen.getByRole("button", { name: /add rule/i }));
+    await userEvent.type(screen.getByPlaceholderText("spoken"), "ty");
+    await userEvent.type(screen.getByPlaceholderText("text"), "TypeScript");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    const { toast } = await import("sonner");
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Couldn't save entries",
+        expect.objectContaining({
+          action: expect.objectContaining({ label: "Retry" }),
+        }),
+      ),
+    );
   });
 
   it("saves new correction entry via updateCorrectionSetEntries", async () => {
