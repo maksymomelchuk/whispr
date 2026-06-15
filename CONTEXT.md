@@ -72,6 +72,15 @@ Named "Custom", deliberately **not** "Local", to avoid colliding with [[Local En
 
 An alternate way to authenticate the Anthropic [[AI Provider]]: a Claude Pro/Max subscription token (`sk-ant-oat…`) used instead of a pay-per-token API key. It is **Anthropic-only** and **global** — a single app-wide toggle chooses whether Anthropic authenticates via OAuth token or API key; no other provider supports it, and Profiles never see it (a Profile picks the provider "Anthropic", not how Anthropic authenticates). The OAuth path additionally asserts the "Claude Code" identity and sends Anthropic's OAuth beta header.
 
+## Translation
+
+Producing output in a different language than the one spoken. Two independent mechanisms exist, at different stages of the pipeline:
+
+- **STT-layer translation** — the [[Engine]] translates _while_ transcribing, so the [[Session]]'s raw transcript is already in the target language. Only the Soniox Engine supports this: one-way (speak any source, including code-switched speech, get one target language out), streamed in the same realtime response as transcription, so it adds no extra round trip.
+- **Cleanup-layer translation** — the [[AI Provider]] translates the already-transcribed text during the post-STT cleanup step, driven by a cleanup prompt (e.g. the seed "UA → EN" Profile's "Translate the following Ukrainian transcription to English"). Works with any [[Engine]], at the cost of an extra LLM round trip.
+
+A Profile picks **at most one**. STT-layer translation is mutually exclusive with verbatim code-switching _within the same Profile_: a Soniox Engine either preserves both languages verbatim (no target set) or collapses everything into the target (target set) — never both. The two mechanisms are not guarded against each other; enabling both in one Profile merely translates twice (the second pass is a near no-op), so the product guidance is "pick one."
+
 ## Flagged ambiguities
 
 - "Profile" vs "Mode" are the same concept: the UI consistently says **Profile** (sidebar, editor, toasts); the code, Tauri commands, and ADRs say **Mode** (`Mode`, `update_mode`, `mode.term_set_ids`). Glossary entries use Mode for the code-facing concept; anything user-facing renders it as Profile.
@@ -80,6 +89,7 @@ An alternate way to authenticate the Anthropic [[AI Provider]]: a Claude Pro/Max
 - Groq appears on **both** sides: it is a speech [[Engine]] (Whisper STT) _and_ can be a cleanup [[AI Provider]] (Llama LLMs). Same vendor, two different jobs in two different settings sections. The Speech models / AI Providers split keeps them apart in the UI.
 - OpenAI also appears on **both** sides: it is a speech [[Engine]] (gpt-4o-transcribe) _and_ can be a cleanup [[AI Provider]] (GPT-4o, etc.). The speech key (`openai_api_key` in settings) is independent of the cleanup key (`ai_cleanup.provider_keys["openai"]`). A user who uses OpenAI for both STT and cleanup enters the key twice — same vendor, two jobs, two independent keys. This matches the Groq precedent.
 - "Native vs OpenAI-compatible" is an implementation detail, not a domain concept: Anthropic is reached through its own API (the only path supporting an [[OAuth credential]] and prompt caching via `cache_control`); every other [[AI Provider]] is reached through the shared OpenAI-compatible HTTP path. The cleanup _rules_ are identical across providers — only the request envelope differs.
+- "Translation" is overloaded across two pipeline stages — see [[Translation]]. An [[Engine]] can translate while transcribing (STT-layer, Soniox only) or an [[AI Provider]] can translate during cleanup (cleanup-layer, any Engine). When precision matters: "STT-layer" / "in-stream" translation = the Engine does it; "cleanup translation" = the LLM does it. A Profile should use one or the other — product guidance, not a runtime guard (see the Translation section above).
 
 ## Model Idle Timeout
 

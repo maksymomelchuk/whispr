@@ -11,6 +11,7 @@ pub enum TranscriptionProvider {
     Local,
     OpenAi,
     ElevenLabs,
+    Soniox,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -26,6 +27,23 @@ impl OpenAiTranscribeModel {
         match self {
             Self::Gpt4oTranscribe => "gpt-4o-transcribe",
             Self::Gpt4oMiniTranscribe => "gpt-4o-mini-transcribe",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ElevenLabsModel {
+    #[default]
+    ScribeV2,
+    ScribeV2Realtime,
+}
+
+impl ElevenLabsModel {
+    pub fn api_id(self) -> &'static str {
+        match self {
+            Self::ScribeV2 => "scribe_v2",
+            Self::ScribeV2Realtime => "scribe_v2_realtime",
         }
     }
 }
@@ -55,6 +73,10 @@ pub enum AssemblyAiModel {
     UniversalStreamingEnglish,
     UniversalStreamingMultilingual,
     WhisperStreaming,
+    // Async-only (no streaming endpoint); the only AssemblyAI model that covers
+    // Ukrainian and the full 99-language set.
+    #[serde(rename = "universal_2")]
+    Universal2,
 }
 
 impl AssemblyAiModel {
@@ -64,6 +86,7 @@ impl AssemblyAiModel {
             Self::UniversalStreamingEnglish => "universal-streaming-english",
             Self::UniversalStreamingMultilingual => "universal-streaming-multilingual",
             Self::WhisperStreaming => "whisper-rt",
+            Self::Universal2 => "universal-2",
         }
     }
 
@@ -73,7 +96,7 @@ impl AssemblyAiModel {
             Self::UniversalProStreaming | Self::UniversalStreamingMultilingual => {
                 matches!(code, "en" | "es" | "de" | "fr" | "pt" | "it")
             }
-            Self::WhisperStreaming => true,
+            Self::WhisperStreaming | Self::Universal2 => true,
         }
     }
 
@@ -83,7 +106,7 @@ impl AssemblyAiModel {
             Self::UniversalProStreaming | Self::UniversalStreamingMultilingual => {
                 Some(vec!["en", "es", "de", "fr", "pt", "it"])
             }
-            Self::WhisperStreaming => None,
+            Self::WhisperStreaming | Self::Universal2 => None,
         }
     }
 }
@@ -130,7 +153,19 @@ pub enum ProviderModel {
     OpenAi {
         model: OpenAiTranscribeModel,
     },
-    ElevenLabs,
+    ElevenLabs {
+        // Existing configs predate per-model selection and omit this field.
+        #[serde(default)]
+        model: ElevenLabsModel,
+    },
+    // Single realtime model (stt-rt-v4), so no model sub-enum. `translate_to`
+    // carries the one-way STT-layer translation target; None = verbatim
+    // code-switching. The field lives here so it's unrepresentable for any
+    // provider that can't honor it.
+    Soniox {
+        #[serde(default)]
+        translate_to: Option<String>,
+    },
 }
 
 impl ProviderModel {
@@ -141,7 +176,8 @@ impl ProviderModel {
             Self::AssemblyAi { .. } => TranscriptionProvider::AssemblyAi,
             Self::Local { .. } => TranscriptionProvider::Local,
             Self::OpenAi { .. } => TranscriptionProvider::OpenAi,
-            Self::ElevenLabs => TranscriptionProvider::ElevenLabs,
+            Self::ElevenLabs { .. } => TranscriptionProvider::ElevenLabs,
+            Self::Soniox { .. } => TranscriptionProvider::Soniox,
         }
     }
 
@@ -162,7 +198,10 @@ impl ProviderModel {
             TranscriptionProvider::OpenAi => Self::OpenAi {
                 model: OpenAiTranscribeModel::default(),
             },
-            TranscriptionProvider::ElevenLabs => Self::ElevenLabs,
+            TranscriptionProvider::ElevenLabs => Self::ElevenLabs {
+                model: ElevenLabsModel::default(),
+            },
+            TranscriptionProvider::Soniox => Self::Soniox { translate_to: None },
         }
     }
 }
@@ -200,6 +239,12 @@ mod tests {
     }
 
     #[test]
+    fn assemblyai_universal_2_serializes_with_explicit_tag() {
+        let v = serde_json::to_value(AssemblyAiModel::Universal2).unwrap();
+        assert_eq!(v, "universal_2");
+    }
+
+    #[test]
     fn provider_model_round_trips() {
         let cases = vec![
             ProviderModel::Deepgram,
@@ -221,7 +266,9 @@ mod tests {
             ProviderModel::OpenAi {
                 model: OpenAiTranscribeModel::Gpt4oMiniTranscribe,
             },
-            ProviderModel::ElevenLabs,
+            ProviderModel::ElevenLabs {
+                model: ElevenLabsModel::ScribeV2Realtime,
+            },
         ];
         for case in cases {
             let json = serde_json::to_string(&case).unwrap();
@@ -231,24 +278,98 @@ mod tests {
     }
 
     #[test]
-    fn provider_model_eleven_labs_serializes_with_provider_tag() {
-        let m = ProviderModel::ElevenLabs;
+    fn provider_model_eleven_labs_serializes_with_provider_and_model() {
+        let m = ProviderModel::ElevenLabs {
+            model: ElevenLabsModel::ScribeV2Realtime,
+        };
         let v: serde_json::Value = serde_json::to_value(&m).unwrap();
         assert_eq!(v["provider"], "eleven_labs");
-        assert!(v.get("model").is_none());
+        assert_eq!(v["model"], "scribe_v2_realtime");
     }
 
     #[test]
     fn provider_model_eleven_labs_round_trips() {
-        let pm = ProviderModel::ElevenLabs;
+        let pm = ProviderModel::ElevenLabs {
+            model: ElevenLabsModel::ScribeV2Realtime,
+        };
         let json = serde_json::to_string(&pm).unwrap();
         let decoded: ProviderModel = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded, pm);
     }
 
     #[test]
+    fn provider_model_eleven_labs_legacy_json_without_model_defaults_to_scribe_v2() {
+        let decoded: ProviderModel = serde_json::from_str(r#"{"provider":"eleven_labs"}"#).unwrap();
+        assert_eq!(
+            decoded,
+            ProviderModel::ElevenLabs {
+                model: ElevenLabsModel::ScribeV2,
+            }
+        );
+    }
+
+    #[test]
+    fn eleven_labs_model_api_ids() {
+        assert_eq!(ElevenLabsModel::ScribeV2.api_id(), "scribe_v2");
+        assert_eq!(
+            ElevenLabsModel::ScribeV2Realtime.api_id(),
+            "scribe_v2_realtime"
+        );
+    }
+
+    #[test]
     fn provider_model_default_is_deepgram() {
         assert_eq!(ProviderModel::default(), ProviderModel::Deepgram);
+    }
+
+    #[test]
+    fn provider_model_soniox_verbatim_serializes_without_target() {
+        let m = ProviderModel::Soniox { translate_to: None };
+        let v: serde_json::Value = serde_json::to_value(&m).unwrap();
+        assert_eq!(v["provider"], "soniox");
+        assert!(v["translate_to"].is_null());
+    }
+
+    #[test]
+    fn provider_model_soniox_translating_serializes_with_target() {
+        let m = ProviderModel::Soniox {
+            translate_to: Some("en".to_string()),
+        };
+        let v: serde_json::Value = serde_json::to_value(&m).unwrap();
+        assert_eq!(v["provider"], "soniox");
+        assert_eq!(v["translate_to"], "en");
+    }
+
+    #[test]
+    fn provider_model_soniox_round_trips() {
+        for translate_to in [None, Some("uk".to_string())] {
+            let pm = ProviderModel::Soniox { translate_to };
+            let json = serde_json::to_string(&pm).unwrap();
+            let decoded: ProviderModel = serde_json::from_str(&json).unwrap();
+            assert_eq!(decoded, pm);
+        }
+    }
+
+    #[test]
+    fn provider_model_soniox_legacy_json_without_target_defaults_to_none() {
+        let decoded: ProviderModel = serde_json::from_str(r#"{"provider":"soniox"}"#).unwrap();
+        assert_eq!(decoded, ProviderModel::Soniox { translate_to: None });
+    }
+
+    #[test]
+    fn provider_model_soniox_reports_soniox_provider() {
+        let pm = ProviderModel::Soniox { translate_to: None };
+        assert_eq!(pm.provider(), TranscriptionProvider::Soniox);
+    }
+
+    #[test]
+    fn from_legacy_soniox_has_no_translation_target() {
+        let pm = ProviderModel::from_legacy(
+            TranscriptionProvider::Soniox,
+            GroqModel::default(),
+            AssemblyAiModel::default(),
+        );
+        assert_eq!(pm, ProviderModel::Soniox { translate_to: None });
     }
 
     #[test]

@@ -3,11 +3,13 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AiProviderId,
   ApiKeyValidation,
+  AppToneInfo,
   CleanupAuthMode,
   CleanupStats,
   HistoryEntry,
   HistoryLimit,
   HotkeyBinding,
+  LearnedEntry,
   LocalModelStatus,
   LocalWhisperIdleTimeout,
   LocalWhisperModel,
@@ -16,6 +18,7 @@ import type {
   Settings,
   Snippet,
   StatsRow,
+  TonePreset,
 } from "./types";
 
 export { formatShortcut } from "./shortcut";
@@ -37,6 +40,9 @@ export const setOpenaiApiKey = (apiKey: string) =>
 export const setElevenLabsApiKey = (apiKey: string) =>
   invoke<void>("set_elevenlabs_api_key", { apiKey });
 
+export const setSonioxApiKey = (apiKey: string) =>
+  invoke<void>("set_soniox_api_key", { apiKey });
+
 export const validateAssemblyAiApiKey = (apiKey: string) =>
   invoke<ApiKeyValidation>("validate_assemblyai_api_key", { apiKey });
 
@@ -45,6 +51,9 @@ export const validateOpenaiApiKey = (apiKey: string) =>
 
 export const validateElevenLabsApiKey = (apiKey: string) =>
   invoke<ApiKeyValidation>("validate_elevenlabs_api_key", { apiKey });
+
+export const validateSonioxApiKey = (apiKey: string) =>
+  invoke<ApiKeyValidation>("validate_soniox_api_key", { apiKey });
 
 export const validateDeepgramApiKey = (apiKey: string) =>
   invoke<ApiKeyValidation>("validate_deepgram_api_key", { apiKey });
@@ -128,6 +137,33 @@ export const setCleanupThresholds = (minWords: number, minDurationMs: number) =>
     minDurationMs,
   });
 
+export const setToneOverlayEnabled = (enabled: boolean) =>
+  invoke<void>("set_tone_overlay_enabled", { enabled });
+
+export const getAppsSeenInHistory = () =>
+  invoke<AppToneInfo[]>("get_apps_seen_in_history");
+
+export const setToneAppOverride = (bundleId: string, preset: TonePreset) =>
+  invoke<void>("set_tone_app_override", { bundleId, preset });
+
+export const setToneAppCustomPrompt = (bundleId: string, prompt: string) =>
+  invoke<void>("set_tone_app_custom_prompt", { bundleId, prompt });
+
+export const clearToneAppOverride = (bundleId: string) =>
+  invoke<void>("clear_tone_app_override", { bundleId });
+
+export const getLearnedEntries = () =>
+  invoke<LearnedEntry[]>("get_learned_entries");
+
+export const deleteLearnedEntry = (id: string) =>
+  invoke<void>("delete_learned_entry", { id });
+
+export const promoteLearnedEntry = (id: string) =>
+  invoke<void>("promote_learned_entry", { id });
+
+export const setLearnFromCorrections = (enabled: boolean) =>
+  invoke<void>("set_learn_from_corrections", { enabled });
+
 export const listInputDevices = () => invoke<string[]>("list_input_devices");
 
 export const setInputDevice = (device: string | null) =>
@@ -159,8 +195,8 @@ export const updateHistoryEntry = (
 ) =>
   invoke<void>("update_history_entry", {
     id,
-    replaced_text: replacedText,
-    final_text: finalText,
+    replacedText,
+    finalText,
   });
 
 export const recoverCleanup = (id: string) =>

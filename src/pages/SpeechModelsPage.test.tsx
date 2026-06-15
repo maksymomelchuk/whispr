@@ -14,11 +14,13 @@ vi.mock("../lib/api", () => ({
   setAssemblyAiApiKey: vi.fn(),
   setOpenaiApiKey: vi.fn(),
   setElevenLabsApiKey: vi.fn(),
+  setSonioxApiKey: vi.fn(),
   validateDeepgramApiKey: vi.fn(),
   validateGroqApiKey: vi.fn(),
   validateAssemblyAiApiKey: vi.fn(),
   validateOpenaiApiKey: vi.fn(),
   validateElevenLabsApiKey: vi.fn(),
+  validateSonioxApiKey: vi.fn(),
   getLocalModelStatuses: vi.fn().mockResolvedValue([]),
   startModelDownload: vi.fn(),
   cancelModelDownload: vi.fn(),
@@ -62,6 +64,7 @@ const BASE_SETTINGS: Settings = {
   assemblyai_api_key_configured: false,
   openai_api_key_configured: false,
   elevenlabs_api_key_configured: false,
+  soniox_api_key_configured: false,
   hotkey_bindings: [],
   term_sets: [],
   correction_sets: [],
@@ -72,6 +75,10 @@ const BASE_SETTINGS: Settings = {
   ai_cleanup_oauth_token_configured: false,
   ai_cleanup_min_words: 9,
   ai_cleanup_min_duration_ms: 3000,
+  ai_cleanup_tone_overlay_enabled: false,
+  tone_app_overrides: {},
+  tone_app_custom_prompts: {},
+  learn_from_corrections: false,
   input_device: null,
   pause_media_on_record: true,
   history_limit: 5,
@@ -118,7 +125,7 @@ describe("SpeechModelsPage", () => {
 
   it("marks every engine as needing setup when none are configured", () => {
     render(<Wrapper />);
-    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(5);
+    expect(screen.getAllByRole("img", { name: "Set up" })).toHaveLength(6);
   });
 
   it("marks an engine as configured when it has a key", () => {

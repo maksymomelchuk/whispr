@@ -3,6 +3,8 @@ use serde::Serialize;
 use tauri::Manager;
 use tauri::{AppHandle, Emitter};
 
+use std::sync::{Mutex, OnceLock};
+
 const TARGET_APP_EVENT: &str = "target-app";
 
 /// The frontmost app at PTT-down, resolved per-platform. Plumbed from the
@@ -12,6 +14,24 @@ const TARGET_APP_EVENT: &str = "target-app";
 pub struct FrontmostApp {
     pub bundle_id: String,
     pub name: String,
+}
+
+fn session_app_cell() -> &'static Mutex<Option<FrontmostApp>> {
+    static CELL: OnceLock<Mutex<Option<FrontmostApp>>> = OnceLock::new();
+    CELL.get_or_init(|| Mutex::new(None))
+}
+
+fn set_session_app(app: Option<FrontmostApp>) {
+    *session_app_cell().lock().unwrap() = app;
+}
+
+/// Returns the frontmost app captured at the most recent PTT-down. macOS
+/// resolves the app through the per-session oneshot instead, so this getter is
+/// only the resolution path on Windows/Linux. Returns `None` on Linux or when
+/// capture has not yet run.
+#[cfg(not(target_os = "macos"))]
+pub fn session_app() -> Option<FrontmostApp> {
+    session_app_cell().lock().unwrap().clone()
 }
 
 #[derive(Serialize, Clone)]
@@ -39,8 +59,6 @@ use std::io::Write;
 #[cfg(target_os = "macos")]
 use std::process::{Command, Stdio};
 #[cfg(target_os = "macos")]
-use std::sync::{Mutex, OnceLock};
-#[cfg(target_os = "macos")]
 use tokio::sync::oneshot;
 
 #[cfg(target_os = "macos")]
@@ -67,10 +85,12 @@ fn platform_capture(app: AppHandle) {
 
     tauri::async_runtime::spawn_blocking(move || {
         let Some(frontmost) = resolve_bundle() else {
+            set_session_app(None);
             let _ = tx.send(None);
             return;
         };
 
+        set_session_app(Some(frontmost.clone()));
         let _ = tx.send(Some(frontmost.clone()));
 
         if let Some(cached) = icon_cache()
@@ -107,6 +127,11 @@ fn resolve_bundle() -> Option<FrontmostApp> {
         return None;
     }
     Some(FrontmostApp { bundle_id, name })
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn resolve_icon(_bundle_id: &str) -> Option<String> {
+    None
 }
 
 #[cfg(target_os = "macos")]
@@ -201,8 +226,6 @@ fn run_osascript(script: &str, args: &[&str]) -> Option<String> {
 
 #[cfg(target_os = "windows")]
 use std::collections::HashMap;
-#[cfg(target_os = "windows")]
-use std::sync::{Mutex, OnceLock};
 
 #[cfg(target_os = "windows")]
 fn icon_cache() -> &'static Mutex<HashMap<String, TargetApp>> {
@@ -241,8 +264,11 @@ mod win32 {
 fn platform_capture(app: AppHandle) {
     tauri::async_runtime::spawn_blocking(move || {
         let Some((frontmost, exe_path)) = resolve_foreground_window() else {
+            set_session_app(None);
             return;
         };
+
+        set_session_app(Some(frontmost.clone()));
 
         if let Some(cached) = icon_cache()
             .lock()

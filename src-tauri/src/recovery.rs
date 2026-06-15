@@ -45,6 +45,9 @@ pub async fn recover_entry(
         snapshot.cleanup_provider.clone(),
         &snapshot.cleanup_model,
         snapshot.cleanup_prompt_override.as_deref(),
+        None,
+        &[],
+        None,
         &entry.raw_text,
     )
     .await?;
@@ -73,6 +76,9 @@ pub(crate) async fn recover_entry_with_transport<T: Transport>(
         snapshot.cleanup_provider.clone(),
         &snapshot.cleanup_model,
         snapshot.cleanup_prompt_override.as_deref(),
+        None,
+        &[],
+        None,
         &entry.raw_text,
         transport,
         timeout,
@@ -105,9 +111,12 @@ fn build_outcome(
     if snapshot.use_snippets {
         final_text = expand_snippets(&final_text, &settings.snippets);
     }
-    if !snapshot.correction_set_ids.is_empty() {
-        let corrections =
-            compose_corrections(&snapshot.correction_set_ids, &settings.correction_sets);
+    if !snapshot.correction_set_ids.is_empty() || !settings.learned_entries.is_empty() {
+        let corrections = compose_corrections(
+            &snapshot.correction_set_ids,
+            &settings.correction_sets,
+            &settings.learned_entries,
+        );
         final_text = apply_corrections(&final_text, &corrections);
     }
 
@@ -125,6 +134,7 @@ fn build_outcome(
         provider_model: entry.provider_model.clone(),
         app_name: entry.app_name.clone(),
         bundle_id: entry.bundle_id.clone(),
+        context_channels: entry.context_channels.clone(),
     };
 
     Outcome {
@@ -218,6 +228,7 @@ mod tests {
             provider_model: None,
             app_name: None,
             bundle_id: None,
+            context_channels: vec![],
         }
     }
 

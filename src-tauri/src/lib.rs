@@ -12,7 +12,6 @@ pub(crate) mod keysym;
 pub mod mode;
 mod permissions;
 pub mod pipeline;
-#[cfg(target_os = "linux")]
 pub(crate) mod platform;
 pub mod provider;
 mod snippets;
@@ -38,12 +37,22 @@ mod openai_transcribe_session;
 mod preview_throttle;
 pub(crate) mod recorder;
 mod session;
+mod soniox_session;
 
 // cleanup is cross-platform HTTP (reqwest + serde_json, no OS APIs).
 pub mod cleanup;
 mod cleanup_invoke;
 pub mod model_catalog;
 pub mod recovery;
+
+mod clipboard_context;
+mod focused_field_context;
+mod focused_window_context;
+mod miner;
+mod post_paste_observer;
+mod selected_text_context;
+pub(crate) mod selector;
+mod tone;
 
 // media, overlay, and target_app expose platform-neutral public APIs and
 // select their OS implementation internally via cfg.
@@ -150,6 +159,7 @@ pub fn run() {
             }
 
             let app_state = AppState::default();
+            clipboard_context::start_sampler(app_state.clipboard_window.clone());
             *app_state.hotkey_bindings.lock().unwrap() = settings.hotkey_bindings;
             *app_state.input_device.lock().unwrap() = settings.input_device;
             *app_state.pause_media_on_record.lock().unwrap() = settings.pause_media_on_record;
@@ -224,11 +234,13 @@ pub fn run() {
             commands::set_assemblyai_api_key,
             commands::set_openai_api_key,
             commands::set_elevenlabs_api_key,
+            commands::set_soniox_api_key,
             commands::validate_deepgram_api_key,
             commands::validate_groq_api_key,
             commands::validate_assemblyai_api_key,
             commands::validate_openai_api_key,
             commands::validate_elevenlabs_api_key,
+            commands::validate_soniox_api_key,
             commands::set_hotkey_bindings,
             commands::set_shortcut_capture_paused,
             commands::create_term_set,
@@ -253,6 +265,11 @@ pub fn run() {
             commands::clear_custom_provider,
             commands::set_cleanup_auth_mode,
             commands::set_cleanup_thresholds,
+            commands::set_tone_overlay_enabled,
+            commands::get_apps_seen_in_history,
+            commands::set_tone_app_override,
+            commands::set_tone_app_custom_prompt,
+            commands::clear_tone_app_override,
             commands::list_input_devices,
             commands::set_input_device,
             commands::set_pause_media_on_record,
@@ -263,6 +280,10 @@ pub fn run() {
             commands::clear_history,
             commands::set_history_limit,
             commands::update_history_entry,
+            commands::get_learned_entries,
+            commands::delete_learned_entry,
+            commands::promote_learned_entry,
+            commands::set_learn_from_corrections,
             commands::recover_cleanup,
             commands::get_stats,
             commands::clear_stats,

@@ -61,7 +61,8 @@ export type TranscriptionProvider =
   | "assembly_ai"
   | "local"
   | "open_ai"
-  | "eleven_labs";
+  | "eleven_labs"
+  | "soniox";
 
 export type GroqModel = "whisper_large_v3" | "whisper_large_v3_turbo";
 
@@ -69,11 +70,14 @@ export type OpenAiTranscribeModel =
   | "gpt4o_transcribe"
   | "gpt4o_mini_transcribe";
 
+export type ElevenLabsModel = "scribe_v2" | "scribe_v2_realtime";
+
 export type AssemblyAiModel =
   | "universal_pro_streaming"
   | "universal_streaming_english"
   | "universal_streaming_multilingual"
-  | "whisper_streaming";
+  | "whisper_streaming"
+  | "universal_2";
 
 export const ASSEMBLYAI_MODEL_SUPPORTED_LANGUAGES: Record<
   AssemblyAiModel,
@@ -83,6 +87,7 @@ export const ASSEMBLYAI_MODEL_SUPPORTED_LANGUAGES: Record<
   universal_streaming_english: ["en"],
   universal_streaming_multilingual: ["en", "es", "de", "fr", "pt", "it"],
   whisper_streaming: null,
+  universal_2: null,
 };
 
 export type LocalWhisperModel = "large_v3" | "large_v3_turbo" | "parakeet";
@@ -100,7 +105,8 @@ export type ProviderModel =
   | { provider: "assembly_ai"; model: AssemblyAiModel }
   | { provider: "local"; model: LocalWhisperModel }
   | { provider: "open_ai"; model: OpenAiTranscribeModel }
-  | { provider: "eleven_labs" };
+  | { provider: "eleven_labs"; model: ElevenLabsModel }
+  | { provider: "soniox"; translate_to: string | null };
 
 export function providerModelLanguageCodes(pm: ProviderModel): string[] | null {
   if (pm.provider !== "assembly_ai") return null;
@@ -122,12 +128,18 @@ const ASSEMBLYAI_MODEL_LABELS: Record<AssemblyAiModel, string> = {
   universal_streaming_english: "Universal English",
   universal_streaming_multilingual: "Universal Multilingual",
   whisper_streaming: "Whisper Streaming",
+  universal_2: "Universal-2 (multilingual)",
 };
 
 const LOCAL_MODEL_LABELS: Record<LocalWhisperModel, string> = {
   large_v3: "Large v3",
   large_v3_turbo: "Large v3 Turbo",
   parakeet: "Parakeet TDT",
+};
+
+const ELEVENLABS_MODEL_LABELS: Record<ElevenLabsModel, string> = {
+  scribe_v2: "Scribe v2",
+  scribe_v2_realtime: "Scribe v2 Realtime",
 };
 
 export function providerModelLabel(pm: ProviderModel): string {
@@ -145,12 +157,27 @@ export function providerModelLabel(pm: ProviderModel): string {
     case "open_ai":
       return `OpenAI · ${OPENAI_TRANSCRIBE_MODEL_LABELS[pm.model]}`;
     case "eleven_labs":
-      return "ElevenLabs";
+      return `ElevenLabs · ${ELEVENLABS_MODEL_LABELS[pm.model]}`;
+    case "soniox":
+      return pm.translate_to
+        ? `Soniox · → ${pm.translate_to.toUpperCase()}`
+        : "Soniox";
   }
 }
 
 /// `null` = unlimited, `0` = off, `n` = keep last n.
 export type HistoryLimit = number | null;
+
+export type TonePreset = "casual" | "formal" | "technical_casing" | "neutral";
+
+export interface AppToneInfo {
+  bundle_id: string;
+  app_name: string;
+  tone_preset: TonePreset;
+  tone_override: TonePreset | null;
+  custom_prompt: string | null;
+  icon_data_url: string | null;
+}
 
 export type CleanupAuthMode = "api_key" | "oauth";
 
@@ -180,6 +207,7 @@ export interface ModeCleanup {
   provider: AiProviderId;
   model: string;
   paste_raw_on_failure: boolean;
+  context_capture_enabled: boolean;
 }
 
 export interface NamedTermSet {
@@ -206,6 +234,7 @@ export interface Settings {
   assemblyai_api_key_configured: boolean;
   openai_api_key_configured: boolean;
   elevenlabs_api_key_configured: boolean;
+  soniox_api_key_configured: boolean;
   hotkey_bindings: HotkeyBinding[];
   term_sets: NamedTermSet[];
   correction_sets: NamedCorrectionSet[];
@@ -221,6 +250,10 @@ export interface Settings {
   custom_provider_model: string;
   ai_cleanup_min_words: number;
   ai_cleanup_min_duration_ms: number;
+  ai_cleanup_tone_overlay_enabled: boolean;
+  tone_app_overrides: Record<string, TonePreset>;
+  tone_app_custom_prompts: Record<string, string>;
+  learn_from_corrections: boolean;
   input_device: string | null;
   pause_media_on_record: boolean;
   history_limit: HistoryLimit;
@@ -281,7 +314,22 @@ export interface HistoryEntry {
   provider_model?: ProviderModel | null;
   app_name?: string | null;
   bundle_id?: string | null;
+  context_channels?: string[];
 }
+
+export type LearnedKind =
+  | { kind: "correction"; from: string }
+  | { kind: "term" };
+
+export type LearnedEntryStatus = "candidate" | "promoted";
+
+export type LearnedEntry = {
+  id: string;
+  word: string;
+  status: LearnedEntryStatus;
+  total_observations: number;
+  last_observed_ms: number;
+} & LearnedKind;
 
 export interface AppUsage {
   name: string;

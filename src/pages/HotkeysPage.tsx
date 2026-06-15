@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { EmptyRowCard } from "@/components/EmptyRowCard";
 import { Keycap, ShortcutKeycaps } from "@/components/Keycap";
+import { PageHeader } from "@/components/PageHeader";
 import { RowCard } from "@/components/RowCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { Alert } from "@/components/ui/alert";
@@ -337,6 +338,10 @@ export function HotkeysPage() {
 
   return (
     <div className="p-6 flex flex-col gap-6">
+      <PageHeader
+        title="Hotkeys"
+        subtitle="Bind push-to-talk shortcuts to profiles and the paste and recover actions."
+      />
       {error && (
         <Alert variant="destructive" className="font-medium">
           {error}

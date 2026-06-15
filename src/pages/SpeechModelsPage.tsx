@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { PageShell } from "@/components/PageShell";
 import {
   Select,
   SelectContent,
@@ -26,6 +27,7 @@ const CONFIGURED_KEY: Record<string, keyof Settings> = {
   assemblyai: "assemblyai_api_key_configured",
   openai: "openai_api_key_configured",
   elevenlabs: "elevenlabs_api_key_configured",
+  soniox: "soniox_api_key_configured",
 };
 
 const IDLE_TIMEOUT_OPTIONS: {
@@ -48,9 +50,12 @@ export function SpeechModelsPage() {
   }, []);
 
   return (
-    <div className="p-6 flex flex-col gap-8">
+    <PageShell
+      title="Speech models"
+      description="How speech is transcribed. Cloud providers need an API key; local models run on-device."
+    >
       <SectionCard title="Cloud">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {SPEECH_MODEL_CATALOG.map((descriptor) => (
             <ProviderCard
               key={descriptor.id}
@@ -68,7 +73,7 @@ export function SpeechModelsPage() {
       {localStatuses.length > 0 && (
         <SectionCard title="Local">
           <div className="flex flex-col gap-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {localStatuses.map((status) => (
                 <LocalModelCard key={status.model} status={status} />
               ))}
@@ -109,6 +114,6 @@ export function SpeechModelsPage() {
           </div>
         </SectionCard>
       )}
-    </div>
+    </PageShell>
   );
 }

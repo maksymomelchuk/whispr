@@ -38,6 +38,7 @@ const BASE_MODE: Mode = {
     provider: "anthropic",
     model: "claude-haiku-4-5",
     paste_raw_on_failure: true,
+    context_capture_enabled: false,
   },
   term_set_ids: [],
   correction_set_ids: [],
@@ -51,6 +52,7 @@ const BASE: Settings = {
   assemblyai_api_key_configured: false,
   openai_api_key_configured: false,
   elevenlabs_api_key_configured: false,
+  soniox_api_key_configured: false,
   hotkey_bindings: [],
   term_sets: [],
   correction_sets: [],
@@ -61,6 +63,10 @@ const BASE: Settings = {
   ai_cleanup_oauth_token_configured: false,
   ai_cleanup_min_words: 3,
   ai_cleanup_min_duration_ms: 1000,
+  ai_cleanup_tone_overlay_enabled: false,
+  tone_app_overrides: {},
+  tone_app_custom_prompts: {},
+  learn_from_corrections: false,
   input_device: null,
   pause_media_on_record: false,
   history_limit: null,
@@ -124,11 +130,11 @@ describe("TermsPage – vocabulary-specific", () => {
       term_sets: [{ id: "ts-new", name: "Medical", entries: [] }],
     });
     render(<Wrapper />);
-    await userEvent.type(
-      screen.getByPlaceholderText("New set name"),
-      "Medical",
+    await userEvent.click(
+      screen.getByRole("button", { name: /new term set/i }),
     );
-    await userEvent.click(screen.getByRole("button", { name: /create set/i }));
+    await userEvent.type(screen.getByPlaceholderText("Set name"), "Medical");
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() =>
       expect(mockCreateTermSet).toHaveBeenCalledWith("Medical"),
     );
@@ -148,7 +154,7 @@ describe("TermsPage – vocabulary-specific", () => {
   it("shows TermChipInput when a set is expanded", async () => {
     const set: NamedTermSet = { id: "ts-1", name: "My Set", entries: [] };
     render(<Wrapper initial={{ ...BASE, term_sets: [set] }} />);
-    await userEvent.click(screen.getByText("My Set"));
+    await userEvent.click(screen.getByRole("button", { name: "Open" }));
     expect(screen.getByPlaceholderText(/type a term/i)).toBeInTheDocument();
   });
 
@@ -159,7 +165,7 @@ describe("TermsPage – vocabulary-specific", () => {
       term_sets: [{ id: "ts-1", name: "My Set", entries: ["MongoDB"] }],
     });
     render(<Wrapper initial={{ ...BASE, term_sets: [set] }} />);
-    await userEvent.click(screen.getByText("My Set"));
+    await userEvent.click(screen.getByRole("button", { name: "Open" }));
     await userEvent.type(
       screen.getByPlaceholderText(/type a term/i),
       "MongoDB{Enter}",

@@ -1,5 +1,6 @@
 import {
   ArrowsHorizontalIcon,
+  BrainIcon,
   ChartBarIcon,
   ClockCounterClockwiseIcon,
   GearIcon,
@@ -8,6 +9,7 @@ import {
   LightningIcon,
   SlidersIcon,
   SparkleIcon,
+  TextAaIcon,
   TextTIcon,
   WaveformIcon,
 } from "@phosphor-icons/react";
@@ -29,11 +31,13 @@ import { GeneralPage } from "../pages/GeneralPage";
 import { HistoryPage } from "../pages/HistoryPage";
 import { HomePage } from "../pages/HomePage";
 import { HotkeysPage } from "../pages/HotkeysPage";
+import { LearnedEntriesPage } from "../pages/LearnedEntriesPage";
 import { ModesPage } from "../pages/ModesPage";
 import { SnippetsPage } from "../pages/SnippetsPage";
 import { SpeechModelsPage } from "../pages/SpeechModelsPage";
 import { StatsPage } from "../pages/StatsPage";
 import { TermsPage } from "../pages/TermsPage";
+import { ToneOverlayPage } from "../pages/ToneOverlayPage";
 import {
   Sidebar,
   SidebarContent,
@@ -68,13 +72,20 @@ const NAV_SECTIONS: NavSection[] = [
       { label: "Hotkeys", icon: KeyboardIcon, path: "/hotkeys" },
       { label: "Profiles", icon: SlidersIcon, path: "/modes" },
       { label: "Speech models", icon: WaveformIcon, path: "/speech-models" },
-      { label: "AI Providers", icon: SparkleIcon, path: "/ai-providers" },
+      { label: "Cleanup", icon: SparkleIcon, path: "/ai-providers" },
+      { label: "Tone of voice", icon: TextAaIcon, path: "/tone" },
+    ],
+  },
+  {
+    label: "Customization",
+    items: [
       { label: "Vocabulary", icon: TextTIcon, path: "/terms" },
       {
         label: "Corrections",
         icon: ArrowsHorizontalIcon,
         path: "/corrections",
       },
+      { label: "Auto-Learn", icon: BrainIcon, path: "/learned" },
       { label: "Snippets", icon: LightningIcon, path: "/snippets" },
     ],
   },
@@ -297,8 +308,10 @@ function ShellInner() {
               <Route path="/hotkeys" element={<HotkeysPage />} />
               <Route path="/speech-models" element={<SpeechModelsPage />} />
               <Route path="/ai-providers" element={<AiProvidersPage />} />
+              <Route path="/tone" element={<ToneOverlayPage />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/corrections" element={<CorrectionsPage />} />
+              <Route path="/learned" element={<LearnedEntriesPage />} />
               <Route path="/modes" element={<ModesPage />} />
               <Route path="/snippets" element={<SnippetsPage />} />
               <Route path="/history" element={<HistoryPage />} />

@@ -1,8 +1,8 @@
-use crate::assemblyai_session::AssemblyAiEngine;
+use crate::assemblyai_session::{AssemblyAiEngine, AssemblyAiUniversalEngine};
 use crate::config::{HotkeyAction, HotkeyBinding, Shortcut};
 use crate::corrections::compose_corrections;
 use crate::deepgram_session::DeepgramEngine;
-use crate::elevenlabs_session::ElevenLabsEngine;
+use crate::elevenlabs_session::{ElevenLabsEngine, ElevenLabsRealtimeEngine};
 use crate::engine::EngineContext;
 use crate::groq_session::GroqEngine;
 use crate::history::{self, CleanupStatus, HISTORY_UPDATED_EVENT};
@@ -14,11 +14,18 @@ use crate::hotkey::{
 use crate::local_engine::LocalWhisperEngine;
 use crate::openai_transcribe_session::OpenAiTranscribeEngine;
 use crate::pipeline::{self, CleanupOutput, Notice};
-use crate::provider::{self, LocalWhisperModel, ProviderModel, TranscriptionProvider};
+use crate::provider::{
+    self, AssemblyAiModel, ElevenLabsModel, LocalWhisperModel, ProviderModel, TranscriptionProvider,
+};
 use crate::recorder::Recorder;
 use crate::session::{Session, PTT_ERROR_EVENT, TRANSCRIPTION_ERROR_EVENT};
+use crate::soniox_session::SonioxRealtimeEngine;
 use crate::state::{AppState, ModifierState};
-use crate::{cleanup, cleanup_invoke, cleanup_stats, config, model_catalog, recovery, stats};
+use crate::{
+    cleanup, cleanup_invoke, cleanup_stats, clipboard_context, config, focused_field_context,
+    focused_window_context, miner, model_catalog, post_paste_observer, recovery,
+    selected_text_context, selector, stats, tone,
+};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
@@ -69,7 +76,7 @@ fn notify_silent(app: &AppHandle, message: impl Into<String>) {
     let _ = app.emit(TRANSCRIPTION_ERROR_EVENT, &message);
 }
 
-/// Pops main window. Only safe after any pending paste has gone out.
+/// Only safe after any pending paste has gone out: set_focus would steal focus mid-paste.
 fn notify_error(app: &AppHandle, message: impl Into<String>) {
     let message = message.into();
     eprintln!("[notify focus] {message}");
@@ -229,8 +236,7 @@ fn update_modifier_state(state: &AppState, code: &str, is_press: bool, sides: &m
 }
 
 /// The downstream short-circuit in run_session is what skips paste / history /
-/// stats / cleanup — this function only handles the immediate
-/// mic-and-overlay teardown that mirrors a normal release.
+/// stats / cleanup; this only does the immediate mic-and-overlay teardown.
 fn cancel_session(app: &AppHandle, state: &AppState, recorder: &Recorder) {
     state.session_cancelled.store(true, Ordering::Release);
     *state.ptt_active.lock().unwrap() = false;
@@ -248,7 +254,6 @@ fn maybe_pause_media(state: &AppState) {
     }
 }
 
-/// Unmutes only if this session was the one that applied the mute.
 fn maybe_resume_media(state: &AppState) {
     let mut flag = state.did_pause_media.lock().unwrap();
     if !*flag {
@@ -280,6 +285,19 @@ fn spawn_session(app: AppHandle, recorder: Recorder, device: Option<String>, mod
         }
         overlay::hide(&app);
     });
+}
+
+const CONTEXT_CAPTURE_DEADLINE: Duration = Duration::from_millis(500);
+
+async fn await_context_capture(
+    rx: Option<tokio::sync::oneshot::Receiver<Option<String>>>,
+) -> Option<String> {
+    let rx = rx?;
+    tokio::time::timeout(CONTEXT_CAPTURE_DEADLINE, rx)
+        .await
+        .ok()
+        .and_then(|r| r.ok())
+        .flatten()
 }
 
 async fn run_session(
@@ -315,8 +333,41 @@ async fn run_session(
     let cleanup_provider = active_mode.ai_cleanup.provider;
     let cleanup_model = active_mode.ai_cleanup.model.clone();
     let paste_raw_on_failure = active_mode.ai_cleanup.paste_raw_on_failure;
-    let session_terms =
-        crate::terms::compose_term_hints(&settings.term_sets, &active_mode.term_set_ids);
+    let context_capture_enabled = active_mode.ai_cleanup.context_capture_enabled;
+    // On macOS, pending_app_rx is the correct synchronization point: it's
+    // populated by the platform_capture spawn_blocking task (osascript) and
+    // awaited with a timeout. Reading session_app() directly would race if
+    // osascript hasn't finished yet. Resolve once before term selection so
+    // terms, glossary, tone overlay, and history attribution all agree on the
+    // same app for this session.
+    #[cfg(target_os = "macos")]
+    let resolved_app: Option<target_app::FrontmostApp> = {
+        let rx = app
+            .state::<crate::state::AppState>()
+            .pending_app_rx
+            .lock()
+            .unwrap()
+            .take();
+        match rx {
+            Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
+                .await
+                .ok()
+                .and_then(|r| r.ok())
+                .flatten(),
+            None => None,
+        }
+    };
+    #[cfg(not(target_os = "macos"))]
+    let resolved_app: Option<target_app::FrontmostApp> = target_app::session_app();
+
+    let session_bundle_id = resolved_app.as_ref().map(|a| a.bundle_id.clone());
+    let session_terms = selector::select_terms(
+        &settings.term_sets,
+        &active_mode.term_set_ids,
+        &settings.learned_entries,
+        session_bundle_id.as_deref(),
+        miner::now_ms(),
+    );
 
     let missing_key = match active_mode.provider_model.provider() {
         TranscriptionProvider::Deepgram => settings
@@ -339,6 +390,10 @@ async fn run_session(
             .elevenlabs_api_key
             .as_deref()
             .is_none_or(|k| k.is_empty()),
+        TranscriptionProvider::Soniox => settings
+            .soniox_api_key
+            .as_deref()
+            .is_none_or(|k| k.is_empty()),
         TranscriptionProvider::Local => false,
     };
     if missing_key {
@@ -349,6 +404,7 @@ async fn run_session(
             TranscriptionProvider::AssemblyAi => "AssemblyAI",
             TranscriptionProvider::OpenAi => "OpenAI",
             TranscriptionProvider::ElevenLabs => "ElevenLabs",
+            TranscriptionProvider::Soniox => "Soniox",
             TranscriptionProvider::Local => unreachable!(),
         };
         return Err(format!("API key missing for {name}"));
@@ -376,8 +432,11 @@ async fn run_session(
                 .or_else(|| settings.api_key.clone())
                 .filter(|k| !k.is_empty())
                 .ok_or_else(|| "API key not configured".to_string())?;
-            let corrections =
-                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
+            let corrections = compose_corrections(
+                &active_mode.correction_set_ids,
+                &settings.correction_sets,
+                &settings.learned_entries,
+            );
             let ctx = EngineContext {
                 format,
                 language: mode_language,
@@ -398,8 +457,11 @@ async fn run_session(
                 .clone()
                 .filter(|k| !k.is_empty())
                 .ok_or_else(|| "API key not configured".to_string())?;
-            let corrections =
-                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
+            let corrections = compose_corrections(
+                &active_mode.correction_set_ids,
+                &settings.correction_sets,
+                &settings.learned_entries,
+            );
             let ctx = EngineContext {
                 format,
                 language: mode_language,
@@ -416,21 +478,38 @@ async fn run_session(
         }
         ProviderModel::AssemblyAi { model } => {
             let key = settings.assemblyai_api_key.clone().unwrap_or_default();
-            let corrections =
-                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
+            let corrections = compose_corrections(
+                &active_mode.correction_set_ids,
+                &settings.correction_sets,
+                &settings.learned_entries,
+            );
             let ctx = EngineContext {
                 format,
                 language: mode_language,
                 terms: session_terms,
             };
-            Session::new(
-                AssemblyAiEngine::new(*model, key),
-                app.clone(),
-                settings.show_live_preview,
-                corrections,
-            )
-            .run(chunk_rx, ctx)
-            .await
+            match model {
+                AssemblyAiModel::Universal2 => {
+                    Session::new(
+                        AssemblyAiUniversalEngine::new(key),
+                        app.clone(),
+                        settings.show_live_preview,
+                        corrections,
+                    )
+                    .run(chunk_rx, ctx)
+                    .await
+                }
+                _ => {
+                    Session::new(
+                        AssemblyAiEngine::new(*model, key),
+                        app.clone(),
+                        settings.show_live_preview,
+                        corrections,
+                    )
+                    .run(chunk_rx, ctx)
+                    .await
+                }
+            }
         }
         ProviderModel::Local { model } => {
             let cache = app.state::<AppState>().model_cache.clone();
@@ -439,8 +518,11 @@ async fn run_session(
                 .app_data_dir()
                 .map_err(|e| format!("Cannot resolve app data directory: {e}"))?;
             let model_path = provider::local_model_path(&data_dir, *model);
-            let corrections =
-                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
+            let corrections = compose_corrections(
+                &active_mode.correction_set_ids,
+                &settings.correction_sets,
+                &settings.learned_entries,
+            );
             let ctx = EngineContext {
                 format,
                 language: mode_language,
@@ -461,8 +543,11 @@ async fn run_session(
                 .clone()
                 .filter(|k| !k.is_empty())
                 .ok_or_else(|| "API key not configured".to_string())?;
-            let corrections =
-                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
+            let corrections = compose_corrections(
+                &active_mode.correction_set_ids,
+                &settings.correction_sets,
+                &settings.learned_entries,
+            );
             let ctx = EngineContext {
                 format,
                 language: mode_language,
@@ -477,21 +562,63 @@ async fn run_session(
             .run(chunk_rx, ctx)
             .await
         }
-        ProviderModel::ElevenLabs => {
+        ProviderModel::ElevenLabs { model } => {
             let key = settings
                 .elevenlabs_api_key
                 .clone()
                 .filter(|k| !k.is_empty())
                 .ok_or_else(|| "API key not configured".to_string())?;
-            let corrections =
-                compose_corrections(&active_mode.correction_set_ids, &settings.correction_sets);
+            let corrections = compose_corrections(
+                &active_mode.correction_set_ids,
+                &settings.correction_sets,
+                &settings.learned_entries,
+            );
+            let ctx = EngineContext {
+                format,
+                language: mode_language,
+                terms: session_terms,
+            };
+            match model {
+                ElevenLabsModel::ScribeV2 => {
+                    Session::new(
+                        ElevenLabsEngine::new(key),
+                        app.clone(),
+                        settings.show_live_preview,
+                        corrections,
+                    )
+                    .run(chunk_rx, ctx)
+                    .await
+                }
+                ElevenLabsModel::ScribeV2Realtime => {
+                    Session::new(
+                        ElevenLabsRealtimeEngine::new(key),
+                        app.clone(),
+                        settings.show_live_preview,
+                        corrections,
+                    )
+                    .run(chunk_rx, ctx)
+                    .await
+                }
+            }
+        }
+        ProviderModel::Soniox { translate_to } => {
+            let key = settings
+                .soniox_api_key
+                .clone()
+                .filter(|k| !k.is_empty())
+                .ok_or_else(|| "API key not configured".to_string())?;
+            let corrections = compose_corrections(
+                &active_mode.correction_set_ids,
+                &settings.correction_sets,
+                &settings.learned_entries,
+            );
             let ctx = EngineContext {
                 format,
                 language: mode_language,
                 terms: session_terms,
             };
             Session::new(
-                ElevenLabsEngine::new(key),
+                SonioxRealtimeEngine::new(key, translate_to.clone()),
                 app.clone(),
                 settings.show_live_preview,
                 corrections,
@@ -526,7 +653,51 @@ async fn run_session(
         return Ok(());
     }
 
-    let (replaced_text, cleanup_status, notice) = maybe_cleanup(
+    let context: Option<cleanup::ContextBlocks> = if context_capture_enabled {
+        let state = app.state::<AppState>();
+        let clipboard_rx = state.pending_clipboard_rx.lock().unwrap().take();
+        let selected_text_rx = state.pending_selected_text_rx.lock().unwrap().take();
+        let focused_field_rx = state.pending_focused_field_rx.lock().unwrap().take();
+        let focused_window_rx = state.pending_focused_window_rx.lock().unwrap().take();
+
+        // Captures run on background workers from PTT-down, so they've usually
+        // resolved by now. Await all concurrently under one deadline so a single
+        // hung backend can't stack timeouts — serial awaits could reach
+        // N×CONTEXT_CAPTURE_DEADLINE before paste.
+        let (clipboard_text, selected_text, focused_field_text, focused_window_text) = tokio::join!(
+            await_context_capture(clipboard_rx),
+            await_context_capture(selected_text_rx),
+            await_context_capture(focused_field_rx),
+            await_context_capture(focused_window_rx),
+        );
+
+        let clipboard_text = match clipboard_text {
+            Some(text) => Some(text),
+            None => clipboard_context::read_if_copied_mid_session(app).await,
+        };
+
+        Some(cleanup::ContextBlocks {
+            clipboard_text,
+            selected_text,
+            focused_field_text,
+            focused_window_text,
+            system_date: cleanup::system_date(),
+            system_user: cleanup::system_user(),
+        })
+    } else {
+        None
+    };
+
+    let glossary = selector::select_glossary_words(
+        &settings.term_sets,
+        &active_mode.term_set_ids,
+        &settings.correction_sets,
+        &active_mode.correction_set_ids,
+        &settings.learned_entries,
+        session_bundle_id.as_deref(),
+        miner::now_ms(),
+    );
+    let (replaced_text, cleanup_status, notice, context_channels) = maybe_cleanup(
         app,
         &settings,
         mode_cleanup_enabled,
@@ -535,6 +706,9 @@ async fn run_session(
         mode_prompt_override.as_deref(),
         cleanup_provider,
         &cleanup_model,
+        session_bundle_id.as_deref(),
+        &glossary,
+        context.as_ref(),
     )
     .await;
 
@@ -556,25 +730,10 @@ async fn run_session(
 
     #[cfg(target_os = "macos")]
     {
-        let resolved_app = {
-            let rx = app
-                .state::<crate::state::AppState>()
-                .pending_app_rx
-                .lock()
-                .unwrap()
-                .take();
-            match rx {
-                Some(rx) => tokio::time::timeout(Duration::from_millis(500), rx)
-                    .await
-                    .ok()
-                    .and_then(|r| r.ok())
-                    .flatten(),
-                None => None,
-            }
-        };
         history_entry.app_name = resolved_app.as_ref().map(|a| a.name.clone());
         history_entry.bundle_id = resolved_app.map(|a| a.bundle_id);
     }
+    history_entry.context_channels = context_channels;
 
     let paste_policy =
         pipeline::resolve_paste_policy(&history_entry.cleanup_status, paste_raw_on_failure);
@@ -608,6 +767,10 @@ async fn run_session(
         notify_error(app, format!("Paste failed: {e}"));
     }
 
+    if settings.learn_from_corrections && paste_policy == pipeline::PastePolicy::PasteRaw {
+        post_paste_observer::start(app.clone(), session_bundle_id.clone());
+    }
+
     match notice {
         Notice::None => {}
         Notice::Flash(message) => {
@@ -629,7 +792,10 @@ async fn maybe_cleanup(
     prompt_override: Option<&str>,
     cleanup_provider: cleanup::AiProviderId,
     cleanup_model: &str,
-) -> (String, CleanupStatus, Notice) {
+    bundle_id: Option<&str>,
+    glossary: &[String],
+    context: Option<&cleanup::ContextBlocks>,
+) -> (String, CleanupStatus, Notice, Vec<String>) {
     let cleanup_settings = &settings.ai_cleanup;
 
     if !mode_cleanup_enabled {
@@ -637,6 +803,7 @@ async fn maybe_cleanup(
             transcript.to_string(),
             CleanupStatus::Disabled,
             Notice::None,
+            vec![],
         );
     }
 
@@ -646,6 +813,7 @@ async fn maybe_cleanup(
             transcript.to_string(),
             CleanupStatus::SkippedBelowMinWords,
             Notice::None,
+            vec![],
         );
     }
     let min_duration = Duration::from_millis(cleanup_settings.min_duration_ms);
@@ -654,8 +822,42 @@ async fn maybe_cleanup(
             transcript.to_string(),
             CleanupStatus::SkippedBelowMinDuration,
             Notice::None,
+            vec![],
         );
     }
+
+    let tone = if cleanup_settings.tone_overlay_enabled {
+        tone::resolve_tone(
+            bundle_id,
+            &cleanup_settings.tone_app_overrides,
+            &cleanup_settings.tone_app_custom_prompts,
+        )
+    } else {
+        None
+    };
+
+    let context_channels: Vec<String> = match context {
+        None => vec![],
+        Some(ctx) => {
+            let mut channels = Vec::new();
+            if ctx.selected_text.is_some() {
+                channels.push("selected_text".to_string());
+            }
+            if ctx.focused_field_text.is_some() {
+                channels.push("focused_field".to_string());
+            }
+            if ctx.focused_window_text.is_some() {
+                channels.push("focused_window".to_string());
+            }
+            if ctx.clipboard_text.is_some() {
+                channels.push("clipboard".to_string());
+            }
+            if ctx.system_date.is_some() || ctx.system_user.is_some() {
+                channels.push("system".to_string());
+            }
+            channels
+        }
+    };
 
     let _ = app.emit(PTT_THINKING_EVENT, ());
 
@@ -664,6 +866,9 @@ async fn maybe_cleanup(
         cleanup_provider,
         cleanup_model,
         prompt_override,
+        tone.as_deref(),
+        glossary,
+        context,
         transcript,
     )
     .await;
@@ -671,7 +876,7 @@ async fn maybe_cleanup(
     match result {
         Ok((cleaned, usage)) => {
             cleanup_stats::record(app, usage.input_tokens, usage.output_tokens);
-            (cleaned, CleanupStatus::Ran, Notice::None)
+            (cleaned, CleanupStatus::Ran, Notice::None, context_channels)
         }
         Err(err) => {
             let message = format!("AI cleanup unavailable: {err}");
@@ -693,7 +898,7 @@ async fn maybe_cleanup(
                     (CleanupStatus::FailedTransient(m), Notice::Flash(message))
                 }
             };
-            (transcript.to_string(), status, notice)
+            (transcript.to_string(), status, notice, context_channels)
         }
     }
 }
@@ -713,6 +918,28 @@ fn start_ptt(
     state.session_cancelled.store(false, Ordering::Release);
     *state.active_shortcut.lock().unwrap() = Some(shortcut.clone());
     let device = state.input_device.lock().unwrap().clone();
+
+    let modes = config::load(app).modes;
+    let mode_settings = modes
+        .iter()
+        .find(|m| m.id == mode_id)
+        .or_else(|| modes.first());
+    let context_capture_enabled = mode_settings
+        .map(|m| m.ai_cleanup.context_capture_enabled)
+        .unwrap_or(false);
+    if context_capture_enabled {
+        clipboard_context::capture(app.clone());
+        selected_text_context::capture(app.clone());
+        focused_field_context::capture(app.clone());
+        focused_window_context::capture(app.clone());
+    } else {
+        *state.pending_clipboard_rx.lock().unwrap() = None;
+        *state.pending_selected_text_rx.lock().unwrap() = None;
+        *state.pending_focused_field_rx.lock().unwrap() = None;
+        *state.pending_focused_window_rx.lock().unwrap() = None;
+        *state.clipboard_count_at_ptt_down.lock().unwrap() = None;
+    }
+
     // Capture the target app before showing our overlay: show() can make the
     // overlay the frontmost window, and the capture would then attribute the
     // dictation to our own overlay instead of the app the user is typing into.

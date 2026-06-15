@@ -1,13 +1,14 @@
 use crate::api_key_validation::{self, ApiKeyValidation};
 use crate::cleanup_stats::{self, CleanupStats, CLEANUP_STATS_UPDATED_EVENT};
 use crate::config::{
-    self, CleanupAuthMode, CorrectionEntry, HotkeyAction, HotkeyBinding, LocalWhisperIdleTimeout,
-    NamedCorrectionSet, NamedTermSet, Settings, SnippetEntry,
+    self, CleanupAuthMode, CorrectionEntry, HotkeyAction, HotkeyBinding, LearnedEntry,
+    LocalWhisperIdleTimeout, NamedCorrectionSet, NamedTermSet, Settings, SnippetEntry, TonePreset,
 };
 use crate::download::{
     self, LocalModelStatus, MODEL_DOWNLOAD_COMPLETE_EVENT, MODEL_DOWNLOAD_ERROR_EVENT,
 };
 use crate::history::{self, HistoryEntry, HISTORY_UPDATED_EVENT};
+use crate::miner;
 use crate::mode::{Mode, ModeId, SetId};
 use crate::model_catalog;
 use crate::permissions;
@@ -15,7 +16,9 @@ use crate::provider::{local_model_path, GroqModel, LocalWhisperModel};
 use crate::recovery;
 use crate::state::AppState;
 use crate::stats::{self, StatsRow, STATS_UPDATED_EVENT};
+use crate::tone;
 use serde::Serialize;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -30,6 +33,7 @@ pub struct SettingsView {
     pub assemblyai_api_key_configured: bool,
     pub openai_api_key_configured: bool,
     pub elevenlabs_api_key_configured: bool,
+    pub soniox_api_key_configured: bool,
     pub hotkey_bindings: Vec<HotkeyBinding>,
     pub term_sets: Vec<NamedTermSet>,
     pub correction_sets: Vec<NamedCorrectionSet>,
@@ -44,6 +48,9 @@ pub struct SettingsView {
     pub custom_provider_model: String,
     pub ai_cleanup_min_words: usize,
     pub ai_cleanup_min_duration_ms: u64,
+    pub ai_cleanup_tone_overlay_enabled: bool,
+    pub tone_app_overrides: BTreeMap<String, TonePreset>,
+    pub learn_from_corrections: bool,
     pub input_device: Option<String>,
     pub pause_media_on_record: bool,
     pub history_limit: Option<usize>,
@@ -102,6 +109,7 @@ impl From<Settings> for SettingsView {
                 .elevenlabs_api_key
                 .as_deref()
                 .is_some_and(|k| !k.is_empty()),
+            soniox_api_key_configured: s.soniox_api_key.as_deref().is_some_and(|k| !k.is_empty()),
             hotkey_bindings: s.hotkey_bindings,
             term_sets: s.term_sets,
             correction_sets: s.correction_sets,
@@ -120,6 +128,9 @@ impl From<Settings> for SettingsView {
             custom_provider_model,
             ai_cleanup_min_words: s.ai_cleanup.min_words,
             ai_cleanup_min_duration_ms: s.ai_cleanup.min_duration_ms,
+            ai_cleanup_tone_overlay_enabled: s.ai_cleanup.tone_overlay_enabled,
+            tone_app_overrides: s.ai_cleanup.tone_app_overrides,
+            learn_from_corrections: s.learn_from_corrections,
             input_device: s.input_device,
             pause_media_on_record: s.pause_media_on_record,
             history_limit: s.history_limit,
@@ -162,6 +173,11 @@ pub fn set_elevenlabs_api_key(app: AppHandle, api_key: String) -> Result<(), Str
 }
 
 #[tauri::command]
+pub fn set_soniox_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
+    config::update(&app, |s| s.soniox_api_key = config::non_empty(api_key))
+}
+
+#[tauri::command]
 pub async fn validate_assemblyai_api_key(api_key: String) -> ApiKeyValidation {
     api_key_validation::validate_assemblyai(&api_key).await
 }
@@ -174,6 +190,11 @@ pub async fn validate_openai_api_key(api_key: String) -> ApiKeyValidation {
 #[tauri::command]
 pub async fn validate_elevenlabs_api_key(api_key: String) -> ApiKeyValidation {
     api_key_validation::validate_elevenlabs(&api_key).await
+}
+
+#[tauri::command]
+pub async fn validate_soniox_api_key(api_key: String) -> ApiKeyValidation {
+    api_key_validation::validate_soniox(&api_key).await
 }
 
 #[tauri::command]
@@ -489,6 +510,104 @@ pub fn set_cleanup_thresholds(
 }
 
 #[tauri::command]
+pub fn set_tone_overlay_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
+    config::update(&app, |s| s.ai_cleanup.tone_overlay_enabled = enabled)
+}
+
+#[derive(Debug, Serialize)]
+pub struct AppToneInfo {
+    pub bundle_id: String,
+    pub app_name: String,
+    pub tone_preset: TonePreset,
+    pub tone_override: Option<TonePreset>,
+    pub custom_prompt: Option<String>,
+    pub icon_data_url: Option<String>,
+}
+
+#[tauri::command]
+pub fn get_apps_seen_in_history(app: AppHandle) -> Vec<AppToneInfo> {
+    let settings = config::load(&app);
+    let own_id = app.config().identifier.clone();
+
+    // Source the app list from the long-lived stats aggregate, not the
+    // history log (which is truncated to history_limit). Rows arrive sorted
+    // ascending by date, so the last name written for a bundle id wins.
+    let mut usage: HashMap<String, (String, u32)> = HashMap::new();
+    for row in stats::load(&app) {
+        for (bid, app_usage) in row.app_counts {
+            if bid.is_empty() || bid == own_id || app_usage.name.trim().is_empty() {
+                continue;
+            }
+            let entry = usage.entry(bid).or_insert_with(|| (String::new(), 0));
+            entry.0 = app_usage.name;
+            entry.1 = entry.1.saturating_add(app_usage.count);
+        }
+    }
+
+    let mut apps: Vec<(String, String, u32)> = usage
+        .into_iter()
+        .map(|(bid, (name, count))| (bid, name, count))
+        .collect();
+    apps.sort_by(|a, b| b.2.cmp(&a.2).then_with(|| a.1.cmp(&b.1)));
+
+    apps.into_iter()
+        .map(|(bid, name, _count)| {
+            let override_preset = settings.ai_cleanup.tone_app_overrides.get(&bid).copied();
+            let resolved = override_preset
+                .unwrap_or_else(|| tone::preset_for_category(tone::categorize_app(&bid)));
+            let custom_prompt = settings
+                .ai_cleanup
+                .tone_app_custom_prompts
+                .get(&bid)
+                .cloned();
+            let icon_data_url = crate::target_app::resolve_icon(&bid);
+            AppToneInfo {
+                bundle_id: bid,
+                app_name: name,
+                tone_preset: resolved,
+                tone_override: override_preset,
+                custom_prompt,
+                icon_data_url,
+            }
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub fn set_tone_app_override(
+    app: AppHandle,
+    bundle_id: String,
+    preset: TonePreset,
+) -> Result<(), String> {
+    config::update(&app, |s| {
+        s.ai_cleanup.tone_app_custom_prompts.remove(&bundle_id);
+        s.ai_cleanup.tone_app_overrides.insert(bundle_id, preset);
+    })
+}
+
+#[tauri::command]
+pub fn set_tone_app_custom_prompt(
+    app: AppHandle,
+    bundle_id: String,
+    prompt: String,
+) -> Result<(), String> {
+    config::update(&app, |s| {
+        s.ai_cleanup.tone_app_overrides.remove(&bundle_id);
+        s.ai_cleanup
+            .tone_app_custom_prompts
+            .insert(bundle_id, prompt);
+    })
+}
+
+#[tauri::command]
+pub fn clear_tone_app_override(app: AppHandle, bundle_id: String) -> Result<(), String> {
+    config::update(&app, |s| {
+        s.ai_cleanup.tone_app_overrides.remove(&bundle_id);
+        s.ai_cleanup.tone_app_custom_prompts.remove(&bundle_id);
+    })
+}
+
+#[tauri::command]
 pub fn set_pause_media_on_record(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -578,9 +697,57 @@ pub fn update_history_entry(
     replaced_text: String,
     final_text: String,
 ) -> Result<(), String> {
-    history::update_by_id(&app, &id, replaced_text, final_text)?;
+    let entry = history::load(&app).into_iter().find(|e| e.id == id);
+    let original_final = entry.as_ref().map(|e| e.final_text.clone());
+    let entry_bundle_id = entry.and_then(|e| e.bundle_id);
+
+    history::update_by_id(&app, &id, replaced_text, final_text.clone())?;
+
+    if let Some(original) = original_final {
+        let settings = config::load(&app);
+        if settings.learn_from_corrections {
+            let candidates = miner::mine(&original, &final_text);
+            if !candidates.is_empty() {
+                let now_ms = miner::now_ms();
+                let bundle_ref = entry_bundle_id.as_deref();
+                match config::update(&app, |s| {
+                    miner::observe_candidates(&candidates, s, bundle_ref, now_ms);
+                }) {
+                    Ok(_) => {
+                        let _ = app.emit(crate::post_paste_observer::LEARNED_UPDATED_EVENT, ());
+                    }
+                    Err(e) => eprintln!("[miner] persisting learned candidates failed: {e}"),
+                }
+            }
+        }
+    }
+
     let _ = app.emit(HISTORY_UPDATED_EVENT, ());
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_learned_entries(app: AppHandle) -> Vec<LearnedEntry> {
+    config::load(&app).learned_entries
+}
+
+#[tauri::command]
+pub fn delete_learned_entry(app: AppHandle, id: String) -> Result<(), String> {
+    config::update(&app, |s| {
+        s.learned_entries.retain(|e| e.id != id);
+    })
+}
+
+#[tauri::command]
+pub fn promote_learned_entry(app: AppHandle, id: String) -> Result<(), String> {
+    config::update(&app, |s| {
+        miner::promote_entry(s, &id);
+    })
+}
+
+#[tauri::command]
+pub fn set_learn_from_corrections(app: AppHandle, enabled: bool) -> Result<(), String> {
+    config::update(&app, |s| s.learn_from_corrections = enabled)
 }
 
 #[tauri::command]

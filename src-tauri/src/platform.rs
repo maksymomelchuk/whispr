@@ -1,3 +1,25 @@
+/// True when a password field anywhere has focus. macOS sets secure event
+/// input (the keylogger-blocking mechanism) for native AND web password fields
+/// — Chromium/WebKit `<input type=password>` report role `AXTextField`, not
+/// `AXSecureTextField`, so role-matching alone fails open on browsers. Fails
+/// safe: a stuck flag only over-blocks capture, never leaks.
+#[cfg(target_os = "macos")]
+pub fn is_secure_input_active() -> bool {
+    #[link(name = "Carbon", kind = "framework")]
+    extern "C" {
+        fn IsSecureEventInputEnabled() -> bool;
+    }
+    unsafe { IsSecureEventInputEnabled() }
+}
+
+/// Windows secure detection is per-element via `UIA_IsPasswordPropertyId` at the
+/// capture site; there is no global flag to consult here.
+#[cfg(not(target_os = "macos"))]
+pub fn is_secure_input_active() -> bool {
+    false
+}
+
+#[cfg(target_os = "linux")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LinuxDisplayServer {
     X11,
@@ -5,6 +27,7 @@ pub enum LinuxDisplayServer {
     Unknown,
 }
 
+#[cfg(target_os = "linux")]
 pub fn linux_display_server() -> LinuxDisplayServer {
     detect_linux_display_server(
         std::env::var("XDG_SESSION_TYPE").ok().as_deref(),
@@ -12,6 +35,7 @@ pub fn linux_display_server() -> LinuxDisplayServer {
     )
 }
 
+#[cfg(target_os = "linux")]
 fn detect_linux_display_server(
     xdg_session_type: Option<&str>,
     wayland_display_present: bool,
@@ -31,7 +55,7 @@ fn detect_linux_display_server(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;
 

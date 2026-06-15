@@ -2,8 +2,9 @@ import { TrashIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 
 import { EmptyRowCard } from "@/components/EmptyRowCard";
+import { ListRow, RowActionButton } from "@/components/ListRow";
+import { ListSurface } from "@/components/ListSurface";
 import { RowCard } from "@/components/RowCard";
-import { SectionHeader } from "@/components/SectionHeader";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,8 @@ const PLACEHOLDERS = [
   { label: "{{CLIPBOARD}}", description: "Current clipboard text" },
 ];
 
+const SEARCH_THRESHOLD = 8;
+
 type Draft = { trigger: string; expansion: string };
 
 function SnippetRow({
@@ -43,59 +46,55 @@ function SnippetRow({
     snippet.expansion.includes(p.label),
   );
   return (
-    <RowCard flashing={flashing}>
-      <div className="flex flex-1 min-w-0 items-center gap-3">
-        <span className="font-mono text-[13px] font-semibold text-foreground truncate max-w-[40%]">
-          {snippet.trigger || (
-            <span className="text-muted-foreground/60 italic">(empty)</span>
+    <ListRow
+      flashing={flashing}
+      label={
+        <>
+          <span className="font-mono text-[13px] font-semibold text-foreground truncate max-w-[40%]">
+            {snippet.trigger || (
+              <span className="text-muted-foreground/60 italic">(empty)</span>
+            )}
+          </span>
+          <span className="text-muted-foreground/60 text-help shrink-0">→</span>
+          <span className="flex-1 truncate text-xs text-muted-foreground">
+            {snippet.expansion || (
+              <span className="italic text-muted-foreground/60">(empty)</span>
+            )}
+          </span>
+          {usedPlaceholders.length > 0 && (
+            <div className="hidden md:flex gap-1 flex-wrap shrink-0">
+              {usedPlaceholders.map((p) => (
+                <Badge
+                  key={p.label}
+                  variant="neutral"
+                  className="font-mono text-[10px] tracking-tight"
+                >
+                  {p.label}
+                </Badge>
+              ))}
+            </div>
           )}
-        </span>
-        <span className="text-muted-foreground/60 text-help shrink-0">→</span>
-        <span className="flex-1 truncate text-xs text-muted-foreground">
-          {snippet.expansion || (
-            <span className="italic text-muted-foreground/60">(empty)</span>
-          )}
-        </span>
-        {usedPlaceholders.length > 0 && (
-          <div className="hidden md:flex gap-1 flex-wrap shrink-0">
-            {usedPlaceholders.map((p) => (
-              <Badge
-                key={p.label}
-                variant="neutral"
-                className="font-mono text-[10px] tracking-tight"
-              >
-                {p.label}
-              </Badge>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center gap-0.5 shrink-0 transform-gpu opacity-65 group-hover:opacity-100 transition-opacity">
-        <Button
-          variant="ghost"
-          size="xs"
-          className="text-muted-foreground hover:text-foreground "
-          onClick={onEdit}
-        >
-          Edit
-        </Button>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Delete snippet"
-              onClick={onDelete}
-              className="transition-colors text-muted-foreground/70 hover:text-destructive"
-            >
-              <TrashIcon size={15} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Delete</TooltipContent>
-        </Tooltip>
-      </div>
-    </RowCard>
+        </>
+      }
+      actions={
+        <>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-[12px] text-muted-foreground hover:text-foreground"
+            onClick={onEdit}
+          >
+            Edit
+          </Button>
+          <RowActionButton
+            icon={<TrashIcon size={15} />}
+            label="Delete snippet"
+            tone="destructive"
+            onClick={onDelete}
+          />
+        </>
+      }
+    />
   );
 }
 
@@ -224,21 +223,6 @@ function EditorRow({
   );
 }
 
-function EmptyState({ onAdd }: { onAdd: () => void }) {
-  return (
-    <EmptyRowCard
-      preview={
-        <span className="font-mono text-[13px] font-semibold text-muted-foreground/70">
-          [sample]
-        </span>
-      }
-      hint="Triggers in your dictation expand to their text after cleanup."
-      action="Add snippet"
-      onClick={onAdd}
-    />
-  );
-}
-
 type EditingState =
   | { kind: "none" }
   | { kind: "edit"; id: string; draft: Draft }
@@ -249,6 +233,7 @@ export function SnippetsPage() {
   const [editing, setEditing] = useState<EditingState>({ kind: "none" });
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState("");
   const { flash, isFlashing } = useFlash();
 
   const snippets = settings.snippets;
@@ -287,8 +272,8 @@ export function SnippetsPage() {
     }
   }
 
-  async function handleDelete(id: string) {
-    await persist(snippets.filter((s) => s.id !== id));
+  async function handleDelete(snippet: Snippet) {
+    await persist(snippets.filter((s) => s.id !== snippet.id));
   }
 
   async function handleSave() {
@@ -326,22 +311,47 @@ export function SnippetsPage() {
   const editingId = editing.kind === "edit" ? editing.id : null;
   const showTopLevelError = saveError !== null && editing.kind === "none";
 
-  return (
-    <div className="p-6 flex flex-col gap-8">
-      <SectionHeader
-        title="Snippets"
-        trailing={
-          snippets.length > 0
-            ? `${snippets.length} ${snippets.length === 1 ? "entry" : "entries"}`
-            : undefined
-        }
-      />
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleSnippets = normalizedQuery
+    ? snippets.filter((s) =>
+        `${s.trigger} ${s.expansion}`.toLowerCase().includes(normalizedQuery),
+      )
+    : snippets;
 
+  const count =
+    snippets.length > 0
+      ? `${snippets.length} ${snippets.length === 1 ? "entry" : "entries"}`
+      : undefined;
+
+  return (
+    <ListSurface
+      title="Snippets"
+      description="Triggers in your dictation expand to their text after cleanup."
+      count={count}
+      search={
+        snippets.length > SEARCH_THRESHOLD
+          ? {
+              value: query,
+              onChange: setQuery,
+              placeholder: "Search snippets…",
+            }
+          : undefined
+      }
+    >
       {snippets.length === 0 && !editingNew ? (
-        <EmptyState onAdd={startNew} />
+        <EmptyRowCard
+          preview={
+            <span className="font-mono text-[13px] font-semibold text-muted-foreground/70">
+              [sample]
+            </span>
+          }
+          hint="Triggers in your dictation expand to their text after cleanup."
+          action="Add snippet"
+          onClick={startNew}
+        />
       ) : (
         <div className="flex flex-col gap-2">
-          {snippets.map((snippet) =>
+          {visibleSnippets.map((snippet) =>
             editingId === snippet.id && editing.kind === "edit" ? (
               <EditorRow
                 key={snippet.id}
@@ -360,9 +370,15 @@ export function SnippetsPage() {
                 snippet={snippet}
                 flashing={isFlashing(snippet.id)}
                 onEdit={() => startEdit(snippet)}
-                onDelete={() => handleDelete(snippet.id)}
+                onDelete={() => handleDelete(snippet)}
               />
             ),
+          )}
+
+          {normalizedQuery && visibleSnippets.length === 0 && (
+            <p className="px-1 py-2 text-xs text-muted-foreground">
+              No snippets match “{query}”.
+            </p>
           )}
 
           {editingNew && editing.kind === "new" && (
@@ -376,7 +392,7 @@ export function SnippetsPage() {
             />
           )}
 
-          {!editingNew && (
+          {!editingNew && !normalizedQuery && (
             <EmptyRowCard
               preview={
                 <span className="font-mono text-[13px] font-semibold text-muted-foreground/55">
@@ -396,6 +412,6 @@ export function SnippetsPage() {
           <AlertDescription>{saveError}</AlertDescription>
         </Alert>
       )}
-    </div>
+    </ListSurface>
   );
 }

@@ -13,6 +13,7 @@ import { GoogleGeminiLogo } from "@/assets/GoogleGeminiLogo";
 import { GroqLogo } from "@/assets/GroqLogo";
 import { OpenAiLogo } from "@/assets/OpenAiLogo";
 import { OpenRouterLogo } from "@/assets/OpenRouterLogo";
+import { PageShell } from "@/components/PageShell";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -247,14 +248,16 @@ function CustomProviderDialog({
   isConfigured,
   currentBaseUrl,
   currentModel,
-  onConfiguredChange,
+  onSaved,
+  onDisconnected,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   isConfigured: boolean;
   currentBaseUrl: string | null;
   currentModel: string;
-  onConfiguredChange: (configured: boolean) => void;
+  onSaved: (baseUrl: string, model: string) => void;
+  onDisconnected: () => void;
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -279,13 +282,11 @@ function CustomProviderDialog({
   const handleSave = form.handleSubmit(async (values) => {
     setSaving(true);
     setError(null);
+    const baseUrl = values.baseUrl.trim().replace(/\/$/, "");
+    const model = values.model.trim();
     try {
-      await setCustomProvider(
-        values.baseUrl.trim().replace(/\/$/, ""),
-        values.model.trim(),
-        values.apiKey.trim(),
-      );
-      onConfiguredChange(true);
+      await setCustomProvider(baseUrl, model, values.apiKey.trim());
+      onSaved(baseUrl, model);
       onOpenChange(false);
     } catch (e) {
       setError(`Couldn't save: ${String(e)}`);
@@ -299,7 +300,7 @@ function CustomProviderDialog({
     setError(null);
     try {
       await clearCustomProvider();
-      onConfiguredChange(false);
+      onDisconnected();
       onOpenChange(false);
     } catch (e) {
       setError(`Couldn't disconnect: ${String(e)}`);
@@ -449,6 +450,7 @@ export function AiProvidersPage() {
     ai_cleanup_min_words: minWords,
     ai_cleanup_min_duration_ms: minDurationMs,
   } = settings;
+
   const [openDialog, setOpenDialog] = useState<string | null>(null);
 
   const anthropicDescriptor =
@@ -489,10 +491,21 @@ export function AiProvidersPage() {
     }));
   };
 
-  const handleCustomConfiguredChange = (configured: boolean) => {
+  const handleCustomSaved = (baseUrl: string, model: string) => {
     setSettings((s) => ({
       ...s,
-      custom_provider_configured: configured,
+      custom_provider_configured: true,
+      custom_provider_base_url: baseUrl,
+      custom_provider_model: model,
+    }));
+  };
+
+  const handleCustomDisconnected = () => {
+    setSettings((s) => ({
+      ...s,
+      custom_provider_configured: false,
+      custom_provider_base_url: null,
+      custom_provider_model: "",
     }));
   };
 
@@ -537,9 +550,12 @@ export function AiProvidersPage() {
   }, [watched.minWords, watched.minDurationSec, setSettings]);
 
   return (
-    <div className="p-6 flex flex-col gap-8">
+    <PageShell
+      title="Cleanup"
+      description="Models that clean up transcriptions. Configure a provider, then enable cleanup per profile."
+    >
       <SectionCard title="Provider">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <ProviderCard
             descriptor={anthropicDescriptor}
             settings={settings}
@@ -635,7 +651,8 @@ export function AiProvidersPage() {
         isConfigured={settings.custom_provider_configured}
         currentBaseUrl={settings.custom_provider_base_url}
         currentModel={settings.custom_provider_model}
-        onConfiguredChange={handleCustomConfiguredChange}
+        onSaved={handleCustomSaved}
+        onDisconnected={handleCustomDisconnected}
       />
 
       <SectionCard title="Cleanup Thresholds">
@@ -689,12 +706,11 @@ export function AiProvidersPage() {
             </form>
           </Form>
           <p className="text-xs text-muted-foreground">
-            Cleanup runs only when both thresholds are met and is enabled
-            per-Profile in the Profiles page. There is no global toggle — enable
-            cleanup per-Profile under Profiles.
+            Cleanup runs only when both thresholds are met. Enable it per
+            profile under Profiles; there is no global toggle.
           </p>
         </div>
       </SectionCard>
-    </div>
+    </PageShell>
   );
 }

@@ -179,6 +179,12 @@ impl PipelineHarness {
         self
     }
 
+    /// Append a single learned entry to `settings.learned_entries`.
+    pub fn with_learned_entry(mut self, entry: whispr_lib::config::LearnedEntry) -> Self {
+        self.settings.learned_entries.push(entry);
+        self
+    }
+
     /// Run the post-transcription pipeline stages against `raw_text` and
     /// return an `Outcome`. Intended to be called inside a
     /// `tokio::task::spawn_blocking` future wrapped with

@@ -108,8 +108,12 @@ pub fn run_stages(
     if mode.use_snippets {
         final_text = expand_snippets(&final_text, &settings.snippets);
     }
-    if !mode.correction_set_ids.is_empty() {
-        let entries = compose_corrections(&mode.correction_set_ids, &settings.correction_sets);
+    if !mode.correction_set_ids.is_empty() || !settings.learned_entries.is_empty() {
+        let entries = compose_corrections(
+            &mode.correction_set_ids,
+            &settings.correction_sets,
+            &settings.learned_entries,
+        );
         final_text = apply_corrections(&final_text, &entries);
     }
 
@@ -135,6 +139,7 @@ pub fn run_stages(
         provider_model: Some(mode.provider_model.clone()),
         app_name: None,
         bundle_id: None,
+        context_channels: vec![],
     };
 
     Outcome {

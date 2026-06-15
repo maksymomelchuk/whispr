@@ -18,10 +18,7 @@ const ERROR_MESSAGES: SetManagementPageProps["errorMessages"] = {
   delete: "Couldn't delete set",
 };
 
-function makeWrapper(
-  createVariant: "bottom-input" | "inline-card" = "bottom-input",
-  expandVariant: "row-click" | "open-button" = "row-click",
-) {
+function makeWrapper() {
   const mockCreate = vi.fn<(name: string) => Promise<string | null>>();
   const mockRename = vi.fn<(id: string, name: string) => Promise<void>>();
   const mockDelete = vi.fn<(id: string) => Promise<void>>();
@@ -44,7 +41,6 @@ function makeWrapper(
           renderEntryBadge={(count) => (
             <span className="text-xs">{count} entries</span>
           )}
-          expandVariant={expandVariant}
           getAffectedModeNames={mockGetAffected}
           onCreateSet={async (name) => {
             const id = await mockCreate(name);
@@ -64,7 +60,6 @@ function makeWrapper(
           renderEntriesEditor={(setId) => (
             <div data-testid={`editor-${setId}`}>Editor for {setId}</div>
           )}
-          createVariant={createVariant}
           errorMessages={ERROR_MESSAGES}
         />
       </TooltipProvider>
@@ -79,15 +74,8 @@ afterEach(() => {
 });
 
 describe("SetManagementPage – empty state", () => {
-  it("shows empty card when no sets exist (bottom-input)", () => {
-    const { Wrapper } = makeWrapper("bottom-input");
-    render(<Wrapper />);
-    expect(screen.getByText("No sets yet")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("New set name")).toBeInTheDocument();
-  });
-
-  it("shows empty card when no sets exist (inline-card)", () => {
-    const { Wrapper } = makeWrapper("inline-card");
+  it("shows empty card with create action when no sets exist", () => {
+    const { Wrapper } = makeWrapper();
     render(<Wrapper />);
     expect(screen.getByText("No sets yet")).toBeInTheDocument();
     expect(
@@ -96,57 +84,9 @@ describe("SetManagementPage – empty state", () => {
   });
 });
 
-describe("SetManagementPage – create (bottom-input variant)", () => {
-  it("calls onCreateSet and shows new set", async () => {
-    const { Wrapper, mockCreate } = makeWrapper("bottom-input");
-    mockCreate.mockResolvedValue("set-new");
-
-    render(<Wrapper />);
-    await userEvent.type(screen.getByPlaceholderText("New set name"), "My Set");
-    await userEvent.click(screen.getByRole("button", { name: /create set/i }));
-
-    await waitFor(() => expect(mockCreate).toHaveBeenCalledWith("My Set"));
-    expect(screen.getByText("My Set")).toBeInTheDocument();
-  });
-
-  it("clears input after creation", async () => {
-    const { Wrapper, mockCreate } = makeWrapper("bottom-input");
-    mockCreate.mockResolvedValue("set-new");
-
-    render(<Wrapper />);
-    const input = screen.getByPlaceholderText("New set name");
-    await userEvent.type(input, "Legal");
-    await userEvent.click(screen.getByRole("button", { name: /create set/i }));
-
-    await waitFor(() => expect(input).toHaveValue(""));
-  });
-
-  it("create button is disabled when name is empty", () => {
-    const { Wrapper } = makeWrapper("bottom-input");
-    render(<Wrapper />);
-    expect(screen.getByRole("button", { name: /create set/i })).toBeDisabled();
-  });
-
-  it("expands newly created set", async () => {
-    const { Wrapper, mockCreate } = makeWrapper("bottom-input");
-    mockCreate.mockResolvedValue("set-new");
-
-    render(<Wrapper />);
-    await userEvent.type(
-      screen.getByPlaceholderText("New set name"),
-      "Medical",
-    );
-    await userEvent.click(screen.getByRole("button", { name: /create set/i }));
-
-    await waitFor(() =>
-      expect(screen.getByTestId("editor-set-new")).toBeInTheDocument(),
-    );
-  });
-});
-
-describe("SetManagementPage – create (inline-card variant)", () => {
-  it("shows inline form after clicking new set action", async () => {
-    const { Wrapper } = makeWrapper("inline-card");
+describe("SetManagementPage – create", () => {
+  it("shows inline form after clicking the new set action", async () => {
+    const { Wrapper } = makeWrapper();
     render(<Wrapper />);
 
     await userEvent.click(screen.getByRole("button", { name: /new set/i }));
@@ -156,7 +96,7 @@ describe("SetManagementPage – create (inline-card variant)", () => {
   });
 
   it("cancel clears the inline form", async () => {
-    const { Wrapper } = makeWrapper("inline-card");
+    const { Wrapper } = makeWrapper();
     render(<Wrapper />);
 
     await userEvent.click(screen.getByRole("button", { name: /new set/i }));
@@ -165,18 +105,38 @@ describe("SetManagementPage – create (inline-card variant)", () => {
     expect(screen.queryByPlaceholderText("Set name")).not.toBeInTheDocument();
   });
 
-  it("saves set on Create click", async () => {
-    const { Wrapper, mockCreate } = makeWrapper("inline-card");
+  it("calls onCreateSet and shows the new set", async () => {
+    const { Wrapper, mockCreate } = makeWrapper();
     mockCreate.mockResolvedValue("set-new");
 
     render(<Wrapper />);
     await userEvent.click(screen.getByRole("button", { name: /new set/i }));
-    const input = screen.getByPlaceholderText("Set name");
-    await userEvent.type(input, "My Rules");
+    await userEvent.type(screen.getByPlaceholderText("Set name"), "My Set");
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
 
-    await waitFor(() => expect(mockCreate).toHaveBeenCalledWith("My Rules"));
-    expect(screen.getByText("My Rules")).toBeInTheDocument();
+    await waitFor(() => expect(mockCreate).toHaveBeenCalledWith("My Set"));
+    expect(screen.getByText("My Set")).toBeInTheDocument();
+  });
+
+  it("create button is disabled when name is empty", async () => {
+    const { Wrapper } = makeWrapper();
+    render(<Wrapper />);
+    await userEvent.click(screen.getByRole("button", { name: /new set/i }));
+    expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
+  });
+
+  it("expands the newly created set", async () => {
+    const { Wrapper, mockCreate } = makeWrapper();
+    mockCreate.mockResolvedValue("set-new");
+
+    render(<Wrapper />);
+    await userEvent.click(screen.getByRole("button", { name: /new set/i }));
+    await userEvent.type(screen.getByPlaceholderText("Set name"), "Medical");
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("editor-set-new")).toBeInTheDocument(),
+    );
   });
 });
 
@@ -297,17 +257,8 @@ describe("SetManagementPage – delete", () => {
 describe("SetManagementPage – expand and entries editor", () => {
   const SET: GenericSet = { id: "s-1", name: "My Set", entryCount: 2 };
 
-  it("expands row on click (row-click variant)", async () => {
-    const { Wrapper } = makeWrapper("bottom-input", "row-click");
-    render(<Wrapper initialSets={[SET]} />);
-
-    await userEvent.click(screen.getByText("My Set"));
-
-    expect(screen.getByTestId("editor-s-1")).toBeInTheDocument();
-  });
-
-  it("expands row on Open button click (open-button variant)", async () => {
-    const { Wrapper } = makeWrapper("inline-card", "open-button");
+  it("expands row on Open button click", async () => {
+    const { Wrapper } = makeWrapper();
     render(<Wrapper initialSets={[SET]} />);
 
     await userEvent.click(screen.getByRole("button", { name: "Open" }));
@@ -315,18 +266,8 @@ describe("SetManagementPage – expand and entries editor", () => {
     expect(screen.getByTestId("editor-s-1")).toBeInTheDocument();
   });
 
-  it("collapses expanded row on second click", async () => {
-    const { Wrapper } = makeWrapper("bottom-input", "row-click");
-    render(<Wrapper initialSets={[SET]} />);
-
-    await userEvent.click(screen.getByText("My Set"));
-    await userEvent.click(screen.getByText("My Set"));
-
-    expect(screen.queryByTestId("editor-s-1")).not.toBeInTheDocument();
-  });
-
-  it("collapses via Close button (open-button variant)", async () => {
-    const { Wrapper } = makeWrapper("inline-card", "open-button");
+  it("collapses expanded row via Close button", async () => {
+    const { Wrapper } = makeWrapper();
     render(<Wrapper initialSets={[SET]} />);
 
     await userEvent.click(screen.getByRole("button", { name: "Open" }));

@@ -75,7 +75,6 @@ export function TermsPage() {
           {count} {count === 1 ? "entry" : "entries"}
         </span>
       )}
-      expandVariant="row-click"
       getAffectedModeNames={(setId) =>
         settings.modes
           .filter((m) => m.term_set_ids.includes(setId))
@@ -94,7 +93,6 @@ export function TermsPage() {
           />
         );
       }}
-      createVariant="bottom-input"
       errorMessages={{
         create: "Couldn't create term set",
         rename: "Couldn't rename term set",

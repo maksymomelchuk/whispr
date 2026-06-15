@@ -2,7 +2,15 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Host, SampleFormat, Stream};
 use std::sync::mpsc;
 use std::thread;
+use std::time::Duration;
 use tokio::sync::{mpsc as tokio_mpsc, oneshot};
+
+/// Keep capturing this long after a Stop before dropping the stream. Audio that
+/// the OS/driver buffered but hadn't yet delivered to the callback at release
+/// is otherwise discarded with the stream, clipping the last word. The cpal
+/// callback runs on its own audio thread, so this sleep doesn't block capture —
+/// it just delays teardown so the tail lands on the chunk channel first.
+const TRAILING_CAPTURE: Duration = Duration::from_millis(250);
 
 /// Look up the saved input device by name. If the saved device no longer
 /// exists (unplugged, renamed), warn and fall back to the system default so
@@ -121,9 +129,14 @@ fn audio_thread(rx: mpsc::Receiver<Cmd>) {
                 }
             }
             Cmd::Stop => {
-                // Tail samples racing teardown either lose their write or
-                // land just before the drop — accepted.
-                session = None;
+                // Let the driver's buffered tail reach the callback before the
+                // stream drops, so the last word isn't clipped. Only when a
+                // stream is actually live — a redundant Stop shouldn't stall the
+                // command loop.
+                if session.is_some() {
+                    thread::sleep(TRAILING_CAPTURE);
+                    session = None;
+                }
             }
         }
     }

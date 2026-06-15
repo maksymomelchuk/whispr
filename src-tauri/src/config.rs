@@ -1,5 +1,6 @@
 use crate::mode::{Mode, ModeId, SetId, SEED_MODE_UA_EN};
 pub use crate::provider::{AssemblyAiModel, GroqModel, ProviderModel, TranscriptionProvider};
+pub use crate::tone::TonePreset;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
@@ -168,7 +169,7 @@ pub struct DictionaryEntry {
     pub to: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CorrectionEntry {
     pub from: String,
     pub to: String,
@@ -176,11 +177,38 @@ pub struct CorrectionEntry {
 
 pub const DEFAULT_CORRECTION_SET_ID: &str = "correction-set-default";
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NamedCorrectionSet {
     pub id: SetId,
     pub name: String,
     pub entries: Vec<CorrectionEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum LearnedKind {
+    Correction { from: String },
+    Term,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum LearnedEntryStatus {
+    Candidate,
+    Promoted,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LearnedEntry {
+    pub id: String,
+    pub word: String,
+    #[serde(flatten)]
+    pub kind: LearnedKind,
+    pub status: LearnedEntryStatus,
+    pub total_observations: u32,
+    pub last_observed_ms: i64,
+    #[serde(default)]
+    pub per_app_observations: std::collections::BTreeMap<String, u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -279,6 +307,13 @@ pub struct AiCleanupSettings {
     pub min_words: usize,
     #[serde(default = "default_cleanup_min_duration_ms")]
     pub min_duration_ms: u64,
+    // Defaults to false so existing behaviour is unchanged after upgrade.
+    #[serde(default)]
+    pub tone_overlay_enabled: bool,
+    #[serde(default)]
+    pub tone_app_overrides: BTreeMap<String, TonePreset>,
+    #[serde(default)]
+    pub tone_app_custom_prompts: BTreeMap<String, String>,
 }
 
 impl Default for AiCleanupSettings {
@@ -292,6 +327,9 @@ impl Default for AiCleanupSettings {
             custom_provider: None,
             min_words: DEFAULT_CLEANUP_MIN_WORDS,
             min_duration_ms: DEFAULT_CLEANUP_MIN_DURATION_MS,
+            tone_overlay_enabled: false,
+            tone_app_overrides: BTreeMap::new(),
+            tone_app_custom_prompts: BTreeMap::new(),
         }
     }
 }
@@ -360,6 +398,8 @@ pub struct Settings {
     pub openai_api_key: Option<String>,
     #[serde(default)]
     pub elevenlabs_api_key: Option<String>,
+    #[serde(default)]
+    pub soniox_api_key: Option<String>,
     /// Legacy single-shortcut field; converted to a HotkeyBinding on first load.
     #[serde(rename = "shortcut", default, skip_serializing)]
     pub legacy_shortcut: Shortcut,
@@ -405,6 +445,15 @@ pub struct Settings {
     pub show_live_preview: bool,
     #[serde(default)]
     pub local_whisper: LocalWhisperSettings,
+    #[serde(default)]
+    pub learn_from_corrections: bool,
+    #[serde(default)]
+    pub learned_entries: Vec<LearnedEntry>,
+    /// from-words that have experienced an inconsistent mapping replacement.
+    /// Once a from-word is here, new observations for it never create a Correction
+    /// (only Terms), preventing replacement cycles.
+    #[serde(default)]
+    pub learned_inconsistent_from: Vec<String>,
 }
 
 impl Default for Settings {
@@ -419,6 +468,7 @@ impl Default for Settings {
             assemblyai_api_key: None,
             openai_api_key: None,
             elevenlabs_api_key: None,
+            soniox_api_key: None,
             legacy_shortcut: Shortcut::default(),
             hotkey_bindings: vec![],
             legacy_dictionary: vec![],
@@ -439,6 +489,9 @@ impl Default for Settings {
             start_at_login: false,
             show_live_preview: true,
             local_whisper: LocalWhisperSettings::default(),
+            learn_from_corrections: false,
+            learned_entries: vec![],
+            learned_inconsistent_from: vec![],
         }
     }
 }
@@ -530,6 +583,21 @@ fn migrate(s: &mut Settings) -> bool {
                 mode.use_corrections = false;
             }
             mode.legacy_use_dictionary = None;
+            changed = true;
+        }
+    }
+
+    for mode in s.modes.iter_mut() {
+        let cleanup = &mut mode.ai_cleanup;
+        let legacy_flags = [
+            cleanup.legacy_clipboard_context_enabled.take(),
+            cleanup.legacy_selected_text_context_enabled.take(),
+            cleanup.legacy_focused_field_context_enabled.take(),
+        ];
+        if legacy_flags.iter().any(Option::is_some) {
+            if legacy_flags.contains(&Some(true)) {
+                cleanup.context_capture_enabled = true;
+            }
             changed = true;
         }
     }
@@ -731,6 +799,38 @@ pub fn save(app: &tauri::AppHandle, settings: &Settings) -> Result<(), String> {
 mod tests {
     use super::*;
     use crate::mode::SEED_MODE_DEFAULT_EN;
+
+    #[test]
+    fn tone_app_overrides_default_is_empty() {
+        let s = AiCleanupSettings::default();
+        assert!(s.tone_app_overrides.is_empty());
+    }
+
+    #[test]
+    fn tone_app_overrides_round_trips_through_json() {
+        let json = r#"{"ai_cleanup": {"tone_app_overrides": {"com.apple.mail": "casual"}}}"#;
+        let s: Settings = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            s.ai_cleanup
+                .tone_app_overrides
+                .get("com.apple.mail")
+                .copied(),
+            Some(TonePreset::Casual)
+        );
+        let reserialized = serde_json::to_string(&s).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&reserialized).unwrap();
+        assert_eq!(
+            v["ai_cleanup"]["tone_app_overrides"]["com.apple.mail"],
+            serde_json::json!("casual")
+        );
+    }
+
+    #[test]
+    fn settings_without_tone_app_overrides_defaults_to_empty_map() {
+        let json = r#"{}"#;
+        let s: Settings = serde_json::from_str(json).unwrap();
+        assert!(s.ai_cleanup.tone_app_overrides.is_empty());
+    }
 
     #[test]
     fn default_settings_have_expected_provider_and_groq_defaults() {
@@ -1151,6 +1251,40 @@ mod tests {
 
         let ids: Vec<&str> = s.modes.iter().map(|m| m.id.as_str()).collect();
         assert_eq!(ids, vec!["a", "b"], "neither dropped nor backfilled");
+    }
+
+    #[test]
+    fn migrate_folds_any_true_legacy_context_flag_into_unified_switch() {
+        let json = r#"{
+            "modes": [
+                {"id":"a","name":"A","language":{"kind":"auto"},"ai_cleanup":{"enabled":true,"prompt_override":null,"clipboard_context_enabled":true,"selected_text_context_enabled":false,"focused_field_context_enabled":false},"use_snippets":true},
+                {"id":"b","name":"B","language":{"kind":"auto"},"ai_cleanup":{"enabled":true,"prompt_override":null,"clipboard_context_enabled":false,"selected_text_context_enabled":false,"focused_field_context_enabled":false},"use_snippets":true}
+            ]
+        }"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+
+        assert!(
+            migrate(&mut s),
+            "legacy flags present must trigger a re-save"
+        );
+
+        assert!(s.modes[0].ai_cleanup.context_capture_enabled);
+        assert!(!s.modes[1].ai_cleanup.context_capture_enabled);
+        assert!(s.modes[0]
+            .ai_cleanup
+            .legacy_clipboard_context_enabled
+            .is_none());
+    }
+
+    #[test]
+    fn migrate_without_legacy_context_flags_leaves_unified_switch_untouched() {
+        let json = r#"{
+            "modes": [{"id":"a","name":"A","language":{"kind":"auto"},"ai_cleanup":{"enabled":true,"prompt_override":null,"context_capture_enabled":true},"use_snippets":true}]
+        }"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        migrate(&mut s);
+
+        assert!(s.modes[0].ai_cleanup.context_capture_enabled);
     }
 
     #[test]

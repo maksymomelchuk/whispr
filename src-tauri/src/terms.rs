@@ -1,4 +1,4 @@
-use crate::config::NamedTermSet;
+use crate::config::{LearnedEntry, LearnedEntryStatus, LearnedKind, NamedTermSet};
 
 /// 4 KB ceiling — Deepgram's documented maximum is ~8 KB; halving gives
 /// comfortable headroom for the base URL and engine parameters that precede
@@ -9,7 +9,14 @@ pub const DEEPGRAM_KEYTERM_BUDGET_BYTES: usize = 4096;
 /// stays well within that window for typical English vocabulary lists.
 pub const GROQ_PROMPT_BUDGET_CHARS: usize = 800;
 
-pub fn compose_term_hints(term_sets: &[NamedTermSet], set_ids: &[String]) -> Vec<String> {
+/// Merges manual term sets with promoted learned Terms. Manual entries are
+/// emitted first so budget-capping functions (deepgram_keyterms, etc.) drop
+/// learned terms before manual ones when the budget is exhausted.
+pub fn compose_term_hints(
+    term_sets: &[NamedTermSet],
+    set_ids: &[String],
+    learned: &[LearnedEntry],
+) -> Vec<String> {
     let mut result = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for id in set_ids {
@@ -18,6 +25,14 @@ pub fn compose_term_hints(term_sets: &[NamedTermSet], set_ids: &[String]) -> Vec
         };
         for entry in &set.entries {
             let trimmed = entry.trim().to_string();
+            if !trimmed.is_empty() && seen.insert(trimmed.clone()) {
+                result.push(trimmed);
+            }
+        }
+    }
+    for entry in learned {
+        if entry.status == LearnedEntryStatus::Promoted && matches!(entry.kind, LearnedKind::Term) {
+            let trimmed = entry.word.trim().to_string();
             if !trimmed.is_empty() && seen.insert(trimmed.clone()) {
                 result.push(trimmed);
             }
@@ -50,12 +65,17 @@ pub fn deepgram_keyterms(terms: &[String], remaining_budget: usize) -> Vec<Strin
     result
 }
 
-pub fn assemblyai_keyterms_prompt(terms: &[String]) -> Option<String> {
-    let filtered: Vec<&str> = terms
+pub fn assemblyai_keyterms(terms: &[String]) -> Vec<String> {
+    terms
         .iter()
         .map(|t| t.trim())
         .filter(|t| !t.is_empty())
-        .collect();
+        .map(str::to_string)
+        .collect()
+}
+
+pub fn assemblyai_keyterms_prompt(terms: &[String]) -> Option<String> {
+    let filtered = assemblyai_keyterms(terms);
     if filtered.is_empty() {
         return None;
     }
@@ -64,6 +84,11 @@ pub fn assemblyai_keyterms_prompt(terms: &[String]) -> Option<String> {
 
 const ELEVENLABS_MAX_KEYTERMS: usize = 1000;
 const ELEVENLABS_MAX_KEYTERM_CHARS: usize = 50;
+
+/// 4 KB ceiling for keyterms carried as `keyterms` query params on the realtime
+/// WebSocket URL. ElevenLabs doesn't document a URL length limit, so this
+/// mirrors the conservative Deepgram budget.
+pub const ELEVENLABS_REALTIME_KEYTERM_BUDGET_BYTES: usize = 4096;
 
 pub fn elevenlabs_keyterms(terms: &[String]) -> Vec<String> {
     let mut result = Vec::new();
@@ -79,6 +104,51 @@ pub fn elevenlabs_keyterms(terms: &[String]) -> Vec<String> {
         if seen.insert(trimmed.clone()) {
             result.push(trimmed);
         }
+    }
+    result
+}
+
+/// Validates terms via `elevenlabs_keyterms`, then truncates in insertion order
+/// once the next term would push consumed URL bytes past `remaining_budget`.
+pub fn elevenlabs_realtime_keyterms(terms: &[String], remaining_budget: usize) -> Vec<String> {
+    const KEY_PREFIX_BYTES: usize = "&keyterms=".len();
+    let mut result = Vec::new();
+    let mut used = 0usize;
+    for term in elevenlabs_keyterms(terms) {
+        let encoded: String = url::form_urlencoded::byte_serialize(term.as_bytes()).collect();
+        let needed = KEY_PREFIX_BYTES + encoded.len();
+        if used + needed > remaining_budget {
+            break;
+        }
+        used += needed;
+        result.push(term);
+    }
+    result
+}
+
+/// Soniox caps the whole `context` object at ~8,000 tokens (~10,000 chars).
+/// `terms` is the only context field we populate; 8,000 chars leaves headroom
+/// for JSON overhead and stays clear of the ceiling.
+pub const SONIOX_CONTEXT_TERMS_BUDGET_CHARS: usize = 8000;
+
+/// Returns terms for Soniox `context.terms` (a JSON string array, so no URL
+/// budget). Dedupes, trims, and truncates in insertion order once the next
+/// term would push the consumed character count past the budget.
+pub fn soniox_context_terms(terms: &[String]) -> Vec<String> {
+    let mut result = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut used = 0usize;
+    for term in terms {
+        let trimmed = term.trim();
+        if trimmed.is_empty() || !seen.insert(trimmed.to_string()) {
+            continue;
+        }
+        let needed = trimmed.chars().count();
+        if used + needed > SONIOX_CONTEXT_TERMS_BUDGET_CHARS {
+            break;
+        }
+        used += needed;
+        result.push(trimmed.to_string());
     }
     result
 }
@@ -124,27 +194,27 @@ mod tests {
     #[test]
     fn compose_returns_empty_when_no_set_ids() {
         let sets = vec![make_set("s1", &["MongoDB"])];
-        assert!(compose_term_hints(&sets, &[]).is_empty());
+        assert!(compose_term_hints(&sets, &[], &[]).is_empty());
     }
 
     #[test]
     fn compose_returns_empty_when_set_id_not_found() {
         let sets = vec![make_set("s1", &["MongoDB"])];
-        let result = compose_term_hints(&sets, &["nonexistent".to_string()]);
+        let result = compose_term_hints(&sets, &["nonexistent".to_string()], &[]);
         assert!(result.is_empty());
     }
 
     #[test]
     fn compose_single_set_returns_its_entries() {
         let sets = vec![make_set("s1", &["MongoDB", "TypeScript"])];
-        let result = compose_term_hints(&sets, &["s1".to_string()]);
+        let result = compose_term_hints(&sets, &["s1".to_string()], &[]);
         assert_eq!(result, vec!["MongoDB", "TypeScript"]);
     }
 
     #[test]
     fn compose_multi_set_concatenates_in_order() {
         let sets = vec![make_set("a", &["alpha"]), make_set("b", &["beta"])];
-        let result = compose_term_hints(&sets, &["a".to_string(), "b".to_string()]);
+        let result = compose_term_hints(&sets, &["a".to_string(), "b".to_string()], &[]);
         assert_eq!(result, vec!["alpha", "beta"]);
     }
 
@@ -154,21 +224,21 @@ mod tests {
             make_set("a", &["MongoDB", "shared"]),
             make_set("b", &["shared", "TypeScript"]),
         ];
-        let result = compose_term_hints(&sets, &["a".to_string(), "b".to_string()]);
+        let result = compose_term_hints(&sets, &["a".to_string(), "b".to_string()], &[]);
         assert_eq!(result, vec!["MongoDB", "shared", "TypeScript"]);
     }
 
     #[test]
     fn compose_skips_blank_entries() {
         let sets = vec![make_set("s1", &["  ", "MongoDB", "\t"])];
-        let result = compose_term_hints(&sets, &["s1".to_string()]);
+        let result = compose_term_hints(&sets, &["s1".to_string()], &[]);
         assert_eq!(result, vec!["MongoDB"]);
     }
 
     #[test]
     fn compose_empty_set_ids_with_populated_sets_returns_empty() {
         let sets = vec![make_set("s1", &["MongoDB"])];
-        assert!(compose_term_hints(&sets, &[]).is_empty());
+        assert!(compose_term_hints(&sets, &[], &[]).is_empty());
     }
 
     #[test]
@@ -343,5 +413,56 @@ mod tests {
         assert_eq!(term.chars().count(), 50);
         let result = elevenlabs_keyterms(&[term.clone()]);
         assert_eq!(result, vec![term]);
+    }
+
+    #[test]
+    fn elevenlabs_realtime_keyterms_passes_validated_terms_within_budget() {
+        let terms: Vec<String> = vec!["MongoDB".into(), "TypeScript".into()];
+        let result = elevenlabs_realtime_keyterms(&terms, 4096);
+        assert_eq!(result, vec!["MongoDB", "TypeScript"]);
+    }
+
+    #[test]
+    fn elevenlabs_realtime_keyterms_truncates_at_budget() {
+        // "&keyterms=" = 10 bytes prefix. alpha (5) → 15; beta (4) → 15+14=29.
+        // Budget 20: alpha fits (15 ≤ 20), beta would push to 29 > 20 → dropped.
+        let terms: Vec<String> = vec!["alpha".into(), "beta".into()];
+        let result = elevenlabs_realtime_keyterms(&terms, 20);
+        assert_eq!(result, vec!["alpha"]);
+    }
+
+    #[test]
+    fn elevenlabs_realtime_keyterms_drops_over_length_terms_before_budgeting() {
+        let long_term = "a".repeat(51);
+        let terms: Vec<String> = vec![long_term, "MongoDB".into()];
+        let result = elevenlabs_realtime_keyterms(&terms, 4096);
+        assert_eq!(result, vec!["MongoDB"]);
+    }
+
+    #[test]
+    fn soniox_context_terms_returns_all_within_budget() {
+        let terms: Vec<String> = vec!["MongoDB".into(), "TypeScript".into()];
+        assert_eq!(soniox_context_terms(&terms), vec!["MongoDB", "TypeScript"]);
+    }
+
+    #[test]
+    fn soniox_context_terms_dedupes_and_trims() {
+        let terms: Vec<String> = vec!["MongoDB".into(), " TypeScript ".into(), "MongoDB".into()];
+        assert_eq!(soniox_context_terms(&terms), vec!["MongoDB", "TypeScript"]);
+    }
+
+    #[test]
+    fn soniox_context_terms_skips_blank_terms() {
+        let terms: Vec<String> = vec!["  ".into(), "MongoDB".into(), "\t".into()];
+        assert_eq!(soniox_context_terms(&terms), vec!["MongoDB"]);
+    }
+
+    #[test]
+    fn soniox_context_terms_truncates_at_char_budget() {
+        let big = "a".repeat(SONIOX_CONTEXT_TERMS_BUDGET_CHARS - 2);
+        let terms: Vec<String> = vec![big.clone(), "bb".into(), "cc".into()];
+        // big (budget-2) + "bb" (2) = budget exactly → both fit; "cc" overflows.
+        let result = soniox_context_terms(&terms);
+        assert_eq!(result, vec![big, "bb".to_string()]);
     }
 }

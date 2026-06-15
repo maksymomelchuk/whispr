@@ -58,6 +58,7 @@ const MODE: Mode = {
     provider: "anthropic",
     model: "claude-haiku-4-5",
     paste_raw_on_failure: true,
+    context_capture_enabled: false,
   },
   term_set_ids: [],
   correction_set_ids: [],
@@ -219,6 +220,7 @@ const BASE_SETTINGS: Settings = {
   assemblyai_api_key_configured: false,
   openai_api_key_configured: false,
   elevenlabs_api_key_configured: false,
+  soniox_api_key_configured: false,
   hotkey_bindings: [],
   term_sets: [],
   correction_sets: [],
@@ -233,6 +235,10 @@ const BASE_SETTINGS: Settings = {
   custom_provider_model: "",
   ai_cleanup_min_words: 9,
   ai_cleanup_min_duration_ms: 3000,
+  ai_cleanup_tone_overlay_enabled: false,
+  tone_app_overrides: {},
+  tone_app_custom_prompts: {},
+  learn_from_corrections: false,
   input_device: null,
   pause_media_on_record: true,
   history_limit: 5,
@@ -553,6 +559,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
       provider: "anthropic",
       model: "claude-haiku-4-5",
       paste_raw_on_failure: true,
+      context_capture_enabled: false,
     },
   };
 
@@ -575,6 +582,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         provider: "openai",
         model: "gpt-5.4-mini",
         paste_raw_on_failure: true,
+        context_capture_enabled: false,
       },
     };
     render(
@@ -604,6 +612,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         provider: "google",
         model: "gemini-2.5-flash",
         paste_raw_on_failure: true,
+        context_capture_enabled: false,
       },
     };
     render(
@@ -621,6 +630,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         provider: "groq",
         model: "llama-3.1-8b-instant",
         paste_raw_on_failure: true,
+        context_capture_enabled: false,
       },
     };
     render(<EditorWrapper mode={groqMode} configuredProviders={["groq"]} />);
@@ -636,6 +646,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         provider: "deepseek",
         model: "deepseek-v4-flash",
         paste_raw_on_failure: true,
+        context_capture_enabled: false,
       },
     };
     render(
@@ -653,6 +664,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         provider: "cerebras",
         model: "llama-3.3-70b",
         paste_raw_on_failure: true,
+        context_capture_enabled: false,
       },
     };
     render(
@@ -670,6 +682,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         provider: "openrouter",
         model: "anthropic/claude-haiku-4.5",
         paste_raw_on_failure: true,
+        context_capture_enabled: false,
       },
     };
     render(
@@ -690,6 +703,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         provider: "custom",
         model: "",
         paste_raw_on_failure: true,
+        context_capture_enabled: false,
       },
     };
     render(
@@ -711,6 +725,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         provider: "custom",
         model: "",
         paste_raw_on_failure: true,
+        context_capture_enabled: false,
       },
     };
     render(
@@ -734,6 +749,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         provider: "custom",
         model: "",
         paste_raw_on_failure: true,
+        context_capture_enabled: false,
       },
     };
     render(

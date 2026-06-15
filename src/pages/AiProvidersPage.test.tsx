@@ -17,6 +17,34 @@ vi.mock("../lib/api", () => ({
   setProviderKey: vi.fn(),
 }));
 
+vi.mock("@/components/ui/select", () => ({
+  Select: ({
+    value,
+    onValueChange,
+    children,
+  }: {
+    value?: string;
+    onValueChange?: (value: string) => void;
+    children?: React.ReactNode;
+  }) => (
+    <select value={value} onChange={(e) => onValueChange?.(e.target.value)}>
+      {children}
+    </select>
+  ),
+  SelectTrigger: () => null,
+  SelectValue: () => null,
+  SelectContent: ({ children }: { children?: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  SelectItem: ({
+    value,
+    children,
+  }: {
+    value: string;
+    children?: React.ReactNode;
+  }) => <option value={value}>{children}</option>,
+}));
+
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
     open ? <div>{children}</div> : null,
@@ -54,6 +82,7 @@ const BASE_SETTINGS: Settings = {
   assemblyai_api_key_configured: false,
   openai_api_key_configured: false,
   elevenlabs_api_key_configured: false,
+  soniox_api_key_configured: false,
   hotkey_bindings: [],
   term_sets: [],
   correction_sets: [],
@@ -68,6 +97,10 @@ const BASE_SETTINGS: Settings = {
   custom_provider_model: "",
   ai_cleanup_min_words: 9,
   ai_cleanup_min_duration_ms: 3000,
+  ai_cleanup_tone_overlay_enabled: false,
+  tone_app_overrides: {},
+  tone_app_custom_prompts: {},
+  learn_from_corrections: false,
   input_device: null,
   pause_media_on_record: true,
   history_limit: 5,
@@ -164,9 +197,9 @@ describe("AiProvidersPage", () => {
     expect(screen.getByText("Claude Code OAuth")).toBeInTheDocument();
   });
 
-  it("states that cleanup is enabled per-Profile", () => {
+  it("states that cleanup is enabled per profile, not globally", () => {
     render(<Wrapper />);
-    expect(screen.getByText(/per-profile/i)).toBeInTheDocument();
+    expect(screen.getByText(/no global toggle/i)).toBeInTheDocument();
   });
 });
 

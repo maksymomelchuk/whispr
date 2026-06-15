@@ -1,3 +1,4 @@
+use crate::clipboard_context::SamplerWindow;
 use crate::config::{HotkeyBinding, Shortcut};
 use crate::provider::LocalWhisperModel;
 use crate::recorder::Recorder;
@@ -7,7 +8,6 @@ use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-#[cfg(target_os = "macos")]
 use tokio::sync::oneshot;
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -78,4 +78,22 @@ pub struct AppState {
     /// press is ignored while this is set, preventing two AI calls from racing
     /// to overwrite the same entry.
     pub recover_in_flight: Arc<AtomicBool>,
+    /// Rolling window of (change_count, Instant) samples taken every 500 ms by
+    /// the clipboard sampler thread. Used to determine clipboard recency at PTT-down.
+    pub clipboard_window: SamplerWindow,
+    /// Receives the clipboard text captured at PTT-down (or None if not recent).
+    /// Populated by clipboard_context::capture; consumed once per session.
+    pub pending_clipboard_rx: Arc<Mutex<Option<oneshot::Receiver<Option<String>>>>>,
+    /// Receives the selected text captured at PTT-down via the Accessibility API.
+    /// Populated by selected_text_context::capture; consumed once per session.
+    pub pending_selected_text_rx: Arc<Mutex<Option<oneshot::Receiver<Option<String>>>>>,
+    /// Receives the focused field's text captured concurrently with recording.
+    /// Populated by focused_field_context::capture; consumed once per session.
+    pub pending_focused_field_rx: Arc<Mutex<Option<oneshot::Receiver<Option<String>>>>>,
+    /// Receives the frontmost window's visible text captured via AX traversal.
+    /// Populated by focused_window_context::capture; consumed once per session.
+    pub pending_focused_window_rx: Arc<Mutex<Option<oneshot::Receiver<Option<String>>>>>,
+    /// Clipboard change count recorded at PTT-down; consumed once per session
+    /// by the mid-dictation copy check.
+    pub clipboard_count_at_ptt_down: Arc<Mutex<Option<i64>>>,
 }
