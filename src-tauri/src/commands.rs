@@ -215,6 +215,25 @@ pub async fn validate_groq_api_key(app: AppHandle, api_key: String) -> ApiKeyVal
 }
 
 #[tauri::command]
+pub async fn validate_cleanup_provider_key(
+    provider_id: String,
+    api_key: String,
+) -> ApiKeyValidation {
+    match provider_id.as_str() {
+        "anthropic" => api_key_validation::validate_anthropic_key(&api_key).await,
+        "openai" => api_key_validation::validate_openai(&api_key).await,
+        "google" => api_key_validation::validate_google_key(&api_key).await,
+        "groq" => api_key_validation::validate_groq_chat_key(&api_key).await,
+        "deepseek" => api_key_validation::validate_deepseek_key(&api_key).await,
+        "cerebras" => api_key_validation::validate_cerebras_key(&api_key).await,
+        "openrouter" => api_key_validation::validate_openrouter_key(&api_key).await,
+        _ => ApiKeyValidation::Error {
+            message: format!("Unknown provider: {provider_id}"),
+        },
+    }
+}
+
+#[tauri::command]
 pub fn set_hotkey_bindings(
     app: AppHandle,
     state: State<'_, AppState>,

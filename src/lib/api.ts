@@ -61,6 +61,15 @@ export const validateDeepgramApiKey = (apiKey: string) =>
 export const validateGroqApiKey = (apiKey: string) =>
   invoke<ApiKeyValidation>("validate_groq_api_key", { apiKey });
 
+export const validateCleanupProviderKey = (
+  providerId: string,
+  apiKey: string,
+) =>
+  invoke<ApiKeyValidation>("validate_cleanup_provider_key", {
+    providerId,
+    apiKey,
+  });
+
 export const setHotkeyBindings = (bindings: HotkeyBinding[]) =>
   invoke<void>("set_hotkey_bindings", { bindings });
 
