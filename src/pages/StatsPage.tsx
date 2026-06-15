@@ -2,8 +2,7 @@ import { useState } from "react";
 
 import { PageHeader } from "@/components/PageHeader";
 
-import { PeriodToggle, StatsTab } from "../components/StatsTab";
-import type { Period } from "../components/StatsTab";
+import { PeriodToggle, StatsTab, type Period } from "../components/StatsTab";
 
 export function StatsPage() {
   const [period, setPeriod] = useState<Period>("week");
