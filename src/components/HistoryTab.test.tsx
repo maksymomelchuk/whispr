@@ -320,6 +320,33 @@ describe("HistoryTab entry editing", () => {
   });
 });
 
+describe("HistoryTab action button accessibility", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("Copy button has aria-label for screen reader identification", async () => {
+    vi.mocked(mockGetHistory).mockResolvedValue([RAN_ENTRY]);
+    render(<Wrapper />);
+
+    await waitFor(() => screen.getByText("cleaned text"));
+
+    expect(
+      screen.getByRole("button", { name: "Copy transcript" }),
+    ).toBeInTheDocument();
+  });
+
+  it("Show trace button uses aria-expanded to communicate state", async () => {
+    vi.mocked(mockGetHistory).mockResolvedValue([RAN_ENTRY]);
+    render(<Wrapper />);
+
+    await waitFor(() => screen.getByText("cleaned text"));
+
+    const traceBtn = screen.getByRole("button", { name: "Show trace" });
+    expect(traceBtn).toHaveAttribute("aria-expanded", "false");
+  });
+});
+
 describe("HistoryTab clear all", () => {
   beforeEach(() => {
     vi.clearAllMocks();

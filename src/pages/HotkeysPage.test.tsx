@@ -93,6 +93,39 @@ function HotkeysPageWrapper({ settings }: { settings: Settings }) {
   );
 }
 
+const BINDING_SETTINGS: Settings = {
+  ...BASE_SETTINGS,
+  modes: [BASE_MODE],
+  hotkey_bindings: [
+    {
+      shortcut: { key: "AltRight", modifiers: [] },
+      action: { type: "Ptt", mode_id: "mode-1" },
+    },
+  ],
+};
+
+describe("HotkeysPage – binding row accessibility", () => {
+  it("renders Re-record and Remove binding buttons when a binding exists", () => {
+    render(<HotkeysPageWrapper settings={BINDING_SETTINGS} />);
+    expect(
+      screen.getByRole("button", { name: "Re-record" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Remove binding" }),
+    ).toBeInTheDocument();
+  });
+
+  it("Re-record and Remove buttons are not disabled", () => {
+    render(<HotkeysPageWrapper settings={BINDING_SETTINGS} />);
+    expect(
+      screen.getByRole("button", { name: "Re-record" }),
+    ).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Remove binding" }),
+    ).not.toBeDisabled();
+  });
+});
+
 describe("HotkeysPage – empty states", () => {
   it("shows an EmptyPanel with teaching copy when no profiles exist", () => {
     render(<HotkeysPageWrapper settings={BASE_SETTINGS} />);

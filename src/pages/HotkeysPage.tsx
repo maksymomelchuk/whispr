@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { EmptyPanel } from "@/components/EmptyPanel";
 import { EmptyRowCard } from "@/components/EmptyRowCard";
 import { Keycap, ShortcutKeycaps } from "@/components/Keycap";
-import { PageHeader } from "@/components/PageHeader";
+import { PageShell } from "@/components/PageShell";
 import { RowCard } from "@/components/RowCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { Alert } from "@/components/ui/alert";
@@ -120,7 +120,7 @@ function BindingRow({
         )}
       </div>
 
-      <div className="flex items-center gap-0.5 shrink-0 transform-gpu opacity-65 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-0.5 shrink-0 transform-gpu opacity-65 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
         <Button
           variant="ghost"
           size="xs"
@@ -339,11 +339,10 @@ export function HotkeysPage() {
     `${targetIdValue}|${shortcutKey(shortcut)}`;
 
   return (
-    <div className="p-6 flex flex-col gap-6">
-      <PageHeader
-        title="Hotkeys"
-        subtitle="Bind push-to-talk shortcuts to profiles and the paste and recover actions."
-      />
+    <PageShell
+      title="Hotkeys"
+      description="Bind push-to-talk shortcuts to profiles and the paste and recover actions."
+    >
       {error && (
         <Alert variant="destructive" className="font-medium">
           {error}
@@ -469,7 +468,7 @@ export function HotkeysPage() {
         isFlashing={isFlashing}
         rowFlashId={rowFlashId}
       />
-    </div>
+    </PageShell>
   );
 }
 

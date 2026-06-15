@@ -141,6 +141,16 @@ describe("SpeechModelsPage", () => {
     render(<Wrapper />);
     expect(screen.getByText("Cloud")).toBeInTheDocument();
   });
+
+  it("each provider card is a keyboard-accessible button", () => {
+    render(<Wrapper />);
+    const deepgramCard = screen
+      .getByText("Deepgram")
+      .closest("button") as HTMLButtonElement;
+    expect(deepgramCard).toBeInTheDocument();
+    expect(deepgramCard.tagName).toBe("BUTTON");
+    expect(deepgramCard).not.toBeDisabled();
+  });
 });
 
 describe("SpeechModelsPage LOCAL section", () => {

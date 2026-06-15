@@ -200,6 +200,7 @@ function ProviderCard({
       className={cn(
         "flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3",
         "text-left transition-colors hover:bg-accent/40 cursor-pointer w-full",
+        "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
       )}
     >
       <descriptor.logo className="h-8 w-8 shrink-0 rounded-md" />

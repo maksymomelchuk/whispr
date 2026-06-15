@@ -589,7 +589,7 @@ function HistoryRow({
                   {view.badge.label}
                 </Badge>
               )}
-              <div className="flex items-center gap-1 pt-0.5 opacity-65 group-hover:opacity-100 transition-opacity">
+              <div className="flex items-center gap-1 pt-0.5 opacity-65 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                 <Button
                   type="button"
                   variant="ghost"

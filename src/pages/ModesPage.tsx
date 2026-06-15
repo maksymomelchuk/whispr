@@ -1146,7 +1146,7 @@ export function ModeEditor({
                 onOpenChange={setPromptOpen}
                 className="flex flex-col gap-2"
               >
-                <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-fit">
+                <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-fit rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
                   <CaretRightIcon
                     size={10}
                     className={`transition-transform ${promptOpen ? "rotate-90" : ""}`}
