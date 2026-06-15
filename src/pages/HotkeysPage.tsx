@@ -1,6 +1,7 @@
 import { TrashIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
 
+import { EmptyPanel } from "@/components/EmptyPanel";
 import { EmptyRowCard } from "@/components/EmptyRowCard";
 import { Keycap, ShortcutKeycaps } from "@/components/Keycap";
 import { PageHeader } from "@/components/PageHeader";
@@ -261,6 +262,7 @@ function EmptyModeCard({ onAdd }: { onAdd: () => void }) {
           <Keycap tone="phantom">K</Keycap>
         </div>
       }
+      hint="Hold to dictate. Release to transcribe and paste."
       action="Add hotkey"
       onClick={onAdd}
       className="py-3"
@@ -353,9 +355,10 @@ export function HotkeysPage() {
           Dictation Modes
         </p>
         {settings.modes.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            No profiles yet. Create one in Profiles to bind a hotkey.
-          </p>
+          <EmptyPanel
+            title="No profiles yet"
+            hint="Create a profile first, then come back to bind a push-to-talk hotkey."
+          />
         )}
         <div className="flex flex-col gap-8">
           {settings.modes.map((mode, modeIdx) => {

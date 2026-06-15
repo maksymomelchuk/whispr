@@ -408,7 +408,9 @@ describe("ModesPage – delete", () => {
     );
     await waitFor(() =>
       expect(
-        screen.getByText("No profiles yet. Add one to start dictating."),
+        screen.getByText(
+          "Profiles pair a speech model with AI cleanup. Bind a hotkey to activate one mid-session.",
+        ),
       ).toBeInTheDocument(),
     );
   });
@@ -418,7 +420,18 @@ describe("ModesPage – delete", () => {
       <StatefulModesPageWrapper initial={{ ...BASE_SETTINGS, modes: [] }} />,
     );
     expect(
-      screen.getByText("No profiles yet. Add one to start dictating."),
+      screen.getByText(
+        "Profiles pair a speech model with AI cleanup. Bind a hotkey to activate one mid-session.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("renders an interactive empty-state card when there are no profiles", () => {
+    render(
+      <StatefulModesPageWrapper initial={{ ...BASE_SETTINGS, modes: [] }} />,
+    );
+    expect(
+      screen.getByRole("button", { name: /Profile name/i }),
     ).toBeInTheDocument();
   });
 });
