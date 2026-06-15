@@ -197,9 +197,9 @@ describe("AiProvidersPage", () => {
     expect(screen.getByText("Claude Code OAuth")).toBeInTheDocument();
   });
 
-  it("states that cleanup is enabled per-Profile", () => {
+  it("states that cleanup is enabled per profile, not globally", () => {
     render(<Wrapper />);
-    expect(screen.getByText(/per-profile/i)).toBeInTheDocument();
+    expect(screen.getByText(/no global toggle/i)).toBeInTheDocument();
   });
 });
 

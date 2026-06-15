@@ -3,8 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyRowCard } from "@/components/EmptyRowCard";
+import { ListRow, RowActionButton } from "@/components/ListRow";
+import { ListSurface } from "@/components/ListSurface";
 import { RowCard } from "@/components/RowCard";
-import { SectionHeader } from "@/components/SectionHeader";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,11 +16,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 export interface GenericSet {
   id: string;
@@ -32,6 +28,8 @@ interface DeleteTarget {
   affectedModeNames: string[];
 }
 
+const SEARCH_THRESHOLD = 8;
+
 export interface SetManagementPageProps {
   title: string;
   trailing?: string;
@@ -41,13 +39,11 @@ export interface SetManagementPageProps {
   emptyAction: string;
   sets: GenericSet[];
   renderEntryBadge: (count: number) => React.ReactNode;
-  expandVariant: "row-click" | "open-button";
   getAffectedModeNames: (setId: string) => string[];
   onCreateSet: (name: string) => Promise<string | null>;
   onRenameSet: (id: string, name: string) => Promise<void>;
   onDeleteSet: (id: string) => Promise<void>;
   renderEntriesEditor: (setId: string) => React.ReactNode;
-  createVariant: "bottom-input" | "inline-card";
   errorMessages: {
     create: string;
     rename: string;
@@ -64,38 +60,19 @@ export function SetManagementPage({
   emptyAction,
   sets,
   renderEntryBadge,
-  expandVariant,
   getAffectedModeNames,
   onCreateSet,
   onRenameSet,
   onDeleteSet,
   renderEntriesEditor,
-  createVariant,
   errorMessages,
 }: SetManagementPageProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
-  const [newName, setNewName] = useState("");
-  const [creating, setCreating] = useState(false);
-  const newInputRef = useRef<HTMLInputElement>(null);
   const [creatingName, setCreatingName] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
-  async function handleCreateBottomInput() {
-    const name = newName.trim();
-    if (!name) return;
-    setCreating(true);
-    try {
-      const newId = await onCreateSet(name);
-      setNewName("");
-      setExpandedId(newId);
-    } catch (e) {
-      toast.error(errorMessages.create, { description: String(e) });
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  async function handleCreateInlineCard() {
+  async function handleCreate() {
     if (creatingName === null || !creatingName.trim()) return;
     try {
       const newId = await onCreateSet(creatingName.trim());
@@ -130,38 +107,43 @@ export function SetManagementPage({
     }
   }
 
-  const showEmptyState =
-    sets.length === 0 &&
-    (createVariant === "bottom-input" || creatingName === null);
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleSets = normalizedQuery
+    ? sets.filter((s) => s.name.toLowerCase().includes(normalizedQuery))
+    : sets;
+
+  const isEmpty = sets.length === 0 && creatingName === null;
 
   return (
-    <div className="p-6 flex flex-col gap-8">
-      <SectionHeader title={title} trailing={trailing} />
-
-      <p className="text-[12px] text-muted-foreground/85 max-w-prose -mt-5">
-        {description}
-      </p>
-
+    <ListSurface
+      title={title}
+      description={description}
+      count={trailing}
+      search={
+        sets.length > SEARCH_THRESHOLD
+          ? {
+              value: query,
+              onChange: setQuery,
+              placeholder: `Search ${title.toLowerCase()}…`,
+            }
+          : undefined
+      }
+    >
       <div className="flex flex-col gap-2">
-        {showEmptyState ? (
+        {isEmpty ? (
           <EmptyRowCard
             preview={emptyPreview}
             hint={emptyHint}
             action={emptyAction}
-            onClick={
-              createVariant === "bottom-input"
-                ? () => newInputRef.current?.focus()
-                : () => setCreatingName("")
-            }
+            onClick={() => setCreatingName("")}
           />
         ) : (
           <>
-            {sets.map((set) => (
+            {visibleSets.map((set) => (
               <SetRow
                 key={set.id}
                 set={set}
                 expanded={expandedId === set.id}
-                expandVariant={expandVariant}
                 renderEntryBadge={renderEntryBadge}
                 onToggleExpand={() =>
                   setExpandedId((id) => (id === set.id ? null : set.id))
@@ -172,15 +154,21 @@ export function SetManagementPage({
               />
             ))}
 
-            {createVariant === "inline-card" &&
-              (creatingName !== null ? (
-                <InlineCreateRow
-                  name={creatingName}
-                  onChange={setCreatingName}
-                  onSave={handleCreateInlineCard}
-                  onCancel={() => setCreatingName(null)}
-                />
-              ) : (
+            {normalizedQuery && visibleSets.length === 0 && (
+              <p className="px-1 py-2 text-xs text-muted-foreground">
+                No sets match “{query}”.
+              </p>
+            )}
+
+            {creatingName !== null ? (
+              <InlineCreateRow
+                name={creatingName}
+                onChange={setCreatingName}
+                onSave={handleCreate}
+                onCancel={() => setCreatingName(null)}
+              />
+            ) : (
+              !normalizedQuery && (
                 <EmptyRowCard
                   preview={
                     <span className="font-mono text-[13px] font-semibold text-muted-foreground/55">
@@ -191,34 +179,24 @@ export function SetManagementPage({
                   onClick={() => setCreatingName("")}
                   className="py-4"
                 />
-              ))}
+              )
+            )}
           </>
         )}
       </div>
-
-      {createVariant === "bottom-input" && (
-        <BottomCreateRow
-          value={newName}
-          onChange={setNewName}
-          onSubmit={handleCreateBottomInput}
-          creating={creating}
-          inputRef={newInputRef}
-        />
-      )}
 
       <DeleteConfirmDialog
         target={deleteTarget}
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
-    </div>
+    </ListSurface>
   );
 }
 
 function SetRow({
   set,
   expanded,
-  expandVariant,
   renderEntryBadge,
   onToggleExpand,
   onRename,
@@ -227,7 +205,6 @@ function SetRow({
 }: {
   set: GenericSet;
   expanded: boolean;
-  expandVariant: "row-click" | "open-button";
   renderEntryBadge: (count: number) => React.ReactNode;
   onToggleExpand: () => void;
   onRename: (name: string) => Promise<void>;
@@ -264,121 +241,52 @@ function SetRow({
     setRenaming(false);
   }
 
-  const clickable = !renaming && expandVariant === "row-click";
-
   return (
-    <div className="flex flex-col gap-0 group/row">
-      <RowCard
-        interactive={clickable}
-        className={
-          expanded
-            ? "rounded-b-none border-b-0 group-hover/row:border-ring/55"
-            : ""
-        }
-        onClick={clickable ? onToggleExpand : undefined}
-      >
-        <div className="flex flex-1 min-w-0 items-center gap-2">
-          {renaming ? (
-            <Input
-              ref={renameRef}
-              value={draftName}
-              onChange={(e) => setDraftName(e.target.value)}
-              onBlur={commitRename}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") commitRename();
-                if (e.key === "Escape") revertRename();
-              }}
-              className="h-7 text-sm font-semibold w-48"
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <span className="text-sm font-semibold truncate">{set.name}</span>
-          )}
-          {renderEntryBadge(set.entryCount)}
-        </div>
-
-        <div
-          className="flex items-center gap-0.5 shrink-0"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {expandVariant === "open-button" && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-[12px] text-muted-foreground hover:text-foreground"
-              onClick={onToggleExpand}
-            >
-              {expanded ? "Close" : "Open"}
-            </Button>
-          )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Rename set"
-                onClick={startRename}
-              >
-                <PencilSimpleIcon size={14} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Rename</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Delete set"
-                onClick={onDelete}
-                className="text-muted-foreground/70 hover:text-destructive"
-              >
-                <TrashIcon size={14} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Delete</TooltipContent>
-          </Tooltip>
-        </div>
-      </RowCard>
-
-      {expanded && (
-        <div className="border-x border-b border-border group-hover/row:border-ring/55 transition-[border-color] duration-150 rounded-b-lg px-3 py-3 bg-card">
-          {renderEntriesEditor(set.id)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function BottomCreateRow({
-  value,
-  onChange,
-  onSubmit,
-  creating,
-  inputRef,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onSubmit: () => void;
-  creating: boolean;
-  inputRef: React.RefObject<HTMLInputElement | null>;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <Input
-        ref={inputRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") onSubmit();
-        }}
-        placeholder="New set name"
-        className="max-w-xs h-8 text-sm"
-      />
-      <Button size="sm" onClick={onSubmit} disabled={creating || !value.trim()}>
-        {creating ? "Creating…" : "Create set"}
-      </Button>
-    </div>
+    <ListRow
+      expanded={expanded}
+      label={
+        renaming ? (
+          <Input
+            ref={renameRef}
+            value={draftName}
+            onChange={(e) => setDraftName(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitRename();
+              if (e.key === "Escape") revertRename();
+            }}
+            className="h-7 text-sm font-semibold w-48"
+          />
+        ) : (
+          <span className="text-sm font-semibold truncate">{set.name}</span>
+        )
+      }
+      meta={!renaming && renderEntryBadge(set.entryCount)}
+      actions={
+        <>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-[12px] text-muted-foreground hover:text-foreground"
+            onClick={onToggleExpand}
+          >
+            {expanded ? "Close" : "Open"}
+          </Button>
+          <RowActionButton
+            icon={<PencilSimpleIcon size={14} />}
+            label="Rename set"
+            onClick={startRename}
+          />
+          <RowActionButton
+            icon={<TrashIcon size={14} />}
+            label="Delete set"
+            tone="destructive"
+            onClick={onDelete}
+          />
+        </>
+      }
+      below={expanded ? renderEntriesEditor(set.id) : null}
+    />
   );
 }
 

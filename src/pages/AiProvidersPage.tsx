@@ -13,6 +13,7 @@ import { GoogleGeminiLogo } from "@/assets/GoogleGeminiLogo";
 import { GroqLogo } from "@/assets/GroqLogo";
 import { OpenAiLogo } from "@/assets/OpenAiLogo";
 import { OpenRouterLogo } from "@/assets/OpenRouterLogo";
+import { PageShell } from "@/components/PageShell";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -549,9 +550,12 @@ export function AiProvidersPage() {
   }, [watched.minWords, watched.minDurationSec, setSettings]);
 
   return (
-    <div className="p-6 flex flex-col gap-8">
+    <PageShell
+      title="Cleanup"
+      description="Models that clean up transcriptions. Configure a provider, then enable cleanup per profile."
+    >
       <SectionCard title="Provider">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <ProviderCard
             descriptor={anthropicDescriptor}
             settings={settings}
@@ -702,12 +706,11 @@ export function AiProvidersPage() {
             </form>
           </Form>
           <p className="text-xs text-muted-foreground">
-            Cleanup runs only when both thresholds are met and is enabled
-            per-Profile in the Profiles page. There is no global toggle — enable
-            cleanup per-Profile under Profiles.
+            Cleanup runs only when both thresholds are met. Enable it per
+            profile under Profiles; there is no global toggle.
           </p>
         </div>
       </SectionCard>
-    </div>
+    </PageShell>
   );
 }

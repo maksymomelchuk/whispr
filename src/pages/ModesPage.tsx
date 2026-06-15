@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
+import { PageShell } from "@/components/PageShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,7 +46,6 @@ import {
 
 import { Chip } from "../components/Chip";
 import { RowCard } from "../components/RowCard";
-import { SectionHeader } from "../components/SectionHeader";
 import { ToggleRow } from "../components/ToggleRow";
 import { useSettings } from "../context/SettingsContext";
 import {
@@ -1053,7 +1053,7 @@ export function ModeEditor({
             label="AI cleanup"
             info={
               !cleanupProviderConfigured && !draft.ai_cleanup.enabled
-                ? "Set up a provider in AI Providers to enable cleanup."
+                ? "Set up a provider on the Cleanup page to enable this."
                 : undefined
             }
             checked={draft.ai_cleanup.enabled}
@@ -1120,7 +1120,7 @@ export function ModeEditor({
                       {customProviderModel || "(blank — single-model server)"}
                     </p>
                     <p className="text-xs text-muted-foreground/60">
-                      Configured on the Custom card in AI Providers.
+                      Configured on the Custom card under Cleanup.
                     </p>
                   </div>
                 )}
@@ -1301,8 +1301,10 @@ export function ModesPage() {
   };
 
   return (
-    <div className="p-6 flex flex-col gap-8">
-      <SectionHeader title="Profiles" />
+    <PageShell
+      title="Profiles"
+      description="Each profile pairs a speech model with cleanup and vocabulary. Bind a hotkey to switch between them."
+    >
       {settings.modes.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No profiles yet. Add one to start dictating.
@@ -1390,6 +1392,6 @@ export function ModesPage() {
           )}
         </SheetContent>
       </Sheet>
-    </div>
+    </PageShell>
   );
 }

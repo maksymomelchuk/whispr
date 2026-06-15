@@ -72,8 +72,13 @@ const NAV_SECTIONS: NavSection[] = [
       { label: "Hotkeys", icon: KeyboardIcon, path: "/hotkeys" },
       { label: "Profiles", icon: SlidersIcon, path: "/modes" },
       { label: "Speech models", icon: WaveformIcon, path: "/speech-models" },
-      { label: "AI Providers", icon: SparkleIcon, path: "/ai-providers" },
+      { label: "Cleanup", icon: SparkleIcon, path: "/ai-providers" },
       { label: "Tone of voice", icon: TextAaIcon, path: "/tone" },
+    ],
+  },
+  {
+    label: "Customization",
+    items: [
       { label: "Vocabulary", icon: TextTIcon, path: "/terms" },
       {
         label: "Corrections",

@@ -3,7 +3,10 @@ import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { SectionCard } from "@/components/SectionCard";
+import { ListRow, RowActionButton } from "@/components/ListRow";
+import { ListSurface } from "@/components/ListSurface";
+import { RowCard } from "@/components/RowCard";
+import { SectionHeader } from "@/components/SectionHeader";
 import { ToggleRow } from "@/components/ToggleRow";
 import { Button } from "@/components/ui/button";
 import {
@@ -198,129 +201,72 @@ export function ToneOverlayPage() {
   );
 
   return (
-    <div className="p-6 flex flex-col gap-8">
-      <SectionCard title="Tone of voice">
-        <div className="flex flex-col gap-3">
-          <ToggleRow
-            id="tone-overlay-enabled"
-            label="Adapt tone to app"
-            info="Matches formatting to the app you dictate into — email gets formal punctuation, messaging stays casual, code honors spoken casing cues like 'underscore' and 'dot'. Presets adjust punctuation, capitalization, line breaks, and (for Technical) identifier casing; a custom prompt can do more."
-            checked={settings.ai_cleanup_tone_overlay_enabled}
-            onCheckedChange={toneOverlay.toggle}
-          />
-          {settings.ai_cleanup_tone_overlay_enabled && (
-            <div className="flex flex-col gap-2 pt-1">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-medium text-foreground">
-                  Per-app overrides
-                </p>
-                {candidateApps.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <Select value="" onValueChange={handleAddOverride}>
-                      <SelectTrigger className="h-7 w-40 text-xs">
-                        <SelectValue placeholder="+ Add app override" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {candidateApps.map((app) => (
-                          <SelectItem key={app.bundle_id} value={app.bundle_id}>
-                            <span className="flex items-center gap-2">
-                              <AppIcon
-                                icon={app.icon_data_url}
-                                name={app.app_name}
-                              />
-                              {app.app_name}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <span className="size-6 shrink-0" aria-hidden />
-                    <span className="size-6 shrink-0" aria-hidden />
-                  </div>
-                )}
-              </div>
-              {overriddenApps.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  Every app uses its automatic tone. Add an override to
-                  customize one.
-                </p>
-              ) : (
-                <div className="flex flex-col">
-                  {overriddenApps.map((app) => {
-                    const isCustom = app.custom_prompt !== null;
-                    return (
-                      <div
-                        key={app.bundle_id}
-                        className="flex items-center gap-2 py-1.5"
-                      >
-                        <AppIcon icon={app.icon_data_url} name={app.app_name} />
-                        <span className="min-w-0 truncate text-[13px] text-foreground">
+    <ListSurface
+      title="Tone of voice"
+      description="Adapt formatting to the app you dictate into. Email gets formal punctuation, messaging stays casual, code honors spoken casing cues."
+    >
+      <RowCard interactive={false}>
+        <ToggleRow
+          id="tone-overlay-enabled"
+          label="Adapt tone to app"
+          info="Matches formatting to the app you dictate into — email gets formal punctuation, messaging stays casual, code honors spoken casing cues like 'underscore' and 'dot'. Presets adjust punctuation, capitalization, line breaks, and (for Technical) identifier casing; a custom prompt can do more."
+          checked={settings.ai_cleanup_tone_overlay_enabled}
+          onCheckedChange={toneOverlay.toggle}
+          className="flex-1"
+        />
+      </RowCard>
+
+      {settings.ai_cleanup_tone_overlay_enabled && (
+        <div className="flex flex-col gap-2">
+          <SectionHeader
+            title="Per-app overrides"
+            control={
+              candidateApps.length > 0 ? (
+                <Select value="" onValueChange={handleAddOverride}>
+                  <SelectTrigger className="h-7 w-44 text-xs">
+                    <SelectValue placeholder="+ Add app override" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {candidateApps.map((app) => (
+                      <SelectItem key={app.bundle_id} value={app.bundle_id}>
+                        <span className="flex items-center gap-2">
+                          <AppIcon
+                            icon={app.icon_data_url}
+                            name={app.app_name}
+                          />
                           {app.app_name}
                         </span>
-                        <Select
-                          value={
-                            isCustom
-                              ? "custom"
-                              : (app.tone_override ?? "neutral")
-                          }
-                          onValueChange={(v) => {
-                            if (v === "custom") {
-                              setEditing({
-                                bundleId: app.bundle_id,
-                                appName: app.app_name,
-                                text: app.custom_prompt ?? "",
-                              });
-                            } else {
-                              void applyPreset(app.bundle_id, v as TonePreset);
-                            }
-                          }}
-                        >
-                          <SelectTrigger className="ml-auto h-7 w-40 shrink-0 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {OVERRIDE_OPTIONS.map((opt) => (
-                              <SelectItem key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {isCustom ? (
-                          <button
-                            type="button"
-                            aria-label={`Edit ${app.app_name} custom prompt`}
-                            onClick={() =>
-                              setEditing({
-                                bundleId: app.bundle_id,
-                                appName: app.app_name,
-                                text: app.custom_prompt ?? "",
-                              })
-                            }
-                            className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-                          >
-                            <PencilSimpleIcon className="size-4" />
-                          </button>
-                        ) : (
-                          <span className="size-6 shrink-0" aria-hidden />
-                        )}
-                        <button
-                          type="button"
-                          aria-label={`Remove ${app.app_name} override`}
-                          onClick={() => removeOverride(app.bundle_id)}
-                          className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                          <XIcon className="size-4" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : undefined
+            }
+          />
+          {overriddenApps.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Every app uses its automatic tone. Add an override to customize
+              one.
+            </p>
+          ) : (
+            overriddenApps.map((app) => (
+              <ToneAppRow
+                key={app.bundle_id}
+                app={app}
+                onApplyPreset={(preset) => applyPreset(app.bundle_id, preset)}
+                onEditCustom={() =>
+                  setEditing({
+                    bundleId: app.bundle_id,
+                    appName: app.app_name,
+                    text: app.custom_prompt ?? "",
+                  })
+                }
+                onRemove={() => removeOverride(app.bundle_id)}
+              />
+            ))
           )}
         </div>
-      </SectionCard>
+      )}
 
       <Dialog
         open={editing !== null}
@@ -357,6 +303,69 @@ export function ToneOverlayPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </ListSurface>
+  );
+}
+
+function ToneAppRow({
+  app,
+  onApplyPreset,
+  onEditCustom,
+  onRemove,
+}: {
+  app: AppToneInfo;
+  onApplyPreset: (preset: TonePreset) => void;
+  onEditCustom: () => void;
+  onRemove: () => void;
+}) {
+  const isCustom = app.custom_prompt !== null;
+
+  return (
+    <ListRow
+      label={
+        <>
+          <AppIcon icon={app.icon_data_url} name={app.app_name} />
+          <span className="min-w-0 truncate text-[13px] text-foreground">
+            {app.app_name}
+          </span>
+        </>
+      }
+      meta={
+        <Select
+          value={isCustom ? "custom" : (app.tone_override ?? "neutral")}
+          onValueChange={(v) => {
+            if (v === "custom") onEditCustom();
+            else onApplyPreset(v as TonePreset);
+          }}
+        >
+          <SelectTrigger className="ml-auto h-7 w-40 shrink-0 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {OVERRIDE_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      }
+      actions={
+        <>
+          {isCustom && (
+            <RowActionButton
+              icon={<PencilSimpleIcon size={14} />}
+              label={`Edit ${app.app_name} custom prompt`}
+              onClick={onEditCustom}
+            />
+          )}
+          <RowActionButton
+            icon={<XIcon size={14} />}
+            label={`Remove ${app.app_name} override`}
+            onClick={onRemove}
+          />
+        </>
+      }
+    />
   );
 }

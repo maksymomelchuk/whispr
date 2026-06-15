@@ -3,17 +3,13 @@ import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { Chip } from "@/components/Chip";
 import { EmptyPanel } from "@/components/EmptyPanel";
+import { ListRow, RowActionButton } from "@/components/ListRow";
+import { ListSurface } from "@/components/ListSurface";
 import { RowCard } from "@/components/RowCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { ToggleRow } from "@/components/ToggleRow";
-import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
 
 import { useSettings } from "../context/SettingsContext";
 import {
@@ -88,75 +84,67 @@ export function LearnedEntriesPage() {
   const promotedEntries = entries.filter((e) => e.status === "promoted");
 
   return (
-    <div className="p-6 flex flex-col gap-8">
-      <SectionHeader title="Auto-Learning" />
+    <ListSurface
+      title="Auto-Learn"
+      description="Edits you make to History entries become vocabulary and correction suggestions. Promote the ones worth keeping."
+    >
+      <RowCard interactive={false}>
+        <ToggleRow
+          id="learn-from-corrections"
+          label="Learn from my corrections"
+          info="When on, edits you make to History entries are analysed and vocabulary corrections are suggested automatically."
+          checked={settings.learn_from_corrections}
+          onCheckedChange={handleToggleLearning}
+          className="flex-1"
+        />
+      </RowCard>
 
-      <div className="flex flex-col gap-3">
-        <div className="bg-card border border-border rounded-lg px-3 py-3">
-          <ToggleRow
-            id="learn-from-corrections"
-            label="Learn from my corrections"
-            info="When on, edits you make to History entries are analysed and vocabulary corrections are suggested automatically."
-            checked={settings.learn_from_corrections}
-            onCheckedChange={handleToggleLearning}
+      {settings.learn_from_corrections &&
+        (!loading && entries.length === 0 ? (
+          <EmptyPanel
+            title="No learned entries yet"
+            hint="Edit History entries to teach the app your corrections."
           />
-        </div>
-      </div>
-
-      {settings.learn_from_corrections && (
-        <>
-          {!loading && entries.length === 0 ? (
-            <EmptyPanel
-              title="No learned entries yet"
-              hint="Edit History entries to teach the app your corrections."
-            />
-          ) : (
-            <>
-              {promotedEntries.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <SectionHeader
-                    title="Ready to use"
-                    trailing={`${promotedEntries.length}`}
+        ) : (
+          <>
+            {promotedEntries.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <SectionHeader
+                  title="Ready to use"
+                  trailing={`${promotedEntries.length}`}
+                />
+                {promotedEntries.map((entry) => (
+                  <LearnedEntryRow
+                    key={entry.id}
+                    entry={entry}
+                    onDelete={() => handleDelete(entry.id)}
                   />
-                  <div className="flex flex-wrap gap-1.5 items-center p-2 rounded-lg bg-card border border-border shadow-xs">
-                    {promotedEntries.map((entry) => (
-                      <Chip
-                        key={entry.id}
-                        label={<LearnedChipLabel entry={entry} />}
-                        removeLabel={`Delete ${entry.word}`}
-                        onRemove={() => handleDelete(entry.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
+                ))}
+              </div>
+            )}
 
-              {candidateEntries.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <SectionHeader
-                    title="Candidates"
-                    trailing={`${candidateEntries.length}`}
+            {candidateEntries.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <SectionHeader
+                  title="Candidates"
+                  trailing={`${candidateEntries.length}`}
+                />
+                <p className="text-[12px] text-muted-foreground">
+                  Seen once. Needs one more observation to activate.
+                </p>
+                {candidateEntries.map((entry) => (
+                  <LearnedEntryRow
+                    key={entry.id}
+                    entry={entry}
+                    onDelete={() => handleDelete(entry.id)}
+                    onPromote={() => handlePromote(entry.id)}
                   />
-                  <p className="text-[12px] text-muted-foreground">
-                    Seen once. Needs one more observation to activate.
-                  </p>
-                  <div className="flex flex-col gap-1.5">
-                    {candidateEntries.map((entry) => (
-                      <LearnedEntryRow
-                        key={entry.id}
-                        entry={entry}
-                        onDelete={() => handleDelete(entry.id)}
-                        onPromote={() => handlePromote(entry.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </>
-      )}
-    </div>
+                ))}
+              </div>
+            )}
+          </>
+        ))}
+    </ListSurface>
   );
 }
 
@@ -170,46 +158,39 @@ function LearnedEntryRow({
   onPromote?: () => void;
 }) {
   return (
-    <RowCard>
-      <div className="flex flex-1 min-w-0 items-center gap-2">
-        <LearnedRowLabel entry={entry} />
-        <span className="ml-auto text-[11px] text-muted-foreground/60 shrink-0 tabular-nums">
-          {entry.total_observations}×
+    <ListRow
+      label={<LearnedRowLabel entry={entry} />}
+      meta={
+        <span className="ml-auto shrink-0">
+          {entry.status === "promoted" ? (
+            <Badge variant="neutral" className="text-[10px]">
+              Active
+            </Badge>
+          ) : (
+            <span className="text-[11px] text-muted-foreground/60 tabular-nums">
+              {entry.total_observations}×
+            </span>
+          )}
         </span>
-      </div>
-
-      <div className="flex items-center gap-0.5 shrink-0">
-        {onPromote && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Promote to permanent entry"
-                onClick={onPromote}
-              >
-                <ArrowUpIcon size={14} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Promote to permanent entry</TooltipContent>
-          </Tooltip>
-        )}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Delete"
-              onClick={onDelete}
-              className="text-muted-foreground/70 hover:text-destructive"
-            >
-              <TrashIcon size={14} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Delete</TooltipContent>
-        </Tooltip>
-      </div>
-    </RowCard>
+      }
+      actions={
+        <>
+          {onPromote && (
+            <RowActionButton
+              icon={<ArrowUpIcon size={14} />}
+              label="Promote to permanent entry"
+              onClick={onPromote}
+            />
+          )}
+          <RowActionButton
+            icon={<TrashIcon size={14} />}
+            label={`Delete ${entry.word}`}
+            tone="destructive"
+            onClick={onDelete}
+          />
+        </>
+      }
+    />
   );
 }
 
@@ -228,17 +209,4 @@ function LearnedRowLabel({ entry }: { entry: LearnedEntry }) {
       {entry.word}
     </span>
   );
-}
-
-function LearnedChipLabel({ entry }: { entry: LearnedEntry }) {
-  if (entry.kind === "correction" && entry.from) {
-    return (
-      <span className="font-mono">
-        <span className="text-primary/60">{entry.from}</span>
-        <span className="mx-1 text-primary/40">→</span>
-        <span className="font-semibold">{entry.word}</span>
-      </span>
-    );
-  }
-  return <span className="font-mono font-semibold">{entry.word}</span>;
 }

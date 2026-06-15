@@ -130,11 +130,11 @@ describe("TermsPage – vocabulary-specific", () => {
       term_sets: [{ id: "ts-new", name: "Medical", entries: [] }],
     });
     render(<Wrapper />);
-    await userEvent.type(
-      screen.getByPlaceholderText("New set name"),
-      "Medical",
+    await userEvent.click(
+      screen.getByRole("button", { name: /new term set/i }),
     );
-    await userEvent.click(screen.getByRole("button", { name: /create set/i }));
+    await userEvent.type(screen.getByPlaceholderText("Set name"), "Medical");
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() =>
       expect(mockCreateTermSet).toHaveBeenCalledWith("Medical"),
     );
@@ -154,7 +154,7 @@ describe("TermsPage – vocabulary-specific", () => {
   it("shows TermChipInput when a set is expanded", async () => {
     const set: NamedTermSet = { id: "ts-1", name: "My Set", entries: [] };
     render(<Wrapper initial={{ ...BASE, term_sets: [set] }} />);
-    await userEvent.click(screen.getByText("My Set"));
+    await userEvent.click(screen.getByRole("button", { name: "Open" }));
     expect(screen.getByPlaceholderText(/type a term/i)).toBeInTheDocument();
   });
 
@@ -165,7 +165,7 @@ describe("TermsPage – vocabulary-specific", () => {
       term_sets: [{ id: "ts-1", name: "My Set", entries: ["MongoDB"] }],
     });
     render(<Wrapper initial={{ ...BASE, term_sets: [set] }} />);
-    await userEvent.click(screen.getByText("My Set"));
+    await userEvent.click(screen.getByRole("button", { name: "Open" }));
     await userEvent.type(
       screen.getByPlaceholderText(/type a term/i),
       "MongoDB{Enter}",

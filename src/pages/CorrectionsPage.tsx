@@ -78,7 +78,6 @@ export function CorrectionsPage() {
           </Badge>
         ) : null
       }
-      expandVariant="open-button"
       getAffectedModeNames={(setId) =>
         settings.modes
           .filter((m) => m.correction_set_ids.includes(setId))
@@ -97,7 +96,6 @@ export function CorrectionsPage() {
           />
         );
       }}
-      createVariant="inline-card"
       errorMessages={{
         create: "Couldn't create correction set",
         rename: "Couldn't rename correction set",

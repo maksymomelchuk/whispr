@@ -162,7 +162,7 @@ describe("LearnedEntriesPage – entry display", () => {
     expect(screen.getByText("1×")).toBeInTheDocument();
   });
 
-  it("renders promoted term as a chip with a delete control", async () => {
+  it("renders promoted term with a delete control", async () => {
     render(<Wrapper initial={{ ...BASE, learn_from_corrections: true }} />);
     await waitFor(() => expect(screen.getByText("GitHub")).toBeInTheDocument());
     expect(
@@ -186,7 +186,7 @@ describe("LearnedEntriesPage – delete", () => {
 
     await waitFor(() => expect(screen.getByText("Tauri")).toBeInTheDocument());
 
-    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete Tauri" }));
 
     await waitFor(() =>
       expect(mockDeleteLearnedEntry).toHaveBeenCalledWith("learned-1"),
