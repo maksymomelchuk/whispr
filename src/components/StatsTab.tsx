@@ -12,13 +12,20 @@ import {
 } from "@/components/ui/chart";
 import type { ChartConfig } from "@/components/ui/chart";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-import { useConfirmAction } from "../hooks/useConfirmAction";
 import {
   getAppIcon,
   getCleanupStats,
@@ -211,16 +218,18 @@ export function StatsTab({ period }: StatsTabProps) {
     };
   }, [cleanup, period]);
 
-  const { confirming: confirmingClear, trigger: handleClear } =
-    useConfirmAction(async () => {
-      try {
-        await persistClearStats();
-        setRows([]);
-        setCleanup(null);
-      } catch (e) {
-        console.error("clear stats failed", e);
-      }
-    });
+  const [clearDialogOpen, setClearDialogOpen] = useState(false);
+
+  const handleClearConfirm = async () => {
+    try {
+      await persistClearStats();
+      setRows([]);
+      setCleanup(null);
+    } catch (e) {
+      console.error("clear stats failed", e);
+    }
+    setClearDialogOpen(false);
+  };
 
   const refresh = () => {
     Promise.all([getStats(), getCleanupStats()])
@@ -278,11 +287,11 @@ export function StatsTab({ period }: StatsTabProps) {
       {hasAny && (
         <div className="flex items-center justify-end">
           <Button
-            variant={confirmingClear ? "destructive" : "ghost"}
+            variant="ghost"
             size="xs"
-            onClick={handleClear}
+            onClick={() => setClearDialogOpen(true)}
           >
-            {confirmingClear ? "Click to confirm" : "Clear stats"}
+            Clear stats
           </Button>
         </div>
       )}
@@ -326,7 +335,44 @@ export function StatsTab({ period }: StatsTabProps) {
           {cleanupTokens && <CleanupRow tokens={cleanupTokens} />}
         </>
       )}
+
+      <ClearStatsConfirmDialog
+        open={clearDialogOpen}
+        onConfirm={handleClearConfirm}
+        onCancel={() => setClearDialogOpen(false)}
+      />
     </section>
+  );
+}
+
+function ClearStatsConfirmDialog({
+  open,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Clear stats?</DialogTitle>
+          <DialogDescription>
+            Delete all recorded stats? This can&rsquo;t be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={onConfirm}>
+            Clear stats
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
