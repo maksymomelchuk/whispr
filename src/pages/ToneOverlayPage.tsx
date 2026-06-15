@@ -27,6 +27,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 
 import { useSettings } from "../context/SettingsContext";
+import { useFlash } from "../hooks/useFlash";
 import { usePersistedToggle } from "../hooks/usePersistedToggle";
 import {
   clearToneAppOverride,
@@ -35,6 +36,7 @@ import {
   setToneAppCustomPrompt,
   setToneAppOverride,
 } from "../lib/api";
+import { toastUndo } from "../lib/toastUndo";
 import type { AppToneInfo, TonePreset } from "../lib/types";
 
 const OVERRIDE_OPTIONS: { value: TonePreset | "custom"; label: string }[] = [
@@ -77,6 +79,7 @@ export function ToneOverlayPage() {
 
   const [seenApps, setSeenApps] = useState<AppToneInfo[]>([]);
   const [editing, setEditing] = useState<CustomDraft | null>(null);
+  const { flash, isFlashing } = useFlash();
 
   const loadSeenApps = useCallback(async () => {
     try {
@@ -125,35 +128,71 @@ export function ToneOverlayPage() {
             : a,
         ),
       );
+      flash(bundleId);
     } catch (e) {
       toast.error("Couldn't update tone override", { description: String(e) });
     }
   };
 
-  const removeOverride = async (bundleId: string) => {
-    try {
-      await clearToneAppOverride(bundleId);
-      setSettings((s) => {
-        const overrides = { ...s.tone_app_overrides };
-        const customs = { ...s.tone_app_custom_prompts };
-        delete overrides[bundleId];
-        delete customs[bundleId];
-        return {
-          ...s,
-          tone_app_overrides: overrides,
-          tone_app_custom_prompts: customs,
-        };
-      });
-      setSeenApps((prev) =>
-        prev.map((a) =>
-          a.bundle_id === bundleId
-            ? { ...a, tone_override: null, custom_prompt: null }
-            : a,
-        ),
-      );
-    } catch (e) {
-      toast.error("Couldn't remove tone override", { description: String(e) });
-    }
+  const removeOverride = (bundleId: string) => {
+    const app = seenApps.find((a) => a.bundle_id === bundleId);
+    if (!app) return;
+
+    setSeenApps((prev) =>
+      prev.map((a) =>
+        a.bundle_id === bundleId
+          ? { ...a, tone_override: null, custom_prompt: null }
+          : a,
+      ),
+    );
+
+    toastUndo(
+      `Removed ${app.app_name} override`,
+      async () => {
+        try {
+          await clearToneAppOverride(bundleId);
+          setSettings((s) => {
+            const overrides = { ...s.tone_app_overrides };
+            const customs = { ...s.tone_app_custom_prompts };
+            delete overrides[bundleId];
+            delete customs[bundleId];
+            return {
+              ...s,
+              tone_app_overrides: overrides,
+              tone_app_custom_prompts: customs,
+            };
+          });
+        } catch (e) {
+          toast.error("Couldn't remove tone override", {
+            description: String(e),
+          });
+          setSeenApps((prev) =>
+            prev.map((a) =>
+              a.bundle_id === bundleId
+                ? {
+                    ...a,
+                    tone_override: app.tone_override,
+                    custom_prompt: app.custom_prompt,
+                  }
+                : a,
+            ),
+          );
+        }
+      },
+      () => {
+        setSeenApps((prev) =>
+          prev.map((a) =>
+            a.bundle_id === bundleId
+              ? {
+                  ...a,
+                  tone_override: app.tone_override,
+                  custom_prompt: app.custom_prompt,
+                }
+              : a,
+          ),
+        );
+      },
+    );
   };
 
   const saveCustom = async () => {
@@ -181,6 +220,7 @@ export function ToneOverlayPage() {
             : a,
         ),
       );
+      flash(editing.bundleId);
       setEditing(null);
     } catch (e) {
       toast.error("Couldn't save custom tone", { description: String(e) });
@@ -253,6 +293,7 @@ export function ToneOverlayPage() {
               <ToneAppRow
                 key={app.bundle_id}
                 app={app}
+                flashing={isFlashing(app.bundle_id)}
                 onApplyPreset={(preset) => applyPreset(app.bundle_id, preset)}
                 onEditCustom={() =>
                   setEditing({
@@ -309,11 +350,13 @@ export function ToneOverlayPage() {
 
 function ToneAppRow({
   app,
+  flashing,
   onApplyPreset,
   onEditCustom,
   onRemove,
 }: {
   app: AppToneInfo;
+  flashing?: boolean;
   onApplyPreset: (preset: TonePreset) => void;
   onEditCustom: () => void;
   onRemove: () => void;
@@ -322,6 +365,7 @@ function ToneAppRow({
 
   return (
     <ListRow
+      flashing={flashing}
       label={
         <>
           <AppIcon icon={app.icon_data_url} name={app.app_name} />
