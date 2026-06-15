@@ -338,7 +338,10 @@ fn observe_one(
     bundle_id: Option<&str>,
     now_ms: i64,
 ) {
-    let known_inconsistent = settings.learned_inconsistent_from.iter().any(|f| f == from);
+    // The inconsistent set is a case-normalized key: inverse detection below is
+    // case-insensitive, so a case variant must not slip past this guard.
+    let from_lc = from.to_lowercase();
+    let known_inconsistent = settings.learned_inconsistent_from.contains(&from_lc);
 
     if known_inconsistent {
         // Reinforce the current rule if it still matches; otherwise fall through to
@@ -361,7 +364,6 @@ fn observe_one(
     // Inverse contradiction: an existing `to → from` rule makes this a 2-cycle
     // that oscillates under apply_corrections. Drop the existing rule, skip the
     // new one, and mark both from-words inconsistent so neither side recreates.
-    let from_lc = from.to_lowercase();
     let to_lc = to.to_lowercase();
     let inverse_from = settings.learned_entries.iter().find_map(|e| match &e.kind {
         LearnedKind::Correction { from: f }
@@ -375,7 +377,7 @@ fn observe_one(
         settings.learned_entries.retain(
             |e| !matches!(&e.kind, LearnedKind::Correction { from: f } if *f == inverse_from),
         );
-        for word in [from.to_string(), inverse_from] {
+        for word in [from_lc.clone(), inverse_from.to_lowercase()] {
             if !settings.learned_inconsistent_from.contains(&word) {
                 settings.learned_inconsistent_from.push(word);
             }
@@ -393,7 +395,7 @@ fn observe_one(
             .learned_entries
             .retain(|e| !matches!(&e.kind, LearnedKind::Correction { from: f } if f == from));
         // Record the inconsistency so future observations never create a new Correction.
-        settings.learned_inconsistent_from.push(from.to_string());
+        settings.learned_inconsistent_from.push(from_lc.clone());
         // The new target starts fresh as a Correction candidate.
         let id = format!("learned-{now_ms}-{}", settings.learned_entries.len());
         settings.learned_entries.push(LearnedEntry {
@@ -726,7 +728,27 @@ mod tests {
         assert!(s
             .learned_inconsistent_from
             .iter()
-            .any(|f| f == "PostgreSQL"));
+            .any(|f| f == "postgresql"));
+    }
+
+    #[test]
+    fn inconsistent_guard_ignores_case() {
+        let mut s = make_settings();
+        observe_one("postgres", "PostgreSQL", &mut s, None, 1000);
+        observe_one("PostgreSQL", "Postgres", &mut s, None, 2000);
+        // A case variant of a from-word marked inconsistent must not recreate a
+        // Correction — the cycle-prevention key is case-normalized.
+        observe_one("Postgres", "PostgreSQL", &mut s, None, 3000);
+
+        let corrections: Vec<_> = s
+            .learned_entries
+            .iter()
+            .filter(|e| matches!(&e.kind, LearnedKind::Correction { .. }))
+            .collect();
+        assert!(
+            corrections.is_empty(),
+            "a case variant must not bypass the inconsistent guard"
+        );
     }
 
     #[test]
