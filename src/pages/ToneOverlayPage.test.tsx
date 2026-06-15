@@ -205,17 +205,51 @@ describe("ToneOverlayPage", () => {
         settings={{ ...BASE_SETTINGS, ai_cleanup_tone_overlay_enabled: true }}
       />,
     );
-    await waitFor(() => screen.getByRole("combobox"));
-    await userEvent.selectOptions(
-      screen.getByRole("combobox"),
-      "com.apple.mail",
+    await userEvent.click(
+      await screen.findByRole("button", { name: /add app override/i }),
     );
+    await userEvent.click(screen.getByRole("button", { name: "Mail" }));
     await waitFor(() => {
       expect(setToneAppOverride).toHaveBeenCalledWith(
         "com.apple.mail",
         "formal",
       );
     });
+  });
+
+  it("filters apps in the picker dialog by search query", async () => {
+    const { getAppsSeenInHistory } = await import("../lib/api");
+    vi.mocked(getAppsSeenInHistory).mockResolvedValueOnce([
+      {
+        bundle_id: "com.apple.mail",
+        app_name: "Mail",
+        tone_preset: "formal",
+        tone_override: null,
+        custom_prompt: null,
+        icon_data_url: null,
+      },
+      {
+        bundle_id: "com.tinyspeck.slackmacgap",
+        app_name: "Slack",
+        tone_preset: "casual",
+        tone_override: null,
+        custom_prompt: null,
+        icon_data_url: null,
+      },
+    ]);
+    render(
+      <Wrapper
+        settings={{ ...BASE_SETTINGS, ai_cleanup_tone_overlay_enabled: true }}
+      />,
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: /add app override/i }),
+    );
+    await userEvent.type(screen.getByPlaceholderText(/search/i), "sla");
+    expect(
+      screen.queryByRole("button", { name: "Mail" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Slack" })).toBeInTheDocument();
   });
 
   it("optimistically removes the row and shows undo toast when override is removed", async () => {

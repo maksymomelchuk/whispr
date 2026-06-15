@@ -1,4 +1,4 @@
-import { PencilSimpleIcon, XIcon } from "@phosphor-icons/react";
+import { PencilSimpleIcon, PlusIcon, XIcon } from "@phosphor-icons/react";
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -59,7 +60,10 @@ function AppIcon({ icon, name }: { icon: string | null; name: string }) {
     );
   }
   return (
-    <div className="flex size-6 shrink-0 items-center justify-center rounded-[5px] bg-muted text-[11px] font-medium text-muted-foreground">
+    <div
+      aria-hidden
+      className="flex size-6 shrink-0 items-center justify-center rounded-[5px] bg-muted text-[11px] font-medium text-muted-foreground"
+    >
       {name.charAt(0).toUpperCase()}
     </div>
   );
@@ -79,6 +83,7 @@ export function ToneOverlayPage() {
 
   const [seenApps, setSeenApps] = useState<AppToneInfo[]>([]);
   const [editing, setEditing] = useState<CustomDraft | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const { flash, isFlashing } = useFlash();
 
   const loadSeenApps = useCallback(async () => {
@@ -262,24 +267,14 @@ export function ToneOverlayPage() {
             title="Per-app overrides"
             control={
               candidateApps.length > 0 ? (
-                <Select value="" onValueChange={handleAddOverride}>
-                  <SelectTrigger className="h-7 w-44 text-xs">
-                    <SelectValue placeholder="+ Add app override" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {candidateApps.map((app) => (
-                      <SelectItem key={app.bundle_id} value={app.bundle_id}>
-                        <span className="flex items-center gap-2">
-                          <AppIcon
-                            icon={app.icon_data_url}
-                            name={app.app_name}
-                          />
-                          {app.app_name}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => setPickerOpen(true)}
+                >
+                  <PlusIcon />
+                  Add app override
+                </Button>
               ) : undefined
             }
           />
@@ -308,6 +303,13 @@ export function ToneOverlayPage() {
           )}
         </div>
       )}
+
+      <AppPickerDialog
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        candidates={candidateApps}
+        onSelect={handleAddOverride}
+      />
 
       <Dialog
         open={editing !== null}
@@ -345,6 +347,59 @@ export function ToneOverlayPage() {
         </DialogContent>
       </Dialog>
     </ListSurface>
+  );
+}
+
+function AppPickerDialog({
+  open,
+  onOpenChange,
+  candidates,
+  onSelect,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  candidates: AppToneInfo[];
+  onSelect: (bundleId: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const filtered = candidates.filter((a) =>
+    a.app_name.toLowerCase().includes(query.toLowerCase()),
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add app override</DialogTitle>
+        </DialogHeader>
+        <Input
+          placeholder="Search apps…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          autoFocus
+        />
+        <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
+          {filtered.map((app) => (
+            <button
+              key={app.bundle_id}
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
+              onClick={() => {
+                onSelect(app.bundle_id);
+                onOpenChange(false);
+              }}
+            >
+              <AppIcon icon={app.icon_data_url} name={app.app_name} />
+              {app.app_name}
+            </button>
+          ))}
+          {filtered.length === 0 && (
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">
+              No apps found.
+            </p>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
