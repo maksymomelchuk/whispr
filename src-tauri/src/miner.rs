@@ -30,8 +30,12 @@ pub fn mine(before: &str, after: &str) -> Vec<MinedCandidate> {
             if from.is_empty() || to.is_empty() || from == to {
                 return None;
             }
+            let at_sentence_start = s.to_word_pos == 0
+                || after_words
+                    .get(s.to_word_pos - 1)
+                    .is_some_and(|w| follows_sentence_end(w));
             let accept = is_phonetically_similar(&from, &to)
-                || looks_like_proper_noun(&to, s.to_word_pos == 0);
+                || looks_like_proper_noun(&to, at_sentence_start);
             accept.then_some(MinedCandidate { from, to })
         })
         .collect()
@@ -41,6 +45,14 @@ pub fn mine(before: &str, after: &str) -> Vec<MinedCandidate> {
 // to the same `from` the whole-word matcher uses — keeping word-internal `'-_`.
 fn trim_to_word_bounds(token: &str) -> &str {
     token.trim_matches(|c: char| !crate::corrections::is_word_char(c))
+}
+
+// Title case right after sentence-ending punctuation is grammar, not a proper
+// noun — exclude it so "...world. Tauri" isn't mined as `tauri → Tauri`.
+fn follows_sentence_end(prev_word: &str) -> bool {
+    prev_word
+        .trim_end_matches(|c: char| matches!(c, '"' | '\'' | ')' | ']'))
+        .ends_with(['.', '!', '?'])
 }
 
 /// When a `from` word has seen conflicting targets, the old rule is replaced
@@ -551,6 +563,23 @@ mod tests {
         // proper noun correction.
         let candidates = mine("hello world", "Hello world");
         assert!(candidates.is_empty());
+    }
+
+    #[test]
+    fn title_case_after_period_is_not_extracted() {
+        // Capitalisation after a sentence end is grammar, not a proper-noun
+        // correction — even though the word isn't at transcript position 0.
+        let candidates = mine("hello world. tauri", "hello world. Tauri");
+        assert!(candidates.is_empty());
+    }
+
+    #[test]
+    fn title_case_mid_sentence_is_still_extracted() {
+        let candidates = mine(
+            "push the code to tauri today",
+            "push the code to Tauri today",
+        );
+        assert_eq!(pairs(candidates), vec![("tauri".into(), "Tauri".into())]);
     }
 
     #[test]
