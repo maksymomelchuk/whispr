@@ -1,0 +1,14 @@
+staged="$(git diff --cached --name-only --diff-filter=ACMR)"
+[ -z "$staged" ] && exit 0
+
+web_files="$(echo "$staged" | grep -E '\.(ts|tsx|js|jsx|json|css|html|md)$' || true)"
+if [ -n "$web_files" ]; then
+  echo "$web_files" | xargs pnpm exec prettier --write
+  echo "$web_files" | xargs git add
+fi
+
+rust_files="$(echo "$staged" | grep -E '\.rs$' || true)"
+if [ -n "$rust_files" ]; then
+  (cd src-tauri && cargo fmt)
+  echo "$rust_files" | xargs git add
+fi
