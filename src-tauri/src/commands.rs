@@ -1007,19 +1007,22 @@ pub(crate) fn speech_provider_key_from_settings(
             .or_else(|| settings.api_key.clone())
             .filter(|k| !k.is_empty()),
         "groq" => settings.groq_api_key.clone().filter(|k| !k.is_empty()),
-        "assembly_ai" => settings.assemblyai_api_key.clone().filter(|k| !k.is_empty()),
+        "assembly_ai" => settings
+            .assemblyai_api_key
+            .clone()
+            .filter(|k| !k.is_empty()),
         "open_ai" => settings.openai_api_key.clone().filter(|k| !k.is_empty()),
-        "eleven_labs" => settings.elevenlabs_api_key.clone().filter(|k| !k.is_empty()),
+        "eleven_labs" => settings
+            .elevenlabs_api_key
+            .clone()
+            .filter(|k| !k.is_empty()),
         "soniox" => settings.soniox_api_key.clone().filter(|k| !k.is_empty()),
         _ => None,
     }
 }
 
 #[tauri::command]
-pub async fn check_speech_provider_key(
-    app: AppHandle,
-    provider_id: String,
-) -> ApiKeyValidation {
+pub async fn check_speech_provider_key(app: AppHandle, provider_id: String) -> ApiKeyValidation {
     let settings = config::load(&app);
     let Some(key) = speech_provider_key_from_settings(&settings, &provider_id) else {
         return ApiKeyValidation::Invalid;

@@ -1,4 +1,4 @@
-use crate::mode::{Mode, ModeId, SetId, SEED_MODE_DEFAULT_EN, SEED_MODE_UA_EN};
+use crate::mode::{Mode, ModeId, SetId, SEED_MODE_UA_EN};
 pub use crate::provider::{AssemblyAiModel, GroqModel, ProviderModel, TranscriptionProvider};
 pub use crate::tone::TonePreset;
 use serde::{Deserialize, Serialize};
@@ -1239,7 +1239,11 @@ mod tests {
 
         migrate(&mut s);
 
-        assert_eq!(s.modes.len(), 1, "fresh install must get the default profile");
+        assert_eq!(
+            s.modes.len(),
+            1,
+            "fresh install must get the default profile"
+        );
         assert_eq!(s.modes[0].id, SEED_MODE_DEFAULT_EN);
         assert!(!s.modes[0].ai_cleanup.enabled, "cleanup off on seed");
     }
