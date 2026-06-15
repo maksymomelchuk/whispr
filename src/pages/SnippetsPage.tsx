@@ -239,6 +239,8 @@ export function SnippetsPage() {
   const { flash, isFlashing } = useFlash();
 
   const snippets = settings.snippets;
+  const snippetsRef = useRef(snippets);
+  snippetsRef.current = snippets;
 
   function startNew() {
     setEditing({ kind: "new", draft: { trigger: "", expansion: "" } });
@@ -275,12 +277,11 @@ export function SnippetsPage() {
   }
 
   function handleDelete(snippet: Snippet) {
-    const withoutItem = snippets.filter((s) => s.id !== snippet.id);
     setPendingDeletes((prev) => new Set([...prev, snippet.id]));
     toastUndo(
       `Deleted "${snippet.trigger}"`,
       async () => {
-        await persist(withoutItem);
+        await persist(snippetsRef.current.filter((s) => s.id !== snippet.id));
         setPendingDeletes((prev) => {
           const next = new Set(prev);
           next.delete(snippet.id);
