@@ -250,3 +250,6 @@ export const setLocalWhisperIdleTimeout = (timeout: LocalWhisperIdleTimeout) =>
 
 export const getAppIcon = (bundleId: string) =>
   invoke<string | null>("get_app_icon", { bundleId });
+
+export const checkSpeechProviderKey = (providerId: string) =>
+  invoke<ApiKeyValidation>("check_speech_provider_key", { providerId });

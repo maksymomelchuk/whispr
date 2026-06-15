@@ -898,9 +898,12 @@ pub fn get_local_model_statuses(
     .iter()
     .map(|&model| {
         let catalog = model_catalog::catalog_for(model);
+        let downloaded = model_catalog::all_files_present(&catalog, &models_dir);
+        let load_failed = downloaded && !model_catalog::all_files_intact(&catalog, &models_dir);
         LocalModelStatus {
             model,
-            downloaded: model_catalog::all_files_present(&catalog, &models_dir),
+            downloaded,
+            load_failed,
             downloading: flags.contains_key(&model),
             size_bytes: download::model_size_bytes(model),
         }
@@ -991,6 +994,55 @@ pub fn set_local_whisper_idle_timeout(
     config::update(&app, |s| {
         s.local_whisper.idle_timeout = timeout;
     })
+}
+
+pub(crate) fn speech_provider_key_from_settings(
+    settings: &config::Settings,
+    provider_id: &str,
+) -> Option<String> {
+    match provider_id {
+        "deepgram" => settings
+            .deepgram_api_key
+            .clone()
+            .or_else(|| settings.api_key.clone())
+            .filter(|k| !k.is_empty()),
+        "groq" => settings.groq_api_key.clone().filter(|k| !k.is_empty()),
+        "assembly_ai" => settings.assemblyai_api_key.clone().filter(|k| !k.is_empty()),
+        "open_ai" => settings.openai_api_key.clone().filter(|k| !k.is_empty()),
+        "eleven_labs" => settings.elevenlabs_api_key.clone().filter(|k| !k.is_empty()),
+        "soniox" => settings.soniox_api_key.clone().filter(|k| !k.is_empty()),
+        _ => None,
+    }
+}
+
+#[tauri::command]
+pub async fn check_speech_provider_key(
+    app: AppHandle,
+    provider_id: String,
+) -> ApiKeyValidation {
+    let settings = config::load(&app);
+    let Some(key) = speech_provider_key_from_settings(&settings, &provider_id) else {
+        return ApiKeyValidation::Invalid;
+    };
+    match provider_id.as_str() {
+        "deepgram" => api_key_validation::validate_deepgram(&key).await,
+        "groq" => {
+            let language = settings
+                .modes
+                .first()
+                .and_then(|m| m.language.as_code())
+                .unwrap_or("en")
+                .to_string();
+            api_key_validation::validate_groq(&key, GroqModel::default(), &language).await
+        }
+        "assembly_ai" => api_key_validation::validate_assemblyai(&key).await,
+        "open_ai" => api_key_validation::validate_openai(&key).await,
+        "eleven_labs" => api_key_validation::validate_elevenlabs(&key).await,
+        "soniox" => api_key_validation::validate_soniox(&key).await,
+        _ => ApiKeyValidation::Error {
+            message: format!("Unknown provider: {provider_id}"),
+        },
+    }
 }
 
 #[cfg(test)]
@@ -1095,6 +1147,67 @@ mod tests {
         }
         .into();
         assert!(view.deepgram_api_key_configured);
+    }
+
+    #[test]
+    fn speech_provider_key_returns_deepgram_primary_key() {
+        let s = crate::config::Settings {
+            deepgram_api_key: Some("dg-key".to_string()),
+            ..crate::config::Settings::default()
+        };
+        assert_eq!(
+            speech_provider_key_from_settings(&s, "deepgram").as_deref(),
+            Some("dg-key")
+        );
+    }
+
+    #[test]
+    fn speech_provider_key_falls_back_to_legacy_for_deepgram() {
+        let s = crate::config::Settings {
+            api_key: Some("legacy-key".to_string()),
+            ..crate::config::Settings::default()
+        };
+        assert_eq!(
+            speech_provider_key_from_settings(&s, "deepgram").as_deref(),
+            Some("legacy-key")
+        );
+    }
+
+    #[test]
+    fn speech_provider_key_returns_none_for_empty_deepgram_key() {
+        let s = crate::config::Settings {
+            deepgram_api_key: Some(String::new()),
+            ..crate::config::Settings::default()
+        };
+        assert!(speech_provider_key_from_settings(&s, "deepgram").is_none());
+    }
+
+    #[test]
+    fn speech_provider_key_returns_none_for_unknown_provider() {
+        assert!(
+            speech_provider_key_from_settings(&crate::config::Settings::default(), "unknown")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn speech_provider_key_returns_groq_key() {
+        let s = crate::config::Settings {
+            groq_api_key: Some("gsk-key".to_string()),
+            ..crate::config::Settings::default()
+        };
+        assert_eq!(
+            speech_provider_key_from_settings(&s, "groq").as_deref(),
+            Some("gsk-key")
+        );
+    }
+
+    #[test]
+    fn speech_provider_key_returns_none_for_missing_groq_key() {
+        assert!(
+            speech_provider_key_from_settings(&crate::config::Settings::default(), "groq")
+                .is_none()
+        );
     }
 
     #[test]

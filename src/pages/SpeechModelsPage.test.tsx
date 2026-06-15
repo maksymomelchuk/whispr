@@ -159,6 +159,7 @@ describe("SpeechModelsPage LOCAL section", () => {
         model: "large_v3_turbo",
         downloaded: true,
         downloading: false,
+        load_failed: false,
         size_bytes: 1_624_555_275,
       },
     ]);
@@ -173,12 +174,14 @@ describe("SpeechModelsPage LOCAL section", () => {
         model: "large_v3",
         downloaded: false,
         downloading: false,
+        load_failed: false,
         size_bytes: 3_115_853_312,
       },
       {
         model: "large_v3_turbo",
         downloaded: true,
         downloading: false,
+        load_failed: false,
         size_bytes: 1_624_555_275,
       },
     ]);
@@ -196,6 +199,7 @@ describe("SpeechModelsPage LOCAL section", () => {
         model: "large_v3_turbo",
         downloaded: true,
         downloading: false,
+        load_failed: false,
         size_bytes: 1_624_555_275,
       },
     ]);
@@ -212,6 +216,7 @@ describe("SpeechModelsPage LOCAL section", () => {
         model: "large_v3",
         downloaded: false,
         downloading: false,
+        load_failed: false,
         size_bytes: 3_115_853_312,
       },
     ]);
@@ -230,6 +235,7 @@ describe("SpeechModelsPage LOCAL section", () => {
         model: "large_v3_turbo",
         downloaded: true,
         downloading: false,
+        load_failed: false,
         size_bytes: 1_624_555_275,
       },
     ]);

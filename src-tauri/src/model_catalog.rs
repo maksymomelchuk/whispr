@@ -100,6 +100,15 @@ pub fn all_files_present(spec: &ModelSpec, models_dir: &Path) -> bool {
         .all(|f| models_dir.join(&f.filename).exists())
 }
 
+pub fn all_files_intact(spec: &ModelSpec, models_dir: &Path) -> bool {
+    spec.files.iter().all(|f| {
+        let path = models_dir.join(&f.filename);
+        std::fs::metadata(&path)
+            .map(|m| m.len() == f.size_bytes)
+            .unwrap_or(false)
+    })
+}
+
 pub fn files_to_delete(spec: &ModelSpec, models_dir: &Path) -> Vec<PathBuf> {
     let mut paths = Vec::new();
     for f in &spec.files {
@@ -243,6 +252,28 @@ mod tests {
     #[test]
     fn is_placeholder_hash_false_for_empty_string() {
         assert!(!is_placeholder_hash(""));
+    }
+
+    #[test]
+    fn all_files_intact_true_when_all_files_match_expected_size() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("encoder.onnx"), vec![0u8; 300]).unwrap();
+        std::fs::write(dir.path().join("decoder.onnx"), vec![0u8; 700]).unwrap();
+        assert!(all_files_intact(&two_file_spec(), dir.path()));
+    }
+
+    #[test]
+    fn all_files_intact_false_when_file_size_differs() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("encoder.onnx"), b"too-small").unwrap();
+        std::fs::write(dir.path().join("decoder.onnx"), vec![0u8; 700]).unwrap();
+        assert!(!all_files_intact(&two_file_spec(), dir.path()));
+    }
+
+    #[test]
+    fn all_files_intact_false_when_file_absent() {
+        let dir = tempfile::TempDir::new().unwrap();
+        assert!(!all_files_intact(&two_file_spec(), dir.path()));
     }
 
     #[test]

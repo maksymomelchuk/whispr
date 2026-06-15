@@ -521,12 +521,14 @@ describe("ModeEditor – local model picker", () => {
         model: "large_v3_turbo",
         downloaded: false,
         downloading: false,
+        load_failed: false,
         size_bytes: 0,
       },
       {
         model: "large_v3",
         downloaded: false,
         downloading: false,
+        load_failed: false,
         size_bytes: 0,
       },
     ]);
@@ -542,12 +544,14 @@ describe("ModeEditor – local model picker", () => {
         model: "large_v3_turbo",
         downloaded: true,
         downloading: false,
+        load_failed: false,
         size_bytes: 0,
       },
       {
         model: "large_v3",
         downloaded: true,
         downloading: false,
+        load_failed: false,
         size_bytes: 0,
       },
     ]);

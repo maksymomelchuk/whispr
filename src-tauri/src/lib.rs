@@ -300,6 +300,7 @@ pub fn run() {
             commands::delete_local_model,
             commands::get_local_model_path,
             commands::set_local_whisper_idle_timeout,
+            commands::check_speech_provider_key,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

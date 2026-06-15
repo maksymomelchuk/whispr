@@ -2,6 +2,7 @@ import {
   DownloadSimpleIcon,
   FolderOpenIcon,
   TrashIcon,
+  WarningIcon,
   XIcon,
 } from "@phosphor-icons/react";
 import { listen } from "@tauri-apps/api/event";
@@ -31,6 +32,7 @@ import type {
   ModelDownloadError,
   ModelDownloadProgress,
 } from "../lib/types";
+import { Alert, AlertDescription } from "./ui/alert";
 
 const MODEL_LABELS: Record<LocalWhisperModel, string> = {
   large_v3: "Large v3",
@@ -74,6 +76,7 @@ export function LocalModelCard({ status }: Props) {
       : { kind: "idle" },
   );
   const [downloaded, setDownloaded] = useState(status.downloaded);
+  const [loadFailed, setLoadFailed] = useState(status.load_failed);
 
   const { model } = status;
   const ModelLogo = MODEL_LOGOS[model];
@@ -103,6 +106,7 @@ export function LocalModelCard({ status }: Props) {
           if (e.payload !== model) return;
           dispatch({ type: "complete" });
           setDownloaded(true);
+          setLoadFailed(false);
           toast.success(`${MODEL_LABELS[model]} downloaded`);
         },
       );
@@ -166,6 +170,18 @@ export function LocalModelCard({ status }: Props) {
     } catch (e) {
       toast.error("Couldn't open Finder", { description: String(e) });
     }
+  };
+
+  const handleRedownload = async () => {
+    try {
+      await deleteLocalModel(model);
+      setDownloaded(false);
+      setLoadFailed(false);
+    } catch (e) {
+      toast.error("Couldn't remove corrupt model", { description: String(e) });
+      return;
+    }
+    await handleDownload();
   };
 
   const isDownloading = downloadState.kind === "downloading";
@@ -264,6 +280,24 @@ export function LocalModelCard({ status }: Props) {
 
       {downloadState.kind === "error" && (
         <p className="text-xs text-destructive">{downloadState.message}</p>
+      )}
+
+      {loadFailed && !isDownloading && (
+        <Alert variant="destructive">
+          <WarningIcon size={15} />
+          <AlertDescription>
+            This model is downloaded but failed to load. Re-download to repair
+            it.
+          </AlertDescription>
+          <div className="flex gap-2 mt-2">
+            <Button size="sm" variant="destructive" onClick={handleRedownload}>
+              Re-download
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleReveal}>
+              Reveal in Finder
+            </Button>
+          </div>
+        </Alert>
       )}
     </div>
   );

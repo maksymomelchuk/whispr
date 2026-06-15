@@ -11,6 +11,7 @@ import {
   SparkleIcon,
   TextAaIcon,
   TextTIcon,
+  WarningIcon,
   WaveformIcon,
 } from "@phosphor-icons/react";
 import { useEffect } from "react";
@@ -25,6 +26,8 @@ import {
 import { isMacOS } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 
+import { useSettings } from "../context/SettingsContext";
+import { useSystemStatus } from "../context/SystemStatusContext";
 import { AiProvidersPage } from "../pages/AiProvidersPage";
 import { CorrectionsPage } from "../pages/CorrectionsPage";
 import { GeneralPage } from "../pages/GeneralPage";
@@ -38,6 +41,8 @@ import { SpeechModelsPage } from "../pages/SpeechModelsPage";
 import { StatsPage } from "../pages/StatsPage";
 import { TermsPage } from "../pages/TermsPage";
 import { ToneOverlayPage } from "../pages/ToneOverlayPage";
+import { Alert, AlertDescription } from "./ui/alert";
+import { Button } from "./ui/button";
 import {
   Sidebar,
   SidebarContent,
@@ -121,7 +126,8 @@ function NavMenuButton({
   icon: Icon,
   path,
   shortcut,
-}: NavItem & { shortcut: string | null }) {
+  hasDot,
+}: NavItem & { shortcut: string | null; hasDot?: boolean }) {
   const { pathname } = useLocation();
   const { state } = useSidebar();
   const isActive = path === "/" ? pathname === "/" : pathname.startsWith(path);
@@ -137,10 +143,18 @@ function NavMenuButton({
       className="group/nav-item h-8 gap-2.5 data-[active=true]:font-normal"
     >
       <NavLink to={path} end={path === "/"}>
-        <Icon
-          size={15}
-          className="shrink-0 text-muted-foreground group-data-[active=true]/nav-item:text-foreground"
-        />
+        <div className="relative shrink-0">
+          <Icon
+            size={15}
+            className="text-muted-foreground group-data-[active=true]/nav-item:text-foreground"
+          />
+          {hasDot && (
+            <span
+              aria-hidden
+              className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-destructive motion-safe:animate-none"
+            />
+          )}
+        </div>
         <span className="flex-1 text-[13px]">{label}</span>
         {!collapsed && shortcut && (
           <kbd
@@ -156,6 +170,117 @@ function NavMenuButton({
         )}
       </NavLink>
     </SidebarMenuButton>
+  );
+}
+
+const PROVIDER_LABELS: Record<string, string> = {
+  deepgram: "Deepgram",
+  groq: "Groq",
+  assembly_ai: "AssemblyAI",
+  open_ai: "OpenAI",
+  eleven_labs: "ElevenLabs",
+  soniox: "Soniox",
+};
+
+function DegradedBanner() {
+  const { loadFailedModels, speechProviderStatuses } = useSystemStatus();
+  const { settings } = useSettings();
+  const navigate = useNavigate();
+
+  const activeLocalModels = new Set(
+    settings.modes
+      .filter((m) => m.provider_model.provider === "local")
+      .map((m) => {
+        const pm = m.provider_model;
+        return pm.provider === "local" ? pm.model : null;
+      })
+      .filter(Boolean),
+  );
+  const activeSpeechProviders = new Set<string>(
+    settings.modes
+      .map((m) => m.provider_model.provider)
+      .filter((p) => p !== "local"),
+  );
+
+  const blockingLocalCount = [...loadFailedModels].filter((m) =>
+    activeLocalModels.has(m),
+  ).length;
+  const rejectedProviders = [...speechProviderStatuses.entries()]
+    .filter(
+      ([provider, status]) =>
+        status === "rejected" && activeSpeechProviders.has(provider),
+    )
+    .map(([provider]) => provider);
+  const blockingCount = blockingLocalCount + rejectedProviders.length;
+
+  if (blockingCount === 0) return null;
+
+  if (blockingCount > 1) {
+    return (
+      <Alert
+        variant="destructive"
+        className="flex items-center gap-2 rounded-none border-x-0 border-t-0"
+      >
+        <WarningIcon size={15} className="shrink-0" />
+        <AlertDescription className="flex-1">
+          {blockingCount} issues need attention.
+        </AlertDescription>
+        <Button
+          size="sm"
+          variant="destructive"
+          className="ml-auto"
+          onClick={() => navigate("/speech-models")}
+        >
+          Review
+        </Button>
+      </Alert>
+    );
+  }
+
+  if (blockingLocalCount === 1) {
+    return (
+      <Alert
+        variant="destructive"
+        className="flex items-center gap-2 rounded-none border-x-0 border-t-0"
+      >
+        <WarningIcon size={15} className="shrink-0" />
+        <AlertDescription className="flex-1">
+          Your speech model won&rsquo;t load, so dictation is paused.
+          Re-download to fix it.
+        </AlertDescription>
+        <Button
+          size="sm"
+          variant="destructive"
+          className="ml-auto"
+          onClick={() => navigate("/speech-models")}
+        >
+          Fix
+        </Button>
+      </Alert>
+    );
+  }
+
+  const provider = rejectedProviders[0];
+  const providerLabel = PROVIDER_LABELS[provider] ?? provider;
+  return (
+    <Alert
+      variant="destructive"
+      className="flex items-center gap-2 rounded-none border-x-0 border-t-0"
+    >
+      <WarningIcon size={15} className="shrink-0" />
+      <AlertDescription className="flex-1">
+        {providerLabel} rejected your API key, so dictation is paused. Replace
+        it to continue.
+      </AlertDescription>
+      <Button
+        size="sm"
+        variant="destructive"
+        className="ml-auto"
+        onClick={() => navigate("/speech-models")}
+      >
+        Fix
+      </Button>
+    </Alert>
   );
 }
 
@@ -227,6 +352,16 @@ function ShellInner() {
   const navModifier = isMac ? "⌘" : "Ctrl+";
   let counter = 0;
 
+  const { micMissing, loadFailedModels, speechProviderStatuses } =
+    useSystemStatus();
+  const speechModelsHasDot =
+    loadFailedModels.size > 0 ||
+    [...speechProviderStatuses.values()].some((s) => s !== "valid");
+  const dotPaths: Record<string, boolean> = {
+    "/speech-models": speechModelsHasDot,
+    "/general": micMissing,
+  };
+
   return (
     <>
       {isMac && (
@@ -269,7 +404,11 @@ function ShellInner() {
                       counter <= 9 ? `${navModifier}${counter}` : null;
                     return (
                       <SidebarMenuItem key={item.path}>
-                        <NavMenuButton {...item} shortcut={shortcut} />
+                        <NavMenuButton
+                          {...item}
+                          shortcut={shortcut}
+                          hasDot={dotPaths[item.path] ?? false}
+                        />
                       </SidebarMenuItem>
                     );
                   })}
@@ -284,7 +423,11 @@ function ShellInner() {
                 const shortcut = counter <= 9 ? `⌘${counter}` : null;
                 return (
                   <SidebarMenuItem key={item.path}>
-                    <NavMenuButton {...item} shortcut={shortcut} />
+                    <NavMenuButton
+                      {...item}
+                      shortcut={shortcut}
+                      hasDot={dotPaths[item.path] ?? false}
+                    />
                   </SidebarMenuItem>
                 );
               })}
@@ -295,6 +438,7 @@ function ShellInner() {
 
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
           <UpdateBanner />
+          <DegradedBanner />
 
           <main
             className={

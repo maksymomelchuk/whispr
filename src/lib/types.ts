@@ -266,9 +266,12 @@ export interface Settings {
 export interface LocalModelStatus {
   model: LocalWhisperModel;
   downloaded: boolean;
+  load_failed: boolean;
   downloading: boolean;
   size_bytes: number;
 }
+
+export type ProviderHealthStatus = "valid" | "rejected" | "unreachable";
 
 export interface ModelDownloadProgress {
   model: LocalWhisperModel;

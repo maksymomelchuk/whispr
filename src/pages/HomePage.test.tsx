@@ -339,6 +339,7 @@ describe("HomePage — activating state (permissions granted, no history)", () =
         model: "large_v3_turbo",
         downloaded: true,
         downloading: false,
+        load_failed: false,
         size_bytes: 100,
       },
     ]);
