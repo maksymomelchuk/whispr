@@ -896,6 +896,10 @@ async fn maybe_cleanup(
 
     match result {
         Ok((cleaned, usage)) => {
+            eprintln!(
+                "[profile] cleanup tokens input={} output={}",
+                usage.input_tokens, usage.output_tokens
+            );
             cleanup_stats::record(app, usage.input_tokens, usage.output_tokens);
             (cleaned, CleanupStatus::Ran, Notice::None, context_channels)
         }

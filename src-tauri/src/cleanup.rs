@@ -604,6 +604,19 @@ fn openrouter_effort(model: &str) -> Option<&'static str> {
     None
 }
 
+/// Provider-specific body fields beyond the standard chat params. Groq's
+/// GPT-OSS models emit a reasoning trace by default; cleanup waits for the full
+/// non-streamed response, so `include_reasoning: false` keeps that trace from
+/// padding generation the pipeline then discards.
+fn extra_body_params(provider: AiProviderId, model: &str) -> Vec<(&'static str, Value)> {
+    match provider {
+        AiProviderId::Groq if model.contains("gpt-oss") => {
+            vec![("include_reasoning", Value::Bool(false))]
+        }
+        _ => Vec::new(),
+    }
+}
+
 async fn call_openai_with_transport<T: Transport>(
     transcript: &str,
     target: OpenAiTarget<'_>,
@@ -622,6 +635,9 @@ async fn call_openai_with_transport<T: Transport>(
     });
     if let Some(effort) = reasoning_effort_for(target.provider, target.model) {
         body["reasoning_effort"] = Value::String(effort.to_string());
+    }
+    for (key, value) in extra_body_params(target.provider, target.model) {
+        body[key] = value;
     }
     let resp = transport
         .post(target.chat_url, &headers, &body)
