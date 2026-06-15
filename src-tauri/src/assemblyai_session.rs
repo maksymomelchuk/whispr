@@ -251,6 +251,10 @@ const POLL_INTERVAL: Duration = Duration::from_millis(400);
 /// Ceiling on the async transcription round-trip so a stuck job can't hang the
 /// paste indefinitely.
 const TRANSCRIBE_TIMEOUT: Duration = Duration::from_secs(60);
+const HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// Bounds a stalled mid-transfer on upload/submit while leaving room for a
+/// multi-megabyte FLAC body on a slow link.
+const HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Universal-2 has no streaming endpoint, so this engine buffers the full clip,
 /// uploads it, submits an async transcript, and polls for the result. It exists
@@ -302,7 +306,13 @@ impl Engine for AssemblyAiUniversalEngine {
 
 fn http_client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
-    CLIENT.get_or_init(reqwest::Client::new)
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .connect_timeout(HTTP_CONNECT_TIMEOUT)
+            .timeout(HTTP_REQUEST_TIMEOUT)
+            .build()
+            .expect("assemblyai http client")
+    })
 }
 
 async fn upload_audio(key: &str, flac: Vec<u8>) -> Result<String, String> {
