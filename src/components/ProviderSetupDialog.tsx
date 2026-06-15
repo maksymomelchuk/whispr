@@ -1,5 +1,5 @@
 import { ArrowSquareOutIcon } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -34,57 +34,86 @@ export function ProviderSetupDialog({
   onOpenChange,
   children,
 }: Props) {
+  type SavePhase = "idle" | "validating" | "saving" | "connected";
+
   const [keyValue, setKeyValue] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [savePhase, setSavePhase] = useState<SavePhase>("idle");
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (open) {
       setKeyValue("");
       setError(null);
-      setSaving(false);
+      setSavePhase("idle");
+      if (closeTimerRef.current !== null) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
     }
   }, [open]);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current !== null) {
+        clearTimeout(closeTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleSave = async () => {
     const trimmed = keyValue.trim();
     setError(null);
-    setSaving(true);
+    setSavePhase("validating");
     try {
       const result = await descriptor.validate(trimmed);
       if (result.kind === "invalid") {
         setError("Key was rejected by the provider.");
+        setSavePhase("idle");
         return;
       }
       if (result.kind === "error") {
         setError(`Couldn't validate: ${result.message}`);
+        setSavePhase("idle");
         return;
       }
+      setSavePhase("saving");
       await descriptor.persist(trimmed);
       onConfiguredChange(true);
-      onOpenChange(false);
+      setSavePhase("connected");
+      closeTimerRef.current = setTimeout(() => {
+        onOpenChange(false);
+      }, 800);
     } catch (e) {
       setError(`Couldn't save: ${String(e)}`);
-    } finally {
-      setSaving(false);
+      setSavePhase("idle");
     }
   };
 
   const handleDisconnect = async () => {
-    setSaving(true);
+    setSavePhase("saving");
     try {
       await descriptor.persist("");
       onConfiguredChange(false);
       onOpenChange(false);
     } catch (e) {
       setError(`Couldn't disconnect: ${String(e)}`);
-    } finally {
-      setSaving(false);
+      setSavePhase("idle");
     }
   };
 
   const { logo: Logo } = descriptor;
-  const isSaveDisabled = keyValue.trim() === "" || saving;
+  const busy = savePhase !== "idle";
+  const isSaveDisabled = keyValue.trim() === "" || busy;
+
+  const saveLabel =
+    savePhase === "validating"
+      ? "Validating…"
+      : savePhase === "saving"
+        ? "Saving…"
+        : savePhase === "connected"
+          ? "Connected"
+          : "Save";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -118,7 +147,7 @@ export function ProviderSetupDialog({
                 setKeyValue(e.target.value);
                 setError(null);
               }}
-              disabled={saving}
+              disabled={busy}
               spellCheck={false}
               autoComplete="off"
               aria-label="API Key"
@@ -145,12 +174,7 @@ export function ProviderSetupDialog({
         <DialogFooter className="flex items-center justify-between sm:justify-between gap-2">
           <div className="flex gap-2">
             <DialogClose asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={saving}
-              >
+              <Button type="button" variant="outline" size="sm" disabled={busy}>
                 Cancel
               </Button>
             </DialogClose>
@@ -160,7 +184,7 @@ export function ProviderSetupDialog({
               disabled={isSaveDisabled}
               onClick={handleSave}
             >
-              {saving ? "Saving…" : "Save"}
+              {saveLabel}
             </Button>
           </div>
           {isConfigured && (
@@ -168,7 +192,7 @@ export function ProviderSetupDialog({
               type="button"
               variant="ghost"
               size="sm"
-              disabled={saving}
+              disabled={busy}
               onClick={handleDisconnect}
               className="text-muted-foreground hover:text-destructive"
             >

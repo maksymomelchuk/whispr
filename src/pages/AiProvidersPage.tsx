@@ -47,6 +47,7 @@ import {
   setCleanupThresholds as persistThresholds,
   setCustomProvider,
   setProviderKey,
+  validateCleanupProviderKey,
 } from "../lib/api";
 import type { EngineDescriptor } from "../lib/speechModelCatalog";
 import type { AiProviderId, Settings } from "../lib/types";
@@ -61,7 +62,7 @@ const ANTHROPIC_API_KEY_DESCRIPTOR: EngineDescriptor = {
   helpUrl: "https://console.anthropic.com/settings/keys",
   selectConfigured: (s: Settings) => s.ai_cleanup_key_configured,
   persist: persistApiKey,
-  validate: async () => ({ kind: "valid" as const }),
+  validate: (key: string) => validateCleanupProviderKey("anthropic", key),
 };
 
 const ANTHROPIC_OAUTH_DESCRIPTOR: EngineDescriptor = {
@@ -89,7 +90,7 @@ const OPENAI_COMPAT_DESCRIPTORS: EngineDescriptor[] = [
     selectConfigured: (s: Settings) =>
       s.configured_providers.includes("openai"),
     persist: (key: string) => setProviderKey("openai", key),
-    validate: async () => ({ kind: "valid" as const }),
+    validate: (key: string) => validateCleanupProviderKey("openai", key),
   },
   {
     id: "google",
@@ -102,7 +103,7 @@ const OPENAI_COMPAT_DESCRIPTORS: EngineDescriptor[] = [
     selectConfigured: (s: Settings) =>
       s.configured_providers.includes("google"),
     persist: (key: string) => setProviderKey("google", key),
-    validate: async () => ({ kind: "valid" as const }),
+    validate: (key: string) => validateCleanupProviderKey("google", key),
   },
   {
     id: "groq",
@@ -114,7 +115,7 @@ const OPENAI_COMPAT_DESCRIPTORS: EngineDescriptor[] = [
     helpUrl: "https://console.groq.com/keys",
     selectConfigured: (s: Settings) => s.configured_providers.includes("groq"),
     persist: (key: string) => setProviderKey("groq", key),
-    validate: async () => ({ kind: "valid" as const }),
+    validate: (key: string) => validateCleanupProviderKey("groq", key),
   },
   {
     id: "deepseek",
@@ -127,7 +128,7 @@ const OPENAI_COMPAT_DESCRIPTORS: EngineDescriptor[] = [
     selectConfigured: (s: Settings) =>
       s.configured_providers.includes("deepseek"),
     persist: (key: string) => setProviderKey("deepseek", key),
-    validate: async () => ({ kind: "valid" as const }),
+    validate: (key: string) => validateCleanupProviderKey("deepseek", key),
   },
   {
     id: "cerebras",
@@ -141,7 +142,7 @@ const OPENAI_COMPAT_DESCRIPTORS: EngineDescriptor[] = [
     selectConfigured: (s: Settings) =>
       s.configured_providers.includes("cerebras"),
     persist: (key: string) => setProviderKey("cerebras", key),
-    validate: async () => ({ kind: "valid" as const }),
+    validate: (key: string) => validateCleanupProviderKey("cerebras", key),
   },
   {
     id: "openrouter",
@@ -155,7 +156,7 @@ const OPENAI_COMPAT_DESCRIPTORS: EngineDescriptor[] = [
     selectConfigured: (s: Settings) =>
       s.configured_providers.includes("openrouter"),
     persist: (key: string) => setProviderKey("openrouter", key),
-    validate: async () => ({ kind: "valid" as const }),
+    validate: (key: string) => validateCleanupProviderKey("openrouter", key),
   },
 ];
 

@@ -241,6 +241,7 @@ pub fn run() {
             commands::validate_openai_api_key,
             commands::validate_elevenlabs_api_key,
             commands::validate_soniox_api_key,
+            commands::validate_cleanup_provider_key,
             commands::set_hotkey_bindings,
             commands::set_shortcut_capture_paused,
             commands::create_term_set,
