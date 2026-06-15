@@ -151,6 +151,18 @@ describe("AiProvidersPage", () => {
     expect(screen.getByRole("img", { name: "Configured" })).toBeInTheDocument();
   });
 
+  it("configured icon uses muted token, not green", () => {
+    render(
+      <Wrapper
+        settings={{ ...BASE_SETTINGS, ai_cleanup_key_configured: true }}
+      />,
+    );
+    const icon = screen.getByRole("img", { name: "Configured" });
+    const classes = icon.getAttribute("class") ?? "";
+    expect(classes).not.toMatch(/text-green/);
+    expect(classes).toMatch(/text-muted-foreground/);
+  });
+
   it("marks the provider as configured when OAuth token is configured in oauth mode", () => {
     render(
       <Wrapper
