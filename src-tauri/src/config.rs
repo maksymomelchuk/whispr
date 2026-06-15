@@ -1,4 +1,4 @@
-use crate::mode::{Mode, ModeId, SetId, SEED_MODE_UA_EN};
+use crate::mode::{Mode, ModeId, SetId, SEED_MODE_DEFAULT_EN, SEED_MODE_UA_EN};
 pub use crate::provider::{AssemblyAiModel, GroqModel, ProviderModel, TranscriptionProvider};
 pub use crate::tone::TonePreset;
 use serde::{Deserialize, Serialize};
@@ -518,8 +518,12 @@ fn migrate(s: &mut Settings) -> bool {
         }
     }
 
-    // Profiles are never auto-created or backfilled: a fresh install starts with
-    // an empty list and the user builds their own. Deleted profiles stay deleted.
+    // Seed the default English profile on first run. Empty modes = fresh install;
+    // subsequent migrations that encounter at least one mode leave the list alone.
+    if s.modes.is_empty() {
+        s.modes.push(Mode::seed_default_en(false));
+        changed = true;
+    }
 
     if s.ai_cleanup_enabled.take().is_some() {
         changed = true;
@@ -1228,14 +1232,16 @@ mod tests {
     }
 
     #[test]
-    fn migrate_does_not_seed_profiles_into_an_empty_config() {
+    fn migrate_seeds_default_english_profile_for_fresh_install() {
         let json = r#"{}"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         assert!(s.modes.is_empty());
 
         migrate(&mut s);
 
-        assert!(s.modes.is_empty(), "a fresh config must stay profile-free");
+        assert_eq!(s.modes.len(), 1, "fresh install must get the default profile");
+        assert_eq!(s.modes[0].id, SEED_MODE_DEFAULT_EN);
+        assert!(!s.modes[0].ai_cleanup.enabled, "cleanup off on seed");
     }
 
     #[test]
@@ -1852,10 +1858,11 @@ mod tests {
 
     #[test]
     fn migration_deepgram_provider_does_not_stamp_modes() {
+        // Deepgram is the default ProviderModel; modes seeded by migrate() already
+        // carry Deepgram, so the provider-stamping branch must not overwrite them.
         let mut s = Settings::default();
         s.transcription_provider = TranscriptionProvider::Deepgram;
-        let changed = migrate(&mut s);
-        assert!(!changed, "deepgram is the default; no stamping needed");
+        migrate(&mut s);
         for mode in &s.modes {
             assert_eq!(mode.provider_model, ProviderModel::Deepgram);
         }
