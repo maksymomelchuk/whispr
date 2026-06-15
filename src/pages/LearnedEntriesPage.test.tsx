@@ -155,19 +155,19 @@ describe("LearnedEntriesPage – entry display", () => {
     ]);
   });
 
-  it("renders candidate correction with from→to display and candidate badge", async () => {
+  it("renders candidate correction with from→to display and observation count", async () => {
     render(<Wrapper initial={{ ...BASE, learn_from_corrections: true }} />);
     await waitFor(() => expect(screen.getByText("tory")).toBeInTheDocument());
     expect(screen.getByText("Tauri")).toBeInTheDocument();
-    expect(screen.getAllByText("candidate").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("correction").length).toBeGreaterThan(0);
+    expect(screen.getByText("1×")).toBeInTheDocument();
   });
 
-  it("renders promoted term with active badge and observation count", async () => {
+  it("renders promoted term as a chip with a delete control", async () => {
     render(<Wrapper initial={{ ...BASE, learn_from_corrections: true }} />);
     await waitFor(() => expect(screen.getByText("GitHub")).toBeInTheDocument());
-    expect(screen.getAllByText("active").length).toBeGreaterThan(0);
-    expect(screen.getByText("2×")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Delete GitHub" }),
+    ).toBeInTheDocument();
   });
 
   it("separates candidates and promoted into distinct sections", async () => {

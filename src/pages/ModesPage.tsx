@@ -500,7 +500,12 @@ function SetMultiSelect({
       ) : (
         <div className="min-h-[40px] flex flex-wrap gap-1 items-center p-2 rounded-lg bg-card border border-border shadow-xs">
           {selected.map((s) => (
-            <Chip key={s.id} label={s.name} onRemove={() => onRemove(s.id)} />
+            <Chip
+              key={s.id}
+              label={s.name}
+              removeLabel={`Remove ${s.name}`}
+              onRemove={() => onRemove(s.id)}
+            />
           ))}
           {unselected.length > 0 && (
             <Select value="" onValueChange={(id) => id && onAdd(id)}>
@@ -1031,6 +1036,7 @@ export function ModeEditor({
                       <Chip
                         key={code}
                         label={langLabel(code)}
+                        removeLabel={`Remove ${langLabel(code)}`}
                         onRemove={() => removeLangCode(code)}
                       />
                     ))}
