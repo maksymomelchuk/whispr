@@ -12,6 +12,16 @@ pub(crate) const PTT_ERROR_EVENT: &str = "ptt-error";
 pub(crate) const TRANSCRIPTION_ERROR_EVENT: &str = "transcription-error";
 const SOFT_WARNING_FLASH: Duration = Duration::from_millis(800);
 
+/// Result of a transcription session. `speak_duration` is the time the user
+/// held the key; `finalize` is the tail from the moment recording stopped to
+/// the transcript being ready — the provider's post-release latency (drain for
+/// streaming engines, upload-plus-inference for batch ones).
+pub struct SessionOutcome {
+    pub transcript: String,
+    pub speak_duration: Duration,
+    pub finalize: Duration,
+}
+
 pub struct Session<E: Engine> {
     engine: E,
     app: AppHandle,
@@ -38,7 +48,7 @@ impl<E: Engine> Session<E> {
         self,
         mut chunks: UnboundedReceiver<Vec<i16>>,
         ctx: EngineContext,
-    ) -> Result<(String, Duration), String> {
+    ) -> Result<SessionOutcome, String> {
         let speak_start = Instant::now();
 
         let (engine_chunk_tx, engine_chunk_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -76,12 +86,14 @@ impl<E: Engine> Session<E> {
         });
 
         let outcome = self.engine.run(engine_chunk_rx, preview_tx, ctx).await?;
+        let engine_returned_at = Instant::now();
 
         let _ = meter_handle.await;
         let _ = preview_handle.await;
 
         let chunks_closed_at = close_rx.await.unwrap_or_else(|_| Instant::now());
         let speak_duration = chunks_closed_at.duration_since(speak_start);
+        let finalize = engine_returned_at.saturating_duration_since(chunks_closed_at);
 
         if let Some(Warning::FinalFailedUsedPreview) = outcome.warning {
             let _ = self.app.emit(PTT_ERROR_EVENT, ());
@@ -92,6 +104,10 @@ impl<E: Engine> Session<E> {
             tokio::time::sleep(SOFT_WARNING_FLASH).await;
         }
 
-        Ok((outcome.transcript, speak_duration))
+        Ok(SessionOutcome {
+            transcript: outcome.transcript,
+            speak_duration,
+            finalize,
+        })
     }
 }
