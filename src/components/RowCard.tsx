@@ -13,19 +13,19 @@ interface BaseProps {
 }
 
 const BASE =
-  "group relative flex items-center gap-3 rounded-lg border pl-3 pr-2 py-2.5 " +
+  "group relative flex items-center gap-3 rounded-lg pl-3 pr-2 py-2.5 " +
   "shadow-xs transition-[border-color,box-shadow,background-color,outline-color] duration-150 " +
   "outline outline-2 outline-offset-0";
 
 const TONES: Record<RowCardTone, string> = {
-  neutral: "border-border bg-card",
-  destructive: "border-destructive/45 bg-destructive/[0.04]",
-  accent: "border-ring/60 bg-ring/[0.04]",
-  dashed: "border-dashed border-border/80 bg-card/30",
+  neutral: "bg-card",
+  destructive: "border border-destructive/45 bg-destructive/[0.04]",
+  accent: "border border-ring/60 bg-ring/[0.04]",
+  dashed: "border border-dashed border-border/80 bg-card/30",
 };
 
 const INTERACTIVE_TONES: Record<RowCardTone, string> = {
-  neutral: "hover:border-ring/55 hover:shadow-sm",
+  neutral: "hover:shadow-sm",
   destructive: "hover:border-destructive/65",
   accent: "",
   dashed: "hover:border-ring/55 hover:bg-card hover:shadow-xs",

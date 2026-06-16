@@ -26,7 +26,7 @@ export function ProviderCard({
         type="button"
         onClick={() => setDialogOpen(true)}
         className={cn(
-          "flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3",
+          "flex items-center gap-3 rounded-lg bg-card shadow-xs px-4 py-3",
           "text-left transition-colors hover:bg-accent/40 cursor-pointer w-full",
           "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
         )}

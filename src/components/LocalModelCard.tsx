@@ -187,7 +187,7 @@ export function LocalModelCard({ status }: Props) {
   const isDownloading = downloadState.kind === "downloading";
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border bg-card px-4 py-3">
+    <div className="flex flex-col gap-2 rounded-lg bg-card shadow-xs px-4 py-3">
       <div className="flex items-center gap-3">
         <ModelLogo className="h-8 w-8 shrink-0 rounded-md" />
         <div className="flex flex-1 flex-col gap-0.5 min-w-0">

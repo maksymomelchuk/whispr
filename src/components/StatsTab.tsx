@@ -617,7 +617,7 @@ function AppIcon({
 function CleanupRow({ tokens }: { tokens: CleanupTokens }) {
   const total = tokens.input + tokens.output;
   return (
-    <div className="flex items-baseline justify-between gap-3 overflow-hidden rounded-lg border border-border bg-card px-4 py-3.5">
+    <div className="flex items-baseline justify-between gap-3 overflow-hidden rounded-lg bg-card shadow-xs px-4 py-3.5">
       <span className="flex items-baseline gap-1.5 text-xs tabular-nums text-muted-foreground">
         <span className="whitespace-nowrap">
           {formatCount(tokens.input)} input
