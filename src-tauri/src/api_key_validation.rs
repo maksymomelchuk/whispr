@@ -43,6 +43,18 @@ pub enum ApiKeyValidation {
     Error { message: String },
 }
 
+const KEY_VALIDATION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// A stalled provider endpoint must not leave the Settings UI stuck in a
+/// non-idle validation phase; the timeout surfaces as a `reqwest` error that the
+/// callers already map to `ApiKeyValidation::Error`.
+fn validation_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(KEY_VALIDATION_TIMEOUT)
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
+}
+
 pub fn silent_groq_flac() -> Result<Vec<u8>, String> {
     let samples = vec![0i16; 16_000];
     encode_to_flac_16k_mono(&samples, 16_000, 1)
@@ -71,7 +83,7 @@ pub async fn validate_assemblyai(api_key: &str) -> ApiKeyValidation {
     if api_key.is_empty() {
         return ApiKeyValidation::Invalid;
     }
-    let client = reqwest::Client::new();
+    let client = validation_client();
     match client
         .get(ASSEMBLYAI_ACCOUNT_URL)
         .header("Authorization", api_key)
@@ -89,7 +101,7 @@ pub async fn validate_deepgram(api_key: &str) -> ApiKeyValidation {
     if api_key.is_empty() {
         return ApiKeyValidation::Invalid;
     }
-    let client = reqwest::Client::new();
+    let client = validation_client();
     match client
         .get(DEEPGRAM_AUTH_URL)
         .header("Authorization", format!("Token {api_key}"))
@@ -107,7 +119,7 @@ pub async fn validate_openai(api_key: &str) -> ApiKeyValidation {
     if api_key.is_empty() {
         return ApiKeyValidation::Invalid;
     }
-    let client = reqwest::Client::new();
+    let client = validation_client();
     match client
         .get(OPENAI_MODELS_URL)
         .bearer_auth(api_key)
@@ -125,7 +137,7 @@ pub async fn validate_elevenlabs(api_key: &str) -> ApiKeyValidation {
     if api_key.is_empty() {
         return ApiKeyValidation::Invalid;
     }
-    let client = reqwest::Client::new();
+    let client = validation_client();
     match client
         .get(ELEVENLABS_USER_URL)
         .header("xi-api-key", api_key)
@@ -143,7 +155,7 @@ pub async fn validate_soniox(api_key: &str) -> ApiKeyValidation {
     if api_key.is_empty() {
         return ApiKeyValidation::Invalid;
     }
-    let client = reqwest::Client::new();
+    let client = validation_client();
     match client
         .get(SONIOX_MODELS_URL)
         .bearer_auth(api_key)
@@ -189,7 +201,7 @@ pub async fn validate_groq(api_key: &str, model: GroqModel, language: &str) -> A
         .text("response_format", "json")
         .text("language", lang.to_string());
 
-    let client = reqwest::Client::new();
+    let client = validation_client();
     match client
         .post(GROQ_TRANSCRIBE_URL)
         .bearer_auth(api_key)
@@ -208,7 +220,7 @@ pub async fn validate_anthropic_key(api_key: &str) -> ApiKeyValidation {
     if api_key.is_empty() {
         return ApiKeyValidation::Invalid;
     }
-    let client = reqwest::Client::new();
+    let client = validation_client();
     match client
         .get(ANTHROPIC_KEY_MODELS_URL)
         .header("x-api-key", api_key)
@@ -227,7 +239,7 @@ pub async fn validate_google_key(api_key: &str) -> ApiKeyValidation {
     if api_key.is_empty() {
         return ApiKeyValidation::Invalid;
     }
-    let client = reqwest::Client::new();
+    let client = validation_client();
     match client
         .get(GOOGLE_MODELS_URL)
         .query(&[("key", api_key)])
@@ -261,7 +273,7 @@ pub async fn validate_groq_chat_key(api_key: &str) -> ApiKeyValidation {
     if api_key.is_empty() {
         return ApiKeyValidation::Invalid;
     }
-    let client = reqwest::Client::new();
+    let client = validation_client();
     match client
         .get(GROQ_MODELS_URL)
         .bearer_auth(api_key)
@@ -279,7 +291,7 @@ pub async fn validate_deepseek_key(api_key: &str) -> ApiKeyValidation {
     if api_key.is_empty() {
         return ApiKeyValidation::Invalid;
     }
-    let client = reqwest::Client::new();
+    let client = validation_client();
     match client
         .get(DEEPSEEK_MODELS_URL)
         .bearer_auth(api_key)
@@ -297,7 +309,7 @@ pub async fn validate_cerebras_key(api_key: &str) -> ApiKeyValidation {
     if api_key.is_empty() {
         return ApiKeyValidation::Invalid;
     }
-    let client = reqwest::Client::new();
+    let client = validation_client();
     match client
         .get(CEREBRAS_MODELS_URL)
         .bearer_auth(api_key)
@@ -315,7 +327,7 @@ pub async fn validate_openrouter_key(api_key: &str) -> ApiKeyValidation {
     if api_key.is_empty() {
         return ApiKeyValidation::Invalid;
     }
-    let client = reqwest::Client::new();
+    let client = validation_client();
     match client
         .get(OPENROUTER_MODELS_URL)
         .bearer_auth(api_key)
