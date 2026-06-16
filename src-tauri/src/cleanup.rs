@@ -504,10 +504,17 @@ fn http_client() -> &'static reqwest::Client {
 /// keep-alive connection in the shared client's pool; draining the body returns
 /// it for reuse. Errors are ignored: a cold connection at cleanup time is the
 /// unwarmed status quo, not a failure.
+const PREWARM_TIMEOUT: Duration = Duration::from_secs(2);
+
 pub(crate) async fn prewarm_connection(url: &str) {
-    if let Ok(resp) = http_client().get(url).send().await {
-        let _ = resp.bytes().await;
-    }
+    let prewarm = async {
+        if let Ok(resp) = http_client().get(url).send().await {
+            let _ = resp.bytes().await;
+        }
+    };
+    // A stalled host must not leave the detached prewarm task (and its socket)
+    // alive — repeated PTT presses would otherwise pile them up.
+    let _ = tokio::time::timeout(PREWARM_TIMEOUT, prewarm).await;
 }
 
 /// Whether the model accepts an assistant-message prefill. Haiku 4.5 and older
