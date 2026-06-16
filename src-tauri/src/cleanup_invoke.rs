@@ -128,6 +128,28 @@ pub(crate) async fn invoke_with_transport<T: cleanup::Transport>(
     }
 }
 
+/// Warms the TLS connection to `provider`'s cleanup endpoint so the
+/// post-recording cleanup call reuses a live connection rather than opening a
+/// cold one. Only the host/URL is resolved — no credential is needed to open a
+/// connection — and a Custom provider with no base URL configured is a no-op.
+pub async fn prewarm(
+    cleanup_settings: &config::AiCleanupSettings,
+    provider: cleanup::AiProviderId,
+) {
+    use cleanup::AiProviderId;
+    let url = match provider {
+        AiProviderId::Anthropic => cleanup::ANTHROPIC_URL.to_string(),
+        AiProviderId::Custom => match &cleanup_settings.custom_provider {
+            Some(cp) if !cp.base_url.is_empty() => {
+                format!("{}/chat/completions", cp.base_url.trim_end_matches('/'))
+            }
+            _ => return,
+        },
+        _ => provider.openai_chat_url().to_string(),
+    };
+    cleanup::prewarm_connection(&url).await;
+}
+
 fn resolve_anthropic_credential<'a>(
     cleanup_settings: &'a config::AiCleanupSettings,
 ) -> Result<cleanup::Credential<'a>, cleanup::CleanupError> {

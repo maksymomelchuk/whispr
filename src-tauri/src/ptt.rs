@@ -896,10 +896,6 @@ async fn maybe_cleanup(
 
     match result {
         Ok((cleaned, usage)) => {
-            eprintln!(
-                "[profile] cleanup tokens input={} output={}",
-                usage.input_tokens, usage.output_tokens
-            );
             cleanup_stats::record(app, usage.input_tokens, usage.output_tokens);
             (cleaned, CleanupStatus::Ran, Notice::None, context_channels)
         }
@@ -944,14 +940,18 @@ fn start_ptt(
     *state.active_shortcut.lock().unwrap() = Some(shortcut.clone());
     let device = state.input_device.lock().unwrap().clone();
 
-    let modes = config::load(app).modes;
-    let mode_settings = modes
+    let settings = config::load(app);
+    let mode_settings = settings
+        .modes
         .iter()
         .find(|m| m.id == mode_id)
-        .or_else(|| modes.first());
+        .or_else(|| settings.modes.first());
     let context_capture_enabled = mode_settings
         .map(|m| m.ai_cleanup.context_capture_enabled)
         .unwrap_or(false);
+    let cleanup_prewarm_provider = mode_settings
+        .filter(|m| m.ai_cleanup.enabled)
+        .map(|m| m.ai_cleanup.provider);
     if context_capture_enabled {
         clipboard_context::capture(app.clone());
         selected_text_context::capture(app.clone());
@@ -963,6 +963,15 @@ fn start_ptt(
         *state.pending_focused_field_rx.lock().unwrap() = None;
         *state.pending_focused_window_rx.lock().unwrap() = None;
         *state.clipboard_count_at_ptt_down.lock().unwrap() = None;
+    }
+
+    // Warm the cleanup endpoint's TLS connection while the user speaks so the
+    // post-recording cleanup call reuses it instead of opening a cold one.
+    if let Some(provider) = cleanup_prewarm_provider {
+        let cleanup_settings = settings.ai_cleanup.clone();
+        tauri::async_runtime::spawn(async move {
+            cleanup_invoke::prewarm(&cleanup_settings, provider).await;
+        });
     }
 
     // Capture the target app before showing our overlay: show() can make the
