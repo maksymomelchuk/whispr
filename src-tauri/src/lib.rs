@@ -18,6 +18,8 @@ mod snippets;
 mod state;
 mod stats;
 pub mod terms;
+#[cfg(target_os = "macos")]
+mod traffic_lights;
 mod tray;
 
 // cleanup_stats is pure Rust (file I/O + token counters, no OS APIs) and
@@ -112,6 +114,12 @@ pub fn run() {
                 WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
                     let _ = window.hide();
+                }
+                #[cfg(target_os = "macos")]
+                WindowEvent::Resized(_) => {
+                    if let Ok(ns_window) = window.ns_window() {
+                        traffic_lights::reposition(ns_window);
+                    }
                 }
                 _ => {}
             }
@@ -223,6 +231,10 @@ pub fn run() {
             // doing. Explicitly focus it.
             if let Some(window) = app.get_webview_window(MAIN_LABEL) {
                 let _ = window.set_focus();
+                #[cfg(target_os = "macos")]
+                if let Ok(ns_window) = window.ns_window() {
+                    traffic_lights::reposition(ns_window);
+                }
             }
             app.manage(app_state);
             Ok(())

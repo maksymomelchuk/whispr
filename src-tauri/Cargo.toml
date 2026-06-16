@@ -64,6 +64,7 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = [
     "NSBitmapImageRep", "NSGraphics", "NSGraphicsContext",
     "NSImage", "NSImageRep", "NSWorkspace",
     "NSPasteboard", "NSPasteboardItem",
+    "NSWindow", "NSButton", "NSControl", "NSResponder", "NSView",
 ] }
 transcribe-rs = { version = "0.3", features = ["whisper-metal", "ort-coreml"] }
 
