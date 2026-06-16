@@ -1,9 +1,17 @@
-import { StatsTab } from "../components/StatsTab";
+import { useState } from "react";
+
+import { PageShell } from "@/components/PageShell";
+
+import { PeriodToggle, StatsTab, type Period } from "../components/StatsTab";
 
 export function StatsPage() {
+  const [period, setPeriod] = useState<Period>("week");
   return (
-    <div className="p-6">
-      <StatsTab />
-    </div>
+    <PageShell
+      title="Stats"
+      trailing={<PeriodToggle value={period} onChange={setPeriod} />}
+    >
+      <StatsTab period={period} />
+    </PageShell>
   );
 }

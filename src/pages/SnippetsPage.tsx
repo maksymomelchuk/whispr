@@ -19,6 +19,7 @@ import {
 import { useSettings } from "../context/SettingsContext";
 import { useFlash } from "../hooks/useFlash";
 import { getSettings, setSnippets } from "../lib/api";
+import { toastUndo } from "../lib/toastUndo";
 import type { Snippet } from "../lib/types";
 
 const PLACEHOLDERS = [
@@ -234,9 +235,12 @@ export function SnippetsPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState("");
+  const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(new Set());
   const { flash, isFlashing } = useFlash();
 
   const snippets = settings.snippets;
+  const snippetsRef = useRef(snippets);
+  snippetsRef.current = snippets;
 
   function startNew() {
     setEditing({ kind: "new", draft: { trigger: "", expansion: "" } });
@@ -272,8 +276,26 @@ export function SnippetsPage() {
     }
   }
 
-  async function handleDelete(snippet: Snippet) {
-    await persist(snippets.filter((s) => s.id !== snippet.id));
+  function handleDelete(snippet: Snippet) {
+    setPendingDeletes((prev) => new Set([...prev, snippet.id]));
+    toastUndo(
+      `Deleted "${snippet.trigger}"`,
+      async () => {
+        await persist(snippetsRef.current.filter((s) => s.id !== snippet.id));
+        setPendingDeletes((prev) => {
+          const next = new Set(prev);
+          next.delete(snippet.id);
+          return next;
+        });
+      },
+      () => {
+        setPendingDeletes((prev) => {
+          const next = new Set(prev);
+          next.delete(snippet.id);
+          return next;
+        });
+      },
+    );
   }
 
   async function handleSave() {
@@ -312,15 +334,16 @@ export function SnippetsPage() {
   const showTopLevelError = saveError !== null && editing.kind === "none";
 
   const normalizedQuery = query.trim().toLowerCase();
+  const activeSnippets = snippets.filter((s) => !pendingDeletes.has(s.id));
   const visibleSnippets = normalizedQuery
-    ? snippets.filter((s) =>
+    ? activeSnippets.filter((s) =>
         `${s.trigger} ${s.expansion}`.toLowerCase().includes(normalizedQuery),
       )
-    : snippets;
+    : activeSnippets;
 
   const count =
-    snippets.length > 0
-      ? `${snippets.length} ${snippets.length === 1 ? "entry" : "entries"}`
+    activeSnippets.length > 0
+      ? `${activeSnippets.length} ${activeSnippets.length === 1 ? "entry" : "entries"}`
       : undefined;
 
   return (
@@ -338,7 +361,7 @@ export function SnippetsPage() {
           : undefined
       }
     >
-      {snippets.length === 0 && !editingNew ? (
+      {activeSnippets.length === 0 && !editingNew ? (
         <EmptyRowCard
           preview={
             <span className="font-mono text-[13px] font-semibold text-muted-foreground/70">

@@ -31,6 +31,7 @@ pub struct ModelDownloadError {
 pub struct LocalModelStatus {
     pub model: LocalWhisperModel,
     pub downloaded: bool,
+    pub load_failed: bool,
     pub downloading: bool,
     pub size_bytes: u64,
 }

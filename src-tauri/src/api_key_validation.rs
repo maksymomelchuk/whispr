@@ -27,12 +27,32 @@ const ELEVENLABS_USER_URL: &str = "https://api.elevenlabs.io/v1/user";
 /// will pass.
 const SONIOX_MODELS_URL: &str = "https://api.soniox.com/v1/models";
 
+const ANTHROPIC_KEY_MODELS_URL: &str = "https://api.anthropic.com/v1/models";
+const ANTHROPIC_VERSION_HEADER: &str = "2023-06-01";
+const GOOGLE_MODELS_URL: &str = "https://generativelanguage.googleapis.com/v1beta/models";
+const GROQ_MODELS_URL: &str = "https://api.groq.com/openai/v1/models";
+const DEEPSEEK_MODELS_URL: &str = "https://api.deepseek.com/models";
+const CEREBRAS_MODELS_URL: &str = "https://api.cerebras.ai/v1/models";
+const OPENROUTER_MODELS_URL: &str = "https://openrouter.ai/api/v1/models";
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ApiKeyValidation {
     Valid,
     Invalid,
     Error { message: String },
+}
+
+const KEY_VALIDATION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// A stalled provider endpoint must not leave the Settings UI stuck in a
+/// non-idle validation phase; the timeout surfaces as a `reqwest` error that the
+/// callers already map to `ApiKeyValidation::Error`.
+fn validation_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(KEY_VALIDATION_TIMEOUT)
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
 }
 
 pub fn silent_groq_flac() -> Result<Vec<u8>, String> {
@@ -63,7 +83,7 @@ pub async fn validate_assemblyai(api_key: &str) -> ApiKeyValidation {
     if api_key.is_empty() {
         return ApiKeyValidation::Invalid;
     }
-    let client = reqwest::Client::new();
+    let client = validation_client();
     match client
         .get(ASSEMBLYAI_ACCOUNT_URL)
         .header("Authorization", api_key)
@@ -81,7 +101,7 @@ pub async fn validate_deepgram(api_key: &str) -> ApiKeyValidation {
     if api_key.is_empty() {
         return ApiKeyValidation::Invalid;
     }
-    let client = reqwest::Client::new();
+    let client = validation_client();
     match client
         .get(DEEPGRAM_AUTH_URL)
         .header("Authorization", format!("Token {api_key}"))
@@ -99,7 +119,7 @@ pub async fn validate_openai(api_key: &str) -> ApiKeyValidation {
     if api_key.is_empty() {
         return ApiKeyValidation::Invalid;
     }
-    let client = reqwest::Client::new();
+    let client = validation_client();
     match client
         .get(OPENAI_MODELS_URL)
         .bearer_auth(api_key)
@@ -117,7 +137,7 @@ pub async fn validate_elevenlabs(api_key: &str) -> ApiKeyValidation {
     if api_key.is_empty() {
         return ApiKeyValidation::Invalid;
     }
-    let client = reqwest::Client::new();
+    let client = validation_client();
     match client
         .get(ELEVENLABS_USER_URL)
         .header("xi-api-key", api_key)
@@ -135,7 +155,7 @@ pub async fn validate_soniox(api_key: &str) -> ApiKeyValidation {
     if api_key.is_empty() {
         return ApiKeyValidation::Invalid;
     }
-    let client = reqwest::Client::new();
+    let client = validation_client();
     match client
         .get(SONIOX_MODELS_URL)
         .bearer_auth(api_key)
@@ -181,11 +201,136 @@ pub async fn validate_groq(api_key: &str, model: GroqModel, language: &str) -> A
         .text("response_format", "json")
         .text("language", lang.to_string());
 
-    let client = reqwest::Client::new();
+    let client = validation_client();
     match client
         .post(GROQ_TRANSCRIBE_URL)
         .bearer_auth(api_key)
         .multipart(form)
+        .send()
+        .await
+    {
+        Ok(resp) => status_to_validation(resp.status()),
+        Err(e) => ApiKeyValidation::Error {
+            message: format!("Network error: {e}"),
+        },
+    }
+}
+
+pub async fn validate_anthropic_key(api_key: &str) -> ApiKeyValidation {
+    if api_key.is_empty() {
+        return ApiKeyValidation::Invalid;
+    }
+    let client = validation_client();
+    match client
+        .get(ANTHROPIC_KEY_MODELS_URL)
+        .header("x-api-key", api_key)
+        .header("anthropic-version", ANTHROPIC_VERSION_HEADER)
+        .send()
+        .await
+    {
+        Ok(resp) => status_to_validation(resp.status()),
+        Err(e) => ApiKeyValidation::Error {
+            message: format!("Network error: {e}"),
+        },
+    }
+}
+
+pub async fn validate_google_key(api_key: &str) -> ApiKeyValidation {
+    if api_key.is_empty() {
+        return ApiKeyValidation::Invalid;
+    }
+    let client = validation_client();
+    match client
+        .get(GOOGLE_MODELS_URL)
+        .query(&[("key", api_key)])
+        .send()
+        .await
+    {
+        Ok(resp) => {
+            let status = resp.status();
+            if status.is_success() {
+                ApiKeyValidation::Valid
+            } else if status == reqwest::StatusCode::BAD_REQUEST
+                || status == reqwest::StatusCode::UNAUTHORIZED
+                || status == reqwest::StatusCode::FORBIDDEN
+            {
+                // Google returns 400 (not 401) for a missing or malformed key;
+                // 401/403 cover revoked/restricted keys. All three mean Invalid.
+                ApiKeyValidation::Invalid
+            } else {
+                ApiKeyValidation::Error {
+                    message: format!("Provider returned HTTP {}", status.as_u16()),
+                }
+            }
+        }
+        Err(e) => ApiKeyValidation::Error {
+            message: format!("Network error: {e}"),
+        },
+    }
+}
+
+pub async fn validate_groq_chat_key(api_key: &str) -> ApiKeyValidation {
+    if api_key.is_empty() {
+        return ApiKeyValidation::Invalid;
+    }
+    let client = validation_client();
+    match client
+        .get(GROQ_MODELS_URL)
+        .bearer_auth(api_key)
+        .send()
+        .await
+    {
+        Ok(resp) => status_to_validation(resp.status()),
+        Err(e) => ApiKeyValidation::Error {
+            message: format!("Network error: {e}"),
+        },
+    }
+}
+
+pub async fn validate_deepseek_key(api_key: &str) -> ApiKeyValidation {
+    if api_key.is_empty() {
+        return ApiKeyValidation::Invalid;
+    }
+    let client = validation_client();
+    match client
+        .get(DEEPSEEK_MODELS_URL)
+        .bearer_auth(api_key)
+        .send()
+        .await
+    {
+        Ok(resp) => status_to_validation(resp.status()),
+        Err(e) => ApiKeyValidation::Error {
+            message: format!("Network error: {e}"),
+        },
+    }
+}
+
+pub async fn validate_cerebras_key(api_key: &str) -> ApiKeyValidation {
+    if api_key.is_empty() {
+        return ApiKeyValidation::Invalid;
+    }
+    let client = validation_client();
+    match client
+        .get(CEREBRAS_MODELS_URL)
+        .bearer_auth(api_key)
+        .send()
+        .await
+    {
+        Ok(resp) => status_to_validation(resp.status()),
+        Err(e) => ApiKeyValidation::Error {
+            message: format!("Network error: {e}"),
+        },
+    }
+}
+
+pub async fn validate_openrouter_key(api_key: &str) -> ApiKeyValidation {
+    if api_key.is_empty() {
+        return ApiKeyValidation::Invalid;
+    }
+    let client = validation_client();
+    match client
+        .get(OPENROUTER_MODELS_URL)
+        .bearer_auth(api_key)
         .send()
         .await
     {
@@ -288,6 +433,42 @@ mod tests {
     #[tokio::test]
     async fn validate_soniox_short_circuits_on_empty_key() {
         let v = validate_soniox("").await;
+        assert_eq!(v, ApiKeyValidation::Invalid);
+    }
+
+    #[tokio::test]
+    async fn validate_anthropic_key_short_circuits_on_empty_key() {
+        let v = validate_anthropic_key("").await;
+        assert_eq!(v, ApiKeyValidation::Invalid);
+    }
+
+    #[tokio::test]
+    async fn validate_google_key_short_circuits_on_empty_key() {
+        let v = validate_google_key("").await;
+        assert_eq!(v, ApiKeyValidation::Invalid);
+    }
+
+    #[tokio::test]
+    async fn validate_groq_chat_key_short_circuits_on_empty_key() {
+        let v = validate_groq_chat_key("").await;
+        assert_eq!(v, ApiKeyValidation::Invalid);
+    }
+
+    #[tokio::test]
+    async fn validate_deepseek_key_short_circuits_on_empty_key() {
+        let v = validate_deepseek_key("").await;
+        assert_eq!(v, ApiKeyValidation::Invalid);
+    }
+
+    #[tokio::test]
+    async fn validate_cerebras_key_short_circuits_on_empty_key() {
+        let v = validate_cerebras_key("").await;
+        assert_eq!(v, ApiKeyValidation::Invalid);
+    }
+
+    #[tokio::test]
+    async fn validate_openrouter_key_short_circuits_on_empty_key() {
+        let v = validate_openrouter_key("").await;
         assert_eq!(v, ApiKeyValidation::Invalid);
     }
 }

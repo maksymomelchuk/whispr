@@ -389,17 +389,19 @@ fn old_ua_en_with_custom_prompt_is_not_overwritten_on_migration() {
 
 #[test]
 fn current_shape_config_round_trips_without_modification() {
-    // Serialise a default Settings (already in current shape — post migration),
-    // parse it back, and verify that a second migration pass is a no-op and
-    // the re-serialised JSON is byte-for-byte identical.
-    let original = Settings::default();
-    let json = serde_json::to_string(&original).unwrap();
+    // Migration seeds the default profile + binding into an empty config, so a
+    // raw Settings::default() is pre-seed, not current shape. Build the baseline
+    // by migrating once, then verify a second pass is byte-for-byte identical —
+    // migration must be idempotent on an already-migrated config.
+    let baseline_json = serde_json::to_string(&Settings::default()).unwrap();
+    let already_migrated = config::from_json(&baseline_json).unwrap();
+    let json = serde_json::to_string(&already_migrated).unwrap();
 
     let round_tripped = config::from_json(&json).unwrap();
     let reserialized = serde_json::to_string(&round_tripped).unwrap();
 
     assert_eq!(
         json, reserialized,
-        "round-trip through from_json must not modify a current-shape config"
+        "round-trip through from_json must not modify an already-migrated config"
     );
 }

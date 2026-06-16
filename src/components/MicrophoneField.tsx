@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -51,6 +51,7 @@ export function MicrophoneField() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const form = useForm({ values: { device: toSelectValue(input_device) } });
+  const selectTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     listInputDevices()
@@ -116,7 +117,7 @@ export function MicrophoneField() {
                   onValueChange={handleChange}
                   disabled={isDisabled}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger ref={selectTriggerRef} className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -159,10 +160,17 @@ export function MicrophoneField() {
         </Alert>
       )}
       {missing && (
-        <Alert variant="destructive" className="mt-2">
+        <Alert className="mt-2">
           <AlertDescription>
-            Saved device isn&rsquo;t currently available. Recording will use the
-            system default until it&rsquo;s reconnected.
+            Saved microphone isn&rsquo;t available. Recording will use the
+            system default until it reconnects.{" "}
+            <button
+              type="button"
+              className="underline underline-offset-2 cursor-pointer"
+              onClick={() => selectTriggerRef.current?.click()}
+            >
+              Choose another
+            </button>
           </AlertDescription>
         </Alert>
       )}

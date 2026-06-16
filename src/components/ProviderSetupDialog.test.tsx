@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EngineDescriptor } from "../lib/speechModelCatalog";
 import type { Settings } from "../lib/types";
@@ -147,5 +147,59 @@ describe("ProviderSetupDialog", () => {
     expect(
       screen.getByText("A test provider for unit tests."),
     ).toBeInTheDocument();
+  });
+
+  it("shows Validating… while validate() is pending", async () => {
+    vi.mocked(mockDescriptor.validate).mockImplementation(
+      () => new Promise(() => {}),
+    );
+    const user = userEvent.setup();
+    renderDialog();
+    await user.type(screen.getByLabelText("API Key"), "sk-test-123");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(
+      screen.getByRole("button", { name: "Validating…" }),
+    ).toBeInTheDocument();
+  });
+
+  it("validation failure resets save button and preserves key", async () => {
+    vi.mocked(mockDescriptor.validate).mockResolvedValue({
+      kind: "invalid",
+    });
+    const user = userEvent.setup();
+    renderDialog();
+    await user.type(screen.getByLabelText("API Key"), "bad-key");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(screen.getByText(/rejected by the provider/i)).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+    expect(screen.getByLabelText("API Key")).toHaveValue("bad-key");
+  });
+
+  describe("auto-close after connect", () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("shows Connected after successful save and auto-closes", async () => {
+      vi.mocked(mockDescriptor.validate).mockResolvedValue({ kind: "valid" });
+      vi.mocked(mockDescriptor.persist).mockResolvedValue(undefined);
+      const onOpenChange = vi.fn();
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      renderDialog(false, vi.fn(), onOpenChange);
+      await user.type(screen.getByLabelText("API Key"), "sk-valid-123");
+      await user.click(screen.getByRole("button", { name: "Save" }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: "Connected" }),
+        ).toBeInTheDocument(),
+      );
+      vi.advanceTimersByTime(900);
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
   });
 });

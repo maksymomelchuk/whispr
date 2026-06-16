@@ -58,7 +58,7 @@ pub struct Usage {
     pub output_tokens: u64,
 }
 
-const ANTHROPIC_URL: &str = "https://api.anthropic.com/v1/messages";
+pub(crate) const ANTHROPIC_URL: &str = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 /// Beta header required when authenticating with a Claude Code OAuth token.
 /// Without it the Messages endpoint rejects bearer auth.
@@ -498,6 +498,36 @@ fn http_client() -> &'static reqwest::Client {
     CLIENT.get_or_init(reqwest::Client::new)
 }
 
+/// Warms a pooled TLS connection to `url`'s host so the cleanup POST that
+/// follows a few seconds later reuses it instead of paying a fresh TCP+TLS
+/// handshake. The response is irrelevant — any status code still leaves an idle
+/// keep-alive connection in the shared client's pool; draining the body returns
+/// it for reuse. Errors are ignored: a cold connection at cleanup time is the
+/// unwarmed status quo, not a failure.
+const PREWARM_TIMEOUT: Duration = Duration::from_secs(2);
+
+pub(crate) async fn prewarm_connection(url: &str) {
+    let prewarm = async {
+        if let Ok(resp) = http_client().get(url).send().await {
+            let _ = resp.bytes().await;
+        }
+    };
+    // A stalled host must not leave the detached prewarm task (and its socket)
+    // alive — repeated PTT presses would otherwise pile them up.
+    let _ = tokio::time::timeout(PREWARM_TIMEOUT, prewarm).await;
+}
+
+/// Whether the model accepts an assistant-message prefill. Haiku 4.5 and older
+/// models do, and the Anthropic path prefills the `<output>` open tag there to
+/// anchor extraction and suppress refusals. The 4.6 generation onward returns a
+/// 400 ("does not support assistant message prefill") and requires the request
+/// to end on the user turn. Unknown models default to no prefill — the safe
+/// direction, since the trend is away from prefill and `SAFETY_PREAMBLE` already
+/// makes the model wrap its output in the tags.
+fn anthropic_supports_prefill(model: &str) -> bool {
+    model.contains("haiku-4-5")
+}
+
 fn build_system(credential: &Credential<'_>, prompt: &str) -> serde_json::Value {
     match credential {
         Credential::ApiKey(_) => serde_json::json!([
@@ -604,6 +634,19 @@ fn openrouter_effort(model: &str) -> Option<&'static str> {
     None
 }
 
+/// Provider-specific body fields beyond the standard chat params. Groq's
+/// GPT-OSS models emit a reasoning trace by default; cleanup waits for the full
+/// non-streamed response, so `include_reasoning: false` keeps that trace from
+/// padding generation the pipeline then discards.
+fn extra_body_params(provider: AiProviderId, model: &str) -> Vec<(&'static str, Value)> {
+    match provider {
+        AiProviderId::Groq if model.contains("gpt-oss") => {
+            vec![("include_reasoning", Value::Bool(false))]
+        }
+        _ => Vec::new(),
+    }
+}
+
 async fn call_openai_with_transport<T: Transport>(
     transcript: &str,
     target: OpenAiTarget<'_>,
@@ -622,6 +665,9 @@ async fn call_openai_with_transport<T: Transport>(
     });
     if let Some(effort) = reasoning_effort_for(target.provider, target.model) {
         body["reasoning_effort"] = Value::String(effort.to_string());
+    }
+    for (key, value) in extra_body_params(target.provider, target.model) {
+        body[key] = value;
     }
     let resp = transport
         .post(target.chat_url, &headers, &body)
@@ -733,21 +779,22 @@ async fn call_with_transport<T: Transport>(
     transport: &T,
 ) -> Result<(String, Usage), CleanupError> {
     let system = build_system(&credential, prompt);
+    let mut messages = vec![serde_json::json!({
+        "role": "user",
+        "content": wrap_transcript(transcript)
+    })];
+    if anthropic_supports_prefill(model) {
+        messages.push(serde_json::json!({
+            "role": "assistant",
+            "content": OUTPUT_OPEN_TAG
+        }));
+    }
     let body = serde_json::json!({
         "model": model,
         "max_tokens": MAX_TOKENS,
         "system": system,
         "stop_sequences": [OUTPUT_CLOSE_TAG],
-        "messages": [
-            {
-                "role": "user",
-                "content": wrap_transcript(transcript)
-            },
-            {
-                "role": "assistant",
-                "content": OUTPUT_OPEN_TAG
-            }
-        ]
+        "messages": messages
     });
 
     let headers = build_headers(&credential);
@@ -1440,6 +1487,39 @@ mod tests {
         let prefill = messages.last().expect("at least one message");
         assert_eq!(prefill["role"], "assistant");
         assert_eq!(prefill["content"], OUTPUT_OPEN_TAG);
+    }
+
+    #[tokio::test]
+    async fn anthropic_body_omits_prefill_for_models_that_reject_it() {
+        let transport = CapturingTransport::new(success_body("cleaned text"));
+        run_with_transport(
+            "hello world",
+            api_key_cred(),
+            "claude-sonnet-4-6",
+            DEFAULT_SYSTEM_PROMPT,
+            &transport,
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("should succeed");
+        let body = transport.body();
+        let messages = body["messages"].as_array().expect("messages is an array");
+        assert_eq!(
+            messages.last().expect("at least one message")["role"],
+            "user",
+            "request must end on the user turn for models that reject prefill"
+        );
+        assert!(
+            !messages.iter().any(|m| m["role"] == "assistant"),
+            "no assistant prefill turn for models that reject it"
+        );
+    }
+
+    #[test]
+    fn prefill_supported_only_for_haiku_4_5() {
+        assert!(anthropic_supports_prefill("claude-haiku-4-5"));
+        assert!(!anthropic_supports_prefill("claude-sonnet-4-6"));
+        assert!(!anthropic_supports_prefill("claude-opus-4-8"));
     }
 
     #[tokio::test]

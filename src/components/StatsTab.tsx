@@ -12,13 +12,20 @@ import {
 } from "@/components/ui/chart";
 import type { ChartConfig } from "@/components/ui/chart";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-import { useConfirmAction } from "../hooks/useConfirmAction";
 import {
   getAppIcon,
   getCleanupStats,
@@ -31,7 +38,7 @@ import { InfoTip } from "./InfoTip";
 import { SectionHeader } from "./SectionHeader";
 
 type LoadState = "loading" | "ready" | "error";
-type Period = "week" | "month" | "all";
+export type Period = "week" | "month" | "all";
 
 interface PeriodSpec {
   id: Period;
@@ -179,8 +186,11 @@ function formatCount(n: number): string {
   return n.toLocaleString();
 }
 
-export function StatsTab() {
-  const [period, setPeriod] = useState<Period>("week");
+interface StatsTabProps {
+  period: Period;
+}
+
+export function StatsTab({ period }: StatsTabProps) {
   const [rows, setRows] = useState<StatsRow[]>([]);
   const [cleanup, setCleanup] = useState<CleanupStats | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
@@ -208,16 +218,18 @@ export function StatsTab() {
     };
   }, [cleanup, period]);
 
-  const { confirming: confirmingClear, trigger: handleClear } =
-    useConfirmAction(async () => {
-      try {
-        await persistClearStats();
-        setRows([]);
-        setCleanup(null);
-      } catch (e) {
-        console.error("clear stats failed", e);
-      }
-    });
+  const [clearDialogOpen, setClearDialogOpen] = useState(false);
+
+  const handleClearConfirm = async () => {
+    try {
+      await persistClearStats();
+      setRows([]);
+      setCleanup(null);
+    } catch (e) {
+      console.error("clear stats failed", e);
+    }
+    setClearDialogOpen(false);
+  };
 
   const refresh = () => {
     Promise.all([getStats(), getCleanupStats()])
@@ -272,23 +284,17 @@ export function StatsTab() {
 
   return (
     <section className="flex flex-col gap-5">
-      <SectionHeader
-        title="Dictation stats"
-        control={
-          <div className="flex items-center gap-2">
-            {hasAny && (
-              <Button
-                variant={confirmingClear ? "destructive" : "ghost"}
-                size="xs"
-                onClick={handleClear}
-              >
-                {confirmingClear ? "Click to confirm" : "Clear stats"}
-              </Button>
-            )}
-            <PeriodToggle value={period} onChange={setPeriod} />
-          </div>
-        }
-      />
+      {hasAny && (
+        <div className="flex items-center justify-end">
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => setClearDialogOpen(true)}
+          >
+            Clear stats
+          </Button>
+        </div>
+      )}
 
       {!hasAny && <EmptyState />}
 
@@ -329,11 +335,48 @@ export function StatsTab() {
           {cleanupTokens && <CleanupRow tokens={cleanupTokens} />}
         </>
       )}
+
+      <ClearStatsConfirmDialog
+        open={clearDialogOpen}
+        onConfirm={handleClearConfirm}
+        onCancel={() => setClearDialogOpen(false)}
+      />
     </section>
   );
 }
 
-function PeriodToggle({
+function ClearStatsConfirmDialog({
+  open,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Clear stats?</DialogTitle>
+          <DialogDescription>
+            Delete all recorded stats? This can&rsquo;t be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={onConfirm}>
+            Clear stats
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function PeriodToggle({
   value,
   onChange,
 }: {
@@ -574,7 +617,7 @@ function AppIcon({
 function CleanupRow({ tokens }: { tokens: CleanupTokens }) {
   const total = tokens.input + tokens.output;
   return (
-    <div className="flex items-baseline justify-between gap-3 overflow-hidden rounded-lg border border-border bg-card px-4 py-3.5">
+    <div className="flex items-baseline justify-between gap-3 overflow-hidden rounded-lg bg-card shadow-xs px-4 py-3.5">
       <span className="flex items-baseline gap-1.5 text-xs tabular-nums text-muted-foreground">
         <span className="whitespace-nowrap">
           {formatCount(tokens.input)} input

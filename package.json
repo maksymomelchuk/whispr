@@ -15,7 +15,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "sandcastle": "npx tsx .sandcastle/main.ts",
-    "sandcastle:build": "sandcastle docker build-image --dockerfile .sandcastle/Dockerfile --image-name wispr-sandcastle"
+    "sandcastle:build": "sandcastle docker build-image --dockerfile .sandcastle/Dockerfile --image-name wispr-sandcastle",
+    "prepare": "husky"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -51,6 +52,7 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "husky": "^9.1.7",
     "jsdom": "^29.1.1",
     "prettier": "^3.8.3",
     "tailwindcss": "^4.3.0",

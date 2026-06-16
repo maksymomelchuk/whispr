@@ -12,6 +12,13 @@ pub(crate) const PTT_ERROR_EVENT: &str = "ptt-error";
 pub(crate) const TRANSCRIPTION_ERROR_EVENT: &str = "transcription-error";
 const SOFT_WARNING_FLASH: Duration = Duration::from_millis(800);
 
+/// Result of a transcription session. `speak_duration` is the time the user
+/// held the key (recording start to stop).
+pub struct SessionOutcome {
+    pub transcript: String,
+    pub speak_duration: Duration,
+}
+
 pub struct Session<E: Engine> {
     engine: E,
     app: AppHandle,
@@ -38,7 +45,7 @@ impl<E: Engine> Session<E> {
         self,
         mut chunks: UnboundedReceiver<Vec<i16>>,
         ctx: EngineContext,
-    ) -> Result<(String, Duration), String> {
+    ) -> Result<SessionOutcome, String> {
         let speak_start = Instant::now();
 
         let (engine_chunk_tx, engine_chunk_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -92,6 +99,9 @@ impl<E: Engine> Session<E> {
             tokio::time::sleep(SOFT_WARNING_FLASH).await;
         }
 
-        Ok((outcome.transcript, speak_duration))
+        Ok(SessionOutcome {
+            transcript: outcome.transcript,
+            speak_duration,
+        })
     }
 }

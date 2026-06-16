@@ -1,9 +1,11 @@
+import { PageShell } from "@/components/PageShell";
+
 import { HistoryTab } from "../components/HistoryTab";
 
 export function HistoryPage() {
   return (
-    <div className="p-6">
+    <PageShell title="History">
       <HistoryTab />
-    </div>
+    </PageShell>
   );
 }

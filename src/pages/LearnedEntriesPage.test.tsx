@@ -23,7 +23,10 @@ vi.mock("../lib/api", () => ({
 }));
 
 vi.mock("sonner", () => ({
-  toast: { error: vi.fn(), success: vi.fn() },
+  toast: Object.assign(vi.fn(), {
+    error: vi.fn(),
+    success: vi.fn(),
+  }),
 }));
 
 const BASE_MODE: Mode = {
@@ -180,7 +183,8 @@ describe("LearnedEntriesPage – entry display", () => {
 });
 
 describe("LearnedEntriesPage – delete", () => {
-  it("removes deleted entry from the list", async () => {
+  it("optimistically removes the row and shows undo toast on delete", async () => {
+    const { toast } = await import("sonner");
     vi.mocked(mockGetLearnedEntries).mockResolvedValue([CANDIDATE_CORRECTION]);
     render(<Wrapper initial={{ ...BASE, learn_from_corrections: true }} />);
 
@@ -188,10 +192,46 @@ describe("LearnedEntriesPage – delete", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Delete Tauri" }));
 
+    expect(screen.queryByText("Tauri")).not.toBeInTheDocument();
+    expect(mockDeleteLearnedEntry).not.toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledWith(
+      expect.stringContaining("Tauri"),
+      expect.objectContaining({
+        action: expect.objectContaining({ label: "Undo" }),
+      }),
+    );
+  });
+
+  it("restores the row when undo is pressed", async () => {
+    const { toast } = await import("sonner");
+    vi.mocked(mockGetLearnedEntries).mockResolvedValue([CANDIDATE_CORRECTION]);
+    render(<Wrapper initial={{ ...BASE, learn_from_corrections: true }} />);
+
+    await waitFor(() => expect(screen.getByText("Tauri")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: "Delete Tauri" }));
+
+    const opts = vi.mocked(toast).mock.calls[0][1] as Record<string, unknown>;
+    const action = opts.action as { onClick: () => void };
+    action.onClick();
+
+    await waitFor(() => expect(screen.getByText("Tauri")).toBeInTheDocument());
+    expect(mockDeleteLearnedEntry).not.toHaveBeenCalled();
+  });
+
+  it("commits the delete to the backend when the toast closes without undo", async () => {
+    const { toast } = await import("sonner");
+    vi.mocked(mockGetLearnedEntries).mockResolvedValue([CANDIDATE_CORRECTION]);
+    render(<Wrapper initial={{ ...BASE, learn_from_corrections: true }} />);
+
+    await waitFor(() => expect(screen.getByText("Tauri")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: "Delete Tauri" }));
+
+    const opts = vi.mocked(toast).mock.calls[0][1] as Record<string, unknown>;
+    (opts.onAutoClose as (t: unknown) => void)({});
+
     await waitFor(() =>
       expect(mockDeleteLearnedEntry).toHaveBeenCalledWith("learned-1"),
     );
-    expect(screen.queryByText("Tauri")).not.toBeInTheDocument();
   });
 });
 

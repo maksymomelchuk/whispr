@@ -1,9 +1,10 @@
 import { TrashIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
 
+import { EmptyPanel } from "@/components/EmptyPanel";
 import { EmptyRowCard } from "@/components/EmptyRowCard";
 import { Keycap, ShortcutKeycaps } from "@/components/Keycap";
-import { PageHeader } from "@/components/PageHeader";
+import { PageShell } from "@/components/PageShell";
 import { RowCard } from "@/components/RowCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { Alert } from "@/components/ui/alert";
@@ -119,7 +120,7 @@ function BindingRow({
         )}
       </div>
 
-      <div className="flex items-center gap-0.5 shrink-0 transform-gpu opacity-65 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-0.5 shrink-0 transform-gpu opacity-65 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
         <Button
           variant="ghost"
           size="xs"
@@ -261,6 +262,7 @@ function EmptyModeCard({ onAdd }: { onAdd: () => void }) {
           <Keycap tone="phantom">K</Keycap>
         </div>
       }
+      hint="Hold to dictate. Release to transcribe and paste."
       action="Add hotkey"
       onClick={onAdd}
       className="py-3"
@@ -337,11 +339,10 @@ export function HotkeysPage() {
     `${targetIdValue}|${shortcutKey(shortcut)}`;
 
   return (
-    <div className="p-6 flex flex-col gap-6">
-      <PageHeader
-        title="Hotkeys"
-        subtitle="Bind push-to-talk shortcuts to profiles and the paste and recover actions."
-      />
+    <PageShell
+      title="Hotkeys"
+      description="Bind push-to-talk shortcuts to profiles and the paste and recover actions."
+    >
       {error && (
         <Alert variant="destructive" className="font-medium">
           {error}
@@ -353,9 +354,10 @@ export function HotkeysPage() {
           Dictation Modes
         </p>
         {settings.modes.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            No profiles yet. Create one in Profiles to bind a hotkey.
-          </p>
+          <EmptyPanel
+            title="No profiles yet"
+            hint="Create a profile first, then come back to bind a push-to-talk hotkey."
+          />
         )}
         <div className="flex flex-col gap-8">
           {settings.modes.map((mode, modeIdx) => {
@@ -466,7 +468,7 @@ export function HotkeysPage() {
         isFlashing={isFlashing}
         rowFlashId={rowFlashId}
       />
-    </div>
+    </PageShell>
   );
 }
 

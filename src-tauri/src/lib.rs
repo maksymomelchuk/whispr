@@ -241,6 +241,7 @@ pub fn run() {
             commands::validate_openai_api_key,
             commands::validate_elevenlabs_api_key,
             commands::validate_soniox_api_key,
+            commands::validate_cleanup_provider_key,
             commands::set_hotkey_bindings,
             commands::set_shortcut_capture_paused,
             commands::create_term_set,
@@ -299,6 +300,7 @@ pub fn run() {
             commands::delete_local_model,
             commands::get_local_model_path,
             commands::set_local_whisper_idle_timeout,
+            commands::check_speech_provider_key,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

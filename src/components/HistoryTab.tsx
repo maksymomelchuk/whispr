@@ -8,6 +8,14 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -18,7 +26,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 import { useSettings } from "../context/SettingsContext";
-import { useConfirmAction } from "../hooks/useConfirmAction";
 import { useFlash } from "../hooks/useFlash";
 import {
   getHistory,
@@ -124,16 +131,18 @@ export function HistoryTab() {
   const seenIds = useRef<Set<string>>(new Set());
   const initialized = useRef(false);
 
-  const { confirming: confirmingClear, trigger: handleClear } =
-    useConfirmAction(async () => {
-      try {
-        await persistClearHistory();
-        setEntries([]);
-        seenIds.current.clear();
-      } catch (e) {
-        console.error("clear history failed", e);
-      }
-    });
+  const [clearDialogOpen, setClearDialogOpen] = useState(false);
+
+  const handleClearConfirm = async () => {
+    try {
+      await persistClearHistory();
+      setEntries([]);
+      seenIds.current.clear();
+    } catch (e) {
+      console.error("clear history failed", e);
+    }
+    setClearDialogOpen(false);
+  };
 
   const handleLimitChange = async (value: string) => {
     const next = optionValueToLimit(value);
@@ -219,7 +228,7 @@ export function HistoryTab() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-start justify-between gap-3 pb-1 border-b border-border/40">
+      <div className="flex items-start justify-between gap-3 pb-1">
         <p className="text-xs text-muted-foreground">
           {limitHint(historyLimit, entries.length)}
         </p>
@@ -247,11 +256,11 @@ export function HistoryTab() {
           {entries.length > 0 && (
             <Button
               type="button"
-              variant={confirmingClear ? "destructive" : "ghost"}
+              variant="ghost"
               size="sm"
-              onClick={handleClear}
+              onClick={() => setClearDialogOpen(true)}
             >
-              {confirmingClear ? "Click to confirm" : "Clear all"}
+              Clear all
             </Button>
           )}
         </div>
@@ -278,7 +287,48 @@ export function HistoryTab() {
           </div>
         </section>
       ))}
+
+      <ClearHistoryConfirmDialog
+        entryCount={entries.length}
+        open={clearDialogOpen}
+        onConfirm={handleClearConfirm}
+        onCancel={() => setClearDialogOpen(false)}
+      />
     </div>
+  );
+}
+
+function ClearHistoryConfirmDialog({
+  entryCount,
+  open,
+  onConfirm,
+  onCancel,
+}: {
+  entryCount: number;
+  open: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Clear all history?</DialogTitle>
+          <DialogDescription>
+            Delete all {entryCount} {entryCount === 1 ? "entry" : "entries"}?
+            This can&rsquo;t be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={onConfirm}>
+            Clear all
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -539,7 +589,7 @@ function HistoryRow({
                   {view.badge.label}
                 </Badge>
               )}
-              <div className="flex items-center gap-1 pt-0.5 opacity-65 group-hover:opacity-100 transition-opacity">
+              <div className="flex items-center gap-1 pt-0.5 opacity-65 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                 <Button
                   type="button"
                   variant="ghost"

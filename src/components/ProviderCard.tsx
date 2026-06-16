@@ -26,8 +26,9 @@ export function ProviderCard({
         type="button"
         onClick={() => setDialogOpen(true)}
         className={cn(
-          "flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3",
+          "flex items-center gap-3 rounded-lg bg-card shadow-xs px-4 py-3",
           "text-left transition-colors hover:bg-accent/40 cursor-pointer w-full",
+          "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
         )}
       >
         <Logo className="h-8 w-8 shrink-0 rounded-md" />
@@ -40,7 +41,7 @@ export function ProviderCard({
             weight="fill"
             role="img"
             aria-label="Configured"
-            className="shrink-0 text-green-600 dark:text-green-500"
+            className="shrink-0 text-muted-foreground"
           />
         ) : (
           <GearIcon

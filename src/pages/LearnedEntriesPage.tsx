@@ -12,18 +12,21 @@ import { ToggleRow } from "@/components/ToggleRow";
 import { Badge } from "@/components/ui/badge";
 
 import { useSettings } from "../context/SettingsContext";
+import { useFlash } from "../hooks/useFlash";
 import {
   deleteLearnedEntry,
   getLearnedEntries,
   promoteLearnedEntry,
   setLearnFromCorrections,
 } from "../lib/api";
+import { toastUndo } from "../lib/toastUndo";
 import type { LearnedEntry } from "../lib/types";
 
 export function LearnedEntriesPage() {
   const { settings, setSetting } = useSettings();
   const [entries, setEntries] = useState<LearnedEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const { flash, isFlashing } = useFlash();
 
   const refresh = useCallback(() => {
     getLearnedEntries()
@@ -57,13 +60,28 @@ export function LearnedEntriesPage() {
     );
   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteLearnedEntry(id);
-      setEntries((prev) => prev.filter((e) => e.id !== id));
-    } catch (e) {
-      toast.error("Couldn't delete entry", { description: String(e) });
-    }
+  const handleDelete = (entry: LearnedEntry) => {
+    setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+    toastUndo(
+      `Deleted "${entry.word}"`,
+      async () => {
+        try {
+          await deleteLearnedEntry(entry.id);
+        } catch (e) {
+          toast.error("Couldn't delete entry", { description: String(e) });
+          setEntries((prev) => {
+            const alreadyPresent = prev.some((e) => e.id === entry.id);
+            return alreadyPresent ? prev : [...prev, entry];
+          });
+        }
+      },
+      () => {
+        setEntries((prev) => {
+          const alreadyPresent = prev.some((e) => e.id === entry.id);
+          return alreadyPresent ? prev : [...prev, entry];
+        });
+      },
+    );
   };
 
   const handlePromote = async (id: string) => {
@@ -74,6 +92,7 @@ export function LearnedEntriesPage() {
           entry.id === id ? { ...entry, status: "promoted" as const } : entry,
         ),
       );
+      flash(id);
       toast.success("Entry activated");
     } catch (e) {
       toast.error("Couldn't promote entry", { description: String(e) });
@@ -117,7 +136,8 @@ export function LearnedEntriesPage() {
                   <LearnedEntryRow
                     key={entry.id}
                     entry={entry}
-                    onDelete={() => handleDelete(entry.id)}
+                    flashing={isFlashing(entry.id)}
+                    onDelete={() => handleDelete(entry)}
                   />
                 ))}
               </div>
@@ -136,7 +156,8 @@ export function LearnedEntriesPage() {
                   <LearnedEntryRow
                     key={entry.id}
                     entry={entry}
-                    onDelete={() => handleDelete(entry.id)}
+                    flashing={isFlashing(entry.id)}
+                    onDelete={() => handleDelete(entry)}
                     onPromote={() => handlePromote(entry.id)}
                   />
                 ))}
@@ -150,15 +171,18 @@ export function LearnedEntriesPage() {
 
 function LearnedEntryRow({
   entry,
+  flashing,
   onDelete,
   onPromote,
 }: {
   entry: LearnedEntry;
+  flashing?: boolean;
   onDelete: () => void;
   onPromote?: () => void;
 }) {
   return (
     <ListRow
+      flashing={flashing}
       label={<LearnedRowLabel entry={entry} />}
       meta={
         <span className="ml-auto shrink-0">

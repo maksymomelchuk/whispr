@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
+import { EmptyRowCard } from "@/components/EmptyRowCard";
 import { PageShell } from "@/components/PageShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -58,6 +59,7 @@ import {
   reorderModes,
   updateMode,
 } from "../lib/api";
+import { toastRetry } from "../lib/toastRetry";
 import type {
   AiProviderId,
   AssemblyAiModel,
@@ -696,7 +698,19 @@ export function ModeEditor({
       updateMode(normalized)
         .then(() => onPersistRef.current(normalized, false))
         .catch((e) => {
-          toast.error("Couldn't save profile", { description: String(e) });
+          toastRetry(
+            "Couldn't save profile",
+            () => {
+              // Retry the latest draft, not the snapshot that failed — a newer
+              // edit may have saved since, and replaying the old one would
+              // clobber it.
+              const latest = normalizedRef.current;
+              return updateMode(latest).then(() =>
+                onPersistRef.current(latest, false),
+              );
+            },
+            String(e),
+          );
         });
     }, 450);
 
@@ -715,7 +729,14 @@ export function ModeEditor({
       updateMode(current)
         .then(() => onPersistRef.current(current, false))
         .catch((e) => {
-          toast.error("Couldn't save profile", { description: String(e) });
+          toastRetry(
+            "Couldn't save profile",
+            () =>
+              updateMode(current).then(() =>
+                onPersistRef.current(current, false),
+              ),
+            String(e),
+          );
         });
     };
   }, [isNew]);
@@ -1130,7 +1151,7 @@ export function ModeEditor({
                 onOpenChange={setPromptOpen}
                 className="flex flex-col gap-2"
               >
-                <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-fit">
+                <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-fit rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
                   <CaretRightIcon
                     size={10}
                     className={`transition-transform ${promptOpen ? "rotate-90" : ""}`}
@@ -1306,9 +1327,16 @@ export function ModesPage() {
       description="Each profile pairs a speech model with cleanup and vocabulary. Bind a hotkey to switch between them."
     >
       {settings.modes.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No profiles yet. Add one to start dictating.
-        </p>
+        <EmptyRowCard
+          preview={
+            <span className="text-sm font-medium text-muted-foreground/50">
+              Profile name
+            </span>
+          }
+          hint="Profiles pair a speech model with AI cleanup. Bind a hotkey to activate one mid-session."
+          action="Add profile"
+          onClick={handleAddMode}
+        />
       ) : (
         <div className="flex flex-col gap-2">
           {settings.modes.map((mode, index) => {

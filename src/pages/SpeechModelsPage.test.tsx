@@ -141,6 +141,16 @@ describe("SpeechModelsPage", () => {
     render(<Wrapper />);
     expect(screen.getByText("Cloud")).toBeInTheDocument();
   });
+
+  it("each provider card is a keyboard-accessible button", () => {
+    render(<Wrapper />);
+    const deepgramCard = screen
+      .getByText("Deepgram")
+      .closest("button") as HTMLButtonElement;
+    expect(deepgramCard).toBeInTheDocument();
+    expect(deepgramCard.tagName).toBe("BUTTON");
+    expect(deepgramCard).not.toBeDisabled();
+  });
 });
 
 describe("SpeechModelsPage LOCAL section", () => {
@@ -159,6 +169,7 @@ describe("SpeechModelsPage LOCAL section", () => {
         model: "large_v3_turbo",
         downloaded: true,
         downloading: false,
+        load_failed: false,
         size_bytes: 1_624_555_275,
       },
     ]);
@@ -173,12 +184,14 @@ describe("SpeechModelsPage LOCAL section", () => {
         model: "large_v3",
         downloaded: false,
         downloading: false,
+        load_failed: false,
         size_bytes: 3_115_853_312,
       },
       {
         model: "large_v3_turbo",
         downloaded: true,
         downloading: false,
+        load_failed: false,
         size_bytes: 1_624_555_275,
       },
     ]);
@@ -196,6 +209,7 @@ describe("SpeechModelsPage LOCAL section", () => {
         model: "large_v3_turbo",
         downloaded: true,
         downloading: false,
+        load_failed: false,
         size_bytes: 1_624_555_275,
       },
     ]);
@@ -212,6 +226,7 @@ describe("SpeechModelsPage LOCAL section", () => {
         model: "large_v3",
         downloaded: false,
         downloading: false,
+        load_failed: false,
         size_bytes: 3_115_853_312,
       },
     ]);
@@ -230,6 +245,7 @@ describe("SpeechModelsPage LOCAL section", () => {
         model: "large_v3_turbo",
         downloaded: true,
         downloading: false,
+        load_failed: false,
         size_bytes: 1_624_555_275,
       },
     ]);

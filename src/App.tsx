@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from "./components/ui/alert";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { SettingsContext } from "./context/SettingsContext";
+import { SystemStatusProvider } from "./context/SystemStatusContext";
 import { useAccent } from "./hooks/useAccent";
 import { useTheme } from "./hooks/useTheme";
 import { getSettings } from "./lib/api";
@@ -108,7 +109,9 @@ function App() {
     >
       <TooltipProvider>
         <BrowserRouter>
-          <AppShell />
+          <SystemStatusProvider>
+            <AppShell />
+          </SystemStatusProvider>
           <Toaster />
         </BrowserRouter>
       </TooltipProvider>

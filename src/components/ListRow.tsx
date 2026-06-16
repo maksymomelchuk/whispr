@@ -104,9 +104,7 @@ export function ListRow({
       </RowCard>
 
       {expanded && below && (
-        <div className="rounded-b-lg border-x border-b border-border bg-card px-3 py-3 transition-[border-color] duration-150 group-hover/row:border-ring/55">
-          {below}
-        </div>
+        <div className="rounded-b-lg bg-card px-3 py-3">{below}</div>
       )}
     </div>
   );

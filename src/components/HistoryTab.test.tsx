@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,6 +7,7 @@ import { SettingsContext } from "@/context/SettingsContext";
 import type { HistoryEntry, Settings } from "@/lib/types";
 
 import {
+  clearHistory as mockClearHistory,
   getHistory as mockGetHistory,
   recoverCleanup as mockRecoverCleanup,
   updateHistoryEntry as mockUpdateHistoryEntry,
@@ -316,5 +317,86 @@ describe("HistoryTab entry editing", () => {
     });
 
     expect(screen.getByRole("textbox")).toBeInTheDocument();
+  });
+});
+
+describe("HistoryTab action button accessibility", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("Copy button has aria-label for screen reader identification", async () => {
+    vi.mocked(mockGetHistory).mockResolvedValue([RAN_ENTRY]);
+    render(<Wrapper />);
+
+    await waitFor(() => screen.getByText("cleaned text"));
+
+    expect(
+      screen.getByRole("button", { name: "Copy transcript" }),
+    ).toBeInTheDocument();
+  });
+
+  it("Show trace button uses aria-expanded to communicate state", async () => {
+    vi.mocked(mockGetHistory).mockResolvedValue([RAN_ENTRY]);
+    render(<Wrapper />);
+
+    await waitFor(() => screen.getByText("cleaned text"));
+
+    const traceBtn = screen.getByRole("button", { name: "Show trace" });
+    expect(traceBtn).toHaveAttribute("aria-expanded", "false");
+  });
+});
+
+describe("HistoryTab clear all", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("'Clear all' opens a confirmation dialog", async () => {
+    vi.mocked(mockGetHistory).mockResolvedValue([RAN_ENTRY]);
+    const user = userEvent.setup();
+    render(<Wrapper />);
+
+    await waitFor(() => screen.getByText("cleaned text"));
+    await user.click(screen.getByRole("button", { name: "Clear all" }));
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("confirming clears all history entries", async () => {
+    vi.mocked(mockGetHistory).mockResolvedValue([RAN_ENTRY]);
+    vi.mocked(mockClearHistory).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<Wrapper />);
+
+    await waitFor(() => screen.getByText("cleaned text"));
+    await user.click(screen.getByRole("button", { name: "Clear all" }));
+
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Clear all",
+      }),
+    );
+
+    await waitFor(() => expect(mockClearHistory).toHaveBeenCalled());
+  });
+
+  it("cancelling dialog leaves entries intact", async () => {
+    vi.mocked(mockGetHistory).mockResolvedValue([RAN_ENTRY]);
+    const user = userEvent.setup();
+    render(<Wrapper />);
+
+    await waitFor(() => screen.getByText("cleaned text"));
+    await user.click(screen.getByRole("button", { name: "Clear all" }));
+
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Cancel",
+      }),
+    );
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("cleaned text")).toBeInTheDocument();
+    expect(mockClearHistory).not.toHaveBeenCalled();
   });
 });

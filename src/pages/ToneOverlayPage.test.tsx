@@ -1,7 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -15,6 +16,13 @@ vi.mock("../lib/api", () => ({
   setToneAppOverride: vi.fn().mockResolvedValue(undefined),
   setToneAppCustomPrompt: vi.fn().mockResolvedValue(undefined),
   clearToneAppOverride: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("sonner", () => ({
+  toast: Object.assign(vi.fn(), {
+    error: vi.fn(),
+    success: vi.fn(),
+  }),
 }));
 
 vi.mock("@/components/ui/dialog", () => ({
@@ -121,6 +129,8 @@ function Wrapper({ settings = BASE_SETTINGS }: { settings?: Settings }) {
 }
 
 describe("ToneOverlayPage", () => {
+  afterEach(() => vi.clearAllMocks());
+
   it("hides per-app overrides section when tone overlay is disabled", () => {
     render(<Wrapper />);
     expect(screen.queryByText("Per-app overrides")).not.toBeInTheDocument();
@@ -195,11 +205,10 @@ describe("ToneOverlayPage", () => {
         settings={{ ...BASE_SETTINGS, ai_cleanup_tone_overlay_enabled: true }}
       />,
     );
-    await waitFor(() => screen.getByRole("combobox"));
-    await userEvent.selectOptions(
-      screen.getByRole("combobox"),
-      "com.apple.mail",
+    await userEvent.click(
+      await screen.findByRole("button", { name: /add app override/i }),
     );
+    await userEvent.click(screen.getByRole("button", { name: "Mail" }));
     await waitFor(() => {
       expect(setToneAppOverride).toHaveBeenCalledWith(
         "com.apple.mail",
@@ -208,7 +217,73 @@ describe("ToneOverlayPage", () => {
     });
   });
 
-  it("calls clearToneAppOverride when the user removes an override", async () => {
+  it("filters apps in the picker dialog by search query", async () => {
+    const { getAppsSeenInHistory } = await import("../lib/api");
+    vi.mocked(getAppsSeenInHistory).mockResolvedValueOnce([
+      {
+        bundle_id: "com.apple.mail",
+        app_name: "Mail",
+        tone_preset: "formal",
+        tone_override: null,
+        custom_prompt: null,
+        icon_data_url: null,
+      },
+      {
+        bundle_id: "com.tinyspeck.slackmacgap",
+        app_name: "Slack",
+        tone_preset: "casual",
+        tone_override: null,
+        custom_prompt: null,
+        icon_data_url: null,
+      },
+    ]);
+    render(
+      <Wrapper
+        settings={{ ...BASE_SETTINGS, ai_cleanup_tone_overlay_enabled: true }}
+      />,
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: /add app override/i }),
+    );
+    await userEvent.type(screen.getByPlaceholderText(/search/i), "sla");
+    expect(
+      screen.queryByRole("button", { name: "Mail" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Slack" })).toBeInTheDocument();
+  });
+
+  it("optimistically removes the row and shows undo toast when override is removed", async () => {
+    const { getAppsSeenInHistory } = await import("../lib/api");
+    vi.mocked(getAppsSeenInHistory).mockResolvedValueOnce([
+      {
+        bundle_id: "com.apple.mail",
+        app_name: "Mail",
+        tone_preset: "formal",
+        tone_override: "formal",
+        custom_prompt: null,
+        icon_data_url: null,
+      },
+    ]);
+    render(
+      <Wrapper
+        settings={{ ...BASE_SETTINGS, ai_cleanup_tone_overlay_enabled: true }}
+      />,
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: /remove mail override/i }),
+    );
+    expect(
+      screen.queryByRole("button", { name: /remove mail override/i }),
+    ).not.toBeInTheDocument();
+    expect(toast).toHaveBeenCalledWith(
+      expect.stringContaining("Mail"),
+      expect.objectContaining({
+        action: expect.objectContaining({ label: "Undo" }),
+      }),
+    );
+  });
+
+  it("restores the row when undo is pressed", async () => {
     const { getAppsSeenInHistory, clearToneAppOverride } =
       await import("../lib/api");
     vi.mocked(getAppsSeenInHistory).mockResolvedValueOnce([
@@ -229,9 +304,39 @@ describe("ToneOverlayPage", () => {
     await userEvent.click(
       await screen.findByRole("button", { name: /remove mail override/i }),
     );
-    await waitFor(() => {
-      expect(clearToneAppOverride).toHaveBeenCalledWith("com.apple.mail");
-    });
+    const opts = vi.mocked(toast).mock.calls[0][1] as Record<string, unknown>;
+    const action = opts.action as { onClick: () => void };
+    action.onClick();
+    await waitFor(() => expect(screen.getByText("Mail")).toBeInTheDocument());
+    expect(clearToneAppOverride).not.toHaveBeenCalled();
+  });
+
+  it("commits the remove to the backend when the toast closes without undo", async () => {
+    const { getAppsSeenInHistory, clearToneAppOverride } =
+      await import("../lib/api");
+    vi.mocked(getAppsSeenInHistory).mockResolvedValueOnce([
+      {
+        bundle_id: "com.apple.mail",
+        app_name: "Mail",
+        tone_preset: "formal",
+        tone_override: "formal",
+        custom_prompt: null,
+        icon_data_url: null,
+      },
+    ]);
+    render(
+      <Wrapper
+        settings={{ ...BASE_SETTINGS, ai_cleanup_tone_overlay_enabled: true }}
+      />,
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: /remove mail override/i }),
+    );
+    const opts = vi.mocked(toast).mock.calls[0][1] as Record<string, unknown>;
+    (opts.onAutoClose as (t: unknown) => void)({});
+    await waitFor(() =>
+      expect(clearToneAppOverride).toHaveBeenCalledWith("com.apple.mail"),
+    );
   });
 
   it("lists an app with a custom prompt as an override", async () => {

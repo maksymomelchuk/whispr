@@ -17,7 +17,7 @@ export function Chip({ label, onRemove, removeLabel }: Props) {
           e.stopPropagation();
           onRemove();
         }}
-        className="inline-flex items-center justify-center p-1.5 rounded-sm text-primary/60 hover:text-destructive transition-colors"
+        className="inline-flex items-center justify-center p-1.5 rounded-sm text-primary/60 hover:text-destructive transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         aria-label={removeLabel ?? "Remove"}
       >
         <XIcon size={10} weight="bold" />

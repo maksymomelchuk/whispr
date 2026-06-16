@@ -47,8 +47,10 @@ import {
   setCleanupThresholds as persistThresholds,
   setCustomProvider,
   setProviderKey,
+  validateCleanupProviderKey,
 } from "../lib/api";
 import type { EngineDescriptor } from "../lib/speechModelCatalog";
+import { toastRetry } from "../lib/toastRetry";
 import type { AiProviderId, Settings } from "../lib/types";
 
 const ANTHROPIC_API_KEY_DESCRIPTOR: EngineDescriptor = {
@@ -61,7 +63,7 @@ const ANTHROPIC_API_KEY_DESCRIPTOR: EngineDescriptor = {
   helpUrl: "https://console.anthropic.com/settings/keys",
   selectConfigured: (s: Settings) => s.ai_cleanup_key_configured,
   persist: persistApiKey,
-  validate: async () => ({ kind: "valid" as const }),
+  validate: (key: string) => validateCleanupProviderKey("anthropic", key),
 };
 
 const ANTHROPIC_OAUTH_DESCRIPTOR: EngineDescriptor = {
@@ -89,7 +91,7 @@ const OPENAI_COMPAT_DESCRIPTORS: EngineDescriptor[] = [
     selectConfigured: (s: Settings) =>
       s.configured_providers.includes("openai"),
     persist: (key: string) => setProviderKey("openai", key),
-    validate: async () => ({ kind: "valid" as const }),
+    validate: (key: string) => validateCleanupProviderKey("openai", key),
   },
   {
     id: "google",
@@ -102,7 +104,7 @@ const OPENAI_COMPAT_DESCRIPTORS: EngineDescriptor[] = [
     selectConfigured: (s: Settings) =>
       s.configured_providers.includes("google"),
     persist: (key: string) => setProviderKey("google", key),
-    validate: async () => ({ kind: "valid" as const }),
+    validate: (key: string) => validateCleanupProviderKey("google", key),
   },
   {
     id: "groq",
@@ -114,7 +116,7 @@ const OPENAI_COMPAT_DESCRIPTORS: EngineDescriptor[] = [
     helpUrl: "https://console.groq.com/keys",
     selectConfigured: (s: Settings) => s.configured_providers.includes("groq"),
     persist: (key: string) => setProviderKey("groq", key),
-    validate: async () => ({ kind: "valid" as const }),
+    validate: (key: string) => validateCleanupProviderKey("groq", key),
   },
   {
     id: "deepseek",
@@ -127,7 +129,7 @@ const OPENAI_COMPAT_DESCRIPTORS: EngineDescriptor[] = [
     selectConfigured: (s: Settings) =>
       s.configured_providers.includes("deepseek"),
     persist: (key: string) => setProviderKey("deepseek", key),
-    validate: async () => ({ kind: "valid" as const }),
+    validate: (key: string) => validateCleanupProviderKey("deepseek", key),
   },
   {
     id: "cerebras",
@@ -141,7 +143,7 @@ const OPENAI_COMPAT_DESCRIPTORS: EngineDescriptor[] = [
     selectConfigured: (s: Settings) =>
       s.configured_providers.includes("cerebras"),
     persist: (key: string) => setProviderKey("cerebras", key),
-    validate: async () => ({ kind: "valid" as const }),
+    validate: (key: string) => validateCleanupProviderKey("cerebras", key),
   },
   {
     id: "openrouter",
@@ -155,7 +157,7 @@ const OPENAI_COMPAT_DESCRIPTORS: EngineDescriptor[] = [
     selectConfigured: (s: Settings) =>
       s.configured_providers.includes("openrouter"),
     persist: (key: string) => setProviderKey("openrouter", key),
-    validate: async () => ({ kind: "valid" as const }),
+    validate: (key: string) => validateCleanupProviderKey("openrouter", key),
   },
 ];
 
@@ -196,8 +198,9 @@ function ProviderCard({
       type="button"
       onClick={onCardClick}
       className={cn(
-        "flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3",
+        "flex items-center gap-3 rounded-lg bg-card shadow-xs px-4 py-3",
         "text-left transition-colors hover:bg-accent/40 cursor-pointer w-full",
+        "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
       )}
     >
       <descriptor.logo className="h-8 w-8 shrink-0 rounded-md" />
@@ -210,7 +213,7 @@ function ProviderCard({
           weight="fill"
           role="img"
           aria-label="Configured"
-          className="shrink-0 text-green-600 dark:text-green-500"
+          className="shrink-0 text-muted-foreground"
         />
       ) : (
         <GearIcon
@@ -543,7 +546,37 @@ export function AiProvidersPage() {
           ai_cleanup_min_duration_ms: ms,
         }));
       } catch (e) {
-        toast.error("Couldn't save thresholds", { description: String(e) });
+        const failedWords = wordsNum;
+        const failedDurationMs = ms;
+        toastRetry(
+          "Couldn't save thresholds",
+          async () => {
+            // Skip if the user has since edited to different values — retrying
+            // a stale toast would otherwise overwrite the newer saved state.
+            const current = thresholdsForm.getValues();
+            const currentWords = Number(current.minWords);
+            const currentDurationMs = Math.round(
+              Number(current.minDurationSec) * 1000,
+            );
+            if (
+              currentWords !== failedWords ||
+              currentDurationMs !== failedDurationMs
+            ) {
+              return;
+            }
+            await persistThresholds(failedWords, failedDurationMs);
+            lastPersistedRef.current = {
+              minWords: failedWords,
+              minDurationMs: failedDurationMs,
+            };
+            setSettings((s) => ({
+              ...s,
+              ai_cleanup_min_words: failedWords,
+              ai_cleanup_min_duration_ms: failedDurationMs,
+            }));
+          },
+          String(e),
+        );
       }
     }, 450);
     return () => clearTimeout(t);
@@ -573,7 +606,7 @@ export function AiProvidersPage() {
             type="button"
             onClick={() => setOpenDialog("custom")}
             className={cn(
-              "flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3",
+              "flex items-center gap-3 rounded-lg bg-card shadow-xs px-4 py-3",
               "text-left transition-colors hover:bg-accent/40 cursor-pointer w-full",
             )}
           >
@@ -587,7 +620,7 @@ export function AiProvidersPage() {
                 weight="fill"
                 role="img"
                 aria-label="Configured"
-                className="shrink-0 text-green-600 dark:text-green-500"
+                className="shrink-0 text-muted-foreground"
               />
             ) : (
               <GearIcon

@@ -1,4 +1,4 @@
-import { PencilSimpleIcon, XIcon } from "@phosphor-icons/react";
+import { PencilSimpleIcon, PlusIcon, XIcon } from "@phosphor-icons/react";
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -27,6 +28,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 
 import { useSettings } from "../context/SettingsContext";
+import { useFlash } from "../hooks/useFlash";
 import { usePersistedToggle } from "../hooks/usePersistedToggle";
 import {
   clearToneAppOverride,
@@ -35,6 +37,7 @@ import {
   setToneAppCustomPrompt,
   setToneAppOverride,
 } from "../lib/api";
+import { toastUndo } from "../lib/toastUndo";
 import type { AppToneInfo, TonePreset } from "../lib/types";
 
 const OVERRIDE_OPTIONS: { value: TonePreset | "custom"; label: string }[] = [
@@ -57,7 +60,10 @@ function AppIcon({ icon, name }: { icon: string | null; name: string }) {
     );
   }
   return (
-    <div className="flex size-6 shrink-0 items-center justify-center rounded-[5px] bg-muted text-[11px] font-medium text-muted-foreground">
+    <div
+      aria-hidden
+      className="flex size-6 shrink-0 items-center justify-center rounded-[5px] bg-muted text-[11px] font-medium text-muted-foreground"
+    >
       {name.charAt(0).toUpperCase()}
     </div>
   );
@@ -77,6 +83,8 @@ export function ToneOverlayPage() {
 
   const [seenApps, setSeenApps] = useState<AppToneInfo[]>([]);
   const [editing, setEditing] = useState<CustomDraft | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const { flash, isFlashing } = useFlash();
 
   const loadSeenApps = useCallback(async () => {
     try {
@@ -125,35 +133,71 @@ export function ToneOverlayPage() {
             : a,
         ),
       );
+      flash(bundleId);
     } catch (e) {
       toast.error("Couldn't update tone override", { description: String(e) });
     }
   };
 
-  const removeOverride = async (bundleId: string) => {
-    try {
-      await clearToneAppOverride(bundleId);
-      setSettings((s) => {
-        const overrides = { ...s.tone_app_overrides };
-        const customs = { ...s.tone_app_custom_prompts };
-        delete overrides[bundleId];
-        delete customs[bundleId];
-        return {
-          ...s,
-          tone_app_overrides: overrides,
-          tone_app_custom_prompts: customs,
-        };
-      });
-      setSeenApps((prev) =>
-        prev.map((a) =>
-          a.bundle_id === bundleId
-            ? { ...a, tone_override: null, custom_prompt: null }
-            : a,
-        ),
-      );
-    } catch (e) {
-      toast.error("Couldn't remove tone override", { description: String(e) });
-    }
+  const removeOverride = (bundleId: string) => {
+    const app = seenApps.find((a) => a.bundle_id === bundleId);
+    if (!app) return;
+
+    setSeenApps((prev) =>
+      prev.map((a) =>
+        a.bundle_id === bundleId
+          ? { ...a, tone_override: null, custom_prompt: null }
+          : a,
+      ),
+    );
+
+    toastUndo(
+      `Removed ${app.app_name} override`,
+      async () => {
+        try {
+          await clearToneAppOverride(bundleId);
+          setSettings((s) => {
+            const overrides = { ...s.tone_app_overrides };
+            const customs = { ...s.tone_app_custom_prompts };
+            delete overrides[bundleId];
+            delete customs[bundleId];
+            return {
+              ...s,
+              tone_app_overrides: overrides,
+              tone_app_custom_prompts: customs,
+            };
+          });
+        } catch (e) {
+          toast.error("Couldn't remove tone override", {
+            description: String(e),
+          });
+          setSeenApps((prev) =>
+            prev.map((a) =>
+              a.bundle_id === bundleId
+                ? {
+                    ...a,
+                    tone_override: app.tone_override,
+                    custom_prompt: app.custom_prompt,
+                  }
+                : a,
+            ),
+          );
+        }
+      },
+      () => {
+        setSeenApps((prev) =>
+          prev.map((a) =>
+            a.bundle_id === bundleId
+              ? {
+                  ...a,
+                  tone_override: app.tone_override,
+                  custom_prompt: app.custom_prompt,
+                }
+              : a,
+          ),
+        );
+      },
+    );
   };
 
   const saveCustom = async () => {
@@ -181,6 +225,7 @@ export function ToneOverlayPage() {
             : a,
         ),
       );
+      flash(editing.bundleId);
       setEditing(null);
     } catch (e) {
       toast.error("Couldn't save custom tone", { description: String(e) });
@@ -222,24 +267,14 @@ export function ToneOverlayPage() {
             title="Per-app overrides"
             control={
               candidateApps.length > 0 ? (
-                <Select value="" onValueChange={handleAddOverride}>
-                  <SelectTrigger className="h-7 w-44 text-xs">
-                    <SelectValue placeholder="+ Add app override" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {candidateApps.map((app) => (
-                      <SelectItem key={app.bundle_id} value={app.bundle_id}>
-                        <span className="flex items-center gap-2">
-                          <AppIcon
-                            icon={app.icon_data_url}
-                            name={app.app_name}
-                          />
-                          {app.app_name}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => setPickerOpen(true)}
+                >
+                  <PlusIcon />
+                  Add app override
+                </Button>
               ) : undefined
             }
           />
@@ -253,6 +288,7 @@ export function ToneOverlayPage() {
               <ToneAppRow
                 key={app.bundle_id}
                 app={app}
+                flashing={isFlashing(app.bundle_id)}
                 onApplyPreset={(preset) => applyPreset(app.bundle_id, preset)}
                 onEditCustom={() =>
                   setEditing({
@@ -267,6 +303,13 @@ export function ToneOverlayPage() {
           )}
         </div>
       )}
+
+      <AppPickerDialog
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        candidates={candidateApps}
+        onSelect={handleAddOverride}
+      />
 
       <Dialog
         open={editing !== null}
@@ -307,13 +350,68 @@ export function ToneOverlayPage() {
   );
 }
 
+function AppPickerDialog({
+  open,
+  onOpenChange,
+  candidates,
+  onSelect,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  candidates: AppToneInfo[];
+  onSelect: (bundleId: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const filtered = candidates.filter((a) =>
+    a.app_name.toLowerCase().includes(query.toLowerCase()),
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add app override</DialogTitle>
+        </DialogHeader>
+        <Input
+          placeholder="Search apps…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          autoFocus
+        />
+        <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
+          {filtered.map((app) => (
+            <button
+              key={app.bundle_id}
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
+              onClick={() => {
+                onSelect(app.bundle_id);
+                onOpenChange(false);
+              }}
+            >
+              <AppIcon icon={app.icon_data_url} name={app.app_name} />
+              {app.app_name}
+            </button>
+          ))}
+          {filtered.length === 0 && (
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">
+              No apps found.
+            </p>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ToneAppRow({
   app,
+  flashing,
   onApplyPreset,
   onEditCustom,
   onRemove,
 }: {
   app: AppToneInfo;
+  flashing?: boolean;
   onApplyPreset: (preset: TonePreset) => void;
   onEditCustom: () => void;
   onRemove: () => void;
@@ -322,6 +420,7 @@ function ToneAppRow({
 
   return (
     <ListRow
+      flashing={flashing}
       label={
         <>
           <AppIcon icon={app.icon_data_url} name={app.app_name} />
