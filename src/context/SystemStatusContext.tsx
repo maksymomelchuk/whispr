@@ -75,8 +75,10 @@ export function SystemStatusProvider({
     try {
       const devices = await listInputDevices();
       setMicMissing(!devices.includes(inputDevice));
-    } catch {
-      // Device enumeration failure is non-critical; leave prior state
+    } catch (e) {
+      // Non-critical; leave prior micMissing rather than fabricate a warning
+      // on a transient enumeration failure.
+      console.error("listInputDevices failed", e);
     }
   }, [inputDevice]);
 
@@ -87,8 +89,9 @@ export function SystemStatusProvider({
         statuses.filter((s) => s.load_failed).map((s) => s.model),
       );
       setLoadFailedModels(failed);
-    } catch {
-      // Model status failure is non-critical
+    } catch (e) {
+      // Non-critical; leave prior loadFailedModels on a transient failure.
+      console.error("getLocalModelStatuses failed", e);
     }
   }, []);
 
@@ -150,7 +153,7 @@ export function SystemStatusProvider({
           unlisten = un;
         }
       })
-      .catch(() => {});
+      .catch((e) => console.error("onFocusChanged listen failed", e));
 
     return () => {
       cancelled = true;
@@ -170,7 +173,7 @@ export function SystemStatusProvider({
         if (cancelled) un();
         else unlistenFn = un;
       })
-      .catch(() => {});
+      .catch((e) => console.error("model-download-complete listen failed", e));
 
     return () => {
       cancelled = true;
