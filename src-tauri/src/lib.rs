@@ -35,7 +35,6 @@ mod groq_session;
 mod local_engine;
 mod openai_transcribe_session;
 mod preview_throttle;
-mod profiler;
 pub(crate) mod recorder;
 mod session;
 mod soniox_session;

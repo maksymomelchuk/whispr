@@ -14,7 +14,6 @@ use crate::hotkey::{
 use crate::local_engine::LocalWhisperEngine;
 use crate::openai_transcribe_session::OpenAiTranscribeEngine;
 use crate::pipeline::{self, CleanupOutput, Notice};
-use crate::profiler::SessionProfile;
 use crate::provider::{
     self, AssemblyAiModel, ElevenLabsModel, LocalWhisperModel, ProviderModel, TranscriptionProvider,
 };
@@ -307,11 +306,8 @@ async fn run_session(
     device: Option<String>,
     mode_id: &str,
 ) -> Result<(), String> {
-    let mut profile = SessionProfile::start();
-
     let (chunk_tx, chunk_rx) = tokio::sync::mpsc::unbounded_channel();
     let (format_tx, format_rx) = tokio::sync::oneshot::channel();
-    let recorder_init_start = Instant::now();
     recorder.start(device, chunk_tx, format_tx);
 
     let format = match format_rx.await {
@@ -319,7 +315,6 @@ async fn run_session(
         Ok(Err(e)) => return Err(pipeline::recorder_failed_error(&e)),
         Err(_) => return Err(pipeline::RECORDER_THREAD_CRASHED_ERROR.to_string()),
     };
-    profile.record("recorder_init", recorder_init_start.elapsed());
 
     let settings = config::load(app);
 
@@ -345,7 +340,6 @@ async fn run_session(
     // osascript hasn't finished yet. Resolve once before term selection so
     // terms, glossary, tone overlay, and history attribution all agree on the
     // same app for this session.
-    let app_resolve_start = Instant::now();
     #[cfg(target_os = "macos")]
     let resolved_app: Option<target_app::FrontmostApp> = {
         let rx = app
@@ -365,7 +359,6 @@ async fn run_session(
     };
     #[cfg(not(target_os = "macos"))]
     let resolved_app: Option<target_app::FrontmostApp> = target_app::session_app();
-    profile.record("app_resolve", app_resolve_start.elapsed());
 
     let session_bundle_id = resolved_app.as_ref().map(|a| a.bundle_id.clone());
     let session_terms = selector::select_terms(
@@ -650,7 +643,6 @@ async fn run_session(
     let SessionOutcome {
         transcript: raw_text,
         speak_duration,
-        finalize,
     } = match session_result {
         Ok(r) => r,
         Err(e) => {
@@ -660,13 +652,10 @@ async fn run_session(
             return Err(e);
         }
     };
-    profile.record_speak(speak_duration);
-    profile.record("stt_finalize", finalize);
     if raw_text.is_empty() || speak_duration < MIN_SPEAK_DURATION {
         return Ok(());
     }
 
-    let context_start = Instant::now();
     let context: Option<cleanup::ContextBlocks> = if context_capture_enabled {
         let state = app.state::<AppState>();
         let clipboard_rx = state.pending_clipboard_rx.lock().unwrap().take();
@@ -701,7 +690,6 @@ async fn run_session(
     } else {
         None
     };
-    profile.record("context", context_start.elapsed());
 
     let glossary = selector::select_glossary_words(
         &settings.term_sets,
@@ -712,7 +700,6 @@ async fn run_session(
         session_bundle_id.as_deref(),
         miner::now_ms(),
     );
-    let cleanup_start = Instant::now();
     let (replaced_text, cleanup_status, notice, context_channels) = maybe_cleanup(
         app,
         &settings,
@@ -727,13 +714,12 @@ async fn run_session(
         context.as_ref(),
     )
     .await;
-    profile.record("cleanup", cleanup_start.elapsed());
 
     #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
     let pipeline::Outcome {
         pasted_text,
         mut history_entry,
-        elapsed: pipeline_elapsed,
+        ..
     } = pipeline::run_stages(
         &raw_text,
         speak_duration,
@@ -744,7 +730,6 @@ async fn run_session(
             status: cleanup_status,
         },
     );
-    profile.record("pipeline", pipeline_elapsed);
 
     #[cfg(target_os = "macos")]
     {
@@ -758,7 +743,6 @@ async fn run_session(
 
     // paste_handle must complete before any notify_error: set_focus()
     // during the modifier-release wait would steal focus mid-paste.
-    let paste_start = Instant::now();
     let paste_handle = match paste_policy {
         pipeline::PastePolicy::PasteRaw => paste::paste_text(pasted_text),
         pipeline::PastePolicy::SuppressAndClipboard => paste::write_to_clipboard(raw_text),
@@ -785,8 +769,6 @@ async fn run_session(
         eprintln!("[pipeline] paste worker failed: {e}");
         notify_error(app, format!("Paste failed: {e}"));
     }
-    profile.record("paste", paste_start.elapsed());
-    profile.finish();
 
     if settings.learn_from_corrections && paste_policy == pipeline::PastePolicy::PasteRaw {
         post_paste_observer::start(app.clone(), session_bundle_id.clone());

@@ -13,13 +13,10 @@ pub(crate) const TRANSCRIPTION_ERROR_EVENT: &str = "transcription-error";
 const SOFT_WARNING_FLASH: Duration = Duration::from_millis(800);
 
 /// Result of a transcription session. `speak_duration` is the time the user
-/// held the key; `finalize` is the tail from the moment recording stopped to
-/// the transcript being ready — the provider's post-release latency (drain for
-/// streaming engines, upload-plus-inference for batch ones).
+/// held the key (recording start to stop).
 pub struct SessionOutcome {
     pub transcript: String,
     pub speak_duration: Duration,
-    pub finalize: Duration,
 }
 
 pub struct Session<E: Engine> {
@@ -86,14 +83,12 @@ impl<E: Engine> Session<E> {
         });
 
         let outcome = self.engine.run(engine_chunk_rx, preview_tx, ctx).await?;
-        let engine_returned_at = Instant::now();
 
         let _ = meter_handle.await;
         let _ = preview_handle.await;
 
         let chunks_closed_at = close_rx.await.unwrap_or_else(|_| Instant::now());
         let speak_duration = chunks_closed_at.duration_since(speak_start);
-        let finalize = engine_returned_at.saturating_duration_since(chunks_closed_at);
 
         if let Some(Warning::FinalFailedUsedPreview) = outcome.warning {
             let _ = self.app.emit(PTT_ERROR_EVENT, ());
@@ -107,7 +102,6 @@ impl<E: Engine> Session<E> {
         Ok(SessionOutcome {
             transcript: outcome.transcript,
             speak_duration,
-            finalize,
         })
     }
 }
