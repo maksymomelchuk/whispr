@@ -520,19 +520,27 @@ fn migrate(s: &mut Settings) -> bool {
 
     // Seed the default English profile on first run. Empty modes = fresh install;
     // subsequent migrations that encounter at least one mode leave the list alone.
+    let legacy_cleanup_enabled = s.ai_cleanup_enabled.take();
+    let legacy_cleanup_master = s.ai_cleanup.legacy_enabled.take();
     if s.modes.is_empty() {
-        s.modes.push(Mode::seed_default_en(false));
+        // Carry the pre-modes global cleanup toggle into the seeded profile so an
+        // upgrading user who had cleanup on keeps it. The dedicated master flag
+        // wins over the older top-level one when both are present.
+        let seed_cleanup_enabled = legacy_cleanup_master
+            .or(legacy_cleanup_enabled)
+            .unwrap_or(false);
+        s.modes.push(Mode::seed_default_en(seed_cleanup_enabled));
         changed = true;
     }
 
-    if s.ai_cleanup_enabled.take().is_some() {
+    if legacy_cleanup_enabled.is_some() {
         changed = true;
     }
 
     // If the user had explicitly turned it off, preserve that intent by forcing
     // every mode's per-mode cleanup toggle off — otherwise modes that defaulted
     // to enabled would silently start running cleanup after the migration.
-    match s.ai_cleanup.legacy_enabled.take() {
+    match legacy_cleanup_master {
         Some(false) => {
             for mode in s.modes.iter_mut() {
                 mode.ai_cleanup.enabled = false;
@@ -754,8 +762,24 @@ pub fn load(app: &tauri::AppHandle) -> Settings {
             return Settings::default();
         }
     };
-    let Ok(contents) = fs::read_to_string(&path) else {
-        return Settings::default();
+    let contents = match fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // Fresh install: no settings file yet. Run migrate() on the defaults
+            // so the seeded profile and PTT binding exist on the first launch
+            // rather than only after some later write recreates the file.
+            let mut settings = Settings::default();
+            if migrate(&mut settings) {
+                if let Err(save_error) = save(app, &settings) {
+                    eprintln!("Failed to save seeded default settings: {save_error}");
+                }
+            }
+            return settings;
+        }
+        Err(e) => {
+            eprintln!("Failed to read {path:?}, using defaults: {e}");
+            return Settings::default();
+        }
     };
     let mut settings: Settings = serde_json::from_str(&contents).unwrap_or_else(|e| {
         eprintln!("Failed to parse {path:?}, using defaults: {e}");
