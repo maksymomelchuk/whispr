@@ -1,3 +1,5 @@
+import { useRef } from "react";
+
 import { SetManagementPage } from "@/components/SetManagementPage";
 import { Badge } from "@/components/ui/badge";
 
@@ -14,6 +16,7 @@ import { EntriesEditor } from "./CorrectionEntriesEditor";
 
 export function CorrectionsPage() {
   const { settings, setSettings } = useSettings();
+  const latestEntriesRef = useRef<Record<string, CorrectionEntry[]>>({});
 
   const correctionSets = settings.correction_sets ?? [];
 
@@ -45,16 +48,22 @@ export function CorrectionsPage() {
     id: string,
     entries: CorrectionEntry[],
   ): Promise<void> {
+    latestEntriesRef.current[id] = entries;
     try {
       const updated = await updateCorrectionSetEntries(id, entries);
       setSettings(() => updated);
     } catch (e) {
       toastRetry(
         "Couldn't save entries",
-        () =>
-          updateCorrectionSetEntries(id, entries).then((updated) =>
+        () => {
+          // Persist the latest entries for this set, not the snapshot that
+          // failed — a newer edit may have saved since, and replaying the old
+          // one would clobber it.
+          const latest = latestEntriesRef.current[id] ?? entries;
+          return updateCorrectionSetEntries(id, latest).then((updated) =>
             setSettings(() => updated),
-          ),
+          );
+        },
         String(e),
       );
     }

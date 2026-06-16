@@ -700,10 +700,15 @@ export function ModeEditor({
         .catch((e) => {
           toastRetry(
             "Couldn't save profile",
-            () =>
-              updateMode(normalized).then(() =>
-                onPersistRef.current(normalized, false),
-              ),
+            () => {
+              // Retry the latest draft, not the snapshot that failed — a newer
+              // edit may have saved since, and replaying the old one would
+              // clobber it.
+              const latest = normalizedRef.current;
+              return updateMode(latest).then(() =>
+                onPersistRef.current(latest, false),
+              );
+            },
             String(e),
           );
         });
