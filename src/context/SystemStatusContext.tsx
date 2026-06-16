@@ -94,9 +94,12 @@ export function SystemStatusProvider({
 
   const checkProviders = useCallback(async () => {
     const providers = configuredProvidersKey
-      ? configuredProvidersKey.split(",")
+      ? Array.from(new Set(configuredProvidersKey.split(",")))
       : [];
-    if (providers.length === 0) return;
+    if (providers.length === 0) {
+      setSpeechProviderStatuses(new Map());
+      return;
+    }
     const results = await Promise.allSettled(
       providers.map(async (provider) => {
         try {
@@ -108,8 +111,8 @@ export function SystemStatusProvider({
         }
       }),
     );
-    setSpeechProviderStatuses((prev) => {
-      const next = new Map(prev);
+    setSpeechProviderStatuses(() => {
+      const next = new Map<string, ProviderHealthStatus>();
       for (const result of results) {
         if (result.status === "fulfilled" && result.value.health) {
           next.set(result.value.provider, result.value.health);
