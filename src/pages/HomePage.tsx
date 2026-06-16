@@ -139,12 +139,13 @@ export function HomePage() {
   const allReady =
     permissions?.microphone === true && permissions?.accessibility === true;
 
-  // null = still loading after permissions granted
   const lifecycle = !allReady
     ? "pending"
-    : hasDictated
-      ? "activated"
-      : "activating";
+    : hasDictated === null
+      ? "loading"
+      : hasDictated
+        ? "activated"
+        : "activating";
 
   const speechModelReady = allReady
     ? isSpeechModelReady(settings, localStatuses)
@@ -158,9 +159,11 @@ export function HomePage() {
       ? " "
       : lifecycle === "pending"
         ? "Grant permissions below to get started."
-        : lifecycle === "activating"
-          ? "Finish setting up."
-          : "Your voice-to-text is ready.";
+        : lifecycle === "loading"
+          ? " "
+          : lifecycle === "activating"
+            ? "Finish setting up."
+            : "Your voice-to-text is ready.";
 
   return (
     <div className="relative flex min-h-full items-center justify-center px-10 py-10 overflow-hidden">
