@@ -546,18 +546,33 @@ export function AiProvidersPage() {
           ai_cleanup_min_duration_ms: ms,
         }));
       } catch (e) {
+        const failedWords = wordsNum;
+        const failedDurationMs = ms;
         toastRetry(
           "Couldn't save thresholds",
           async () => {
-            await persistThresholds(wordsNum, ms);
+            // Skip if the user has since edited to different values — retrying
+            // a stale toast would otherwise overwrite the newer saved state.
+            const current = thresholdsForm.getValues();
+            const currentWords = Number(current.minWords);
+            const currentDurationMs = Math.round(
+              Number(current.minDurationSec) * 1000,
+            );
+            if (
+              currentWords !== failedWords ||
+              currentDurationMs !== failedDurationMs
+            ) {
+              return;
+            }
+            await persistThresholds(failedWords, failedDurationMs);
             lastPersistedRef.current = {
-              minWords: wordsNum,
-              minDurationMs: ms,
+              minWords: failedWords,
+              minDurationMs: failedDurationMs,
             };
             setSettings((s) => ({
               ...s,
-              ai_cleanup_min_words: wordsNum,
-              ai_cleanup_min_duration_ms: ms,
+              ai_cleanup_min_words: failedWords,
+              ai_cleanup_min_duration_ms: failedDurationMs,
             }));
           },
           String(e),
