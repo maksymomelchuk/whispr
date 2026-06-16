@@ -73,7 +73,7 @@ function isSpeechModelReady(
       return settings.soniox_api_key_configured;
     case "local": {
       const status = localStatuses.find((s) => s.model === pm.model);
-      return status?.downloaded ?? false;
+      return Boolean(status?.downloaded && !status.load_failed);
     }
   }
 }
