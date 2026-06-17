@@ -158,7 +158,7 @@ pub enum ProviderModel {
         #[serde(default)]
         model: ElevenLabsModel,
     },
-    // Single realtime model (stt-rt-v4), so no model sub-enum. `translate_to`
+    // Single realtime model (stt-rt-v5), so no model sub-enum. `translate_to`
     // carries the one-way STT-layer translation target; None = verbatim
     // code-switching. The field lives here so it's unrepresentable for any
     // provider that can't honor it.

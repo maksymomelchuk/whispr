@@ -122,7 +122,7 @@ export const SPEECH_MODEL_CATALOG: EngineDescriptor[] = [
     name: "Soniox",
     logo: SonioxLogo,
     description:
-      "Real-time stt-rt-v4 with mid-sentence code-switching and one-way translation.",
+      "Real-time stt-rt-v5 with mid-sentence code-switching and one-way translation.",
     metadata: {
       languages: "60+ languages",
       streaming: "Yes",

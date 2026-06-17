@@ -10,7 +10,7 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::protocol::Message;
 
 const SONIOX_WS_URL: &str = "wss://stt-rt.soniox.com/transcribe-websocket";
-const SONIOX_RT_MODEL_ID: &str = "stt-rt-v4";
+const SONIOX_RT_MODEL_ID: &str = "stt-rt-v5";
 
 /// Capture audio is downmixed and resampled to 16 kHz mono PCM (signed 16-bit
 /// little-endian) before it goes on the wire, so the config message declares a
@@ -313,7 +313,7 @@ mod tests {
         let config = build_config_message("secret", &ModeLanguage::Auto, None, &[]);
         let v: Value = serde_json::from_str(&config).unwrap();
         assert_eq!(v["api_key"], "secret");
-        assert_eq!(v["model"], "stt-rt-v4");
+        assert_eq!(v["model"], "stt-rt-v5");
         assert_eq!(v["audio_format"], "pcm_s16le");
         assert_eq!(v["sample_rate"], 16000);
         assert_eq!(v["num_channels"], 1);
