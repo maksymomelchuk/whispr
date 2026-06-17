@@ -146,16 +146,14 @@ describe("HotkeysPage – empty states", () => {
     expect(screen.queryByText("No profiles yet")).not.toBeInTheDocument();
   });
 
-  it("shows EmptyRowCard with hint when a profile has no hotkeys", () => {
+  it("shows EmptyRowCard with add action when a profile has no hotkeys", () => {
     const settings: Settings = {
       ...BASE_SETTINGS,
       modes: [BASE_MODE],
       hotkey_bindings: [],
     };
     render(<HotkeysPageWrapper settings={settings} />);
-    const hints = screen.getAllByText(
-      "Hold to dictate. Release to transcribe and paste.",
-    );
-    expect(hints.length).toBeGreaterThan(0);
+    const actions = screen.getAllByText("Add hotkey");
+    expect(actions.length).toBeGreaterThan(0);
   });
 });

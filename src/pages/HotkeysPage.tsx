@@ -262,7 +262,6 @@ function EmptyModeCard({ onAdd }: { onAdd: () => void }) {
           <Keycap tone="phantom">K</Keycap>
         </div>
       }
-      hint="Hold to dictate. Release to transcribe and paste."
       action="Add hotkey"
       onClick={onAdd}
       className="py-3"
