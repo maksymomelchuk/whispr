@@ -70,7 +70,9 @@ fn icon_cache() -> &'static Mutex<HashMap<String, TargetApp>> {
 #[cfg(target_os = "macos")]
 const BUNDLE_SCRIPT: &str = r#"tell application "System Events"
   set p to first application process whose frontmost is true
-  return (bundle identifier of p) & "|||" & (name of p)
+  set bid to bundle identifier of p
+  if bid is missing value then set bid to ""
+  return bid & "|||" & (name of p)
 end tell
 "#;
 
@@ -119,14 +121,27 @@ fn platform_capture(app: AppHandle) {
 
 #[cfg(target_os = "macos")]
 fn resolve_bundle() -> Option<FrontmostApp> {
-    let output = run_osascript(BUNDLE_SCRIPT, &[])?;
+    parse_bundle_output(&run_osascript(BUNDLE_SCRIPT, &[])?)
+}
+
+/// A bundle-less frontmost process makes AppleScript yield its `missing value`
+/// sentinel; concatenating it coerces the whole result into a comma-joined list,
+/// so the split smears `missing value` across both fields. Rejecting any id that
+/// isn't a plausible reverse-DNS string keeps that junk out of per-app stats.
+#[cfg(target_os = "macos")]
+fn parse_bundle_output(output: &str) -> Option<FrontmostApp> {
     let mut parts = output.splitn(2, "|||");
     let bundle_id = parts.next()?.trim().to_string();
     let name = parts.next()?.trim().to_string();
-    if bundle_id.is_empty() {
+    if !is_plausible_bundle_id(&bundle_id) {
         return None;
     }
     Some(FrontmostApp { bundle_id, name })
+}
+
+#[cfg(target_os = "macos")]
+fn is_plausible_bundle_id(bundle_id: &str) -> bool {
+    !bundle_id.is_empty() && !bundle_id.contains(|c: char| c.is_whitespace() || c == ',')
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -491,3 +506,33 @@ fn encode_png(rgba: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn platform_capture(_app: AppHandle) {}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_well_formed_bundle_output() {
+        let app = parse_bundle_output("com.apple.Notes|||Notes").unwrap();
+        assert_eq!(app.bundle_id, "com.apple.Notes");
+        assert_eq!(app.name, "Notes");
+    }
+
+    #[test]
+    fn rejects_missing_value_sentinel_list_coercion() {
+        assert!(parse_bundle_output("missing value, |||, whispr").is_none());
+    }
+
+    #[test]
+    fn rejects_empty_bundle_id() {
+        assert!(parse_bundle_output("|||Notes").is_none());
+    }
+
+    #[test]
+    fn plausible_bundle_id_rejects_whitespace_and_commas() {
+        assert!(is_plausible_bundle_id("com.apple.Notes"));
+        assert!(!is_plausible_bundle_id(""));
+        assert!(!is_plausible_bundle_id("missing value,"));
+        assert!(!is_plausible_bundle_id("com.foo bar"));
+    }
+}
