@@ -19,14 +19,6 @@ const REALTIME_SAMPLE_RATE: u32 = 16_000;
 const REALTIME_NUM_CHANNELS: u32 = 1;
 const AUDIO_FORMAT_PCM_S16LE: &str = "pcm_s16le";
 
-/// Endpoint detection finalizes tokens progressively as the speaker pauses,
-/// instead of leaving everything non-final until the PTT-release `finalize`.
-/// This keeps the post-release paste near-instant and matches the Playground's
-/// cadence. The delay is how long a pause must last before a segment is
-/// committed; 500 ms (vs the 2000 ms default) trades a little stability for
-/// dictation snappiness. Valid range is 500–3000 ms.
-const MAX_ENDPOINT_DELAY_MS: u32 = 500;
-
 /// Cap on how long we wait for Soniox to flush finalized tokens after we send
 /// the finalize + end-of-audio frames, so a hung WS never blocks the paste.
 const FINAL_RESULTS_TIMEOUT: Duration = Duration::from_secs(3);
@@ -157,14 +149,17 @@ fn build_config_message(
     translate_to: Option<&str>,
     terms: &[String],
 ) -> String {
+    // Endpoint detection is intentionally off: each pause-triggered endpoint is
+    // a sentence boundary, so the formatter terminates with a period, capitalizes
+    // the next word, and can't join compounds across the break (авто інвайти →
+    // "авто. Інвайти."). The PTT-release `finalize` flushes everything anyway, so
+    // letting the whole utterance stay one context gives Playground-quality output.
     let mut config = serde_json::json!({
         "api_key": key,
         "model": SONIOX_RT_MODEL_ID,
         "audio_format": AUDIO_FORMAT_PCM_S16LE,
         "sample_rate": REALTIME_SAMPLE_RATE,
         "num_channels": REALTIME_NUM_CHANNELS,
-        "enable_endpoint_detection": true,
-        "max_endpoint_delay_ms": MAX_ENDPOINT_DELAY_MS,
     });
 
     let hints = language_hints(language);
@@ -320,11 +315,11 @@ mod tests {
     }
 
     #[test]
-    fn config_enables_endpoint_detection_with_tuned_delay() {
+    fn config_omits_endpoint_detection() {
         let config = build_config_message("k", &ModeLanguage::Auto, None, &[]);
         let v: Value = serde_json::from_str(&config).unwrap();
-        assert_eq!(v["enable_endpoint_detection"], true);
-        assert_eq!(v["max_endpoint_delay_ms"], 500);
+        assert!(v.get("enable_endpoint_detection").is_none());
+        assert!(v.get("max_endpoint_delay_ms").is_none());
     }
 
     #[test]
