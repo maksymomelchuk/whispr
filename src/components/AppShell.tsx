@@ -155,7 +155,9 @@ function NavMenuButton({
             />
           )}
         </div>
-        <span className="flex-1 text-[13px]">{label}</span>
+        <span className="flex-1 truncate whitespace-nowrap text-[13px]">
+          {label}
+        </span>
         {!collapsed && shortcut && (
           <kbd
             aria-hidden
