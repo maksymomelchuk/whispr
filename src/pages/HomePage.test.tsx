@@ -26,6 +26,9 @@ vi.mock("../lib/api", () => ({
   openAccessibilitySettings: vi.fn(),
   getHistory: vi.fn().mockResolvedValue([]),
   getLocalModelStatuses: vi.fn().mockResolvedValue([]),
+  getStats: vi.fn().mockResolvedValue([]),
+  getAppIcon: vi.fn().mockResolvedValue(null),
+  formatShortcut: vi.fn((shortcut: { key: string }) => shortcut.key),
 }));
 
 const DEFAULT_MODE: Mode = {
