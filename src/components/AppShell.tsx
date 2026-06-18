@@ -103,8 +103,10 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
+const SETTINGS_PATH = "/general";
+
 const FOOTER_NAV: NavItem[] = [
-  { label: "General", icon: GearIcon, path: "/general" },
+  { label: "General", icon: GearIcon, path: SETTINGS_PATH },
 ];
 
 const FLAT_NAV: NavItem[] = [
@@ -163,8 +165,7 @@ function NavMenuButton({
             aria-hidden
             className={
               "ml-auto font-mono text-[10.5px] tabular-nums text-muted-foreground/65 transition-opacity " +
-              "opacity-0 group-hover/nav-item:opacity-100 group-focus-visible/nav-item:opacity-100 " +
-              "group-data-[active=true]/nav-item:opacity-100"
+              "opacity-0 group-hover/nav-item:opacity-100 group-focus-visible/nav-item:opacity-100"
             }
           >
             {shortcut}
@@ -292,6 +293,11 @@ function useNavShortcuts() {
     const handler = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
       if (e.altKey || e.shiftKey) return;
+      if (e.key === ",") {
+        e.preventDefault();
+        navigate(SETTINGS_PATH);
+        return;
+      }
       const idx = Number.parseInt(e.key, 10);
       if (Number.isNaN(idx) || idx < 1 || idx > FLAT_NAV.length) return;
       e.preventDefault();
@@ -422,7 +428,12 @@ function ShellInner() {
             <SidebarMenu>
               {FOOTER_NAV.map((item) => {
                 counter += 1;
-                const shortcut = counter <= 9 ? `⌘${counter}` : null;
+                const shortcut =
+                  item.path === SETTINGS_PATH
+                    ? `${navModifier},`
+                    : counter <= 9
+                      ? `${navModifier}${counter}`
+                      : null;
                 return (
                   <SidebarMenuItem key={item.path}>
                     <NavMenuButton

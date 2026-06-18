@@ -26,9 +26,16 @@ const PLATFORM_KEY_LABELS: Record<Platform, Record<string, string>> = {
 function buildKeyLabels(platform: Platform): Record<string, string> {
   const mods = MOD_LABELS[platform];
   const sides: Record<string, string> = {};
+  // macOS leads with the modifier glyph (⌥ Right) to match ⌘/⇧ convention;
+  // word-based platforms keep the conventional "Right Alt" ordering.
+  const glyphFirst = platform === "macos";
   for (const base of ["Meta", "Control", "Alt", "Shift"]) {
-    sides[`${base}Left`] = `Left ${mods[base]}`;
-    sides[`${base}Right`] = `Right ${mods[base]}`;
+    sides[`${base}Left`] = glyphFirst
+      ? `${mods[base]} Left`
+      : `Left ${mods[base]}`;
+    sides[`${base}Right`] = glyphFirst
+      ? `${mods[base]} Right`
+      : `Right ${mods[base]}`;
   }
   return { ...COMMON_KEY_LABELS, ...PLATFORM_KEY_LABELS[platform], ...sides };
 }
