@@ -128,6 +128,7 @@ body {
   --destructive: 0 72% 42%;
   --border-shadcn: 220 14% 89%;
   --input: 220 14% 89%;
+  --loops-warm: #f59e0b;
 
   --sidebar-bg: 220 14% 95.5%;
   --sidebar-foreground: 220 20% 8%;
@@ -158,6 +159,7 @@ body {
   --destructive: 0 65% 60%;
   --border-shadcn: 220 12% 20%;
   --input: 220 12% 22%;
+  --loops-warm: #fbbf24;
 
   --sidebar-bg: 220 14% 10.5%;
   --sidebar-foreground: 220 12% 96%;
@@ -316,9 +318,4 @@ main {
 
 .abstract-loops {
   --loops-primary: hsl(var(--shadcn-primary));
-  --loops-warm: #f59e0b;
-}
-
-.dark .abstract-loops {
-  --loops-warm: #fbbf24;
 }
