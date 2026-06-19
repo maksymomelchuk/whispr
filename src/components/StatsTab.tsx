@@ -5,11 +5,7 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
+import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import type { ChartConfig } from "@/components/ui/chart";
 import {
   Dialog,
@@ -60,6 +56,8 @@ const chartConfig = {
 interface ChartPoint {
   date: string;
   words: number;
+  dictations: number;
+  seconds: number;
 }
 
 interface Aggregate {
@@ -127,16 +125,27 @@ function collectAppStats(rows: StatsRow[], period: Period): AppEntry[] {
 
 function buildChartData(rows: StatsRow[], period: Period): ChartPoint[] {
   if (period === "all") {
-    return rows.map((r) => ({ date: r.date, words: r.words }));
+    return rows.map((r) => ({
+      date: r.date,
+      words: r.words,
+      dictations: r.dictations,
+      seconds: r.total_seconds,
+    }));
   }
   const days = period === "week" ? 7 : 30;
-  const rowMap = new Map(rows.map((r) => [r.date, r.words]));
+  const rowMap = new Map(rows.map((r) => [r.date, r]));
   const result: ChartPoint[] = [];
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     const date = localDateISO(d);
-    result.push({ date, words: rowMap.get(date) ?? 0 });
+    const row = rowMap.get(date);
+    result.push({
+      date,
+      words: row?.words ?? 0,
+      dictations: row?.dictations ?? 0,
+      seconds: row?.total_seconds ?? 0,
+    });
   }
   return result;
 }
@@ -495,17 +504,26 @@ function ActivityChart({
         />
         <ChartTooltip
           isAnimationActive={false}
-          content={
-            <ChartTooltipContent
-              formatter={(value) => [formatCount(value as number), " words"]}
-              labelFormatter={(label) =>
-                new Date(label + "T00:00:00").toLocaleDateString("en-US", {
-                  month: "long",
-                  day: "numeric",
-                })
-              }
-            />
-          }
+          content={({ payload, label }) => {
+            if (!payload?.length) return null;
+            const point = payload[0].payload as ChartPoint;
+            const date = new Date(label + "T00:00:00").toLocaleDateString(
+              "en-US",
+              { month: "long", day: "numeric" },
+            );
+            return (
+              <div className="rounded-lg border bg-background px-3 py-2 text-sm shadow-sm">
+                <p className="mb-1 font-medium">{date}</p>
+                <p>{formatCount(point.words)} words</p>
+                <p>
+                  {point.dictations === 1
+                    ? "1 dictation"
+                    : `${formatCount(point.dictations)} dictations`}
+                </p>
+                <p>{formatDuration(point.seconds)} spoken</p>
+              </div>
+            );
+          }}
         />
         <Bar dataKey="words" fill="var(--color-words)" radius={[3, 3, 0, 0]} />
       </BarChart>
