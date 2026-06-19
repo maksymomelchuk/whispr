@@ -1,6 +1,8 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { formatClock } from "@/lib/formatDuration";
+
 import "./OverlayApp.css";
 
 type Mode = "recording" | "thinking" | "error" | "cancelled";
@@ -103,13 +105,6 @@ const Waveform = ({
     ))}
   </div>
 );
-
-function formatElapsed(seconds: number) {
-  const total = Math.max(0, seconds);
-  const m = Math.floor(total / 60);
-  const ss = (total % 60).toString().padStart(2, "0");
-  return `${m}:${ss}`;
-}
 
 export function OverlayApp() {
   const [mode, setMode] = useState<Mode>("recording");
@@ -247,7 +242,7 @@ export function OverlayApp() {
               )}
             </div>
             <span className="overlay-timer">
-              {mode === "cancelled" ? "Cancelled" : formatElapsed(elapsedSec)}
+              {mode === "cancelled" ? "Cancelled" : formatClock(elapsedSec)}
             </span>
           </div>
           {mode === "recording" && <Waveform levelRef={waveRef} />}

@@ -3,14 +3,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { readRecordingWav } from "@/lib/api";
-
-function formatClock(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
-  const total = Math.floor(seconds);
-  const mins = Math.floor(total / 60);
-  const secs = total % 60;
-  return `${mins}:${secs.toString().padStart(2, "0")}`;
-}
+import { formatClock } from "@/lib/formatDuration";
 
 /// Plays a saved recording via a WAV blob: the clip is stored as FLAC and
 /// decoded to WAV in Rust because WKWebView's `<audio>` can't decode FLAC. The
@@ -72,10 +65,16 @@ export function AudioPlayer({ entryId }: { entryId: string }) {
     }
   };
 
-  const handleCanPlay = () => {
+  // preload="metadata" buffers only metadata, so `canplay` never fires until
+  // playback is requested — auto-play the just-loaded clip off loadedmetadata,
+  // whose play() call forces the data load.
+  const handleLoadedMetadata = (
+    event: React.SyntheticEvent<HTMLAudioElement>,
+  ) => {
+    setDuration(event.currentTarget.duration);
     if (!playWhenReady.current) return;
     playWhenReady.current = false;
-    void audioRef.current?.play();
+    void event.currentTarget.play();
   };
 
   const handleSeek = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -100,8 +99,7 @@ export function AudioPlayer({ entryId }: { entryId: string }) {
           ref={audioRef}
           src={src}
           preload="metadata"
-          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-          onCanPlay={handleCanPlay}
+          onLoadedMetadata={handleLoadedMetadata}
           onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
