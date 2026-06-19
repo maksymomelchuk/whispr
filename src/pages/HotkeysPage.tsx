@@ -153,14 +153,16 @@ function RecordingRow({
   initial,
   onSave,
   onCancel,
+  showDoubleTap = true,
 }: {
   initial: Shortcut;
   onSave: (shortcut: Shortcut) => void;
   onCancel: () => void;
+  showDoubleTap?: boolean;
 }) {
   const [captured, setCaptured] = useState<Shortcut | null>(null);
   const [isDoubleTap, setIsDoubleTap] = useState<boolean>(
-    initial.is_double_tap ?? false,
+    showDoubleTap ? (initial.is_double_tap ?? false) : false,
   );
 
   const handleKeyDown = useCallback(
@@ -204,11 +206,12 @@ function RecordingRow({
     };
   }, [handleKeyDown]);
 
-  const doubleTapChanged = isDoubleTap !== (initial.is_double_tap ?? false);
+  const doubleTapChanged =
+    showDoubleTap && isDoubleTap !== (initial.is_double_tap ?? false);
   const hasChanges = captured !== null || doubleTapChanged;
   const effective: Shortcut = {
     ...(captured ?? initial),
-    is_double_tap: isDoubleTap,
+    is_double_tap: showDoubleTap ? isDoubleTap : false,
   };
 
   return (
@@ -230,10 +233,12 @@ function RecordingRow({
             <TooltipContent>Press Esc to cancel</TooltipContent>
           </Tooltip>
         )}
-        <label className="ml-1 flex items-center gap-1.5 text-help text-muted-foreground cursor-pointer select-none">
-          <Switch checked={isDoubleTap} onCheckedChange={setIsDoubleTap} />
-          Double-tap
-        </label>
+        {showDoubleTap && (
+          <label className="ml-1 flex items-center gap-1.5 text-help text-muted-foreground cursor-pointer select-none">
+            <Switch checked={isDoubleTap} onCheckedChange={setIsDoubleTap} />
+            Double-tap
+          </label>
+        )}
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
@@ -390,6 +395,7 @@ export function HotkeysPage() {
                       initial={recorderTarget!.current}
                       onSave={handleRecordSave}
                       onCancel={() => setRecorderTarget(null)}
+                      showDoubleTap={false}
                     />
                   ) : (
                     <EmptyModeCard
@@ -406,6 +412,7 @@ export function HotkeysPage() {
                             initial={recorderTarget!.current}
                             onSave={handleRecordSave}
                             onCancel={() => setRecorderTarget(null)}
+                            showDoubleTap={false}
                           />
                         );
                       }
@@ -432,6 +439,7 @@ export function HotkeysPage() {
                         initial={recorderTarget!.current}
                         onSave={handleRecordSave}
                         onCancel={() => setRecorderTarget(null)}
+                        showDoubleTap={false}
                       />
                     )}
                   </div>
