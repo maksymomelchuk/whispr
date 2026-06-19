@@ -235,7 +235,7 @@ fn build_context_block(kind: &str, text: &str) -> String {
 /// Returns `None` when the local timezone is unavailable.
 pub fn system_date() -> Option<String> {
     use time::format_description;
-    let fmt = format_description::parse(
+    let fmt = format_description::parse_borrowed::<2>(
         "[year]-[month]-[day] [hour]:[minute] [offset_hour sign:mandatory]:[offset_minute]",
     )
     .ok()?;
