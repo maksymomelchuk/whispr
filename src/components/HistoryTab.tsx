@@ -1,9 +1,14 @@
+import { StarIcon } from "@phosphor-icons/react";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { AudioPlayer } from "@/components/AudioPlayer";
 import { EmptyPanel } from "@/components/EmptyPanel";
 import { RowCard } from "@/components/RowCard";
+import { SectionCard } from "@/components/SectionCard";
 import { SectionHeader } from "@/components/SectionHeader";
+import { SelectRow } from "@/components/SelectRow";
+import { ToggleRow } from "@/components/ToggleRow";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,13 +20,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -30,7 +28,9 @@ import { useFlash } from "../hooks/useFlash";
 import {
   getHistory,
   clearHistory as persistClearHistory,
+  setHistoryFavorite as persistHistoryFavorite,
   setHistoryLimit as persistHistoryLimit,
+  setSaveAudioRecordings as persistSaveAudioRecordings,
   recoverCleanup,
   updateHistoryEntry,
 } from "../lib/api";
@@ -154,6 +154,16 @@ export function HistoryTab() {
     }
   };
 
+  const handleSaveAudioToggle = async (next: boolean) => {
+    setSettings((s) => ({ ...s, save_audio_recordings: next }));
+    try {
+      await persistSaveAudioRecordings(next);
+    } catch (err) {
+      console.error("set save audio recordings failed", err);
+      setSettings((s) => ({ ...s, save_audio_recordings: !next }));
+    }
+  };
+
   const refresh = () => {
     getHistory()
       .then((list) => {
@@ -227,32 +237,19 @@ export function HistoryTab() {
   const isOff = historyLimit === 0;
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-start justify-between gap-3 pb-1">
-        <p className="text-xs text-muted-foreground">
-          {limitHint(historyLimit, entries.length)}
-        </p>
-        <div className="flex shrink-0 items-center gap-2.5">
-          <div className="inline-flex items-center gap-1.5">
-            <span className="whitespace-nowrap text-form-label text-muted-foreground">
-              Keep last
-            </span>
-            <Select
-              value={limitToOptionValue(historyLimit)}
-              onValueChange={handleLimitChange}
-            >
-              <SelectTrigger size="sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {LIMIT_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+    <div className="flex flex-col gap-8">
+      <HistorySettings
+        historyLimit={historyLimit}
+        saveAudio={settings.save_audio_recordings}
+        onLimitChange={handleLimitChange}
+        onSaveAudioToggle={handleSaveAudioToggle}
+      />
+
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">
+            {limitHint(historyLimit, entries.length)}
+          </p>
           {entries.length > 0 && (
             <Button
               type="button"
@@ -264,29 +261,29 @@ export function HistoryTab() {
             </Button>
           )}
         </div>
-      </div>
 
-      {entries.length === 0 && (isOff ? <DisabledState /> : <EmptyState />)}
+        {entries.length === 0 && (isOff ? <DisabledState /> : <EmptyState />)}
 
-      {groups.map((group) => (
-        <section key={group.key} className="flex flex-col gap-2.5">
-          <SectionHeader
-            title={group.label}
-            trailing={`${group.entries.length} ${
-              group.entries.length === 1 ? "entry" : "entries"
-            }`}
-          />
-          <div className="flex flex-col gap-2">
-            {group.entries.map((entry) => (
-              <HistoryRow
-                key={entryId(entry)}
-                entry={entry}
-                flashing={isFlashing(entryId(entry))}
-              />
-            ))}
-          </div>
-        </section>
-      ))}
+        {groups.map((group) => (
+          <section key={group.key} className="flex flex-col gap-2.5">
+            <SectionHeader
+              title={group.label}
+              trailing={`${group.entries.length} ${
+                group.entries.length === 1 ? "entry" : "entries"
+              }`}
+            />
+            <div className="flex flex-col gap-2">
+              {group.entries.map((entry) => (
+                <HistoryRow
+                  key={entryId(entry)}
+                  entry={entry}
+                  flashing={isFlashing(entryId(entry))}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
+      </section>
 
       <ClearHistoryConfirmDialog
         entryCount={entries.length}
@@ -295,6 +292,38 @@ export function HistoryTab() {
         onCancel={() => setClearDialogOpen(false)}
       />
     </div>
+  );
+}
+
+function HistorySettings({
+  historyLimit,
+  saveAudio,
+  onLimitChange,
+  onSaveAudioToggle,
+}: {
+  historyLimit: HistoryLimit;
+  saveAudio: boolean;
+  onLimitChange: (value: string) => void;
+  onSaveAudioToggle: (next: boolean) => void;
+}) {
+  return (
+    <SectionCard title="Recordings & history">
+      <SelectRow
+        id="history-keep-last"
+        label="Keep last"
+        info="How many dictations to keep, newest first. Each is one record — its transcript and saved audio are kept and deleted together. Favorites never count and are never auto-deleted."
+        value={limitToOptionValue(historyLimit)}
+        options={LIMIT_OPTIONS}
+        onValueChange={onLimitChange}
+      />
+      <ToggleRow
+        id="save-audio-recordings"
+        label="Save audio recordings"
+        info="Keep a 16 kHz mono copy of each dictation's mic audio so you can replay it from the record. Stored locally, off by default."
+        checked={saveAudio}
+        onCheckedChange={onSaveAudioToggle}
+      />
+    </SectionCard>
   );
 }
 
@@ -480,6 +509,23 @@ function HistoryRow({
   const view = cleanupView(entry.cleanup_status);
   const recoverable = isRecoverable(entry);
   const editable = Boolean(entry.id);
+  const [favorite, setFavorite] = useState(Boolean(entry.favorite));
+
+  useEffect(() => {
+    setFavorite(Boolean(entry.favorite));
+  }, [entry.favorite]);
+
+  const handleToggleFavorite = async () => {
+    if (!entry.id) return;
+    const next = !favorite;
+    setFavorite(next);
+    try {
+      await persistHistoryFavorite(entry.id, next);
+    } catch (e) {
+      setFavorite(!next);
+      console.error("set favorite failed", e);
+    }
+  };
 
   const handleRecover = async () => {
     setRecovering(true);
@@ -523,7 +569,10 @@ function HistoryRow({
     <RowCard
       flashing={flashing}
       interactive={!traceOpen && !editing}
-      className="items-stretch flex-col gap-2 py-3 pr-3"
+      className={cn(
+        "items-stretch flex-col gap-2 py-3 pr-3",
+        favorite && "bg-accent/30",
+      )}
     >
       <div className="flex items-start gap-3.5">
         <div
@@ -641,7 +690,32 @@ function HistoryRow({
             </>
           )}
         </div>
+
+        {editable && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={favorite ? "Remove from favorites" : "Add to favorites"}
+            aria-pressed={favorite}
+            onClick={handleToggleFavorite}
+            className={cn(
+              "shrink-0 transition-opacity",
+              favorite
+                ? "text-amber-500 opacity-100 hover:text-amber-500"
+                : "text-muted-foreground opacity-0 group-hover:opacity-65 group-focus-within:opacity-65 focus-visible:opacity-100",
+            )}
+          >
+            <StarIcon weight={favorite ? "fill" : "regular"} />
+          </Button>
+        )}
       </div>
+
+      {!editing && entry.has_audio && entry.id && (
+        <div className="ml-[84px]">
+          <AudioPlayer entryId={entry.id} />
+        </div>
+      )}
 
       {!editing && traceOpen && (
         <div className="ml-[84px]">

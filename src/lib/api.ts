@@ -197,6 +197,18 @@ export const clearHistory = () => invoke<void>("clear_history");
 export const setHistoryLimit = (limit: HistoryLimit) =>
   invoke<void>("set_history_limit", { limit });
 
+export const setSaveAudioRecordings = (enabled: boolean) =>
+  invoke<void>("set_save_audio_recordings", { enabled });
+
+export const setHandsFreeMaxMinutes = (minutes: number) =>
+  invoke<void>("set_hands_free_max_minutes", { minutes });
+
+export const setHistoryFavorite = (id: string, favorite: boolean) =>
+  invoke<void>("set_history_favorite", { id, favorite });
+
+export const readRecordingWav = (id: string) =>
+  invoke<ArrayBuffer>("read_recording_wav", { id });
+
 export const updateHistoryEntry = (
   id: string,
   replacedText: string,

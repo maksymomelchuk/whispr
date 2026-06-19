@@ -69,6 +69,11 @@ const ERROR_FLASH: Duration = Duration::from_millis(800);
 const CANCEL_FLASH: Duration = Duration::from_millis(800);
 const MIN_SPEAK_DURATION: Duration = Duration::from_millis(300);
 
+/// A PTT key released within this window is a flick-tap and latches hands-free;
+/// held longer it's an ordinary push-to-talk. Sub-threshold taps never captured
+/// usable audio, so latching steals nothing from PTT.
+const LATCH_THRESHOLD: Duration = Duration::from_millis(250);
+
 /// No window focus — caller still owns the target app's focus for paste.
 fn notify_silent(app: &AppHandle, message: impl Into<String>) {
     let message = message.into();
@@ -240,10 +245,81 @@ fn update_modifier_state(state: &AppState, code: &str, is_press: bool, sides: &m
 fn cancel_session(app: &AppHandle, state: &AppState, recorder: &Recorder) {
     state.session_cancelled.store(true, Ordering::Release);
     *state.ptt_active.lock().unwrap() = false;
+    *state.ptt_latched.lock().unwrap() = false;
     *state.active_shortcut.lock().unwrap() = None;
     recorder.stop();
     maybe_resume_media(state);
     let _ = app.emit(PTT_CANCELLED_EVENT, ());
+}
+
+/// Commit and finalize the active recording: normal PTT release, the stopping
+/// press of a latched recording, or the runaway-mic guard. Idempotent — returns
+/// false if no Session was active, so a guard/event race finalizes only once.
+fn commit_stop(app: &AppHandle, state: &AppState, recorder: &Recorder) -> bool {
+    {
+        let mut active = state.ptt_active.lock().unwrap();
+        if !*active {
+            return false;
+        }
+        *active = false;
+    }
+    *state.ptt_latched.lock().unwrap() = false;
+    *state.active_shortcut.lock().unwrap() = None;
+    // Overlay stays visible — spawn_session hides it after paste so the "still
+    // processing" state bridges STT drain and any LLM cleanup pass.
+    let _ = app.emit(PTT_RELEASED_EVENT, ());
+    maybe_resume_media(state);
+    recorder.stop();
+    true
+}
+
+/// Decide a non-double-tap PTT key release: latch into hands-free if it was a
+/// flick-tap, otherwise tell the caller to stop. Already-latched releases are
+/// inert (the key isn't held during hands-free).
+fn resolve_single_press_release(
+    app: &AppHandle,
+    state: &AppState,
+    recorder: &Recorder,
+    now: Instant,
+) -> bool {
+    let already_latched = *state.ptt_latched.lock().unwrap();
+    if already_latched {
+        return false;
+    }
+    let held = state
+        .ptt_press_at
+        .lock()
+        .unwrap()
+        .map(|pressed| now.saturating_duration_since(pressed))
+        .unwrap_or(Duration::ZERO);
+    if held >= LATCH_THRESHOLD {
+        return true;
+    }
+    *state.ptt_latched.lock().unwrap() = true;
+    arm_handsfree_guard(app, state, recorder);
+    false
+}
+
+/// Auto-finalize a latched recording at the configured max duration so a
+/// forgotten mic can't run forever. The session_seq token makes a stale timer
+/// (its Session already stopped, a new one started) a no-op.
+fn arm_handsfree_guard(app: &AppHandle, state: &AppState, recorder: &Recorder) {
+    let seq = state.ptt_session_seq.load(Ordering::Acquire);
+    let minutes = config::load(app).hands_free_max_minutes.max(1) as u64;
+    let app = app.clone();
+    let state = state.clone();
+    let recorder = recorder.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(minutes * 60)).await;
+        if state.ptt_session_seq.load(Ordering::Acquire) != seq {
+            return;
+        }
+        let still_latched = *state.ptt_latched.lock().unwrap();
+        if !still_latched {
+            return;
+        }
+        commit_stop(&app, &state, &recorder);
+    });
 }
 
 fn maybe_pause_media(state: &AppState) {
@@ -317,6 +393,9 @@ async fn run_session(
     };
 
     let settings = config::load(app);
+    let capture_audio = settings.save_audio_recordings;
+    let capture_sample_rate = format.sample_rate;
+    let capture_channels = format.channels;
 
     // Resolve the active mode up front: the STT call needs its language hint,
     // otherwise the provider falls back to the first mode's language and
@@ -448,6 +527,7 @@ async fn run_session(
                 settings.show_live_preview,
                 corrections,
             )
+            .with_capture_audio(capture_audio)
             .run(chunk_rx, ctx)
             .await
         }
@@ -473,6 +553,7 @@ async fn run_session(
                 settings.show_live_preview,
                 corrections,
             )
+            .with_capture_audio(capture_audio)
             .run(chunk_rx, ctx)
             .await
         }
@@ -496,6 +577,7 @@ async fn run_session(
                         settings.show_live_preview,
                         corrections,
                     )
+                    .with_capture_audio(capture_audio)
                     .run(chunk_rx, ctx)
                     .await
                 }
@@ -506,6 +588,7 @@ async fn run_session(
                         settings.show_live_preview,
                         corrections,
                     )
+                    .with_capture_audio(capture_audio)
                     .run(chunk_rx, ctx)
                     .await
                 }
@@ -534,6 +617,7 @@ async fn run_session(
                 settings.show_live_preview,
                 corrections,
             )
+            .with_capture_audio(capture_audio)
             .run(chunk_rx, ctx)
             .await
         }
@@ -559,6 +643,7 @@ async fn run_session(
                 settings.show_live_preview,
                 corrections,
             )
+            .with_capture_audio(capture_audio)
             .run(chunk_rx, ctx)
             .await
         }
@@ -586,6 +671,7 @@ async fn run_session(
                         settings.show_live_preview,
                         corrections,
                     )
+                    .with_capture_audio(capture_audio)
                     .run(chunk_rx, ctx)
                     .await
                 }
@@ -596,6 +682,7 @@ async fn run_session(
                         settings.show_live_preview,
                         corrections,
                     )
+                    .with_capture_audio(capture_audio)
                     .run(chunk_rx, ctx)
                     .await
                 }
@@ -623,6 +710,7 @@ async fn run_session(
                 settings.show_live_preview,
                 corrections,
             )
+            .with_capture_audio(capture_audio)
             .run(chunk_rx, ctx)
             .await
         }
@@ -643,6 +731,7 @@ async fn run_session(
     let SessionOutcome {
         transcript: raw_text,
         speak_duration,
+        audio,
     } = match session_result {
         Ok(r) => r,
         Err(e) => {
@@ -738,6 +827,14 @@ async fn run_session(
     }
     history_entry.context_channels = context_channels;
 
+    let recorded_audio = if capture_audio {
+        audio.filter(|samples| !samples.is_empty())
+    } else {
+        None
+    };
+    history_entry.has_audio = recorded_audio.is_some();
+    let recording_id = history_entry.id.clone();
+
     let paste_policy =
         pipeline::resolve_paste_policy(&history_entry.cleanup_status, paste_raw_on_failure);
 
@@ -759,8 +856,30 @@ async fn run_session(
     );
 
     match history::append(app, history_entry) {
-        Ok(_) => {
+        Ok(kept) => {
             let _ = app.emit(HISTORY_UPDATED_EVENT, ());
+            // Only persist audio for an entry that survived retention; encode
+            // off the runtime worker so a long clip's FLAC pass can't stall the
+            // pipeline. A second history-updated tells the UI the file is ready.
+            if let Some(samples) = recorded_audio {
+                if kept.iter().any(|e| e.id == recording_id) {
+                    let app = app.clone();
+                    tauri::async_runtime::spawn_blocking(move || {
+                        match history::save_recording(
+                            &app,
+                            &recording_id,
+                            &samples,
+                            capture_sample_rate,
+                            capture_channels,
+                        ) {
+                            Ok(()) => {
+                                let _ = app.emit(HISTORY_UPDATED_EVENT, ());
+                            }
+                            Err(e) => eprintln!("[recording] save failed: {e}"),
+                        }
+                    });
+                }
+            }
         }
         Err(e) => eprintln!("[pipeline] history append failed: {e}"),
     }
@@ -919,6 +1038,9 @@ fn start_ptt(
     }
     *active = true;
     state.session_cancelled.store(false, Ordering::Release);
+    *state.ptt_latched.lock().unwrap() = false;
+    *state.ptt_press_at.lock().unwrap() = Some(Instant::now());
+    state.ptt_session_seq.fetch_add(1, Ordering::AcqRel);
     *state.active_shortcut.lock().unwrap() = Some(shortcut.clone());
     let device = state.input_device.lock().unwrap().clone();
 
@@ -1194,7 +1316,19 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                     return None;
                 }
 
-                if is_press && !ptt_active_now {
+                if is_press && ptt_active_now {
+                    // A re-press of the latching key stops & finalizes a
+                    // hands-free recording (Escape-cancel was handled above).
+                    let latched = *state.ptt_latched.lock().unwrap();
+                    let sc_opt = state.active_shortcut.lock().unwrap().clone();
+                    if latched
+                        && sc_opt
+                            .as_ref()
+                            .is_some_and(|sc| shortcut_matches(code, sc, modifiers_val))
+                    {
+                        commit_stop(&app, &state, &recorder);
+                    }
+                } else if is_press && !ptt_active_now {
                     let sp = bindings.iter().find(|b| {
                         !b.shortcut.is_double_tap
                             && shortcut_matches(code, &b.shortcut, modifiers_val)
@@ -1267,8 +1401,8 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                         (None, None) => {}
                     }
                 } else if !is_press {
-                    let mut active = state.ptt_active.lock().unwrap();
-                    if *active {
+                    let is_active = *state.ptt_active.lock().unwrap();
+                    if is_active {
                         let sc_opt = state.active_shortcut.lock().unwrap().clone();
                         let should_stop = match sc_opt {
                             Some(ref sc) if sc.is_double_tap => {
@@ -1276,17 +1410,10 @@ pub fn start(app: AppHandle, state: AppState, recorder: Recorder) {
                                 let ts = tap_states_guard.entry(tap_state_key(sc)).or_default();
                                 advance_tap_state(ts, TapEvent::Up, now) == Dispatch::StopPtt
                             }
-                            _ => true,
+                            _ => resolve_single_press_release(&app, &state, &recorder, now),
                         };
                         if should_stop {
-                            *active = false;
-                            *state.active_shortcut.lock().unwrap() = None;
-                            // Overlay stays visible — spawn_session hides it
-                            // after paste so the "still processing" state
-                            // bridges STT drain and any LLM cleanup pass.
-                            let _ = app.emit(PTT_RELEASED_EVENT, ());
-                            maybe_resume_media(&state);
-                            recorder.stop();
+                            commit_stop(&app, &state, &recorder);
                         }
                     } else {
                         let mut tap_states_guard = tap_states.lock().unwrap();
@@ -1433,7 +1560,19 @@ fn handle_key_event(ctx: &EventCtx, tracking: &mut EventTracking, code: &str, is
         return;
     }
 
-    if is_press && !ptt_active_now {
+    if is_press && ptt_active_now {
+        // A re-press of the latching key stops & finalizes a hands-free
+        // recording (Escape-cancel was handled above).
+        let latched = *state.ptt_latched.lock().unwrap();
+        let sc_opt = state.active_shortcut.lock().unwrap().clone();
+        if latched
+            && sc_opt
+                .as_ref()
+                .is_some_and(|sc| shortcut_matches(code, sc, modifiers_val))
+        {
+            commit_stop(app, state, recorder);
+        }
+    } else if is_press && !ptt_active_now {
         let sp = bindings.iter().find(|b| {
             !b.shortcut.is_double_tap && shortcut_matches(code, &b.shortcut, modifiers_val)
         });
@@ -1502,8 +1641,8 @@ fn handle_key_event(ctx: &EventCtx, tracking: &mut EventTracking, code: &str, is
             (None, None) => {}
         }
     } else if !is_press {
-        let mut active = state.ptt_active.lock().unwrap();
-        if *active {
+        let is_active = *state.ptt_active.lock().unwrap();
+        if is_active {
             let sc_opt = state.active_shortcut.lock().unwrap().clone();
             let should_stop = match sc_opt {
                 Some(ref sc) if sc.is_double_tap => {
@@ -1511,14 +1650,10 @@ fn handle_key_event(ctx: &EventCtx, tracking: &mut EventTracking, code: &str, is
                     let ts = tap_states_guard.entry(tap_state_key(sc)).or_default();
                     advance_tap_state(ts, TapEvent::Up, now) == Dispatch::StopPtt
                 }
-                _ => true,
+                _ => resolve_single_press_release(app, state, recorder, now),
             };
             if should_stop {
-                *active = false;
-                *state.active_shortcut.lock().unwrap() = None;
-                let _ = app.emit(PTT_RELEASED_EVENT, ());
-                maybe_resume_media(state);
-                recorder.stop();
+                commit_stop(app, state, recorder);
             }
         } else {
             let mut tap_states_guard = tap_states.lock().unwrap();

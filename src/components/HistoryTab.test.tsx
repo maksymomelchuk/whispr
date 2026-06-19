@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { SettingsContext } from "@/context/SettingsContext";
 import type { HistoryEntry, Settings } from "@/lib/types";
 
@@ -18,6 +19,10 @@ vi.mock("../lib/api", () => ({
   getHistory: vi.fn(),
   clearHistory: vi.fn(),
   setHistoryLimit: vi.fn(),
+  setSaveAudioRecordings: vi.fn(),
+  setHandsFreeMaxMinutes: vi.fn(),
+  setHistoryFavorite: vi.fn(),
+  readRecordingWav: vi.fn(),
   recoverCleanup: vi.fn(),
   updateHistoryEntry: vi.fn(),
 }));
@@ -50,6 +55,8 @@ const BASE_SETTINGS: Settings = {
   input_device: null,
   pause_media_on_record: false,
   history_limit: 100,
+  save_audio_recordings: false,
+  hands_free_max_minutes: 30,
   show_in_dock: true,
   start_at_login: false,
   show_live_preview: true,
@@ -106,7 +113,9 @@ function Wrapper({ settings = BASE_SETTINGS }: { settings?: Settings }) {
         setAccent: vi.fn(),
       }}
     >
-      <HistoryTab />
+      <TooltipProvider>
+        <HistoryTab />
+      </TooltipProvider>
     </SettingsContext.Provider>
   );
 }

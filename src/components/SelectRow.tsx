@@ -1,7 +1,13 @@
 import type { ReactNode } from "react";
 
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 import { InfoTip } from "./InfoTip";
@@ -10,24 +16,26 @@ interface Props {
   id: string;
   label: ReactNode;
   info?: string;
-  checked: boolean;
-  onCheckedChange: (checked: boolean) => void;
+  value: string;
+  options: { label: string; value: string }[];
+  onValueChange: (value: string) => void;
   disabled?: boolean;
   className?: string;
 }
 
-export function ToggleRow({
+export function SelectRow({
   id,
   label,
   info,
-  checked,
-  onCheckedChange,
+  value,
+  options,
+  onValueChange,
   disabled,
   className,
 }: Props) {
   return (
     <div
-      data-slot="toggle-row"
+      data-slot="select-row"
       className={cn("flex items-center justify-between gap-4 py-2", className)}
     >
       <Label
@@ -40,12 +48,18 @@ export function ToggleRow({
         {label}
         {info && <InfoTip text={info} />}
       </Label>
-      <Switch
-        id={id}
-        checked={checked}
-        onCheckedChange={onCheckedChange}
-        disabled={disabled}
-      />
+      <Select value={value} onValueChange={onValueChange} disabled={disabled}>
+        <SelectTrigger id={id} size="sm">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value}>
+              {opt.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

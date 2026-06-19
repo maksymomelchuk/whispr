@@ -155,6 +155,52 @@ fn encode_mono_16k(samples: &[i16]) -> Result<Vec<u8>, String> {
     Ok(sink.as_slice().to_vec())
 }
 
+/// Decode a saved FLAC into a 16-bit PCM WAV. WKWebView's `<audio>` element
+/// can't reliably decode FLAC, so playback is served as WAV — the most widely
+/// supported container — over IPC. Decodes fully into memory, which is fine for
+/// the short 16 kHz mono clips this stores.
+pub fn flac_to_wav(flac_bytes: &[u8]) -> Result<Vec<u8>, String> {
+    let mut reader =
+        claxon::FlacReader::new(flac_bytes).map_err(|e| format!("decode flac: {e}"))?;
+    let info = reader.streaminfo();
+    let samples: Vec<i16> = reader
+        .samples()
+        .map(|s| s.map(|v| v.clamp(i16::MIN as i32, i16::MAX as i32) as i16))
+        .collect::<Result<_, _>>()
+        .map_err(|e| format!("read flac samples: {e}"))?;
+    Ok(pcm_i16_to_wav(
+        &samples,
+        info.sample_rate,
+        info.channels as u16,
+    ))
+}
+
+fn pcm_i16_to_wav(samples: &[i16], sample_rate: u32, channels: u16) -> Vec<u8> {
+    const BITS_PER_SAMPLE: u16 = 16;
+    let block_align = channels * BITS_PER_SAMPLE / 8;
+    let byte_rate = sample_rate * block_align as u32;
+    let data_len = (samples.len() * 2) as u32;
+
+    let mut out = Vec::with_capacity(44 + data_len as usize);
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&(36 + data_len).to_le_bytes());
+    out.extend_from_slice(b"WAVE");
+    out.extend_from_slice(b"fmt ");
+    out.extend_from_slice(&16u32.to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes());
+    out.extend_from_slice(&channels.to_le_bytes());
+    out.extend_from_slice(&sample_rate.to_le_bytes());
+    out.extend_from_slice(&byte_rate.to_le_bytes());
+    out.extend_from_slice(&block_align.to_le_bytes());
+    out.extend_from_slice(&BITS_PER_SAMPLE.to_le_bytes());
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&data_len.to_le_bytes());
+    for s in samples {
+        out.extend_from_slice(&s.to_le_bytes());
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,6 +248,27 @@ mod tests {
             diff <= frame_tolerance,
             "decoded {decoded} samples vs expected {expected} (diff {diff}, tolerance {frame_tolerance})"
         );
+    }
+
+    #[test]
+    fn flac_to_wav_yields_playable_16k_mono_pcm() {
+        let input = synth_sine(440.0, 48_000, 2, 1.0);
+        let flac = encode_to_flac_16k_mono(&input, 48_000, 2).expect("encode succeeds");
+
+        let wav = flac_to_wav(&flac).expect("flac decodes to wav");
+
+        assert_eq!(&wav[0..4], b"RIFF");
+        assert_eq!(&wav[8..12], b"WAVE");
+        assert_eq!(&wav[12..16], b"fmt ");
+        let channels = u16::from_le_bytes([wav[22], wav[23]]);
+        let sample_rate = u32::from_le_bytes([wav[24], wav[25], wav[26], wav[27]]);
+        let bits = u16::from_le_bytes([wav[34], wav[35]]);
+        assert_eq!(channels, 1);
+        assert_eq!(sample_rate, TARGET_SAMPLE_RATE);
+        assert_eq!(bits, 16);
+        assert_eq!(&wav[36..40], b"data");
+        let data_len = u32::from_le_bytes([wav[40], wav[41], wav[42], wav[43]]) as usize;
+        assert_eq!(data_len, wav.len() - 44);
     }
 
     #[test]

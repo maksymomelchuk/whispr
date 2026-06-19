@@ -54,6 +54,8 @@ pub struct SettingsView {
     pub input_device: Option<String>,
     pub pause_media_on_record: bool,
     pub history_limit: Option<usize>,
+    pub save_audio_recordings: bool,
+    pub hands_free_max_minutes: u32,
     pub show_in_dock: bool,
     pub start_at_login: bool,
     pub show_live_preview: bool,
@@ -134,6 +136,8 @@ impl From<Settings> for SettingsView {
             input_device: s.input_device,
             pause_media_on_record: s.pause_media_on_record,
             history_limit: s.history_limit,
+            save_audio_recordings: s.save_audio_recordings,
+            hands_free_max_minutes: s.hands_free_max_minutes,
             show_in_dock: s.show_in_dock,
             start_at_login: s.start_at_login,
             show_live_preview: s.show_live_preview,
@@ -704,9 +708,37 @@ pub fn clear_history(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn set_history_limit(app: AppHandle, limit: Option<usize>) -> Result<(), String> {
     config::update(&app, |s| s.history_limit = limit)?;
-    history::enforce_limit(&app, limit)?;
+    history::enforce_limits(&app)?;
     let _ = app.emit(HISTORY_UPDATED_EVENT, ());
     Ok(())
+}
+
+#[tauri::command]
+pub fn set_save_audio_recordings(app: AppHandle, enabled: bool) -> Result<(), String> {
+    config::update(&app, |s| s.save_audio_recordings = enabled)
+}
+
+#[tauri::command]
+pub fn set_hands_free_max_minutes(app: AppHandle, minutes: u32) -> Result<(), String> {
+    config::update(&app, |s| s.hands_free_max_minutes = minutes)
+}
+
+#[tauri::command]
+pub fn set_history_favorite(app: AppHandle, id: String, favorite: bool) -> Result<(), String> {
+    history::set_favorite(&app, &id, favorite)?;
+    let _ = app.emit(HISTORY_UPDATED_EVENT, ());
+    Ok(())
+}
+
+/// An entry's saved recording as WAV bytes for inline playback. Stored as FLAC
+/// and decoded on demand because WKWebView's `<audio>` can't decode FLAC. Errors
+/// if the file is missing (e.g. retention removed it between list and play).
+#[tauri::command]
+pub fn read_recording_wav(app: AppHandle, id: String) -> Result<tauri::ipc::Response, String> {
+    let path = history::recording_path(&app, &id)?;
+    let flac = std::fs::read(&path).map_err(|_| format!("recording not found for {id}"))?;
+    let wav = crate::groq_audio::flac_to_wav(&flac)?;
+    Ok(tauri::ipc::Response::new(wav))
 }
 
 #[tauri::command]

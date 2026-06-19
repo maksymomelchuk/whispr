@@ -43,6 +43,8 @@ const BASE_SETTINGS: Settings = {
   input_device: null,
   pause_media_on_record: false,
   history_limit: 100,
+  save_audio_recordings: false,
+  hands_free_max_minutes: 30,
   show_in_dock: true,
   start_at_login: false,
   show_live_preview: true,

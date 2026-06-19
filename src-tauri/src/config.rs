@@ -339,8 +339,15 @@ fn default_true() -> bool {
 }
 
 /// `None` = unlimited, `Some(0)` = off (no history kept), `Some(n)` = keep n.
+/// A record carries its optional audio, so this single cap governs both.
 fn default_history_limit() -> Option<usize> {
     Some(5)
+}
+
+/// Safety net that auto-finalizes a latched hands-free recording so a forgotten
+/// mic can't run forever.
+fn default_hands_free_max_minutes() -> u32 {
+    30
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -438,6 +445,10 @@ pub struct Settings {
     #[serde(default = "default_history_limit")]
     pub history_limit: Option<usize>,
     #[serde(default)]
+    pub save_audio_recordings: bool,
+    #[serde(default = "default_hands_free_max_minutes")]
+    pub hands_free_max_minutes: u32,
+    #[serde(default)]
     pub show_in_dock: bool,
     #[serde(default)]
     pub start_at_login: bool,
@@ -485,6 +496,8 @@ impl Default for Settings {
             input_device: None,
             pause_media_on_record: true,
             history_limit: default_history_limit(),
+            save_audio_recordings: false,
+            hands_free_max_minutes: default_hands_free_max_minutes(),
             show_in_dock: false,
             start_at_login: false,
             show_live_preview: true,

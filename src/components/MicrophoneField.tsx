@@ -20,14 +20,25 @@ import {
 import { useSettings } from "../context/SettingsContext";
 import {
   listInputDevices,
+  setHandsFreeMaxMinutes as persistHandsFreeMaxMinutes,
   setInputDevice as persistInputDevice,
   setPauseMediaOnRecord as persistPauseMediaOnRecord,
 } from "../lib/api";
 import { SectionCard } from "./SectionCard";
+import { SelectRow } from "./SelectRow";
 import { ToggleRow } from "./ToggleRow";
 
 // Radix Select doesn't render correctly with empty-string values; use a sentinel.
 const DEVICE_DEFAULT = "__system_default__";
+
+const HANDS_FREE_OPTIONS: { label: string; value: string }[] = [
+  { label: "5 min", value: "5" },
+  { label: "10 min", value: "10" },
+  { label: "15 min", value: "15" },
+  { label: "30 min", value: "30" },
+  { label: "45 min", value: "45" },
+  { label: "60 min", value: "60" },
+];
 
 function toSelectValue(device: string | null): string {
   return device ?? DEVICE_DEFAULT;
@@ -42,7 +53,8 @@ type SaveStatus = "idle" | "saving" | "error";
 
 export function MicrophoneField() {
   const { settings, setSettings } = useSettings();
-  const { input_device, pause_media_on_record } = settings;
+  const { input_device, pause_media_on_record, hands_free_max_minutes } =
+    settings;
 
   const [devices, setDevices] = useState<string[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
@@ -90,6 +102,18 @@ export function MicrophoneField() {
       await persistPauseMediaOnRecord(next);
     } catch (e) {
       setSettings((s) => ({ ...s, pause_media_on_record: !next }));
+      setSaveError(String(e));
+    }
+  };
+
+  const handleHandsFreeChange = async (value: string) => {
+    const next = Number(value);
+    const previous = hands_free_max_minutes;
+    setSettings((s) => ({ ...s, hands_free_max_minutes: next }));
+    try {
+      await persistHandsFreeMaxMinutes(next);
+    } catch (e) {
+      setSettings((s) => ({ ...s, hands_free_max_minutes: previous }));
       setSaveError(String(e));
     }
   };
@@ -147,6 +171,15 @@ export function MicrophoneField() {
         label="Mute system audio while recording"
         checked={pause_media_on_record}
         onCheckedChange={togglePauseMedia}
+      />
+
+      <SelectRow
+        id="hands-free-auto-stop"
+        label="Auto-stop hands-free after"
+        info="A latched hands-free recording (flick-tap your dictation key, then press again to stop) auto-finalizes at this duration as a runaway-mic safety net."
+        value={String(hands_free_max_minutes)}
+        options={HANDS_FREE_OPTIONS}
+        onValueChange={handleHandsFreeChange}
       />
 
       {loadState === "loading" && (

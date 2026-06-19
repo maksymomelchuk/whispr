@@ -135,6 +135,8 @@ fn build_outcome(
         app_name: entry.app_name.clone(),
         bundle_id: entry.bundle_id.clone(),
         context_channels: entry.context_channels.clone(),
+        has_audio: entry.has_audio,
+        favorite: entry.favorite,
     };
 
     Outcome {
@@ -229,6 +231,8 @@ mod tests {
             app_name: None,
             bundle_id: None,
             context_channels: vec![],
+            has_audio: false,
+            favorite: false,
         }
     }
 

@@ -257,6 +257,8 @@ export interface Settings {
   input_device: string | null;
   pause_media_on_record: boolean;
   history_limit: HistoryLimit;
+  save_audio_recordings: boolean;
+  hands_free_max_minutes: number;
   show_in_dock: boolean;
   start_at_login: boolean;
   show_live_preview: boolean;
@@ -318,6 +320,10 @@ export interface HistoryEntry {
   app_name?: string | null;
   bundle_id?: string | null;
   context_channels?: string[];
+  /** A saved mic recording exists at `recordings/{id}.flac`. */
+  has_audio?: boolean;
+  /** Pinned by the user: exempt from automatic retention. */
+  favorite?: boolean;
 }
 
 export type LearnedKind =

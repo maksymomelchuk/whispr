@@ -77,6 +77,14 @@ pub struct HistoryEntry {
     /// Channel flags only — captured content is never persisted.
     #[serde(default)]
     pub context_channels: Vec<String>,
+    /// A saved mic recording exists at `recordings/{id}.flac`. Drives the
+    /// inline player and the FLAC-deletes-with-the-row retention rule.
+    #[serde(default)]
+    pub has_audio: bool,
+    /// Pinned by the user: exempt from every automatic retention cap and
+    /// uncounted against both limits.
+    #[serde(default)]
+    pub favorite: bool,
 }
 
 fn history_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -86,6 +94,50 @@ fn history_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .map_err(|e| format!("Failed to resolve app data dir: {e}"))?;
     fs::create_dir_all(&dir).map_err(|e| format!("Failed to create app data dir: {e}"))?;
     Ok(dir.join(HISTORY_FILE))
+}
+
+const RECORDINGS_DIR: &str = "recordings";
+
+pub fn recordings_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {e}"))?
+        .join(RECORDINGS_DIR);
+    fs::create_dir_all(&dir).map_err(|e| format!("Failed to create recordings dir: {e}"))?;
+    Ok(dir)
+}
+
+pub fn recording_path(app: &tauri::AppHandle, id: &str) -> Result<PathBuf, String> {
+    Ok(recordings_dir(app)?.join(format!("{id}.flac")))
+}
+
+/// Encode the session's mic audio to 16 kHz mono FLAC and persist it locked to
+/// the owning user. Called off the paste path — FLAC compression of a long clip
+/// can take a noticeable amount of CPU.
+pub fn save_recording(
+    app: &tauri::AppHandle,
+    id: &str,
+    samples: &[i16],
+    sample_rate: u32,
+    channels: u16,
+) -> Result<(), String> {
+    let flac = crate::groq_audio::encode_to_flac_16k_mono(samples, sample_rate, channels)?;
+    let path = recording_path(app, id)?;
+    fs::write(&path, flac).map_err(|e| format!("write {path:?}: {e}"))?;
+    // Recordings can contain anything the user dictated — lock to the owner.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
+}
+
+fn delete_recording(app: &tauri::AppHandle, id: &str) {
+    if let Ok(path) = recording_path(app, id) {
+        let _ = fs::remove_file(path);
+    }
 }
 
 pub fn load(app: &tauri::AppHandle) -> Vec<HistoryEntry> {
@@ -119,25 +171,75 @@ fn save(app: &tauri::AppHandle, entries: &[HistoryEntry]) -> Result<(), String> 
     Ok(())
 }
 
-/// Prepend a new entry (newest-first) and trim to the configured history
-/// limit.
-pub fn append(app: &tauri::AppHandle, entry: HistoryEntry) -> Result<Vec<HistoryEntry>, String> {
-    let limit = config::load(app).history_limit;
-    if matches!(limit, Some(0)) {
-        return Ok(Vec::new());
-    }
+/// Split a newest-first list into the entries to keep and the ids of evicted
+/// entries that had audio (so their FLAC can be removed). A record carries its
+/// optional audio, so one cap governs both: it counts only non-favorites, and an
+/// evicted record drops its FLAC with it. Favorites are always kept and uncounted.
+fn apply_retention(
+    entries: Vec<HistoryEntry>,
+    history_limit: Option<usize>,
+) -> (Vec<HistoryEntry>, Vec<String>) {
+    let mut evicted_audio = Vec::new();
+    let mut seen = 0usize;
+    let kept: Vec<HistoryEntry> = entries
+        .into_iter()
+        .filter(|entry| {
+            if entry.favorite {
+                return true;
+            }
+            seen += 1;
+            let over = history_limit.is_some_and(|max| seen > max);
+            if over && entry.has_audio {
+                evicted_audio.push(entry.id.clone());
+            }
+            !over
+        })
+        .collect();
 
+    (kept, evicted_audio)
+}
+
+fn retain_and_save(
+    app: &tauri::AppHandle,
+    entries: Vec<HistoryEntry>,
+) -> Result<Vec<HistoryEntry>, String> {
+    let cfg = config::load(app);
+    let (kept, evicted_audio) = apply_retention(entries, cfg.history_limit);
+    for id in &evicted_audio {
+        delete_recording(app, id);
+    }
+    save(app, &kept)?;
+    Ok(kept)
+}
+
+/// Prepend a new entry (newest-first) and apply the retention cap, deleting
+/// the FLAC of any entry that gets evicted.
+pub fn append(app: &tauri::AppHandle, entry: HistoryEntry) -> Result<Vec<HistoryEntry>, String> {
     let mut entries = load(app);
     entries.insert(0, entry);
-    if let Some(max) = limit {
-        entries.truncate(max);
-    }
-    save(app, &entries)?;
-    Ok(entries)
+    retain_and_save(app, entries)
 }
 
 pub fn clear(app: &tauri::AppHandle) -> Result<(), String> {
+    for entry in load(app) {
+        if entry.has_audio {
+            delete_recording(app, &entry.id);
+        }
+    }
     save(app, &[])
+}
+
+/// Toggle the favorite flag, then re-apply retention: un-favoriting can push an
+/// old entry back under a cap, favoriting exempts it.
+pub fn set_favorite(app: &tauri::AppHandle, id: &str, favorite: bool) -> Result<(), String> {
+    let mut entries = load(app);
+    let entry = entries
+        .iter_mut()
+        .find(|e| e.id == id)
+        .ok_or_else(|| format!("history entry not found: {id}"))?;
+    entry.favorite = favorite;
+    retain_and_save(app, entries)?;
+    Ok(())
 }
 
 /// History is stored newest-first, so this is just the head.
@@ -171,22 +273,13 @@ pub fn update_by_id(
     save(app, &entries)
 }
 
-/// Apply the limit to the existing on-disk history. Used when the user
-/// changes the limit setting so the change takes effect immediately rather
-/// than waiting for the next dictation.
-pub fn enforce_limit(app: &tauri::AppHandle, limit: Option<usize>) -> Result<(), String> {
-    match limit {
-        Some(0) => clear(app),
-        Some(n) => {
-            let mut entries = load(app);
-            if entries.len() > n {
-                entries.truncate(n);
-                save(app, &entries)?;
-            }
-            Ok(())
-        }
-        None => Ok(()),
-    }
+/// Re-apply the retention cap to the on-disk history. Used when the user
+/// changes the limit so the change takes effect immediately rather than waiting
+/// for the next dictation. Reads the limit from config (already saved by the
+/// caller).
+pub fn enforce_limits(app: &tauri::AppHandle) -> Result<(), String> {
+    retain_and_save(app, load(app))?;
+    Ok(())
 }
 
 pub fn now_unix_seconds() -> i64 {
@@ -194,4 +287,89 @@ pub fn now_unix_seconds() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(id: &str, has_audio: bool, favorite: bool) -> HistoryEntry {
+        HistoryEntry {
+            id: id.to_string(),
+            timestamp: 0,
+            speak_duration_ms: 0,
+            raw_text: String::new(),
+            replaced_text: String::new(),
+            final_text: String::new(),
+            cleanup_status: CleanupStatus::Disabled,
+            profile_snapshot: None,
+            provider_model: None,
+            app_name: None,
+            bundle_id: None,
+            context_channels: vec![],
+            has_audio,
+            favorite,
+        }
+    }
+
+    fn ids(entries: &[HistoryEntry]) -> Vec<&str> {
+        entries.iter().map(|e| e.id.as_str()).collect()
+    }
+
+    #[test]
+    fn cap_trims_oldest_non_favorites() {
+        let entries = vec![
+            entry("a", false, false),
+            entry("b", false, false),
+            entry("c", false, false),
+        ];
+        let (kept, evicted) = apply_retention(entries, Some(2));
+        assert_eq!(ids(&kept), vec!["a", "b"]);
+        assert!(evicted.is_empty());
+    }
+
+    #[test]
+    fn favorites_are_kept_and_uncounted() {
+        let entries = vec![
+            entry("a", false, false),
+            entry("fav", false, true),
+            entry("b", false, false),
+            entry("c", false, false),
+        ];
+        let (kept, _) = apply_retention(entries, Some(2));
+        // The two newest non-favorites (a, b) plus the favorite survive; c drops.
+        assert_eq!(ids(&kept), vec!["a", "fav", "b"]);
+    }
+
+    #[test]
+    fn audio_and_text_records_share_one_cap() {
+        let entries = vec![
+            entry("r1", true, false),
+            entry("t1", false, false),
+            entry("r2", true, false),
+        ];
+        let (kept, evicted) = apply_retention(entries, Some(2));
+        assert_eq!(ids(&kept), vec!["r1", "t1"]);
+        assert_eq!(evicted, vec!["r2"]);
+    }
+
+    #[test]
+    fn favorite_record_is_exempt_from_the_cap() {
+        let entries = vec![
+            entry("r1", true, false),
+            entry("fav", true, true),
+            entry("r2", true, false),
+        ];
+        let (kept, evicted) = apply_retention(entries, Some(1));
+        assert_eq!(ids(&kept), vec!["r1", "fav"]);
+        assert_eq!(evicted, vec!["r2"]);
+    }
+
+    #[test]
+    fn evicting_a_record_marks_its_audio_for_deletion() {
+        let entries = vec![entry("t", false, false), entry("r", true, false)];
+        let (kept, evicted) = apply_retention(entries, Some(1));
+        assert_eq!(ids(&kept), vec!["t"]);
+        assert_eq!(evicted, vec!["r"]);
+    }
 }

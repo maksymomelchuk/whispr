@@ -101,6 +101,8 @@ fn pasted_text_recovered_manually_returns_final_text() {
         app_name: None,
         bundle_id: None,
         context_channels: vec![],
+        has_audio: false,
+        favorite: false,
     };
     assert_eq!(pasted_text(&entry), "final recovered");
 }

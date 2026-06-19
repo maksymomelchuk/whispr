@@ -40,7 +40,35 @@ The Session's output is the raw transcript plus the speak duration. The post-tra
 
 ## Cancelled Session
 
-A [[Session]] the user aborted by pressing Escape while still recording. Cancellation tears down the mic and resumes any paused media, but skips every downstream stage — AI cleanup, history append, stats, and paste — so the focused app receives no text and the dictation leaves no trace beyond a brief "Cancelled" flash in the overlay pill. Only valid during the recording phase: once the user releases PTT, the Session is committed and Escape is inert.
+A [[Session]] the user aborted by pressing Escape while still recording. Cancellation tears down the mic and resumes any paused media, but skips every downstream stage — AI cleanup, history append, stats, and paste — so the focused app receives no text and the dictation leaves no trace beyond a brief "Cancelled" flash in the overlay pill. Only valid during the recording phase.
+
+The "recording phase" boundary depends on the trigger. For [[Push-to-talk (PTT)]] it ends at key-release — release commits the Session and Escape goes inert. For [[Hands-free mode]] there is no release, so Escape stays live for the entire latched recording, right up until the second tap that stops it.
+
+## Push-to-talk (PTT)
+
+The original recording trigger: hold a Profile's dictation key, record while held, release to finalize and transcribe. Press-to-start latency matters — recording begins on key-down with nothing to wait for. Each Profile binds its own PTT key (`HotkeyAction::Ptt { mode_id }`).
+
+## Hands-free mode
+
+A latched recording style layered onto the **same** per-Profile key as [[Push-to-talk (PTT)]] — no separate shortcut, so it scales across Profiles without multiplying hotkeys. The key disambiguates by hold duration (the "hybrid" gesture): hold past a short threshold → PTT; flick-tap (release almost immediately) → **latch** into hands-free, where recording continues with no key held until a second tap stops and finalizes it. Designed for long recordings (e.g. interview practice) where holding a key is impractical. Double-tap was rejected as the trigger because mixing single-press and double-tap on one key forces a ~400ms disambiguation delay on every PTT start.
+
+Because a latched recording has no held key, a runaway-mic guard auto-stops it at a max duration (default 30 min, global setting). Hitting the cap finalizes the Session normally (transcribe → paste) rather than discarding — the cap is a safety net, not a [[Cancelled Session]]. The trigger is duration only, never silence: interview-style speech has long thinking pauses that a silence cut-off would truncate.
+
+A hands-free [[Session]] is still cancellable with Escape, but unlike PTT there is no key-release that commits it — see [[Cancelled Session]].
+
+## Audio recording
+
+The captured microphone audio of a [[Session]], saved to disk so the user can replay it (e.g. to review how an interview answer was delivered). Off by default — a single global switch enables saving; when on, every Session's audio is kept. Engine-agnostic: a copy of every chunk is teed off the shared audio path, so it works the same whether the [[Engine]] streams (Deepgram, Soniox) or batches (Groq, Local). Each recording is tied one-to-one to its [[History entry]] and is only replayable while that entry exists.
+
+There is no separate recordings cap. A record carries its optional audio, so the single history "keep last N" cap governs both: when an entry is evicted, its audio file is deleted with it — audio can never outlive its row. [[Favorite]] recordings are pinned and uncounted against the cap.
+
+## Favorite
+
+A flag on a [[History entry]] marking it important. A Favorite is exempt from all automatic retention deletion — both its transcript and its [[Audio recording]] are pinned until the user manually deletes or un-favorites it — and Favorites do not count against the "keep last N" cap (N non-Favorites + unlimited Favorites). Independent of whether [[Audio recording]] is enabled: a text-only entry can be favorited too.
+
+## History entry
+
+One committed [[Session]]'s record: the transcript (raw / replaced / final), metadata (timestamp, duration, target app, provider), an optional [[Audio recording]], and a [[Favorite]] flag. A [[Cancelled Session]] produces no History entry.
 
 ## Local Engine
 

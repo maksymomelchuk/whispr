@@ -5,7 +5,7 @@ use crate::recorder::Recorder;
 #[cfg(target_os = "macos")]
 use crate::target_app::FrontmostApp;
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tokio::sync::oneshot;
@@ -51,6 +51,16 @@ pub struct AppState {
     pub active_shortcut: Arc<Mutex<Option<Shortcut>>>,
     pub modifiers: Arc<Mutex<ModifierState>>,
     pub ptt_active: Arc<Mutex<bool>>,
+    /// True once the active Session has latched into hands-free recording (a
+    /// flick-tap released the key but recording continues). While set, key
+    /// releases are inert and the next matching press stops the Session.
+    pub ptt_latched: Arc<Mutex<bool>>,
+    /// Instant the current Session's key went down, for the flick-tap vs hold
+    /// decision at release. Set in start_ptt.
+    pub ptt_press_at: Arc<Mutex<Option<Instant>>>,
+    /// Bumped on every start_ptt so a latched recording's runaway-mic guard
+    /// only finalizes the Session it was armed for.
+    pub ptt_session_seq: Arc<AtomicU64>,
     /// Set by the cancel orchestrator when the user presses Escape mid-Session.
     /// Checked by run_session after STT drains to short-circuit cleanup /
     /// paste / history / stats. Cleared at start_ptt.

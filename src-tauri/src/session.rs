@@ -13,10 +13,12 @@ pub(crate) const TRANSCRIPTION_ERROR_EVENT: &str = "transcription-error";
 const SOFT_WARNING_FLASH: Duration = Duration::from_millis(800);
 
 /// Result of a transcription session. `speak_duration` is the time the user
-/// held the key (recording start to stop).
+/// held the key (recording start to stop). `audio` holds the full interleaved
+/// mic buffer at capture rate when recording-to-disk is enabled.
 pub struct SessionOutcome {
     pub transcript: String,
     pub speak_duration: Duration,
+    pub audio: Option<Vec<i16>>,
 }
 
 pub struct Session<E: Engine> {
@@ -24,6 +26,7 @@ pub struct Session<E: Engine> {
     app: AppHandle,
     show_live_preview: bool,
     corrections: Vec<CorrectionEntry>,
+    capture_audio: bool,
 }
 
 impl<E: Engine> Session<E> {
@@ -38,7 +41,15 @@ impl<E: Engine> Session<E> {
             app,
             show_live_preview,
             corrections,
+            capture_audio: false,
         }
+    }
+
+    /// Tee a copy of every mic chunk so the session can be saved as FLAC after
+    /// it finalizes. Off by default to avoid buffering audio nobody keeps.
+    pub fn with_capture_audio(mut self, capture: bool) -> Self {
+        self.capture_audio = capture;
+        self
     }
 
     pub async fn run(
@@ -53,17 +64,23 @@ impl<E: Engine> Session<E> {
         let (close_tx, close_rx) = tokio::sync::oneshot::channel::<Instant>();
 
         let app_meter = self.app.clone();
+        let capture_audio = self.capture_audio;
         let meter_handle = tokio::spawn(async move {
             let mut level_meter = AudioLevelMeter::new();
+            let mut recorded: Option<Vec<i16>> = capture_audio.then(Vec::new);
             while let Some(chunk) = chunks.recv().await {
                 let now = Instant::now();
                 if let Some(level) = level_meter.observe(now, &chunk) {
                     let _ = app_meter.emit(AUDIO_LEVEL_EVENT, level);
                 }
+                if let Some(buffer) = recorded.as_mut() {
+                    buffer.extend_from_slice(&chunk);
+                }
                 let _ = engine_chunk_tx.send(chunk);
             }
             let _ = close_tx.send(Instant::now());
             let _ = app_meter.emit(AUDIO_LEVEL_EVENT, 0.0f32);
+            recorded
         });
 
         let app_preview = self.app.clone();
@@ -84,7 +101,7 @@ impl<E: Engine> Session<E> {
 
         let outcome = self.engine.run(engine_chunk_rx, preview_tx, ctx).await?;
 
-        let _ = meter_handle.await;
+        let audio = meter_handle.await.ok().flatten();
         let _ = preview_handle.await;
 
         let chunks_closed_at = close_rx.await.unwrap_or_else(|_| Instant::now());
@@ -102,6 +119,7 @@ impl<E: Engine> Session<E> {
         Ok(SessionOutcome {
             transcript: outcome.transcript,
             speak_duration,
+            audio,
         })
     }
 }

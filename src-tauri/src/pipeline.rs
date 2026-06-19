@@ -140,6 +140,8 @@ pub fn run_stages(
         app_name: None,
         bundle_id: None,
         context_channels: vec![],
+        has_audio: false,
+        favorite: false,
     };
 
     Outcome {
