@@ -8,7 +8,14 @@ import {
   WarningCircleIcon,
 } from "@phosphor-icons/react";
 import { listen } from "@tauri-apps/api/event";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -44,6 +51,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 import { Chip } from "../components/Chip";
 import { RowCard } from "../components/RowCard";
@@ -469,6 +477,53 @@ function ModeRow({
   );
 }
 
+function FieldLabel({
+  htmlFor,
+  children,
+}: {
+  htmlFor?: string;
+  children: ReactNode;
+}) {
+  return (
+    <Label
+      htmlFor={htmlFor}
+      className="text-[11px] font-medium tracking-[0.2px] text-muted-foreground"
+    >
+      {children}
+    </Label>
+  );
+}
+
+function FieldColumn({
+  label,
+  htmlFor,
+  className,
+  children,
+}: {
+  label: ReactNode;
+  htmlFor?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cn("flex flex-col gap-1.5", className)}>
+      <FieldLabel htmlFor={htmlFor}>{label}</FieldLabel>
+      {children}
+    </div>
+  );
+}
+
+function GroupLabel({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="font-mono text-eyebrow uppercase text-muted-foreground">
+        {children}
+      </span>
+      <div className="h-px flex-1 bg-border/60" />
+    </div>
+  );
+}
+
 function SetMultiSelect({
   label,
   emptyHint,
@@ -494,7 +549,7 @@ function SetMultiSelect({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[13px] text-foreground">{label}</span>
+      <FieldLabel>{label}</FieldLabel>
       {available.length === 0 ? (
         <p className="text-xs text-muted-foreground">{emptyHint}</p>
       ) : (
@@ -791,15 +846,12 @@ export function ModeEditor({
 
   return (
     <>
-      <SheetHeader className="px-4 pt-4 pb-0">
+      <SheetHeader className="px-5 pt-5 pb-0">
         <SheetTitle>{isNew ? "New Profile" : "Edit Profile"}</SheetTitle>
       </SheetHeader>
 
-      <div className="flex flex-col gap-4 px-4 pb-10 overflow-y-scroll flex-1 min-h-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb:hover]:bg-muted-foreground/40">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="mode-name" className="text-[13px]">
-            Name
-          </Label>
+      <div className="flex flex-col gap-6 px-5 pb-10 overflow-y-scroll flex-1 min-h-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb:hover]:bg-muted-foreground/40">
+        <FieldColumn label="Name" htmlFor="mode-name">
           <Input
             id="mode-name"
             value={draft.name}
@@ -807,266 +859,277 @@ export function ModeEditor({
             autoFocus
             placeholder="Profile name"
           />
-        </div>
+        </FieldColumn>
 
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-[13px]">Provider</Label>
-          <Select
-            value={draft.provider_model.provider}
-            onValueChange={(v) => setProvider(v as ProviderModel["provider"])}
-          >
-            <SelectTrigger size="sm" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PROVIDER_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <section className="flex flex-col gap-4">
+          <GroupLabel>Transcription</GroupLabel>
 
-        {draft.provider_model.provider === "groq" && (
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-[13px]">Model</Label>
-            <Select
-              value={draft.provider_model.model}
-              onValueChange={(v) => setGroqModel(v as GroqModel)}
+          <div className="grid grid-cols-2 gap-x-5 gap-y-4">
+            <FieldColumn
+              label="Provider"
+              className={
+                draft.provider_model.provider === "deepgram"
+                  ? "col-span-2"
+                  : undefined
+              }
             >
-              <SelectTrigger size="sm" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {GROQ_MODEL_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {draft.provider_model.provider === "assembly_ai" && (
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-[13px]">Model</Label>
-            <Select
-              value={draft.provider_model.model}
-              onValueChange={(v) => setAssemblyAiModel(v as AssemblyAiModel)}
-            >
-              <SelectTrigger size="sm" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ASSEMBLYAI_MODEL_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {draft.provider_model.provider === "open_ai" && (
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-[13px]">Model</Label>
-            <Select
-              value={draft.provider_model.model}
-              onValueChange={(v) => setOpenAiModel(v as OpenAiTranscribeModel)}
-            >
-              <SelectTrigger size="sm" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {OPENAI_TRANSCRIBE_MODEL_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {draft.provider_model.provider === "eleven_labs" && (
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-[13px]">Model</Label>
-            <Select
-              value={draft.provider_model.model}
-              onValueChange={(v) => setElevenLabsModel(v as ElevenLabsModel)}
-            >
-              <SelectTrigger size="sm" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ELEVENLABS_MODEL_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {draft.provider_model.provider === "soniox" && (
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-[13px]">Translate to</Label>
-            <Select
-              value={draft.provider_model.translate_to ?? SONIOX_VERBATIM}
-              onValueChange={setSonioxTranslateTo}
-            >
-              <SelectTrigger size="sm" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={SONIOX_VERBATIM}>
-                  Off (verbatim — keep code-switching)
-                </SelectItem>
-                {SONIOX_TRANSLATE_LANGUAGES.map((lang) => (
-                  <SelectItem key={lang.code} value={lang.code}>
-                    {lang.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-[12px] text-muted-foreground">
-              Off transcribes verbatim, preserving mixed languages. Selecting a
-              target translates speech into that language as you dictate.
-            </p>
-          </div>
-        )}
-
-        {draft.provider_model.provider === "local" && (
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-[13px]">Model</Label>
-            <Select
-              value={draft.provider_model.model}
-              onValueChange={(v) => setLocalModel(v as LocalWhisperModel)}
-            >
-              <SelectTrigger size="sm" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {LOCAL_MODEL_OPTIONS.map((opt) => {
-                  const downloaded =
-                    localStatuses?.find((s) => s.model === opt.value)
-                      ?.downloaded ?? false;
-                  return (
-                    <SelectItem
-                      key={opt.value}
-                      value={opt.value}
-                      disabled={!downloaded}
-                    >
+              <Select
+                value={draft.provider_model.provider}
+                onValueChange={(v) =>
+                  setProvider(v as ProviderModel["provider"])
+                }
+              >
+                <SelectTrigger size="sm" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PROVIDER_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
                     </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-            {localStatuses !== null &&
-              localStatuses.some((s) => !s.downloaded) && (
-                <p className="text-help text-muted-foreground">
-                  Download models in{" "}
-                  <Link
-                    to="/speech-models"
-                    className="underline hover:text-foreground transition-colors"
-                  >
-                    Speech models
-                  </Link>
-                  .
-                </p>
-              )}
-          </div>
-        )}
+                  ))}
+                </SelectContent>
+              </Select>
+            </FieldColumn>
 
-        <div className="flex flex-col gap-2">
-          <Label className="text-[13px]">Spoken language</Label>
-          <RadioGroup
-            value={langMode}
-            onValueChange={(v) => setLangMode(v as "auto" | "restrict")}
-            className="gap-2"
-          >
-            <Label
-              htmlFor={`lang-auto-${draft.id}`}
-              className="flex items-start gap-2.5 cursor-pointer font-normal"
-            >
-              <RadioGroupItem
-                id={`lang-auto-${draft.id}`}
-                value="auto"
-                className="mt-0.5"
-              />
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[13px]">Auto-detect all languages</span>
-                <span className="text-xs text-muted-foreground">
-                  Let the engine detect the spoken language without
-                  restrictions.
-                </span>
-              </div>
-            </Label>
-            <Label
-              htmlFor={`lang-restrict-${draft.id}`}
-              className="flex items-start gap-2.5 cursor-pointer font-normal"
-            >
-              <RadioGroupItem
-                id={`lang-restrict-${draft.id}`}
-                value="restrict"
-                className="mt-0.5"
-              />
-              <div className="flex flex-col gap-1">
-                <span className="text-[13px]">
-                  Restrict detection to selected languages
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Improve detection by limiting it to one or more expected
-                  languages.
-                </span>
-                {langMode === "restrict" && (
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                    <Select
-                      value=""
-                      onValueChange={(v) => {
-                        if (v) addLangCode(v);
-                      }}
-                    >
-                      <SelectTrigger size="sm" className="w-auto">
-                        <SelectValue placeholder="+ Add language" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {LANGUAGES.filter((l) => {
-                          if (restrictCodes.includes(l.code)) return false;
-                          if (
-                            allowedLanguageCodes !== null &&
-                            !allowedLanguageCodes.includes(l.code)
-                          )
-                            return false;
-                          return true;
-                        }).map((l) => (
-                          <SelectItem key={l.code} value={l.code}>
-                            {l.flag} {l.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {restrictCodes.map((code) => (
-                      <Chip
-                        key={code}
-                        label={langLabel(code)}
-                        removeLabel={`Remove ${langLabel(code)}`}
-                        onRemove={() => removeLangCode(code)}
-                      />
+            {draft.provider_model.provider === "groq" && (
+              <FieldColumn label="Model">
+                <Select
+                  value={draft.provider_model.model}
+                  onValueChange={(v) => setGroqModel(v as GroqModel)}
+                >
+                  <SelectTrigger size="sm" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {GROQ_MODEL_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
                     ))}
-                  </div>
-                )}
-              </div>
-            </Label>
-          </RadioGroup>
-        </div>
+                  </SelectContent>
+                </Select>
+              </FieldColumn>
+            )}
 
-        <div className="flex flex-col gap-2 pt-1">
+            {draft.provider_model.provider === "assembly_ai" && (
+              <FieldColumn label="Model">
+                <Select
+                  value={draft.provider_model.model}
+                  onValueChange={(v) =>
+                    setAssemblyAiModel(v as AssemblyAiModel)
+                  }
+                >
+                  <SelectTrigger size="sm" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ASSEMBLYAI_MODEL_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FieldColumn>
+            )}
+
+            {draft.provider_model.provider === "open_ai" && (
+              <FieldColumn label="Model">
+                <Select
+                  value={draft.provider_model.model}
+                  onValueChange={(v) =>
+                    setOpenAiModel(v as OpenAiTranscribeModel)
+                  }
+                >
+                  <SelectTrigger size="sm" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {OPENAI_TRANSCRIBE_MODEL_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FieldColumn>
+            )}
+
+            {draft.provider_model.provider === "eleven_labs" && (
+              <FieldColumn label="Model">
+                <Select
+                  value={draft.provider_model.model}
+                  onValueChange={(v) =>
+                    setElevenLabsModel(v as ElevenLabsModel)
+                  }
+                >
+                  <SelectTrigger size="sm" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ELEVENLABS_MODEL_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FieldColumn>
+            )}
+
+            {draft.provider_model.provider === "soniox" && (
+              <FieldColumn label="Translate to">
+                <Select
+                  value={draft.provider_model.translate_to ?? SONIOX_VERBATIM}
+                  onValueChange={setSonioxTranslateTo}
+                >
+                  <SelectTrigger size="sm" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={SONIOX_VERBATIM}>
+                      Off (verbatim, keeps code-switching)
+                    </SelectItem>
+                    {SONIOX_TRANSLATE_LANGUAGES.map((lang) => (
+                      <SelectItem key={lang.code} value={lang.code}>
+                        {lang.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FieldColumn>
+            )}
+
+            {draft.provider_model.provider === "local" && (
+              <FieldColumn label="Model">
+                <Select
+                  value={draft.provider_model.model}
+                  onValueChange={(v) => setLocalModel(v as LocalWhisperModel)}
+                >
+                  <SelectTrigger size="sm" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LOCAL_MODEL_OPTIONS.map((opt) => {
+                      const downloaded =
+                        localStatuses?.find((s) => s.model === opt.value)
+                          ?.downloaded ?? false;
+                      return (
+                        <SelectItem
+                          key={opt.value}
+                          value={opt.value}
+                          disabled={!downloaded}
+                        >
+                          {opt.label}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+                {localStatuses !== null &&
+                  localStatuses.some((s) => !s.downloaded) && (
+                    <p className="text-help text-muted-foreground">
+                      Download models in{" "}
+                      <Link
+                        to="/speech-models"
+                        className="underline hover:text-foreground transition-colors"
+                      >
+                        Speech models
+                      </Link>
+                      .
+                    </p>
+                  )}
+              </FieldColumn>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <FieldLabel>Spoken language</FieldLabel>
+            <RadioGroup
+              value={langMode}
+              onValueChange={(v) => setLangMode(v as "auto" | "restrict")}
+              className="gap-2"
+            >
+              <Label
+                htmlFor={`lang-auto-${draft.id}`}
+                className="flex items-start gap-2.5 cursor-pointer font-normal"
+              >
+                <RadioGroupItem
+                  id={`lang-auto-${draft.id}`}
+                  value="auto"
+                  className="mt-0.5"
+                />
+                <span className="text-[13px]">Auto-detect all languages</span>
+              </Label>
+              <Label
+                htmlFor={`lang-restrict-${draft.id}`}
+                className="flex items-start gap-2.5 cursor-pointer font-normal"
+              >
+                <RadioGroupItem
+                  id={`lang-restrict-${draft.id}`}
+                  value="restrict"
+                  className="mt-0.5"
+                />
+                <div className="flex flex-col gap-1">
+                  <span className="text-[13px]">
+                    Restrict detection to selected languages
+                  </span>
+                  {langMode === "restrict" && (
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                      <Select
+                        value=""
+                        onValueChange={(v) => {
+                          if (v) addLangCode(v);
+                        }}
+                      >
+                        <SelectTrigger size="sm" className="w-auto">
+                          <SelectValue placeholder="+ Add language" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {LANGUAGES.filter((l) => {
+                            if (restrictCodes.includes(l.code)) return false;
+                            if (
+                              allowedLanguageCodes !== null &&
+                              !allowedLanguageCodes.includes(l.code)
+                            )
+                              return false;
+                            return true;
+                          }).map((l) => (
+                            <SelectItem key={l.code} value={l.code}>
+                              {l.flag} {l.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {restrictCodes.map((code) => (
+                        <Chip
+                          key={code}
+                          label={langLabel(code)}
+                          removeLabel={`Remove ${langLabel(code)}`}
+                          onRemove={() => removeLangCode(code)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Label>
+            </RadioGroup>
+          </div>
+
+          <SetMultiSelect
+            label="Term sets"
+            emptyHint="No term sets. Create one on the Terms page."
+            addPlaceholder="+ Add term set"
+            available={availableTermSets}
+            selectedIds={draft.term_set_ids}
+            onAdd={(id) => toggleTermSet(id, true)}
+            onRemove={(id) => toggleTermSet(id, false)}
+          />
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <GroupLabel>Cleanup</GroupLabel>
           <ToggleRow
             id="cleanup"
             label="AI cleanup"
@@ -1081,16 +1144,13 @@ export function ModeEditor({
           />
           {draft.ai_cleanup.enabled && (
             <>
-              <div className="flex flex-col gap-2">
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-xs text-muted-foreground/70">
-                    Provider
-                  </span>
+              <div className="grid grid-cols-2 gap-x-5 gap-y-4">
+                <FieldColumn label="Provider">
                   <Select
                     value={draft.ai_cleanup.provider}
                     onValueChange={(v) => setCleanupProvider(v as AiProviderId)}
                   >
-                    <SelectTrigger size="sm">
+                    <SelectTrigger size="sm" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1103,17 +1163,14 @@ export function ModeEditor({
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
+                </FieldColumn>
                 {cleanupProvider !== "custom" ? (
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-xs text-muted-foreground/70">
-                      Model
-                    </span>
+                  <FieldColumn label="Model">
                     <Select
                       value={draft.ai_cleanup.model}
                       onValueChange={setCleanupModel}
                     >
-                      <SelectTrigger size="sm">
+                      <SelectTrigger size="sm" className="w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1121,7 +1178,7 @@ export function ModeEditor({
                           <SelectItem key={opt.value} value={opt.value}>
                             {opt.label}
                             {opt.recommended && (
-                              <span className="ml-1.5 text-muted-foreground/70">
+                              <span className="ml-1.5 text-muted-foreground">
                                 (recommended)
                               </span>
                             )}
@@ -1129,19 +1186,16 @@ export function ModeEditor({
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
+                  </FieldColumn>
                 ) : (
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-xs text-muted-foreground/70">
-                      Model
-                    </span>
-                    <p className="text-xs text-muted-foreground">
-                      {customProviderModel || "(blank — single-model server)"}
+                  <FieldColumn label="Model">
+                    <p className="text-[13px] text-muted-foreground">
+                      {customProviderModel || "(blank: single-model server)"}
                     </p>
-                    <p className="text-xs text-muted-foreground/60">
+                    <p className="text-xs text-muted-foreground">
                       Configured on the Custom card under Cleanup.
                     </p>
-                  </div>
+                  </FieldColumn>
                 )}
               </div>
               <Collapsible
@@ -1167,54 +1221,42 @@ export function ModeEditor({
                 </CollapsibleContent>
               </Collapsible>
               <ToggleRow
+                id="context-capture"
+                label="Context awareness"
+                info="When on, nearby context is sent to your AI provider for spelling and disambiguation: selected text, the focused field, on-screen window text, and your most recently copied text (copied within ~10s before, or during, dictation). Secure password fields are never read, and clipboard items that password managers tag as concealed are skipped, but other recently copied text, including secrets, may be read, so avoid copying sensitive values right before dictating. Context is used only for that cleanup and is never stored."
+                checked={draft.ai_cleanup.context_capture_enabled}
+                onCheckedChange={setContextCaptureEnabled}
+              />
+              <ToggleRow
                 id="paste-raw-on-failure"
                 label="Paste raw on failure"
                 info="When off, cleanup failures copy the raw transcript to clipboard instead of pasting it into the target app."
                 checked={draft.ai_cleanup.paste_raw_on_failure}
                 onCheckedChange={setPasteRawOnFailure}
-              />
-              <ToggleRow
-                id="context-capture"
-                label="Context awareness"
-                info="When on, nearby context is sent to your AI provider for spelling and disambiguation: selected text, the focused field, on-screen window text, and your most recently copied text (copied within ~10s before, or during, dictation). Secure password fields are never read, and clipboard items that password managers tag as concealed are skipped — but other recently copied text, including secrets, may be read, so avoid copying sensitive values right before dictating. Context is used only for that cleanup and is never stored."
-                checked={draft.ai_cleanup.context_capture_enabled}
-                onCheckedChange={setContextCaptureEnabled}
+                className="mt-0! border-t-0! pt-0!"
               />
             </>
           )}
-          <div className="flex items-center gap-3 mt-3 mb-1">
-            <span className="text-eyebrow uppercase text-muted-foreground/70">
-              Augment
-            </span>
-            <div className="flex-1 h-px bg-border/60" />
-          </div>
-          <SetMultiSelect
-            label="Term sets"
-            emptyHint="No term sets — create one in the Terms page."
-            addPlaceholder="+ Add term set"
-            available={availableTermSets}
-            selectedIds={draft.term_set_ids}
-            onAdd={(id) => toggleTermSet(id, true)}
-            onRemove={(id) => toggleTermSet(id, false)}
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <GroupLabel>Augment</GroupLabel>
+          <ToggleRow
+            id="snippets"
+            label="Use snippets"
+            checked={draft.use_snippets}
+            onCheckedChange={setUseSnippets}
           />
           <SetMultiSelect
             label="Correction sets"
-            emptyHint="No correction sets — create one in the Corrections page."
+            emptyHint="No correction sets. Create one on the Corrections page."
             addPlaceholder="+ Add correction set"
             available={correctionSets}
             selectedIds={draft.correction_set_ids}
             onAdd={(id) => toggleCorrectionSet(id, true)}
             onRemove={(id) => toggleCorrectionSet(id, false)}
           />
-          <div className="mt-2 pt-3 border-t border-border/60">
-            <ToggleRow
-              id="snippets"
-              label="Use snippets"
-              checked={draft.use_snippets}
-              onCheckedChange={setUseSnippets}
-            />
-          </div>
-        </div>
+        </section>
       </div>
 
       {isNew && (
@@ -1388,7 +1430,10 @@ export function ModesPage() {
         open={editor !== null}
         onOpenChange={(open) => !open && closeEditor()}
       >
-        <SheetContent side="right" className="flex flex-col gap-4">
+        <SheetContent
+          side="right"
+          className="flex w-[min(92vw,720px)] flex-col gap-4"
+        >
           {editor && (
             <ModeEditor
               key={editor.mode.id}

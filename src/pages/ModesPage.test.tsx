@@ -755,7 +755,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
       />,
     );
     expect(
-      screen.getByText("(blank — single-model server)"),
+      screen.getByText("(blank: single-model server)"),
     ).toBeInTheDocument();
   });
 
