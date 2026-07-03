@@ -647,13 +647,13 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         enabled: true,
         prompt_override: null,
         provider: "groq",
-        model: "llama-3.1-8b-instant",
+        model: "openai/gpt-oss-120b",
         paste_raw_on_failure: true,
         context_capture_enabled: false,
       },
     };
     render(<EditorWrapper mode={groqMode} configuredProviders={["groq"]} />);
-    expect(screen.getByText("Llama 3.1 8B")).toBeInTheDocument();
+    expect(screen.getByText("GPT-OSS 120B")).toBeInTheDocument();
   });
 
   it("shows selected model value when AI cleanup is enabled with DeepSeek", () => {

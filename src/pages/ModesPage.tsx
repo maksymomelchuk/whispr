@@ -283,9 +283,7 @@ const CLEANUP_MODEL_OPTIONS: Record<
       recommended: true,
     },
     { value: "openai/gpt-oss-20b", label: "GPT-OSS 20B" },
-    { value: "qwen/qwen3-32b", label: "Qwen3 32B" },
-    { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B" },
-    { value: "llama-3.1-8b-instant", label: "Llama 3.1 8B" },
+    { value: "qwen/qwen3.6-27b", label: "Qwen3.6 27B" },
   ],
   deepseek: [
     {
