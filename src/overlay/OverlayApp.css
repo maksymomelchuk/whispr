@@ -197,6 +197,26 @@ body:has(.overlay-root) {
   }
 }
 
+.overlay-sparkle {
+  display: block;
+  flex-shrink: 0;
+  color: #b6c8ff;
+  transform-origin: 50% 50%;
+  animation: overlay-sparkle-twinkle 1.3s ease-in-out infinite;
+}
+
+@keyframes overlay-sparkle-twinkle {
+  0%,
+  100% {
+    transform: scale(0.82);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .overlay-pill {
     transition: none;
@@ -207,5 +227,8 @@ body:has(.overlay-root) {
   }
   .overlay-spinner {
     animation-duration: 3s;
+  }
+  .overlay-sparkle {
+    animation: none;
   }
 }

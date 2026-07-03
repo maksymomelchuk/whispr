@@ -5,7 +5,7 @@ import { formatClock } from "@/lib/formatDuration";
 
 import "./OverlayApp.css";
 
-type Mode = "recording" | "thinking" | "error" | "cancelled";
+type Mode = "recording" | "transcribing" | "cleaning" | "error" | "cancelled";
 
 type TargetApp = {
   bundleId: string;
@@ -44,6 +44,24 @@ function Spinner() {
           transform={`rotate(${i * (360 / SPINNER_TICKS)} 12 12)`}
         />
       ))}
+    </svg>
+  );
+}
+
+function Sparkle() {
+  return (
+    <svg
+      className="overlay-sparkle"
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        fill="currentColor"
+        d="M12 1c.6 5.7 5.3 10.4 11 11-5.7.6-10.4 5.3-11 11-.6-5.7-5.3-10.4-11-11 5.7-.6 10.4-5.3 11-11Z"
+      />
     </svg>
   );
 }
@@ -183,11 +201,11 @@ export function OverlayApp() {
       // overlay still shows the recording state through STT drain and any
       // translation step, which looks like recording never stopped.
       listen("ptt-released", () => {
-        setMode("thinking");
+        setMode("transcribing");
         setPartial("");
       }),
       listen("ptt-thinking", () => {
-        setMode("thinking");
+        setMode("cleaning");
         setPartial("");
       }),
       listen("ptt-error", () => {
@@ -246,7 +264,8 @@ export function OverlayApp() {
             </span>
           </div>
           {mode === "recording" && <Waveform levelRef={waveRef} />}
-          {mode === "thinking" && <Spinner />}
+          {mode === "transcribing" && <Spinner />}
+          {mode === "cleaning" && <Sparkle />}
           {mode === "error" && <ErrorIcon />}
           {mode === "cancelled" && <CancelIcon />}
         </div>
