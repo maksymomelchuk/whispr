@@ -114,6 +114,7 @@ jobs:
       # prebuilt ONNX Runtime binaries from.
       - name: Test Rust
         working-directory: src-tauri
+        shell: bash
         run: |
           for attempt in 1 2 3; do
             cargo test && exit 0
