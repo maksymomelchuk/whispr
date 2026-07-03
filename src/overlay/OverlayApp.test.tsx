@@ -53,10 +53,10 @@ describe("OverlayApp", () => {
     expect(container.querySelector(".overlay-wave")).not.toBeInTheDocument();
   });
 
-  it("ptt-thinking shows spinner and hides waveform", async () => {
+  it("ptt-thinking shows sparkle and hides waveform", async () => {
     const { container } = await renderAndSettle();
     fire("ptt-thinking");
-    expect(container.querySelector(".overlay-spinner")).toBeInTheDocument();
+    expect(container.querySelector(".overlay-sparkle")).toBeInTheDocument();
     expect(container.querySelector(".overlay-wave")).not.toBeInTheDocument();
   });
 
@@ -98,9 +98,9 @@ describe("OverlayApp", () => {
   it("overlay-reset returns to recording mode and shows waveform", async () => {
     const { container } = await renderAndSettle();
     fire("ptt-thinking");
-    expect(container.querySelector(".overlay-spinner")).toBeInTheDocument();
+    expect(container.querySelector(".overlay-sparkle")).toBeInTheDocument();
     fire("overlay-reset");
     expect(container.querySelector(".overlay-wave")).toBeInTheDocument();
-    expect(container.querySelector(".overlay-spinner")).not.toBeInTheDocument();
+    expect(container.querySelector(".overlay-sparkle")).not.toBeInTheDocument();
   });
 });
