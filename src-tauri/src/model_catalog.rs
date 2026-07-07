@@ -12,18 +12,18 @@ const LARGE_V3_SIZE_BYTES: u64 = 3_095_033_483;
 const LARGE_V3_TURBO_SIZE_BYTES: u64 = 1_624_555_275;
 
 const PARAKEET_BASE_URL: &str =
-    "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/main";
+    "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main";
 const PARAKEET_ENCODER_SHA256: &str =
-    "3e0581fda6ab843888b51e56d7ee78b6d5bc3237ec113af1f732d1d5286aa155";
+    "6139d2fa7e1b086097b277c7149725edbab89cc7c7ae64b23c741be4055aff09";
 const PARAKEET_DECODER_SHA256: &str =
-    "a449f49acd68979d418651dd2dcb737cc0f1bf0225e009e29ee326354edbf7d3";
+    "eea7483ee3d1a30375daedc8ed83e3960c91b098812127a0d99d1c8977667a70";
 const PARAKEET_VOCAB_SHA256: &str =
-    "ec182b70dd42113aff6c5372c75cac58c952443eb22322f57bbd7f53977d497d";
+    "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d";
 const PARAKEET_PREPROCESSOR_SHA256: &str =
     "a9fde1486ebfcc08f328d75ad4610c67835fea58c73ba57e3209a6f6cf019e9f";
-const PARAKEET_ENCODER_SIZE_BYTES: u64 = 652_184_014;
-const PARAKEET_DECODER_SIZE_BYTES: u64 = 8_998_286;
-const PARAKEET_VOCAB_SIZE_BYTES: u64 = 9_384;
+const PARAKEET_ENCODER_SIZE_BYTES: u64 = 652_183_999;
+const PARAKEET_DECODER_SIZE_BYTES: u64 = 18_202_004;
+const PARAKEET_VOCAB_SIZE_BYTES: u64 = 93_939;
 const PARAKEET_PREPROCESSOR_SIZE_BYTES: u64 = 139_764;
 
 pub struct ModelFile {
