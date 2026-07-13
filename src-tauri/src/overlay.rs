@@ -44,7 +44,35 @@ pub fn create(app: &AppHandle) -> Result<(), String> {
     // steal focus when shown.
     let _ = window.set_ignore_cursor_events(true);
     reposition(&window);
+
+    #[cfg(target_os = "macos")]
+    pin_over_fullscreen_spaces(&window);
+
     Ok(())
+}
+
+/// `visible_on_all_workspaces` only sets `CanJoinAllSpaces`, which does not
+/// cover a window that owns its Space in native full-screen — over such an app
+/// the pill would otherwise render behind it and stay invisible. Adding
+/// `FullScreenAuxiliary` lets the pill draw into that Space; the status level
+/// keeps it above the Dock and the app's own windows. Set once at create: the
+/// window keeps these until it's destroyed.
+#[cfg(target_os = "macos")]
+fn pin_over_fullscreen_spaces(window: &WebviewWindow) {
+    use objc2_app_kit::{NSStatusWindowLevel, NSWindow, NSWindowCollectionBehavior};
+
+    let Ok(ptr) = window.ns_window() else {
+        return;
+    };
+    // SAFETY: tauri returns this webview's live NSWindow, and create() runs on
+    // the main thread — the only thread AppKit permits these calls from.
+    let ns_window: &NSWindow = unsafe { &*(ptr as *const NSWindow) };
+
+    ns_window.setLevel(NSStatusWindowLevel);
+    let behavior = ns_window.collectionBehavior()
+        | NSWindowCollectionBehavior::CanJoinAllSpaces
+        | NSWindowCollectionBehavior::FullScreenAuxiliary;
+    ns_window.setCollectionBehavior(behavior);
 }
 
 /// Recalculate position on the primary monitor's bottom center. Called both
