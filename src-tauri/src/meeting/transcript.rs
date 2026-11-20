@@ -262,4 +262,19 @@ mod tests {
 
         assert_eq!(render(&segments), "[1:02:05] You: Late");
     }
+
+    #[test]
+    fn notes_input_leaves_out_echo_lines() {
+        let line = |speaker: &str, echo: bool| Segment {
+            start_ms: 0,
+            end_ms: 1_000,
+            speaker: speaker.into(),
+            text: "Ship it.".into(),
+            echo,
+        };
+
+        let rendered = render_without_echoes(&[line("Them", false), line("You", true)]);
+
+        assert_eq!(rendered, "[00:00] Them: Ship it.");
+    }
 }
