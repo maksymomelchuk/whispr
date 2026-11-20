@@ -49,7 +49,6 @@ export function filterLines(
   );
 }
 
-/** Call-side speaker labels in order of first appearance. */
 export function remoteSpeakerLabels(segments: MeetingSegment[]): string[] {
   const labels = segments
     .map((segment) => segment.speaker)

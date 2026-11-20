@@ -174,8 +174,6 @@ impl MeetingStore {
         })
     }
 
-    /// Names a call-side speaker, or restores its label when `name` is blank,
-    /// and carries the change into the notes.
     pub fn rename_speaker(&self, id: &str, label: &str, name: &str) -> Result<(), String> {
         let meeting = self.load(id)?;
         let known_remote_label = label != MIC_SPEAKER_LABEL
