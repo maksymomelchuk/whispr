@@ -64,6 +64,8 @@ export function MeetingTranscript({ meeting }: { meeting: Meeting }) {
           <Input
             type="search"
             autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search transcript"
