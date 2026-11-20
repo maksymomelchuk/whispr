@@ -1,14 +1,16 @@
-import { CopyIcon, TrashIcon } from "@phosphor-icons/react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useMeetingsSubscription } from "@/hooks/useMeetings";
-import { deleteMeeting, getMeeting, retryMeeting } from "@/lib/api";
-import type { Meeting } from "@/lib/types";
+import { getMeeting, retryMeeting } from "@/lib/api";
+import type { Meeting, MeetingStatus } from "@/lib/types";
 
-import { formatMeetingStart } from "./meetingFormat";
+import { CopyNotesButton, DeleteMeetingButton } from "./MeetingActions";
+import { formatMeetingStart, meetingTitle } from "./meetingFormat";
+import { MeetingNotes } from "./MeetingNotes";
+import { ProcessingProgress, RecordingPlaceholder } from "./MeetingProgress";
 import { MeetingTranscript } from "./MeetingTranscript";
 
 type View = "notes" | "transcript";
@@ -24,15 +26,8 @@ function useMeeting(id: string) {
   return meeting;
 }
 
-function StatusMessage({ meeting }: { meeting: Meeting }) {
+function FailedMessage({ meeting }: { meeting: Meeting }) {
   const { status } = meeting.meta;
-  if (status.kind === "transcribing" || status.kind === "summarizing") {
-    return (
-      <p className="text-sm text-muted-foreground">
-        {status.kind === "transcribing" ? "Transcribing…" : "Writing notes…"}
-      </p>
-    );
-  }
   if (status.kind !== "failed") return null;
   const retry = () =>
     retryMeeting(meeting.meta.id).catch((err) => toast.error(String(err)));
@@ -48,33 +43,41 @@ function StatusMessage({ meeting }: { meeting: Meeting }) {
   );
 }
 
-export function MeetingDetail({
-  id,
-  onDeleted,
-}: {
-  id: string;
-  onDeleted: () => void;
-}) {
-  const meeting = useMeeting(id);
-  const [view, setView] = useState<View>("notes");
-  if (!meeting) return null;
-
-  const copyNotes = () =>
-    navigator.clipboard
-      .writeText(meeting.notes ?? "")
-      .then(() => toast.success("Notes copied"))
-      .catch((err) => toast.error(`Copy failed: ${String(err)}`));
-  const remove = () =>
-    deleteMeeting(id)
-      .then(onDeleted)
-      .catch((err) => toast.error(String(err)));
-
+function DetailHeading({ meeting }: { meeting: Meeting }) {
+  const { started_at } = meeting.meta;
   return (
-    <section className="flex min-w-0 flex-col gap-4">
-      <header className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">
-          {formatMeetingStart(meeting.meta.started_at)}
-        </h2>
+    <div className="flex min-w-0 flex-col">
+      <h2 className="text-lg font-semibold">
+        {meetingTitle(meeting.title, started_at)}
+      </h2>
+      {meeting.title && (
+        <span className="text-xs text-muted-foreground">
+          {formatMeetingStart(started_at)}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function InProgressBody({ meeting }: { meeting: Meeting }) {
+  if (meeting.meta.status.kind === "recording") {
+    return <RecordingPlaceholder meeting={meeting.meta} />;
+  }
+  return <ProcessingProgress meeting={meeting.meta} />;
+}
+
+function FinishedDetail({
+  meeting,
+  onDelete,
+}: {
+  meeting: Meeting;
+  onDelete: (id: string) => void;
+}) {
+  const [view, setView] = useState<View>("notes");
+  return (
+    <>
+      <header className="flex flex-wrap items-start justify-between gap-2">
+        <DetailHeading meeting={meeting} />
         <div className="flex gap-1">
           {(["notes", "transcript"] as const).map((option) => (
             <Button
@@ -86,32 +89,50 @@ export function MeetingDetail({
               {option === "notes" ? "Notes" : "Transcript"}
             </Button>
           ))}
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            onClick={copyNotes}
-            disabled={!meeting.notes}
-            aria-label="Copy notes"
-          >
-            <CopyIcon />
-          </Button>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            onClick={remove}
-            aria-label="Delete meeting"
-          >
-            <TrashIcon />
-          </Button>
+          <CopyNotesButton notes={meeting.notes} />
+          <DeleteMeetingButton
+            title={meetingTitle(meeting.title, meeting.meta.started_at)}
+            onDelete={() => onDelete(meeting.meta.id)}
+          />
         </div>
       </header>
-      <StatusMessage meeting={meeting} />
+      <FailedMessage meeting={meeting} />
       {view === "notes" && meeting.notes && (
-        <div className="whitespace-pre-wrap text-sm leading-relaxed">
-          {meeting.notes}
-        </div>
+        <MeetingNotes notes={meeting.notes} hasTitle={meeting.title !== null} />
       )}
       {view === "transcript" && <MeetingTranscript meeting={meeting} />}
+    </>
+  );
+}
+
+const IN_PROGRESS_STATUSES = new Set<MeetingStatus["kind"]>([
+  "recording",
+  "transcribing",
+  "summarizing",
+]);
+
+export function MeetingDetail({
+  id,
+  onDelete,
+}: {
+  id: string;
+  onDelete: (id: string) => void;
+}) {
+  const meeting = useMeeting(id);
+  if (!meeting) return null;
+
+  return (
+    <section className="flex min-w-0 flex-col gap-4">
+      {IN_PROGRESS_STATUSES.has(meeting.meta.status.kind) ? (
+        <>
+          <header>
+            <DetailHeading meeting={meeting} />
+          </header>
+          <InProgressBody meeting={meeting} />
+        </>
+      ) : (
+        <FinishedDetail meeting={meeting} onDelete={onDelete} />
+      )}
     </section>
   );
 }

@@ -36,7 +36,7 @@ impl ProcessingConfig {
             return Err(format!(
                 "Meeting notes are set to use {}, which isn't set up yet — connect it on the \
                  Cleanup page or pick another provider.",
-                provider.as_str()
+                provider.display_name()
             ));
         }
         Ok(Self {

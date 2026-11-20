@@ -93,6 +93,21 @@ pub struct Meeting {
     pub meta: MeetingMeta,
     pub segments: Vec<Segment>,
     pub notes: Option<String>,
+    pub title: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MeetingListItem {
+    #[serde(flatten)]
+    pub meta: MeetingMeta,
+    pub title: Option<String>,
+}
+
+/// Notes open with a `# title` line; anything else leaves the meeting untitled.
+pub fn notes_title(notes: &str) -> Option<String> {
+    let first_line = notes.lines().map(str::trim).find(|line| !line.is_empty())?;
+    let title = first_line.strip_prefix("# ")?.trim();
+    (!title.is_empty()).then(|| title.to_string())
 }
 
 /// On-disk layout: one directory per meeting holding its metadata, the raw
@@ -160,6 +175,20 @@ impl MeetingStore {
         metas
     }
 
+    pub fn list_items(&self) -> Vec<MeetingListItem> {
+        self.list()
+            .into_iter()
+            .map(|meta| {
+                let title = read_optional(&self.meeting_dir(&meta.id).join(NOTES_FILE))
+                    .inspect_err(|e| eprintln!("[meeting] untitled, notes unreadable: {e}"))
+                    .ok()
+                    .flatten()
+                    .and_then(|notes| notes_title(&notes));
+                MeetingListItem { meta, title }
+            })
+            .collect()
+    }
+
     pub fn load(&self, id: &str) -> Result<Meeting, String> {
         let dir = self.meeting_dir(id);
         let transcript = read_optional(&dir.join(TRANSCRIPT_FILE))?;
@@ -169,12 +198,14 @@ impl MeetingStore {
             }
             None => Vec::new(),
         };
+        let notes = read_optional(&dir.join(NOTES_FILE))?;
         Ok(Meeting {
             meta: self.load_meta(id)?,
             // Re-flagged on every load so transcripts saved before echo
             // detection existed get it too.
             segments: flag_echoes(segments),
-            notes: read_optional(&dir.join(NOTES_FILE))?,
+            title: notes.as_deref().and_then(notes_title),
+            notes,
         })
     }
 
@@ -383,5 +414,40 @@ mod tests {
             .collect();
 
         assert_eq!(echoes, vec![false, true]);
+    }
+
+    #[test]
+    fn title_comes_from_the_leading_heading_of_the_notes() {
+        assert_eq!(
+            notes_title("\n# Beta launch sync\n\n## TL;DR\n- ship").as_deref(),
+            Some("Beta launch sync")
+        );
+    }
+
+    #[test]
+    fn notes_without_a_leading_heading_are_untitled() {
+        assert_eq!(notes_title("## TL;DR\n# Not first"), None);
+        assert_eq!(notes_title("#   "), None);
+    }
+
+    #[test]
+    fn list_items_carry_each_meetings_title() {
+        let root = tempfile::tempdir().unwrap();
+        let store = MeetingStore::new(root.path().to_path_buf());
+        store
+            .create(&meta("titled", 2, MeetingStatus::Ready))
+            .unwrap();
+        store
+            .create(&meta("recording", 1, MeetingStatus::Recording))
+            .unwrap();
+        store.save_notes("titled", "# Weekly sync\n- item").unwrap();
+
+        let titles: Vec<Option<String>> = store
+            .list_items()
+            .into_iter()
+            .map(|item| item.title)
+            .collect();
+
+        assert_eq!(titles, vec![Some("Weekly sync".to_string()), None]);
     }
 }

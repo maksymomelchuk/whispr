@@ -33,6 +33,19 @@ impl AiProviderId {
         }
     }
 
+    pub fn display_name(self) -> &'static str {
+        match self {
+            AiProviderId::Anthropic => "Anthropic",
+            AiProviderId::OpenAi => "OpenAI",
+            AiProviderId::Google => "Google Gemini",
+            AiProviderId::Groq => "Groq",
+            AiProviderId::DeepSeek => "DeepSeek",
+            AiProviderId::Cerebras => "Cerebras",
+            AiProviderId::OpenRouter => "OpenRouter",
+            AiProviderId::Custom => "your custom provider",
+        }
+    }
+
     /// `/chat/completions` endpoint for the built-in OpenAI-compatible providers.
     /// Anthropic uses its native Messages API and Custom uses a user-supplied
     /// base URL, so both are routed before reaching here; they map to the OpenAI

@@ -13,7 +13,9 @@ type Mode =
   | "cancelled"
   | "notice";
 
-type OverlayNotice = { text: string; is_error: boolean };
+type NoticeKind = "meeting_started" | "meeting_stopped" | "error";
+
+type OverlayNotice = { text: string; kind: NoticeKind };
 
 type TargetApp = {
   bundleId: string;
@@ -112,6 +114,53 @@ function ErrorIcon() {
   );
 }
 
+function RecordDot() {
+  return <span className="overlay-record-dot" aria-hidden="true" />;
+}
+
+function CheckMark() {
+  return (
+    <svg
+      className="overlay-check-icon"
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        d="M5 12.5 L10 17.5 L19 7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function NoticePill({
+  text,
+  kind,
+  ready,
+}: {
+  text: string;
+  kind: NoticeKind;
+  ready: boolean;
+}) {
+  return (
+    <div className="overlay-root">
+      <div className={`overlay-pill notice${ready ? " ready" : ""}`}>
+        <div className="overlay-notice">
+          {kind === "meeting_started" ? <RecordDot /> : <CheckMark />}
+          <span className="overlay-notice-text">{text}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const BAR_COUNT = 5;
 const BAR_MIN_HEIGHT = 4;
 const BAR_MAX_HEIGHT = 16;
@@ -136,6 +185,7 @@ export function OverlayApp() {
   const [mode, setMode] = useState<Mode>("recording");
   const [partial, setPartial] = useState<string>("");
   const [notice, setNotice] = useState<string>("");
+  const [noticeKind, setNoticeKind] = useState<NoticeKind>("meeting_started");
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [ready, setReady] = useState(false);
@@ -232,7 +282,8 @@ export function OverlayApp() {
       listen<OverlayNotice>("overlay-notice", (e) => {
         resetSession();
         setNotice(e.payload.text);
-        setMode(e.payload.is_error ? "error" : "notice");
+        setNoticeKind(e.payload.kind);
+        setMode(e.payload.kind === "error" ? "error" : "notice");
       }),
     ])
       .then((handles) => {
@@ -256,6 +307,10 @@ export function OverlayApp() {
     if (trimmedPartial.length <= PREVIEW_WINDOW) return trimmedPartial;
     return "…" + trimmedPartial.slice(-PREVIEW_WINDOW);
   }, [showNotice, notice, showPreview, trimmedPartial]);
+
+  if (mode === "notice") {
+    return <NoticePill text={notice} kind={noticeKind} ready={ready} />;
+  }
 
   return (
     <div className="overlay-root">
@@ -286,7 +341,6 @@ export function OverlayApp() {
             </span>
           </div>
           {mode === "recording" && <Waveform levelRef={waveRef} />}
-          {mode === "notice" && <Sparkle />}
           {mode === "transcribing" && <Spinner />}
           {mode === "cleaning" && <Sparkle />}
           {mode === "error" && <ErrorIcon />}

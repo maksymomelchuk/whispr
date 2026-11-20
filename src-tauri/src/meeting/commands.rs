@@ -1,7 +1,8 @@
 use super::capture;
 use super::processing::{self, ProcessingConfig};
 use super::store::{
-    new_meeting_id, validate_meeting_id, Meeting, MeetingMeta, MeetingStatus, MeetingStore,
+    new_meeting_id, validate_meeting_id, Meeting, MeetingListItem, MeetingMeta, MeetingStatus,
+    MeetingStore,
 };
 use super::summary::MeetingSummarySettings;
 use crate::config;
@@ -159,8 +160,8 @@ fn spawn_processing(app: AppHandle, store: MeetingStore, id: String) {
 }
 
 #[tauri::command]
-pub fn list_meetings(app: AppHandle) -> Result<Vec<MeetingMeta>, String> {
-    Ok(meeting_store(&app)?.list())
+pub fn list_meetings(app: AppHandle) -> Result<Vec<MeetingListItem>, String> {
+    Ok(meeting_store(&app)?.list_items())
 }
 
 #[tauri::command]

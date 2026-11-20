@@ -1,7 +1,7 @@
 import { formatClock } from "@/lib/formatDuration";
-import type { MeetingStatus } from "@/lib/types";
+import type { MeetingMeta, MeetingStatus } from "@/lib/types";
 
-const MS_PER_SECOND = 1000;
+export const MS_PER_SECOND = 1000;
 const SECONDS_PER_MINUTE = 60;
 const SECONDS_PER_HOUR = 3600;
 
@@ -12,6 +12,17 @@ export function formatMeetingStart(startedAtSeconds: number): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+export function meetingTitle(
+  title: string | null,
+  startedAtSeconds: number,
+): string {
+  return title ?? formatMeetingStart(startedAtSeconds);
+}
+
+export function meetingStoppedAtMs(meta: MeetingMeta): number {
+  return meta.started_at * MS_PER_SECOND + meta.duration_ms;
 }
 
 export function formatMeetingDuration(durationMs: number): string {

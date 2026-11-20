@@ -14,6 +14,7 @@ import type {
   LocalWhisperIdleTimeout,
   LocalWhisperModel,
   Meeting,
+  MeetingListItem,
   MeetingMeta,
   MeetingSummarySettings,
   Mode,
@@ -276,7 +277,7 @@ export const stopMeeting = () => invoke<void>("stop_meeting");
 export const retryMeeting = (id: string) =>
   invoke<void>("retry_meeting", { id });
 
-export const listMeetings = () => invoke<MeetingMeta[]>("list_meetings");
+export const listMeetings = () => invoke<MeetingListItem[]>("list_meetings");
 
 export const getMeeting = (id: string) =>
   invoke<Meeting>("get_meeting", { id });

@@ -1,50 +1,46 @@
-import { RecordIcon, StopIcon } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
+import { RecordIcon, StopIcon, WarningIcon } from "@phosphor-icons/react";
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
-import {
-  AiProviderModelPicker,
-  configuredAiProviders,
-  type AiProviderModel,
-} from "@/components/AiProviderModelPicker";
 import { ShortcutKeycaps } from "@/components/Keycap";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useSettings } from "@/context/SettingsContext";
-import { setMeetingSummary, startMeeting, stopMeeting } from "@/lib/api";
+import { startMeeting, stopMeeting } from "@/lib/api";
 import { isMeetingToggleBinding, type MeetingMeta } from "@/lib/types";
 
-import { formatMeetingDuration } from "./meetingFormat";
+import { formatMeetingDuration, MS_PER_SECOND } from "./meetingFormat";
+import { NotesModelPicker } from "./NotesModelPicker";
+import { useElapsedMs } from "./useElapsedMs";
+import {
+  useMissingMeetingSetup,
+  type MissingSetupStep,
+} from "./useMeetingSetup";
 
-const ELAPSED_TICK_MS = 1000;
-const MS_PER_SECOND = 1000;
+const START_ERROR_TOAST_MS = 8000;
 
-function useElapsedMs(startedAtSeconds: number | null): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (startedAtSeconds === null) return;
-    const timer = setInterval(() => setNow(Date.now()), ELAPSED_TICK_MS);
-    return () => clearInterval(timer);
-  }, [startedAtSeconds]);
-  return startedAtSeconds === null
-    ? 0
-    : Math.max(0, now - startedAtSeconds * MS_PER_SECOND);
-}
-
-function MissingSetupAlert() {
-  const { settings } = useSettings();
-  const summaryProviderReady = configuredAiProviders(settings).includes(
-    settings.meeting_summary.provider,
-  );
-  const missing = [
-    !settings.soniox_api_key_configured && "a Soniox key (Speech models)",
-    !summaryProviderReady && "the notes provider connected (Cleanup page)",
-  ].filter(Boolean);
-  if (missing.length === 0) return null;
+function MissingSetupAlert({ steps }: { steps: MissingSetupStep[] }) {
   return (
-    <Alert>
-      <AlertDescription>
-        Meeting notes need {missing.join(" and ")}.
+    <Alert variant="warning">
+      <WarningIcon weight="fill" />
+      <AlertDescription className="flex flex-col gap-1">
+        {steps.map((step) => (
+          <span key={step.key} className="flex flex-wrap items-center gap-x-2">
+            {step.message}
+            <Link
+              to={step.path}
+              className="font-medium underline underline-offset-2 hover:no-underline"
+            >
+              Set up
+            </Link>
+          </span>
+        ))}
       </AlertDescription>
     </Alert>
   );
@@ -61,23 +57,74 @@ function MeetingShortcutHint() {
   );
 }
 
-function SummaryProviderPicker() {
-  const { settings, setSetting } = useSettings();
-  const change = (summary: AiProviderModel) =>
-    setSetting(
-      "meeting_summary",
-      summary,
-      () => setMeetingSummary(summary),
-      (err) => toast.error(`Failed to save notes model: ${String(err)}`),
-    );
-  return (
-    <AiProviderModelPicker
-      selection={settings.meeting_summary}
-      onChange={change}
-      configuredProviders={configuredAiProviders(settings)}
-      customProviderModel={settings.custom_provider_model}
-    />
+function StartButton({
+  missingSteps,
+  busy,
+  onStart,
+}: {
+  missingSteps: MissingSetupStep[];
+  busy: boolean;
+  onStart: () => void;
+}) {
+  const button = (
+    <Button onClick={onStart} disabled={busy || missingSteps.length > 0}>
+      <RecordIcon />
+      Start meeting
+    </Button>
   );
+  if (missingSteps.length === 0) return button;
+  // Disabled buttons swallow pointer events, so the tooltip hangs off a
+  // focusable wrapper instead.
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span tabIndex={0} className="rounded-md">
+          {button}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-[260px] leading-snug">
+        {missingSteps.map((step) => step.message).join(" ")}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function RecordingControls({
+  recording,
+  busy,
+  onStop,
+}: {
+  recording: MeetingMeta;
+  busy: boolean;
+  onStop: () => void;
+}) {
+  const elapsedMs = useElapsedMs(recording.started_at * MS_PER_SECOND);
+  return (
+    <>
+      <Button onClick={onStop} disabled={busy} variant="destructive">
+        <StopIcon weight="fill" />
+        Stop & summarize
+      </Button>
+      <span className="font-mono text-sm tabular-nums text-muted-foreground">
+        {formatMeetingDuration(elapsedMs)}
+      </span>
+    </>
+  );
+}
+
+function useMeetingToggle() {
+  const [busy, setBusy] = useState(false);
+  const run = (action: () => Promise<unknown>) => async () => {
+    setBusy(true);
+    try {
+      await action();
+    } catch (err) {
+      toast.error(String(err), { duration: START_ERROR_TOAST_MS });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { busy, start: run(startMeeting), stop: run(stopMeeting) };
 }
 
 export function MeetingRecorderCard({
@@ -85,43 +132,32 @@ export function MeetingRecorderCard({
 }: {
   recording: MeetingMeta | null;
 }) {
-  const [busy, setBusy] = useState(false);
-  const elapsedMs = useElapsedMs(recording?.started_at ?? null);
-
-  const toggle = async () => {
-    setBusy(true);
-    try {
-      if (recording) await stopMeeting();
-      else await startMeeting();
-    } catch (err) {
-      toast.error(String(err), { duration: 8000 });
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { busy, start, stop } = useMeetingToggle();
+  const missingSteps = useMissingMeetingSetup();
+  const showSetupAlert = !recording && missingSteps.length > 0;
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card/40 p-4">
-      <MissingSetupAlert />
+      {showSetupAlert && <MissingSetupAlert steps={missingSteps} />}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Button
-            onClick={toggle}
-            disabled={busy}
-            variant={recording ? "destructive" : "default"}
-          >
-            {recording ? <StopIcon weight="fill" /> : <RecordIcon />}
-            {recording ? "Stop & summarize" : "Start meeting"}
-          </Button>
-          {recording && (
-            <span className="font-mono text-sm tabular-nums text-muted-foreground">
-              {formatMeetingDuration(elapsedMs)}
-            </span>
+          {recording ? (
+            <RecordingControls
+              recording={recording}
+              busy={busy}
+              onStop={stop}
+            />
+          ) : (
+            <StartButton
+              missingSteps={missingSteps}
+              busy={busy}
+              onStart={start}
+            />
           )}
           <MeetingShortcutHint />
         </div>
+        <NotesModelPicker />
       </div>
-      <SummaryProviderPicker />
       {recording?.system_audio_error && (
         <p className="text-xs text-amber-700 dark:text-amber-400">
           Recording your mic only: {recording.system_audio_error}

@@ -1,16 +1,17 @@
 import { Badge } from "@/components/ui/badge";
-import type { MeetingMeta } from "@/lib/types";
+import type { MeetingListItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 import {
   formatMeetingDuration,
   formatMeetingStart,
+  meetingTitle,
   STATUS_BADGE_VARIANTS,
   STATUS_LABELS,
 } from "./meetingFormat";
 
 interface MeetingListProps {
-  meetings: MeetingMeta[];
+  meetings: MeetingListItem[];
   selectedId: string | null;
   onSelect: (id: string) => void;
 }
@@ -33,17 +34,25 @@ export function MeetingList({
               meeting.id === selectedId && "bg-accent",
             )}
           >
-            <span className="flex flex-col">
-              <span className="font-medium">
-                {formatMeetingStart(meeting.started_at)}
+            <span className="flex min-w-0 flex-col">
+              <span
+                className="truncate font-medium"
+                title={meeting.title ?? undefined}
+              >
+                {meetingTitle(meeting.title, meeting.started_at)}
               </span>
-              <span className="text-xs text-muted-foreground tabular-nums">
+              <span className="truncate text-xs text-muted-foreground tabular-nums">
+                {meeting.title &&
+                  `${formatMeetingStart(meeting.started_at)} · `}
                 {meeting.status.kind === "recording"
                   ? "In progress"
                   : formatMeetingDuration(meeting.duration_ms)}
               </span>
             </span>
-            <Badge variant={STATUS_BADGE_VARIANTS[meeting.status.kind]}>
+            <Badge
+              variant={STATUS_BADGE_VARIANTS[meeting.status.kind]}
+              className="shrink-0"
+            >
               {STATUS_LABELS[meeting.status.kind]}
             </Badge>
           </button>
