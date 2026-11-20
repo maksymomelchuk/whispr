@@ -1,3 +1,4 @@
+use crate::cleanup_model_migration::replace_delisted_cleanup_models;
 use crate::mode::{Mode, ModeId, SetId, SEED_MODE_UA_EN};
 pub use crate::provider::{AssemblyAiModel, GroqModel, ProviderModel, TranscriptionProvider};
 pub use crate::tone::TonePreset;
@@ -691,6 +692,10 @@ fn migrate(s: &mut Settings) -> bool {
                 .push(HotkeyBinding::ptt(s.legacy_shortcut.clone(), first_mode_id));
             changed = true;
         }
+    }
+
+    if replace_delisted_cleanup_models(&mut s.modes) {
+        changed = true;
     }
 
     // PasteLatest bindings are independent of modes and always retained.
@@ -1822,6 +1827,24 @@ mod tests {
             }),
         ];
         assert!(check_hotkey_conflicts(&bindings).is_err());
+    }
+
+    #[test]
+    fn migration_moves_saved_delisted_models_to_their_successors() {
+        let json = r#"{
+            "modes": [
+                {"id":"a","name":"A","language":{"kind":"auto"},"ai_cleanup":{"enabled":true,"prompt_override":null,"provider":"cerebras","model":"llama-3.3-70b"},"use_snippets":true,"provider_model":{"provider":"assembly_ai","model":"universal_pro_streaming"}}
+            ]
+        }"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        assert!(migrate(&mut s));
+        assert_eq!(s.modes[0].ai_cleanup.model, "gpt-oss-120b");
+        assert_eq!(
+            s.modes[0].provider_model,
+            ProviderModel::AssemblyAi {
+                model: AssemblyAiModel::Universal36Pro
+            }
+        );
     }
 
     #[test]

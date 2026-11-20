@@ -152,7 +152,7 @@ mod tests {
     #[test]
     fn engine_new_stores_model_and_key() {
         let engine = OpenAiTranscribeEngine::new(
-            OpenAiTranscribeModel::Gpt4oTranscribe,
+            OpenAiTranscribeModel::GptTranscribe,
             "sk-test".to_string(),
         );
         assert_eq!(engine.key, "sk-test");

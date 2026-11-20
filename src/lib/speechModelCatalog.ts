@@ -89,7 +89,7 @@ export const SPEECH_MODEL_CATALOG: EngineDescriptor[] = [
     id: "openai",
     name: "OpenAI",
     logo: OpenAiLogo,
-    description: "Batch transcription with gpt-4o-transcribe.",
+    description: "Batch transcription with gpt-transcribe.",
     metadata: {
       languages: "100+ languages",
       streaming: "No",
@@ -105,7 +105,7 @@ export const SPEECH_MODEL_CATALOG: EngineDescriptor[] = [
     id: "elevenlabs",
     name: "ElevenLabs",
     logo: ElevenLabsLogo,
-    description: "Scribe v2 batch or Scribe v2 Realtime streaming.",
+    description: "Scribe v3 batch or Scribe v3 Live streaming.",
     metadata: {
       languages: "99+ languages",
       streaming: "Yes",
@@ -122,7 +122,7 @@ export const SPEECH_MODEL_CATALOG: EngineDescriptor[] = [
     name: "Soniox",
     logo: SonioxLogo,
     description:
-      "Real-time stt-rt-v5 with mid-sentence code-switching and one-way translation.",
+      "Real-time stt-rt-v6 with mid-sentence code-switching and one-way translation.",
     metadata: {
       languages: "60+ languages",
       streaming: "Yes",

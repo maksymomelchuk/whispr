@@ -1,6 +1,7 @@
 use crate::engine::{Engine, EngineContext, EngineOutcome};
 use crate::groq_audio::{encode_to_flac_16k_mono, to_pcm_16k_mono_bytes};
 use crate::mode::ModeLanguage;
+use crate::provider::ElevenLabsModel;
 use crate::terms;
 use base64::Engine as _;
 use futures_util::{SinkExt, StreamExt};
@@ -13,10 +14,7 @@ use tokio_tungstenite::tungstenite::protocol::Message;
 use url::Url;
 
 const ELEVENLABS_STT_URL: &str = "https://api.elevenlabs.io/v1/speech-to-text";
-const SCRIBE_V2_MODEL_ID: &str = "scribe_v2";
-
 const ELEVENLABS_REALTIME_WS_BASE: &str = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
-const SCRIBE_V2_REALTIME_MODEL_ID: &str = "scribe_v2_realtime";
 
 /// The realtime API ingests 16 kHz mono PCM only; capture audio (often 48 kHz
 /// and/or stereo) is downmixed and resampled before it goes on the wire.
@@ -223,7 +221,7 @@ fn build_ws_url(language: &ModeLanguage, terms: &[String]) -> Result<Url, String
         Url::parse(ELEVENLABS_REALTIME_WS_BASE).map_err(|e| format!("base URL parse: {e}"))?;
     {
         let mut query = url.query_pairs_mut();
-        query.append_pair("model_id", SCRIBE_V2_REALTIME_MODEL_ID);
+        query.append_pair("model_id", ElevenLabsModel::ScribeV3Live.api_id());
         query.append_pair("no_verbatim", "true");
         // Realtime takes a single language code; Auto and Hints fall back to the
         // server's multilingual auto-detection (Hints can't be expressed as one
@@ -322,7 +320,7 @@ async fn post_to_elevenlabs(
         .map_err(|e| format!("ElevenLabs mime build failed: {e}"))?;
 
     let mut form = reqwest::multipart::Form::new()
-        .text("model_id", SCRIBE_V2_MODEL_ID)
+        .text("model_id", ElevenLabsModel::ScribeV3.api_id())
         .text("no_verbatim", "true")
         .text("tag_audio_events", "false")
         .part("file", part);
@@ -497,7 +495,7 @@ mod tests {
         let url = build_ws_url(&ModeLanguage::Auto, &[]).unwrap();
         let query = url.query().unwrap_or("");
         assert!(
-            query.contains("model_id=scribe_v2_realtime"),
+            query.contains("model_id=scribe_v3_live"),
             "missing model_id: {query}"
         );
         assert!(

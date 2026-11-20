@@ -287,7 +287,7 @@ describe("ModeEditor – provider/model pickers", () => {
       ...MODE,
       provider_model: {
         provider: "assembly_ai",
-        model: "universal_pro_streaming",
+        model: "stt_3_7_realtime",
       },
     };
     render(<EditorWrapper mode={assemblyMode} />);
@@ -576,7 +576,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
       enabled: true,
       prompt_override: null,
       provider: "anthropic",
-      model: "claude-haiku-4-5",
+      model: "claude-haiku-5-5",
       paste_raw_on_failure: true,
       context_capture_enabled: false,
     },
@@ -589,7 +589,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         configuredProviders={["anthropic"]}
       />,
     );
-    expect(screen.getByText("Claude Haiku 4.5")).toBeInTheDocument();
+    expect(screen.getByText("Claude Haiku 5.5")).toBeInTheDocument();
   });
 
   it("shows selected model value when AI cleanup is enabled with OpenAI", () => {
@@ -599,7 +599,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         enabled: true,
         prompt_override: null,
         provider: "openai",
-        model: "gpt-5.4-mini",
+        model: "gpt-6-luna",
         paste_raw_on_failure: true,
         context_capture_enabled: false,
       },
@@ -607,7 +607,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
     render(
       <EditorWrapper mode={openaiMode} configuredProviders={["openai"]} />,
     );
-    expect(screen.getByText("GPT-5.4 mini")).toBeInTheDocument();
+    expect(screen.getByText("GPT-6 Luna")).toBeInTheDocument();
   });
 
   it("disables the cleanup toggle when no cleanup provider is configured", () => {
@@ -629,7 +629,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         enabled: true,
         prompt_override: null,
         provider: "google",
-        model: "gemini-2.5-flash",
+        model: "gemini-3.5-flash-lite",
         paste_raw_on_failure: true,
         context_capture_enabled: false,
       },
@@ -637,7 +637,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
     render(
       <EditorWrapper mode={googleMode} configuredProviders={["google"]} />,
     );
-    expect(screen.getByText("Gemini 2.5 Flash")).toBeInTheDocument();
+    expect(screen.getByText("Gemini 3.5 Flash-Lite")).toBeInTheDocument();
   });
 
   it("shows selected model value when AI cleanup is enabled with Groq", () => {
@@ -663,7 +663,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         enabled: true,
         prompt_override: null,
         provider: "deepseek",
-        model: "deepseek-v4-flash",
+        model: "deepseek-flash",
         paste_raw_on_failure: true,
         context_capture_enabled: false,
       },
@@ -671,7 +671,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
     render(
       <EditorWrapper mode={deepseekMode} configuredProviders={["deepseek"]} />,
     );
-    expect(screen.getByText("DeepSeek V4 Flash")).toBeInTheDocument();
+    expect(screen.getByText("DeepSeek V4.1 Flash")).toBeInTheDocument();
   });
 
   it("shows selected model value when AI cleanup is enabled with Cerebras", () => {
@@ -681,7 +681,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         enabled: true,
         prompt_override: null,
         provider: "cerebras",
-        model: "llama-3.3-70b",
+        model: "gpt-oss-120b",
         paste_raw_on_failure: true,
         context_capture_enabled: false,
       },
@@ -689,7 +689,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
     render(
       <EditorWrapper mode={cerebrasMode} configuredProviders={["cerebras"]} />,
     );
-    expect(screen.getByText("Llama 3.3 70B")).toBeInTheDocument();
+    expect(screen.getByText("GPT-OSS 120B")).toBeInTheDocument();
   });
 
   it("shows selected model value when AI cleanup is enabled with OpenRouter", () => {
@@ -699,7 +699,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         enabled: true,
         prompt_override: null,
         provider: "openrouter",
-        model: "anthropic/claude-haiku-4.5",
+        model: "anthropic/claude-haiku-5.5",
         paste_raw_on_failure: true,
         context_capture_enabled: false,
       },
@@ -710,7 +710,7 @@ describe("ModeEditor – cleanup provider/model pickers", () => {
         configuredProviders={["openrouter"]}
       />,
     );
-    expect(screen.getByText("Claude Haiku 4.5")).toBeInTheDocument();
+    expect(screen.getByText("Claude Haiku 5.5")).toBeInTheDocument();
   });
 
   it("shows global model text for Custom provider instead of a model dropdown", () => {
