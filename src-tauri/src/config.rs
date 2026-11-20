@@ -1,4 +1,4 @@
-use crate::cleanup_model_migration::replace_delisted_cleanup_models;
+use crate::cleanup_model_migration::{replace_delisted_cleanup_models, successor_of};
 use crate::meeting::summary::MeetingSummarySettings;
 use crate::mode::{Mode, ModeId, SetId, SEED_MODE_UA_EN};
 pub use crate::provider::{AssemblyAiModel, GroqModel, ProviderModel, TranscriptionProvider};
@@ -730,6 +730,10 @@ fn migrate(s: &mut Settings) -> bool {
     }
 
     if replace_delisted_cleanup_models(&mut s.modes) {
+        changed = true;
+    }
+    if let Some(successor) = successor_of(s.meeting_summary.provider, &s.meeting_summary.model) {
+        s.meeting_summary.model = successor.to_string();
         changed = true;
     }
 
@@ -2152,5 +2156,18 @@ mod tests {
         ];
 
         assert!(check_action_constraints(&bindings).is_err());
+    }
+
+    #[test]
+    fn a_delisted_meeting_summary_model_moves_to_its_successor() {
+        let json = r#"{"meeting_summary": {"provider": "anthropic", "model": "claude-haiku-4-5"}}"#;
+
+        let s = from_json(json).unwrap();
+
+        assert_eq!(
+            Some(s.meeting_summary.model.as_str()),
+            successor_of(crate::cleanup::AiProviderId::Anthropic, "claude-haiku-4-5")
+        );
+        assert_ne!(s.meeting_summary.model, "claude-haiku-4-5");
     }
 }

@@ -107,7 +107,7 @@ const DELISTED_CLEANUP_MODELS: &[(AiProviderId, &str, &str)] = &[
     ),
 ];
 
-fn successor_of(provider: AiProviderId, model: &str) -> Option<&'static str> {
+pub fn successor_of(provider: AiProviderId, model: &str) -> Option<&'static str> {
     DELISTED_CLEANUP_MODELS
         .iter()
         .find(|(delisted_provider, delisted_model, _)| {
