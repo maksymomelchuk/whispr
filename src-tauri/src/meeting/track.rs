@@ -4,9 +4,13 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 use std::thread::JoinHandle;
+use std::time::Instant;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 pub const TRACK_SAMPLE_RATE: u32 = 16_000;
+/// Device buffers arrive every ~10 ms with some jitter; only a lag beyond this
+/// is a real gap in delivery.
+const GAP_TOLERANCE_SAMPLES: f64 = TRACK_SAMPLE_RATE as f64 * 0.2;
 
 /// The two audio sources of a meeting, kept as separate recordings so each
 /// transcript line can be attributed to "you" or to the call.
@@ -71,6 +75,39 @@ impl StreamResampler {
     }
 }
 
+/// A Core Audio tap delivers no buffers while nothing is playing, so the call
+/// track would silently drop every pause and slide out of sync with the mic.
+/// Tracks samples written against the wall clock and reports the silence to
+/// insert so each sample stays at its true time.
+pub struct WallClockAligner {
+    started: Instant,
+    written: u64,
+}
+
+impl WallClockAligner {
+    pub fn new(started: Instant) -> Self {
+        Self {
+            started,
+            written: 0,
+        }
+    }
+
+    pub fn silence_before(&mut self, arrived_at: Instant, incoming: usize) -> usize {
+        let elapsed = arrived_at
+            .saturating_duration_since(self.started)
+            .as_secs_f64();
+        let expected_end = elapsed * TRACK_SAMPLE_RATE as f64;
+        let behind = expected_end - (self.written + incoming as u64) as f64;
+        let silence = if behind > GAP_TOLERANCE_SAMPLES {
+            behind as usize
+        } else {
+            0
+        };
+        self.written += (silence + incoming) as u64;
+        silence
+    }
+}
+
 /// Streams a track to disk as 16 kHz mono PCM while it records, so a crash
 /// mid-meeting loses at most the last buffered chunk rather than the meeting.
 /// The thread ends once the capture drops its sender.
@@ -86,11 +123,13 @@ pub fn spawn_track_writer(
             .open(&path)
             .map_err(|e| format!("open {path:?}: {e}"))?;
         let mut resampler = StreamResampler::new(format.sample_rate, TRACK_SAMPLE_RATE);
+        let mut aligner = WallClockAligner::new(Instant::now());
         while let Some(chunk) = chunks.blocking_recv() {
-            let mono = downmix_to_mono(&chunk, format.channels);
-            let pcm: Vec<u8> = resampler
-                .process(&mono)
-                .iter()
+            let arrived_at = Instant::now();
+            let samples = resampler.process(&downmix_to_mono(&chunk, format.channels));
+            let silence = aligner.silence_before(arrived_at, samples.len());
+            let pcm: Vec<u8> = std::iter::repeat_n(0i16, silence)
+                .chain(samples)
                 .flat_map(|sample| sample.to_le_bytes())
                 .collect();
             file.write_all(&pcm)
@@ -110,6 +149,7 @@ pub fn pcm_bytes_to_samples(bytes: &[u8]) -> Vec<i16> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     #[test]
     fn writer_appends_mono_pcm_until_sender_drops() {
@@ -130,6 +170,26 @@ mod tests {
 
         let samples = pcm_bytes_to_samples(&std::fs::read(path).unwrap());
         assert_eq!(samples, vec![20, 30, 50]);
+    }
+
+    #[test]
+    fn on_time_chunks_get_no_padding() {
+        let started = Instant::now();
+        let mut aligner = WallClockAligner::new(started);
+
+        let silence = aligner.silence_before(started + Duration::from_millis(10), 160);
+
+        assert_eq!(silence, 0);
+    }
+
+    #[test]
+    fn a_delivery_gap_is_filled_with_silence_up_to_the_wall_clock() {
+        let started = Instant::now();
+        let mut aligner = WallClockAligner::new(started);
+
+        let silence = aligner.silence_before(started + Duration::from_secs(3), 160);
+
+        assert_eq!(silence, 3 * TRACK_SAMPLE_RATE as usize - 160);
     }
 
     #[test]
