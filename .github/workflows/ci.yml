@@ -68,6 +68,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.99.1
+          components: rustfmt
           targets: ${{ matrix.rust-targets }}
 
       - name: Cache Rust build
