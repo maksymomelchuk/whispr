@@ -92,6 +92,7 @@ async fn process(
     meta.status = MeetingStatus::Ready;
     meta.summary_model = Some(config.summary.model.clone());
     meta.speaker_names = summary.speaker_names;
+    meta.ambiguous_speaker_names = summary.ambiguous_names;
     store.save_meta(&meta)
 }
 

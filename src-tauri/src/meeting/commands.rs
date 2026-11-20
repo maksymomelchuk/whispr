@@ -74,6 +74,7 @@ pub async fn start(app: &AppHandle, state: &AppState) -> Result<MeetingMeta, Str
         system_audio_error: None,
         system_offset_ms: 0,
         speaker_names: Default::default(),
+        ambiguous_speaker_names: Default::default(),
     };
     store.create(&meta)?;
     let started = match capture::start(&store, &meta.id, settings.input_device).await {

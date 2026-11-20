@@ -12,6 +12,9 @@ pub type SpeakerNames = BTreeMap<String, String>;
 pub struct SummaryOutput {
     pub notes: String,
     pub speaker_names: SpeakerNames,
+    /// Names the model gave but that can't be pinned to one speaker. They may
+    /// still be in the notes, so no speaker may later be renamed to them.
+    pub ambiguous_names: BTreeSet<String>,
 }
 
 /// Splits the model's reply into the notes and the `<speakers>` map it was
@@ -22,22 +25,22 @@ pub fn split_summary_output(reply: &str, segments: &[Segment]) -> SummaryOutput 
         return SummaryOutput {
             notes: reply.trim().to_string(),
             speaker_names: SpeakerNames::new(),
+            ambiguous_names: BTreeSet::new(),
         };
     };
     let after_open = &reply[open + SPEAKERS_OPEN_TAG.len()..];
     let json = after_open
         .find(SPEAKERS_CLOSE_TAG)
         .map_or(after_open, |close| &after_open[..close]);
-    let speaker_names = match serde_json::from_str::<SpeakerNames>(json.trim()) {
-        Ok(names) => accepted_names(names, &remote_labels(segments)),
-        Err(error) => {
-            eprintln!("[meeting] ignoring unreadable speaker names {json:?}: {error}");
-            SpeakerNames::new()
-        }
-    };
+    let proposed = serde_json::from_str::<SpeakerNames>(json.trim()).unwrap_or_else(|error| {
+        eprintln!("[meeting] ignoring unreadable speaker names {json:?}: {error}");
+        SpeakerNames::new()
+    });
+    let (speaker_names, ambiguous_names) = accepted_names(proposed, &remote_labels(segments));
     SummaryOutput {
         notes: reply[..open].trim().to_string(),
         speaker_names,
+        ambiguous_names,
     }
 }
 
@@ -52,24 +55,28 @@ fn remote_labels(segments: &[Segment]) -> BTreeSet<&str> {
 /// Only labels that exist on the call side can be named; "You" stays You. A
 /// name given to two labels, or equal to another label, can't be told apart in
 /// the notes, so it is dropped.
-fn accepted_names(names: SpeakerNames, remote_labels: &BTreeSet<&str>) -> SpeakerNames {
+fn accepted_names(
+    names: SpeakerNames,
+    remote_labels: &BTreeSet<&str>,
+) -> (SpeakerNames, BTreeSet<String>) {
     let candidates: Vec<(String, String)> = names
         .into_iter()
         .filter(|(label, _)| remote_labels.contains(label.as_str()))
         .filter_map(|(label, name)| clean_name(&name).map(|name| (label, name)))
         .filter(|(label, name)| label != name)
         .collect();
-    candidates
-        .iter()
-        .filter(|(label, name)| {
+    let (accepted, ambiguous): (Vec<_>, Vec<_>) =
+        candidates.iter().cloned().partition(|(label, name)| {
             let shared = candidates
                 .iter()
                 .any(|(other, other_name)| other != label && same_name(other_name, name));
             let is_a_label = remote_labels.iter().any(|other| same_name(other, name));
             !shared && !is_a_label && !same_name(name, MIC_SPEAKER_LABEL)
-        })
-        .cloned()
-        .collect()
+        });
+    (
+        accepted.into_iter().collect(),
+        ambiguous.into_iter().map(|(_, name)| name).collect(),
+    )
 }
 
 pub fn same_name(first: &str, second: &str) -> bool {
@@ -206,8 +213,9 @@ mod tests {
     fn a_name_given_to_two_speakers_is_dropped() {
         let reply = r#"<speakers>{"Speaker 1": "Sam", "Speaker 2": "sam"}</speakers>"#;
 
-        let names = split_summary_output(reply, &two_remote_speakers()).speaker_names;
+        let output = split_summary_output(reply, &two_remote_speakers());
 
-        assert!(names.is_empty());
+        assert!(output.speaker_names.is_empty());
+        assert_eq!(output.ambiguous_names.len(), 2);
     }
 }
