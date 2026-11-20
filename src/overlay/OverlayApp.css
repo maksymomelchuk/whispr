@@ -182,7 +182,42 @@ body:has(.overlay-root) {
 }
 
 .overlay-pill.notice {
-  background: rgba(15, 15, 15, 0.9);
+  width: max-content;
+  max-width: 100%;
+  padding: 8px 16px;
+}
+
+.overlay-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  animation: overlay-fade-in 160ms ease-out;
+}
+
+.overlay-notice-text {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.94);
+  white-space: nowrap;
+  -webkit-font-smoothing: antialiased;
+}
+
+.overlay-record-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff4d4d;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px rgba(255, 77, 77, 0.22);
+}
+
+.overlay-check-icon {
+  display: block;
+  flex-shrink: 0;
+  color: #6ee7a0;
 }
 
 /* Rotates in 12 discrete steps so the brightest tick "chases" around the
@@ -226,6 +261,7 @@ body:has(.overlay-root) {
     transition: none;
   }
   .overlay-partial,
+  .overlay-notice,
   .overlay-target-icon {
     animation: none;
   }

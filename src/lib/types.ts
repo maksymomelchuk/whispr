@@ -434,6 +434,10 @@ export interface MeetingMeta {
   speaker_names: Record<string, string>;
 }
 
+export interface MeetingListItem extends MeetingMeta {
+  title: string | null;
+}
+
 export interface MeetingSegment {
   start_ms: number;
   end_ms: number;
@@ -447,4 +451,5 @@ export interface Meeting {
   meta: MeetingMeta;
   segments: MeetingSegment[];
   notes: string | null;
+  title: string | null;
 }

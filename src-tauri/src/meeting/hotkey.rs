@@ -9,10 +9,18 @@ const OVERLAY_NOTICE_EVENT: &str = "overlay-notice";
 const NOTICE_DURATION: Duration = Duration::from_millis(1_800);
 const ERROR_NOTICE_DURATION: Duration = Duration::from_millis(4_000);
 
+#[derive(Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum NoticeKind {
+    MeetingStarted,
+    MeetingStopped,
+    Error,
+}
+
 #[derive(Clone, Serialize)]
 struct OverlayNotice {
     text: String,
-    is_error: bool,
+    kind: NoticeKind,
 }
 
 /// Starts a meeting when none is recording, otherwise stops and summarizes
@@ -24,23 +32,23 @@ pub fn toggle(app: AppHandle, state: AppState) {
         let notice = if recording {
             commands::stop(app.clone(), &state)
                 .await
-                .map(|()| "Meeting stopped — writing notes".to_string())
+                .map(|()| ("Writing notes…", NoticeKind::MeetingStopped))
         } else {
             commands::start(&app, &state)
                 .await
-                .map(|_| "Meeting recording".to_string())
+                .map(|_| ("Recording meeting", NoticeKind::MeetingStarted))
         };
         match notice {
-            Ok(text) => flash(&app, text, false).await,
-            Err(error) => flash(&app, format!("Meeting: {error}"), true).await,
+            Ok((text, kind)) => flash(&app, text.to_string(), kind).await,
+            Err(error) => flash(&app, format!("Meeting: {error}"), NoticeKind::Error).await,
         }
     });
 }
 
-async fn flash(app: &AppHandle, text: String, is_error: bool) {
+async fn flash(app: &AppHandle, text: String, kind: NoticeKind) {
     crate::overlay::show(app);
-    let _ = app.emit(OVERLAY_NOTICE_EVENT, OverlayNotice { text, is_error });
-    let duration = if is_error {
+    let _ = app.emit(OVERLAY_NOTICE_EVENT, OverlayNotice { text, kind });
+    let duration = if kind == NoticeKind::Error {
         ERROR_NOTICE_DURATION
     } else {
         NOTICE_DURATION

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { listMeetings } from "@/lib/api";
-import type { MeetingMeta } from "@/lib/types";
+import type { MeetingListItem } from "@/lib/types";
 
 export const MEETINGS_UPDATED_EVENT = "meetings-updated";
 
@@ -33,7 +33,7 @@ export function useMeetingsSubscription(onUpdate: () => void) {
 }
 
 export function useMeetings() {
-  const [meetings, setMeetings] = useState<MeetingMeta[]>([]);
+  const [meetings, setMeetings] = useState<MeetingListItem[]>([]);
 
   const refresh = useCallback(() => {
     listMeetings()

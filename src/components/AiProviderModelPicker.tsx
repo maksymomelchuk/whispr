@@ -101,6 +101,27 @@ export function defaultModelFor(provider: AiProviderId): string {
   return provider === "custom" ? "" : CLEANUP_MODEL_OPTIONS[provider][0].value;
 }
 
+export function providerDisplayName(provider: AiProviderId): string {
+  return (
+    CLEANUP_PROVIDER_OPTIONS.find((option) => option.value === provider)
+      ?.label ?? provider
+  );
+}
+
+export function modelDisplayName(
+  selection: AiProviderModel,
+  customProviderModel: string,
+): string {
+  if (selection.provider === "custom") {
+    return customProviderModel || "your custom provider";
+  }
+  return (
+    CLEANUP_MODEL_OPTIONS[selection.provider].find(
+      (option) => option.value === selection.model,
+    )?.label ?? selection.model
+  );
+}
+
 /** Providers a request can actually use. Anthropic counts only through the
  * credential its active auth mode selects, matching the backend's check. */
 export function configuredAiProviders(settings: Settings): AiProviderId[] {

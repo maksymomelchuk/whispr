@@ -77,17 +77,31 @@ describe("OverlayApp", () => {
     expect(container.querySelector(".overlay-spinner")).not.toBeInTheDocument();
   });
 
-  it("overlay-notice shows the meeting message instead of the timer", async () => {
+  it("a meeting-started notice is a one-line pill with a record dot", async () => {
     const { container, getByText } = await renderAndSettle();
-    fire("overlay-notice", { text: "Meeting recording", is_error: false });
-    expect(getByText("Meeting recording")).toBeInTheDocument();
-    expect(getByText("Meeting")).toBeInTheDocument();
+    fire("overlay-notice", {
+      text: "Recording meeting",
+      kind: "meeting_started",
+    });
+    expect(getByText("Recording meeting")).toBeInTheDocument();
+    expect(container.querySelector(".overlay-record-dot")).toBeInTheDocument();
+    expect(container.querySelector(".overlay-timer")).not.toBeInTheDocument();
     expect(container.querySelector(".overlay-wave")).not.toBeInTheDocument();
+  });
+
+  it("a meeting-stopped notice shows a check instead of the record dot", async () => {
+    const { container, getByText } = await renderAndSettle();
+    fire("overlay-notice", { text: "Writing notes…", kind: "meeting_stopped" });
+    expect(getByText("Writing notes…")).toBeInTheDocument();
+    expect(container.querySelector(".overlay-check-icon")).toBeInTheDocument();
+    expect(
+      container.querySelector(".overlay-record-dot"),
+    ).not.toBeInTheDocument();
   });
 
   it("an error notice shows the error icon with its message", async () => {
     const { container, getByText } = await renderAndSettle();
-    fire("overlay-notice", { text: "Meeting: no key", is_error: true });
+    fire("overlay-notice", { text: "Meeting: no key", kind: "error" });
     expect(getByText("Meeting: no key")).toBeInTheDocument();
     expect(container.querySelector(".overlay-error-icon")).toBeInTheDocument();
   });

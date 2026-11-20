@@ -5,6 +5,7 @@ import type { Settings } from "@/lib/types";
 import {
   configuredAiProviders,
   defaultModelFor,
+  modelDisplayName,
 } from "./AiProviderModelPicker";
 
 const BASE_SETTINGS: Settings = {
@@ -83,5 +84,22 @@ describe("defaultModelFor", () => {
 
   it("leaves the model blank for Custom, which names its own", () => {
     expect(defaultModelFor("custom")).toBe("");
+  });
+});
+
+describe("modelDisplayName", () => {
+  it("shows the catalog label instead of the model id", () => {
+    expect(
+      modelDisplayName(
+        { provider: "anthropic", model: "claude-sonnet-5-5" },
+        "",
+      ),
+    ).toBe("Claude Sonnet 5.5");
+  });
+
+  it("shows the Custom provider's own model name", () => {
+    expect(
+      modelDisplayName({ provider: "custom", model: "" }, "llama-4-70b"),
+    ).toBe("llama-4-70b");
   });
 });
