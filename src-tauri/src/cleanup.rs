@@ -647,6 +647,12 @@ fn parse_openai_response(status: u16, body: &str) -> Result<(String, Usage), Cle
     let v: Value = serde_json::from_str(body)
         .map_err(|e| CleanupError::Transient(format!("cleanup response parse failed: {e}")))?;
 
+    if v["choices"][0]["finish_reason"] == "length" {
+        return Err(CleanupError::Transient(
+            "cleanup response was cut off at the token limit".to_string(),
+        ));
+    }
+
     let cleaned = extract_output(v["choices"][0]["message"]["content"].as_str().ok_or_else(
         || {
             CleanupError::Transient(
@@ -718,6 +724,14 @@ fn parse_response(status: u16, body: &str) -> Result<(String, Usage), CleanupErr
 
     let v: Value = serde_json::from_str(body)
         .map_err(|e| CleanupError::Transient(format!("cleanup response parse failed: {e}")))?;
+
+    // Thinking spends the same output budget, so a text block can be a
+    // half-written answer that would otherwise paste as if it were complete.
+    if v["stop_reason"] == "max_tokens" {
+        return Err(CleanupError::Transient(
+            "cleanup response was cut off at max_tokens".to_string(),
+        ));
+    }
 
     let cleaned = extract_output(first_text_block(&v["content"]).ok_or_else(|| {
         CleanupError::Transient("cleanup response has no text content block".to_string())
@@ -1530,6 +1544,36 @@ mod tests {
             "OpenAI rejects max_tokens"
         );
         assert!(body.get("stop").is_none(), "OpenAI rejects stop");
+    }
+
+    #[test]
+    fn openai_response_cut_off_at_the_token_limit_is_rejected() {
+        let body = serde_json::json!({
+            "choices": [{"message": {"content": "<output>half a sent"}, "finish_reason": "length"}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 1024}
+        })
+        .to_string();
+        assert!(matches!(
+            parse_openai_response(200, &body),
+            Err(CleanupError::Transient(_))
+        ));
+    }
+
+    #[test]
+    fn anthropic_response_cut_off_at_max_tokens_is_rejected() {
+        let body = serde_json::json!({
+            "content": [
+                {"type": "thinking", "thinking": ""},
+                {"type": "text", "text": "<output>half a sent"}
+            ],
+            "stop_reason": "max_tokens",
+            "usage": {"input_tokens": 10, "output_tokens": 1024}
+        })
+        .to_string();
+        assert!(matches!(
+            parse_response(200, &body),
+            Err(CleanupError::Transient(_))
+        ));
     }
 
     #[test]
