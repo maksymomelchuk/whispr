@@ -35,6 +35,7 @@ function meeting(
       segment("Speaker 2", "Olena here."),
     ],
     notes: null,
+    title: null,
   };
 }
 
