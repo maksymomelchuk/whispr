@@ -64,7 +64,7 @@ const ANTHROPIC_VERSION: &str = "2023-06-01";
 /// Without it the Messages endpoint rejects bearer auth.
 const OAUTH_BETA: &str = "oauth-2025-04-20";
 #[cfg(test)]
-const ANTHROPIC_DEFAULT_MODEL: &str = "claude-haiku-4-5";
+const ANTHROPIC_PREFILL_MODEL: &str = "claude-haiku-4-5";
 const MAX_TOKENS: u32 = 1024;
 /// The model is told to wrap its output in these tags; the Anthropic path also
 /// prefills the open tag and stops on the close tag. Extraction strips both,
@@ -80,7 +80,7 @@ const OAUTH_ROLE_SCOPE: &str = "For this request you are not acting as an intera
 
 const OPENAI_CHAT_URL: &str = "https://api.openai.com/v1/chat/completions";
 #[cfg(test)]
-const OPENAI_DEFAULT_MODEL: &str = "gpt-4o-mini";
+const OPENAI_DEFAULT_MODEL: &str = "gpt-6-luna";
 const GOOGLE_CHAT_URL: &str =
     "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 const GROQ_CHAT_URL: &str = "https://api.groq.com/openai/v1/chat/completions";
@@ -512,8 +512,9 @@ pub(crate) fn build_openai_headers(api_key: &str) -> Vec<(String, String)> {
 /// only adds dead air before the answer.
 ///
 /// The value is model-specific, not provider-wide:
-/// - GPT-5.4/5.5 accept `none`; GPT-5.0 mini/nano predate `none`, so the
-///   lightest they take is `minimal`. Non-GPT-5 OpenAI models reject both.
+/// - GPT-5.4/5.5 and GPT-6 Luna accept `none`; GPT-6 Sol and Astra start at
+///   `low`. GPT-5.0 mini/nano predate `none`, so the lightest they take is
+///   `minimal`. Pre-GPT-5 OpenAI models reject the field.
 /// - Gemini's OpenAI-compatible endpoint rejects `medium` and won't reliably
 ///   honor `none`, so `low` is the floor it accepts.
 /// - GPT-OSS (served by Groq and Cerebras) exposes only low/medium/high; plain
@@ -543,6 +544,13 @@ fn groq_effort(model: &str) -> Option<&'static str> {
 }
 
 fn openai_compatible_effort(model: &str) -> Option<&'static str> {
+    if model.starts_with("gpt-6") {
+        return Some(if model.contains("luna") {
+            "none"
+        } else {
+            "low"
+        });
+    }
     if !model.starts_with("gpt-5") {
         return None;
     }
@@ -576,6 +584,20 @@ fn extra_body_params(provider: AiProviderId, model: &str) -> Vec<(&'static str, 
     }
 }
 
+/// OpenAI's own endpoint rejects `max_tokens` and `stop` on GPT-5.4 and newer,
+/// while other OpenAI-compatible servers (including self-hosted Custom ones)
+/// still expect that classic pair. Without a stop sequence the close tag comes
+/// back in the text, where `extract_output` strips it.
+fn output_limit_params(provider: AiProviderId) -> Vec<(&'static str, Value)> {
+    match provider {
+        AiProviderId::OpenAi => vec![("max_completion_tokens", serde_json::json!(MAX_TOKENS))],
+        _ => vec![
+            ("max_tokens", serde_json::json!(MAX_TOKENS)),
+            ("stop", serde_json::json!([OUTPUT_CLOSE_TAG])),
+        ],
+    }
+}
+
 async fn call_openai_with_transport<T: Transport>(
     transcript: &str,
     target: OpenAiTarget<'_>,
@@ -585,13 +607,14 @@ async fn call_openai_with_transport<T: Transport>(
     let headers = build_openai_headers(target.api_key);
     let mut body = serde_json::json!({
         "model": target.model,
-        "max_tokens": MAX_TOKENS,
-        "stop": [OUTPUT_CLOSE_TAG],
         "messages": [
             {"role": "system", "content": prompt},
             {"role": "user", "content": wrap_transcript(transcript)}
         ]
     });
+    for (key, value) in output_limit_params(target.provider) {
+        body[key] = value;
+    }
     if let Some(effort) = reasoning_effort_for(target.provider, target.model) {
         body["reasoning_effort"] = Value::String(effort.to_string());
     }
@@ -623,6 +646,12 @@ fn parse_openai_response(status: u16, body: &str) -> Result<(String, Usage), Cle
 
     let v: Value = serde_json::from_str(body)
         .map_err(|e| CleanupError::Transient(format!("cleanup response parse failed: {e}")))?;
+
+    if v["choices"][0]["finish_reason"] == "length" {
+        return Err(CleanupError::Transient(
+            "cleanup response was cut off at the token limit".to_string(),
+        ));
+    }
 
     let cleaned = extract_output(v["choices"][0]["message"]["content"].as_str().ok_or_else(
         || {
@@ -667,6 +696,16 @@ fn extract_output(text: &str) -> &str {
     inner.trim()
 }
 
+/// Opus 5.5 and Fable 5.2 think by default and lead with a `thinking` block,
+/// so the text is not always at index 0.
+fn first_text_block(content: &Value) -> Option<&str> {
+    content
+        .as_array()?
+        .iter()
+        .find(|block| block["type"] == "text")?["text"]
+        .as_str()
+}
+
 fn parse_response(status: u16, body: &str) -> Result<(String, Usage), CleanupError> {
     if !(200..300).contains(&status) {
         let message = serde_json::from_str::<Value>(body)
@@ -686,8 +725,16 @@ fn parse_response(status: u16, body: &str) -> Result<(String, Usage), CleanupErr
     let v: Value = serde_json::from_str(body)
         .map_err(|e| CleanupError::Transient(format!("cleanup response parse failed: {e}")))?;
 
-    let cleaned = extract_output(v["content"][0]["text"].as_str().ok_or_else(|| {
-        CleanupError::Transient("cleanup response missing content[0].text".to_string())
+    // Thinking spends the same output budget, so a text block can be a
+    // half-written answer that would otherwise paste as if it were complete.
+    if v["stop_reason"] == "max_tokens" {
+        return Err(CleanupError::Transient(
+            "cleanup response was cut off at max_tokens".to_string(),
+        ));
+    }
+
+    let cleaned = extract_output(first_text_block(&v["content"]).ok_or_else(|| {
+        CleanupError::Transient("cleanup response has no text content block".to_string())
     })?);
 
     if cleaned.is_empty() {
@@ -1402,7 +1449,7 @@ mod tests {
         run_with_transport(
             "hello world",
             api_key_cred(),
-            ANTHROPIC_DEFAULT_MODEL,
+            ANTHROPIC_PREFILL_MODEL,
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -1448,10 +1495,33 @@ mod tests {
         assert!(anthropic_supports_prefill("claude-haiku-4-5"));
         assert!(!anthropic_supports_prefill("claude-sonnet-4-6"));
         assert!(!anthropic_supports_prefill("claude-opus-4-8"));
+        assert!(!anthropic_supports_prefill("claude-haiku-5-5"));
     }
 
     #[tokio::test]
-    async fn openai_body_stops_on_close_tag() {
+    async fn openai_compatible_body_caps_with_max_tokens_and_stops_on_close_tag() {
+        let transport = CapturingTransport::new(openai_success_body("cleaned text"));
+        run_openai_with_transport(
+            "hello world",
+            OpenAiTarget {
+                api_key: "test-key",
+                chat_url: GROQ_CHAT_URL,
+                model: "openai/gpt-oss-120b",
+                provider: AiProviderId::Groq,
+            },
+            DEFAULT_SYSTEM_PROMPT,
+            &transport,
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("should succeed");
+        let body = transport.body();
+        assert_eq!(body["max_tokens"], MAX_TOKENS);
+        assert_eq!(body["stop"][0], OUTPUT_CLOSE_TAG);
+    }
+
+    #[tokio::test]
+    async fn openai_body_uses_max_completion_tokens_without_stop() {
         let transport = CapturingTransport::new(openai_success_body("cleaned text"));
         run_openai_with_transport(
             "hello world",
@@ -1467,7 +1537,57 @@ mod tests {
         )
         .await
         .expect("should succeed");
-        assert_eq!(transport.body()["stop"][0], OUTPUT_CLOSE_TAG);
+        let body = transport.body();
+        assert_eq!(body["max_completion_tokens"], MAX_TOKENS);
+        assert!(
+            body.get("max_tokens").is_none(),
+            "OpenAI rejects max_tokens"
+        );
+        assert!(body.get("stop").is_none(), "OpenAI rejects stop");
+    }
+
+    #[test]
+    fn openai_response_cut_off_at_the_token_limit_is_rejected() {
+        let body = serde_json::json!({
+            "choices": [{"message": {"content": "<output>half a sent"}, "finish_reason": "length"}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 1024}
+        })
+        .to_string();
+        assert!(matches!(
+            parse_openai_response(200, &body),
+            Err(CleanupError::Transient(_))
+        ));
+    }
+
+    #[test]
+    fn anthropic_response_cut_off_at_max_tokens_is_rejected() {
+        let body = serde_json::json!({
+            "content": [
+                {"type": "thinking", "thinking": ""},
+                {"type": "text", "text": "<output>half a sent"}
+            ],
+            "stop_reason": "max_tokens",
+            "usage": {"input_tokens": 10, "output_tokens": 1024}
+        })
+        .to_string();
+        assert!(matches!(
+            parse_response(200, &body),
+            Err(CleanupError::Transient(_))
+        ));
+    }
+
+    #[test]
+    fn anthropic_response_reads_text_after_a_leading_thinking_block() {
+        let body = serde_json::json!({
+            "content": [
+                {"type": "thinking", "thinking": ""},
+                {"type": "text", "text": "<output>cleaned text"}
+            ],
+            "usage": {"input_tokens": 10, "output_tokens": 20}
+        })
+        .to_string();
+        let (text, _) = parse_response(200, &body).expect("should parse");
+        assert_eq!(text, "cleaned text");
     }
 
     #[test]
@@ -1553,7 +1673,7 @@ mod tests {
         let result = run_with_transport(
             "hello world",
             api_key_cred(),
-            ANTHROPIC_DEFAULT_MODEL,
+            ANTHROPIC_PREFILL_MODEL,
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -1572,7 +1692,7 @@ mod tests {
         let result = run_with_transport(
             "some text here",
             api_key_cred(),
-            ANTHROPIC_DEFAULT_MODEL,
+            ANTHROPIC_PREFILL_MODEL,
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -1590,7 +1710,7 @@ mod tests {
         let result = run_with_transport(
             "some text here",
             api_key_cred(),
-            ANTHROPIC_DEFAULT_MODEL,
+            ANTHROPIC_PREFILL_MODEL,
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -1608,7 +1728,7 @@ mod tests {
         let result = run_with_transport(
             "some text here",
             api_key_cred(),
-            ANTHROPIC_DEFAULT_MODEL,
+            ANTHROPIC_PREFILL_MODEL,
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -1626,7 +1746,7 @@ mod tests {
         let result = run_with_transport(
             "some text here",
             api_key_cred(),
-            ANTHROPIC_DEFAULT_MODEL,
+            ANTHROPIC_PREFILL_MODEL,
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -1643,7 +1763,7 @@ mod tests {
         let result = run_with_transport(
             "some text here for timing",
             api_key_cred(),
-            ANTHROPIC_DEFAULT_MODEL,
+            ANTHROPIC_PREFILL_MODEL,
             DEFAULT_SYSTEM_PROMPT,
             &HangingTransport,
             Duration::from_millis(50),
@@ -1663,7 +1783,7 @@ mod tests {
         let result = run_with_transport(
             "some text here",
             api_key_cred(),
-            ANTHROPIC_DEFAULT_MODEL,
+            ANTHROPIC_PREFILL_MODEL,
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -1683,7 +1803,7 @@ mod tests {
         let result = run_with_transport(
             "some text here",
             api_key_cred(),
-            ANTHROPIC_DEFAULT_MODEL,
+            ANTHROPIC_PREFILL_MODEL,
             DEFAULT_SYSTEM_PROMPT,
             &transport,
             Duration::from_secs(5),
@@ -1977,6 +2097,27 @@ mod tests {
         assert_eq!(
             reasoning_effort_for(AiProviderId::OpenAi, "gpt-5-nano"),
             Some("minimal")
+        );
+    }
+
+    #[test]
+    fn openai_gpt6_luna_gets_none_but_larger_gpt6_get_low() {
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::OpenAi, "gpt-6-luna"),
+            Some("none")
+        );
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::OpenAi, "gpt-6.2-sol"),
+            Some("low"),
+            "GPT-6 Sol rejects `none`; `low` is its lightest setting"
+        );
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::OpenAi, "gpt-6.2-astra"),
+            Some("low")
+        );
+        assert_eq!(
+            reasoning_effort_for(AiProviderId::OpenRouter, "openai/gpt-6-luna"),
+            Some("none")
         );
     }
 

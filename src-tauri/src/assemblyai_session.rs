@@ -461,14 +461,29 @@ fn build_ws_url(
         let mut q = url.query_pairs_mut();
         q.append_pair("speech_model", model.api_id());
         q.append_pair("sample_rate", "16000");
-        if let ModeLanguage::Exact { code } = language {
-            q.append_pair("language_code", code);
+        if let Some((name, value)) = language_param(model, language) {
+            q.append_pair(name, &value);
         }
         if let Some(prompt) = terms::assemblyai_keyterms_prompt(terms) {
             q.append_pair("keyterms_prompt", &prompt);
         }
     }
     Ok(url)
+}
+
+/// The STT-3.7 and Universal-3.6 models ignore `language_code`; they are
+/// steered by `language_codes`, a JSON list, which a single code pins.
+fn language_param(
+    model: AssemblyAiModel,
+    language: &ModeLanguage,
+) -> Option<(&'static str, String)> {
+    let ModeLanguage::Exact { code } = language else {
+        return None;
+    };
+    if model == AssemblyAiModel::WhisperStreaming {
+        return Some(("language_code", code.clone()));
+    }
+    Some(("language_codes", serde_json::json!([code]).to_string()))
 }
 
 /// Applies a message to the running transcript. Returns `Some(true)` when it
@@ -624,6 +639,32 @@ mod tests {
         .unwrap();
         let query = url.query().unwrap_or("");
         assert!(query.contains("language_code=uk"), "query was: {query}");
+    }
+
+    #[test]
+    fn build_ws_url_pins_current_models_with_a_single_language_codes_entry() {
+        for model in [
+            AssemblyAiModel::Stt37Realtime,
+            AssemblyAiModel::Universal36Pro,
+        ] {
+            let url = build_ws_url(model, &ModeLanguage::exact("es"), &[]).unwrap();
+            let pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
+            assert!(
+                pairs.contains(&("language_codes".to_string(), r#"["es"]"#.to_string())),
+                "{model:?} query was: {pairs:?}"
+            );
+            assert!(
+                !pairs.iter().any(|(name, _)| name == "language_code"),
+                "{model:?} query was: {pairs:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn build_ws_url_omits_language_codes_when_auto() {
+        let url = build_ws_url(AssemblyAiModel::Stt37Realtime, &ModeLanguage::Auto, &[]).unwrap();
+        let query = url.query().unwrap_or("");
+        assert!(!query.contains("language_code"), "query was: {query}");
     }
 
     #[test]

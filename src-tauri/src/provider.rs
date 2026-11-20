@@ -17,16 +17,16 @@ pub enum TranscriptionProvider {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OpenAiTranscribeModel {
+    // OpenAI shuts both GPT-4o transcribe models down on 2027-02-26.
     #[default]
-    Gpt4oTranscribe,
-    Gpt4oMiniTranscribe,
+    #[serde(alias = "gpt4o_transcribe", alias = "gpt4o_mini_transcribe")]
+    GptTranscribe,
 }
 
 impl OpenAiTranscribeModel {
     pub fn api_id(self) -> &'static str {
         match self {
-            Self::Gpt4oTranscribe => "gpt-4o-transcribe",
-            Self::Gpt4oMiniTranscribe => "gpt-4o-mini-transcribe",
+            Self::GptTranscribe => "gpt-transcribe",
         }
     }
 }
@@ -35,15 +35,17 @@ impl OpenAiTranscribeModel {
 #[serde(rename_all = "snake_case")]
 pub enum ElevenLabsModel {
     #[default]
-    ScribeV2,
-    ScribeV2Realtime,
+    #[serde(alias = "scribe_v2")]
+    ScribeV3,
+    #[serde(alias = "scribe_v2_realtime")]
+    ScribeV3Live,
 }
 
 impl ElevenLabsModel {
     pub fn api_id(self) -> &'static str {
         match self {
-            Self::ScribeV2 => "scribe_v2",
-            Self::ScribeV2Realtime => "scribe_v2_realtime",
+            Self::ScribeV3 => "scribe_v3",
+            Self::ScribeV3Live => "scribe_v3_live",
         }
     }
 }
@@ -69,9 +71,15 @@ impl GroqModel {
 #[serde(rename_all = "snake_case")]
 pub enum AssemblyAiModel {
     #[default]
-    UniversalProStreaming,
-    UniversalStreamingEnglish,
-    UniversalStreamingMultilingual,
+    #[serde(
+        rename = "stt_3_7_realtime",
+        alias = "universal_streaming_english",
+        alias = "universal_streaming_multilingual"
+    )]
+    Stt37Realtime,
+    // AssemblyAI retired u3-rt-pro and routes it to Universal-3.6 Pro.
+    #[serde(rename = "universal_3_6_pro", alias = "universal_pro_streaming")]
+    Universal36Pro,
     WhisperStreaming,
     // Async-only (no streaming endpoint); the only AssemblyAI model that covers
     // Ukrainian and the full 99-language set.
@@ -79,32 +87,33 @@ pub enum AssemblyAiModel {
     Universal2,
 }
 
+const ASSEMBLYAI_STREAMING_LANGUAGES: &[&str] = &[
+    "af", "ar", "ca", "da", "de", "en", "es", "et", "fa", "fi", "fr", "gl", "he", "hi", "it", "ja",
+    "ko", "mr", "nb", "nl", "no", "pt", "ro", "ru", "sv", "tr", "ur", "vi", "xh", "yue", "zh",
+    "zu",
+];
+
 impl AssemblyAiModel {
     pub fn api_id(self) -> &'static str {
         match self {
-            Self::UniversalProStreaming => "u3-rt-pro",
-            Self::UniversalStreamingEnglish => "universal-streaming-english",
-            Self::UniversalStreamingMultilingual => "universal-streaming-multilingual",
+            Self::Stt37Realtime => "assemblyai-stt-3-7-realtime",
+            Self::Universal36Pro => "universal-3-6-pro",
             Self::WhisperStreaming => "whisper-rt",
             Self::Universal2 => "universal-2",
         }
     }
 
     pub fn supports_language(self, code: &str) -> bool {
-        match self {
-            Self::UniversalStreamingEnglish => code == "en",
-            Self::UniversalProStreaming | Self::UniversalStreamingMultilingual => {
-                matches!(code, "en" | "es" | "de" | "fr" | "pt" | "it")
-            }
-            Self::WhisperStreaming | Self::Universal2 => true,
+        match self.supported_language_codes() {
+            Some(codes) => codes.contains(&code),
+            None => true,
         }
     }
 
     pub fn supported_language_codes(self) -> Option<Vec<&'static str>> {
         match self {
-            Self::UniversalStreamingEnglish => Some(vec!["en"]),
-            Self::UniversalProStreaming | Self::UniversalStreamingMultilingual => {
-                Some(vec!["en", "es", "de", "fr", "pt", "it"])
+            Self::Stt37Realtime | Self::Universal36Pro => {
+                Some(ASSEMBLYAI_STREAMING_LANGUAGES.to_vec())
             }
             Self::WhisperStreaming | Self::Universal2 => None,
         }
@@ -158,7 +167,7 @@ pub enum ProviderModel {
         #[serde(default)]
         model: ElevenLabsModel,
     },
-    // Single realtime model (stt-rt-v5), so no model sub-enum. `translate_to`
+    // Single realtime model, so no model sub-enum. `translate_to`
     // carries the one-way STT-layer translation target; None = verbatim
     // code-switching. The field lives here so it's unrepresentable for any
     // provider that can't honor it.
@@ -231,11 +240,31 @@ mod tests {
     #[test]
     fn provider_model_assemblyai_serializes_with_provider_and_model() {
         let m = ProviderModel::AssemblyAi {
-            model: AssemblyAiModel::UniversalProStreaming,
+            model: AssemblyAiModel::Stt37Realtime,
         };
         let v: serde_json::Value = serde_json::to_value(&m).unwrap();
         assert_eq!(v["provider"], "assembly_ai");
-        assert_eq!(v["model"], "universal_pro_streaming");
+        assert_eq!(v["model"], "stt_3_7_realtime");
+    }
+
+    #[test]
+    fn assemblyai_retired_models_load_as_their_replacements() {
+        let cases = [
+            ("universal_pro_streaming", AssemblyAiModel::Universal36Pro),
+            (
+                "universal_streaming_english",
+                AssemblyAiModel::Stt37Realtime,
+            ),
+            (
+                "universal_streaming_multilingual",
+                AssemblyAiModel::Stt37Realtime,
+            ),
+        ];
+        for (saved, expected) in cases {
+            let decoded: AssemblyAiModel =
+                serde_json::from_value(serde_json::json!(saved)).unwrap();
+            assert_eq!(decoded, expected, "saved value {saved}");
+        }
     }
 
     #[test]
@@ -255,19 +284,19 @@ mod tests {
                 model: GroqModel::WhisperLargeV3Turbo,
             },
             ProviderModel::AssemblyAi {
-                model: AssemblyAiModel::UniversalProStreaming,
+                model: AssemblyAiModel::Stt37Realtime,
+            },
+            ProviderModel::AssemblyAi {
+                model: AssemblyAiModel::Universal36Pro,
             },
             ProviderModel::AssemblyAi {
                 model: AssemblyAiModel::WhisperStreaming,
             },
             ProviderModel::OpenAi {
-                model: OpenAiTranscribeModel::Gpt4oTranscribe,
-            },
-            ProviderModel::OpenAi {
-                model: OpenAiTranscribeModel::Gpt4oMiniTranscribe,
+                model: OpenAiTranscribeModel::GptTranscribe,
             },
             ProviderModel::ElevenLabs {
-                model: ElevenLabsModel::ScribeV2Realtime,
+                model: ElevenLabsModel::ScribeV3Live,
             },
         ];
         for case in cases {
@@ -280,17 +309,17 @@ mod tests {
     #[test]
     fn provider_model_eleven_labs_serializes_with_provider_and_model() {
         let m = ProviderModel::ElevenLabs {
-            model: ElevenLabsModel::ScribeV2Realtime,
+            model: ElevenLabsModel::ScribeV3Live,
         };
         let v: serde_json::Value = serde_json::to_value(&m).unwrap();
         assert_eq!(v["provider"], "eleven_labs");
-        assert_eq!(v["model"], "scribe_v2_realtime");
+        assert_eq!(v["model"], "scribe_v3_live");
     }
 
     #[test]
     fn provider_model_eleven_labs_round_trips() {
         let pm = ProviderModel::ElevenLabs {
-            model: ElevenLabsModel::ScribeV2Realtime,
+            model: ElevenLabsModel::ScribeV3Live,
         };
         let json = serde_json::to_string(&pm).unwrap();
         let decoded: ProviderModel = serde_json::from_str(&json).unwrap();
@@ -298,23 +327,30 @@ mod tests {
     }
 
     #[test]
-    fn provider_model_eleven_labs_legacy_json_without_model_defaults_to_scribe_v2() {
+    fn provider_model_eleven_labs_legacy_json_without_model_defaults_to_scribe_v3() {
         let decoded: ProviderModel = serde_json::from_str(r#"{"provider":"eleven_labs"}"#).unwrap();
         assert_eq!(
             decoded,
             ProviderModel::ElevenLabs {
-                model: ElevenLabsModel::ScribeV2,
+                model: ElevenLabsModel::ScribeV3,
             }
         );
     }
 
     #[test]
+    fn eleven_labs_scribe_v2_models_load_as_scribe_v3() {
+        let batch: ElevenLabsModel =
+            serde_json::from_value(serde_json::json!("scribe_v2")).unwrap();
+        let realtime: ElevenLabsModel =
+            serde_json::from_value(serde_json::json!("scribe_v2_realtime")).unwrap();
+        assert_eq!(batch, ElevenLabsModel::ScribeV3);
+        assert_eq!(realtime, ElevenLabsModel::ScribeV3Live);
+    }
+
+    #[test]
     fn eleven_labs_model_api_ids() {
-        assert_eq!(ElevenLabsModel::ScribeV2.api_id(), "scribe_v2");
-        assert_eq!(
-            ElevenLabsModel::ScribeV2Realtime.api_id(),
-            "scribe_v2_realtime"
-        );
+        assert_eq!(ElevenLabsModel::ScribeV3.api_id(), "scribe_v3");
+        assert_eq!(ElevenLabsModel::ScribeV3Live.api_id(), "scribe_v3_live");
     }
 
     #[test]
@@ -392,20 +428,20 @@ mod tests {
         let pm = ProviderModel::from_legacy(
             TranscriptionProvider::AssemblyAi,
             GroqModel::default(),
-            AssemblyAiModel::UniversalStreamingEnglish,
+            AssemblyAiModel::Universal36Pro,
         );
         assert_eq!(
             pm,
             ProviderModel::AssemblyAi {
-                model: AssemblyAiModel::UniversalStreamingEnglish
+                model: AssemblyAiModel::Universal36Pro
             }
         );
     }
 
     #[test]
-    fn assemblyai_model_supports_language_english_only() {
-        assert!(AssemblyAiModel::UniversalStreamingEnglish.supports_language("en"));
-        assert!(!AssemblyAiModel::UniversalStreamingEnglish.supports_language("uk"));
+    fn assemblyai_streaming_model_supports_only_its_listed_languages() {
+        assert!(AssemblyAiModel::Stt37Realtime.supports_language("ja"));
+        assert!(!AssemblyAiModel::Stt37Realtime.supports_language("uk"));
     }
 
     #[test]
@@ -429,54 +465,32 @@ mod tests {
     #[test]
     fn openai_transcribe_model_api_id_correct() {
         assert_eq!(
-            OpenAiTranscribeModel::Gpt4oTranscribe.api_id(),
-            "gpt-4o-transcribe"
-        );
-        assert_eq!(
-            OpenAiTranscribeModel::Gpt4oMiniTranscribe.api_id(),
-            "gpt-4o-mini-transcribe"
+            OpenAiTranscribeModel::GptTranscribe.api_id(),
+            "gpt-transcribe"
         );
     }
 
     #[test]
-    fn openai_transcribe_model_default_is_gpt4o_transcribe() {
-        assert_eq!(
-            OpenAiTranscribeModel::default(),
-            OpenAiTranscribeModel::Gpt4oTranscribe
-        );
-    }
-
-    #[test]
-    fn openai_transcribe_model_serializes_as_snake_case() {
-        let v: serde_json::Value =
-            serde_json::to_value(OpenAiTranscribeModel::Gpt4oTranscribe).unwrap();
-        assert_eq!(v, "gpt4o_transcribe");
-        let v: serde_json::Value =
-            serde_json::to_value(OpenAiTranscribeModel::Gpt4oMiniTranscribe).unwrap();
-        assert_eq!(v, "gpt4o_mini_transcribe");
+    fn openai_gpt4o_transcribe_models_load_as_gpt_transcribe() {
+        for saved in ["gpt4o_transcribe", "gpt4o_mini_transcribe"] {
+            let decoded: OpenAiTranscribeModel =
+                serde_json::from_value(serde_json::json!(saved)).unwrap();
+            assert_eq!(
+                decoded,
+                OpenAiTranscribeModel::GptTranscribe,
+                "saved value {saved}"
+            );
+        }
     }
 
     #[test]
     fn provider_model_openai_serializes_with_provider_and_model() {
         let m = ProviderModel::OpenAi {
-            model: OpenAiTranscribeModel::Gpt4oTranscribe,
+            model: OpenAiTranscribeModel::GptTranscribe,
         };
         let v: serde_json::Value = serde_json::to_value(&m).unwrap();
         assert_eq!(v["provider"], "open_ai");
-        assert_eq!(v["model"], "gpt4o_transcribe");
-    }
-
-    #[test]
-    fn provider_model_openai_round_trips() {
-        for model in [
-            OpenAiTranscribeModel::Gpt4oTranscribe,
-            OpenAiTranscribeModel::Gpt4oMiniTranscribe,
-        ] {
-            let pm = ProviderModel::OpenAi { model };
-            let json = serde_json::to_string(&pm).unwrap();
-            let decoded: ProviderModel = serde_json::from_str(&json).unwrap();
-            assert_eq!(decoded, pm);
-        }
+        assert_eq!(v["model"], "gpt_transcribe");
     }
 
     #[test]

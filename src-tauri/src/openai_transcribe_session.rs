@@ -7,6 +7,9 @@ use std::sync::OnceLock;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 const OPENAI_TRANSCRIBE_URL: &str = "https://api.openai.com/v1/audio/transcriptions";
+// gpt-transcribe documents `languages` (a list) as its language hint; it still
+// accepts the GPT-4o era `language`, but that is outside its documented contract.
+const LANGUAGE_HINT_FIELD: &str = "languages[]";
 
 pub struct OpenAiTranscribeEngine {
     pub model: OpenAiTranscribeModel,
@@ -84,7 +87,7 @@ async fn post_to_openai(
         .text("response_format", "json");
 
     if let Some(lang) = language {
-        form = form.text("language", lang.to_string());
+        form = form.text(LANGUAGE_HINT_FIELD, lang.to_string());
     }
     form = form.part("file", part);
     if let Some(p) = prompt {
@@ -152,7 +155,7 @@ mod tests {
     #[test]
     fn engine_new_stores_model_and_key() {
         let engine = OpenAiTranscribeEngine::new(
-            OpenAiTranscribeModel::Gpt4oTranscribe,
+            OpenAiTranscribeModel::GptTranscribe,
             "sk-test".to_string(),
         );
         assert_eq!(engine.key, "sk-test");

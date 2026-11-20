@@ -1,4 +1,5 @@
 use crate::cleanup::AiProviderId;
+use crate::cleanup_model_migration::DEFAULT_CLEANUP_MODEL;
 use crate::provider::ProviderModel;
 use serde::{Deserialize, Serialize};
 
@@ -55,7 +56,7 @@ impl ModeLanguage {
 }
 
 fn default_cleanup_model() -> String {
-    "claude-haiku-4-5".to_string()
+    DEFAULT_CLEANUP_MODEL.to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -395,7 +396,7 @@ mod tests {
     fn mode_cleanup_defaults_to_anthropic_and_haiku() {
         let c = ModeCleanup::default();
         assert_eq!(c.provider, AiProviderId::Anthropic);
-        assert_eq!(c.model, "claude-haiku-4-5");
+        assert_eq!(c.model, "claude-haiku-5-5");
     }
 
     #[test]
@@ -403,7 +404,7 @@ mod tests {
         let json = r#"{"enabled":false,"prompt_override":null}"#;
         let c: ModeCleanup = serde_json::from_str(json).unwrap();
         assert_eq!(c.provider, AiProviderId::Anthropic);
-        assert_eq!(c.model, "claude-haiku-4-5");
+        assert_eq!(c.model, "claude-haiku-5-5");
     }
 
     #[test]

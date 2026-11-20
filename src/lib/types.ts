@@ -66,26 +66,57 @@ export type TranscriptionProvider =
 
 export type GroqModel = "whisper_large_v3" | "whisper_large_v3_turbo";
 
-export type OpenAiTranscribeModel =
-  | "gpt4o_transcribe"
-  | "gpt4o_mini_transcribe";
+export type OpenAiTranscribeModel = "gpt_transcribe";
 
-export type ElevenLabsModel = "scribe_v2" | "scribe_v2_realtime";
+export type ElevenLabsModel = "scribe_v3" | "scribe_v3_live";
 
 export type AssemblyAiModel =
-  | "universal_pro_streaming"
-  | "universal_streaming_english"
-  | "universal_streaming_multilingual"
+  | "stt_3_7_realtime"
+  | "universal_3_6_pro"
   | "whisper_streaming"
   | "universal_2";
+
+const ASSEMBLYAI_STREAMING_LANGUAGES = [
+  "af",
+  "ar",
+  "ca",
+  "da",
+  "de",
+  "en",
+  "es",
+  "et",
+  "fa",
+  "fi",
+  "fr",
+  "gl",
+  "he",
+  "hi",
+  "it",
+  "ja",
+  "ko",
+  "mr",
+  "nb",
+  "nl",
+  "no",
+  "pt",
+  "ro",
+  "ru",
+  "sv",
+  "tr",
+  "ur",
+  "vi",
+  "xh",
+  "yue",
+  "zh",
+  "zu",
+];
 
 export const ASSEMBLYAI_MODEL_SUPPORTED_LANGUAGES: Record<
   AssemblyAiModel,
   string[] | null
 > = {
-  universal_pro_streaming: ["en", "es", "de", "fr", "pt", "it"],
-  universal_streaming_english: ["en"],
-  universal_streaming_multilingual: ["en", "es", "de", "fr", "pt", "it"],
+  stt_3_7_realtime: ASSEMBLYAI_STREAMING_LANGUAGES,
+  universal_3_6_pro: ASSEMBLYAI_STREAMING_LANGUAGES,
   whisper_streaming: null,
   universal_2: null,
 };
@@ -119,14 +150,12 @@ const GROQ_MODEL_LABELS: Record<GroqModel, string> = {
 };
 
 const OPENAI_TRANSCRIBE_MODEL_LABELS: Record<OpenAiTranscribeModel, string> = {
-  gpt4o_transcribe: "GPT-4o Transcribe",
-  gpt4o_mini_transcribe: "GPT-4o mini Transcribe",
+  gpt_transcribe: "GPT Transcribe",
 };
 
 const ASSEMBLYAI_MODEL_LABELS: Record<AssemblyAiModel, string> = {
-  universal_pro_streaming: "Universal-3 Pro",
-  universal_streaming_english: "Universal English",
-  universal_streaming_multilingual: "Universal Multilingual",
+  stt_3_7_realtime: "STT-3.7 Realtime",
+  universal_3_6_pro: "Universal-3.6 Pro",
   whisper_streaming: "Whisper Streaming",
   universal_2: "Universal-2 (multilingual)",
 };
@@ -138,8 +167,8 @@ const LOCAL_MODEL_LABELS: Record<LocalWhisperModel, string> = {
 };
 
 const ELEVENLABS_MODEL_LABELS: Record<ElevenLabsModel, string> = {
-  scribe_v2: "Scribe v2",
-  scribe_v2_realtime: "Scribe v2 Realtime",
+  scribe_v3: "Scribe v3",
+  scribe_v3_live: "Scribe v3 Live",
 };
 
 export function providerModelLabel(pm: ProviderModel): string {

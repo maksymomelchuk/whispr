@@ -44,6 +44,7 @@ mod soniox_session;
 // cleanup is cross-platform HTTP (reqwest + serde_json, no OS APIs).
 pub mod cleanup;
 mod cleanup_invoke;
+mod cleanup_model_migration;
 pub mod model_catalog;
 pub mod recovery;
 

@@ -64,7 +64,7 @@ async fn pipeline_snapshot_captures_mode_cleanup_settings() {
         .expect("snapshot must be present");
 
     assert_eq!(snap.cleanup_provider, AiProviderId::Anthropic);
-    assert_eq!(snap.cleanup_model, "claude-haiku-4-5");
+    assert_eq!(snap.cleanup_model, "claude-haiku-5-5");
     assert!(!snap.use_snippets);
     assert_eq!(snap.cleanup_prompt_override, None);
 }

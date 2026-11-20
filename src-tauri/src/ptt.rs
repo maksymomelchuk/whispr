@@ -664,7 +664,7 @@ async fn run_session(
                 terms: session_terms,
             };
             match model {
-                ElevenLabsModel::ScribeV2 => {
+                ElevenLabsModel::ScribeV3 => {
                     Session::new(
                         ElevenLabsEngine::new(key),
                         app.clone(),
@@ -675,7 +675,7 @@ async fn run_session(
                     .run(chunk_rx, ctx)
                     .await
                 }
-                ElevenLabsModel::ScribeV2Realtime => {
+                ElevenLabsModel::ScribeV3Live => {
                     Session::new(
                         ElevenLabsRealtimeEngine::new(key),
                         app.clone(),

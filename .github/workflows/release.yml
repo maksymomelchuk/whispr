@@ -76,9 +76,14 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      # Pinned with ci.yml: Rust 1.100 moved build scripts' OUT_DIR one level
+      # deeper and ort-sys 2.0.0-rc.12 panics on Windows (rc.13 still does).
+      # Unpin both only after an ort-sys release fixes copy_dylibs and a
+      # Windows build passes on stable.
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: 1.99.1
           targets: ${{ matrix.platform.rust-targets }}
 
       - name: Cache Rust build
