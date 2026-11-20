@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { MeetingSegment } from "@/lib/types";
 
+import { formatSegmentTime } from "./meetingFormat";
 import {
   filterLines,
   remoteSpeakerLabels,
@@ -74,5 +75,15 @@ describe("shouldSuggestHeadphones", () => {
     const echoes = [1, 2, 3].map(() => segment("You", "echo", true));
 
     expect(shouldSuggestHeadphones([...conversation, ...echoes])).toBe(true);
+  });
+});
+
+describe("formatSegmentTime", () => {
+  it("shows minutes and seconds within the first hour", () => {
+    expect(formatSegmentTime(65_000)).toBe("1:05");
+  });
+
+  it("adds hours past the first hour", () => {
+    expect(formatSegmentTime(3_902_000)).toBe("1:05:02");
   });
 });

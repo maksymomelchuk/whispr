@@ -63,6 +63,7 @@ export function MeetingTranscript({ meeting }: { meeting: Meeting }) {
           <MagnifyingGlassIcon className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
+            autoComplete="off"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search transcript"

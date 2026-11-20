@@ -60,6 +60,14 @@ export function TranscriptLineList({
     if (position >= 0) virtualizer.scrollToIndex(position, { align: "center" });
   }, [focusedIndex, lines, virtualizer]);
 
+  if (lines.length === 0) {
+    return (
+      <p className="py-6 text-center text-sm text-muted-foreground">
+        No lines match.
+      </p>
+    );
+  }
+
   return (
     <div
       ref={setScrollElement}
@@ -88,7 +96,7 @@ export function TranscriptLineList({
                 type="button"
                 onClick={() => onTimestampClick(line)}
                 title="Show in full transcript"
-                className="w-12 shrink-0 text-left font-mono text-xs tabular-nums text-muted-foreground hover:text-foreground hover:underline"
+                className="w-16 shrink-0 text-left font-mono text-xs tabular-nums text-muted-foreground hover:text-foreground hover:underline"
               >
                 {formatSegmentTime(line.segment.start_ms)}
               </button>
