@@ -324,7 +324,9 @@ fn arm_handsfree_guard(app: &AppHandle, state: &AppState, recorder: &Recorder) {
 
 fn maybe_pause_media(state: &AppState) {
     *state.did_pause_media.lock().unwrap() = false;
-    if *state.pause_media_on_record.lock().unwrap() {
+    // Muting output mid-meeting would silence the call being recorded.
+    let meeting_recording = state.active_meeting.lock().unwrap().is_some();
+    if *state.pause_media_on_record.lock().unwrap() && !meeting_recording {
         *state.did_pause_media.lock().unwrap() = true;
         tauri::async_runtime::spawn_blocking(media::mute_output);
     }

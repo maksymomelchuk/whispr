@@ -67,6 +67,10 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = [
     "NSWindow", "NSButton", "NSControl", "NSResponder", "NSView",
 ] }
 transcribe-rs = { version = "0.3", features = ["whisper-metal", "ort-coreml"] }
+objc2-core-audio = "0.3"
+objc2-core-audio-types = "0.3"
+objc2-core-foundation = { version = "0.3", features = ["CFDictionary"] }
+block2 = "0.6"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 clipboard-win = "5"

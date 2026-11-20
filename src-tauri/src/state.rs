@@ -1,5 +1,6 @@
 use crate::clipboard_context::SamplerWindow;
 use crate::config::{HotkeyBinding, Shortcut};
+use crate::meeting::ActiveMeeting;
 use crate::provider::LocalWhisperModel;
 use crate::recorder::Recorder;
 #[cfg(target_os = "macos")]
@@ -46,6 +47,7 @@ pub struct LoadedModel {
 #[derive(Clone, Default)]
 pub struct AppState {
     pub hotkey_bindings: Arc<Mutex<Vec<HotkeyBinding>>>,
+    pub active_meeting: Arc<Mutex<Option<ActiveMeeting>>>,
     /// The shortcut that activated the current PTT session. Cleared when PTT ends.
     /// Kept separate so release detection uses only the active binding's keys.
     pub active_shortcut: Arc<Mutex<Option<Shortcut>>>,

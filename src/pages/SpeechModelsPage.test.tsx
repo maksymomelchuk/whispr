@@ -92,6 +92,7 @@ const BASE_SETTINGS: Settings = {
   custom_provider_configured: false,
   custom_provider_base_url: null,
   custom_provider_model: "",
+  meeting_summary: { provider: "anthropic", model: "claude-sonnet-5-5" },
 };
 
 function Wrapper({ settings = BASE_SETTINGS }: { settings?: Settings }) {

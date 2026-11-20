@@ -46,6 +46,7 @@ const BASE_SETTINGS: Settings = {
   custom_provider_configured: false,
   custom_provider_base_url: null,
   custom_provider_model: "",
+  meeting_summary: { provider: "anthropic", model: "claude-sonnet-5-5" },
   ai_cleanup_min_words: 3,
   ai_cleanup_min_duration_ms: 1000,
   ai_cleanup_tone_overlay_enabled: false,

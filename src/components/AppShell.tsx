@@ -11,6 +11,7 @@ import {
   SparkleIcon,
   TextAaIcon,
   TextTIcon,
+  UsersThreeIcon,
   WarningIcon,
   WaveformIcon,
 } from "@phosphor-icons/react";
@@ -35,6 +36,7 @@ import { HistoryPage } from "../pages/HistoryPage";
 import { HomePage } from "../pages/HomePage";
 import { HotkeysPage } from "../pages/HotkeysPage";
 import { LearnedEntriesPage } from "../pages/LearnedEntriesPage";
+import { MeetingsPage } from "../pages/MeetingsPage";
 import { ModesPage } from "../pages/ModesPage";
 import { SnippetsPage } from "../pages/SnippetsPage";
 import { SpeechModelsPage } from "../pages/SpeechModelsPage";
@@ -97,6 +99,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "Activity",
     items: [
+      { label: "Meetings", icon: UsersThreeIcon, path: "/meetings" },
       { label: "History", icon: ClockCounterClockwiseIcon, path: "/history" },
       { label: "Stats", icon: ChartBarIcon, path: "/stats" },
     ],
@@ -471,6 +474,7 @@ function ShellInner() {
               <Route path="/learned" element={<LearnedEntriesPage />} />
               <Route path="/modes" element={<ModesPage />} />
               <Route path="/snippets" element={<SnippetsPage />} />
+              <Route path="/meetings" element={<MeetingsPage />} />
               <Route path="/history" element={<HistoryPage />} />
               <Route path="/stats" element={<StatsPage />} />
             </Routes>

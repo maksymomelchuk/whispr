@@ -1,4 +1,5 @@
 use crate::cleanup_model_migration::replace_delisted_cleanup_models;
+use crate::meeting::summary::MeetingSummarySettings;
 use crate::mode::{Mode, ModeId, SetId, SEED_MODE_UA_EN};
 pub use crate::provider::{AssemblyAiModel, GroqModel, ProviderModel, TranscriptionProvider};
 pub use crate::tone::TonePreset;
@@ -466,6 +467,8 @@ pub struct Settings {
     /// (only Terms), preventing replacement cycles.
     #[serde(default)]
     pub learned_inconsistent_from: Vec<String>,
+    #[serde(default)]
+    pub meeting_summary: MeetingSummarySettings,
 }
 
 impl Default for Settings {
@@ -506,6 +509,7 @@ impl Default for Settings {
             learn_from_corrections: false,
             learned_entries: vec![],
             learned_inconsistent_from: vec![],
+            meeting_summary: MeetingSummarySettings::default(),
         }
     }
 }
