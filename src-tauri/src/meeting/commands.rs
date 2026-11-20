@@ -1,7 +1,8 @@
 use super::capture;
 use super::processing::{self, ProcessingConfig};
 use super::store::{
-    new_meeting_id, validate_meeting_id, Meeting, MeetingListItem, MeetingMeta, MeetingStatus, MeetingStore,
+    new_meeting_id, validate_meeting_id, Meeting, MeetingListItem, MeetingMeta, MeetingStatus,
+    MeetingStore,
 };
 use super::summary::MeetingSummarySettings;
 use crate::config;

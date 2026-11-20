@@ -434,14 +434,19 @@ mod tests {
     fn list_items_carry_each_meetings_title() {
         let root = tempfile::tempdir().unwrap();
         let store = MeetingStore::new(root.path().to_path_buf());
-        store.create(&meta("titled", 2, MeetingStatus::Ready)).unwrap();
+        store
+            .create(&meta("titled", 2, MeetingStatus::Ready))
+            .unwrap();
         store
             .create(&meta("recording", 1, MeetingStatus::Recording))
             .unwrap();
         store.save_notes("titled", "# Weekly sync\n- item").unwrap();
 
-        let titles: Vec<Option<String>> =
-            store.list_items().into_iter().map(|item| item.title).collect();
+        let titles: Vec<Option<String>> = store
+            .list_items()
+            .into_iter()
+            .map(|item| item.title)
+            .collect();
 
         assert_eq!(titles, vec![Some("Weekly sync".to_string()), None]);
     }
