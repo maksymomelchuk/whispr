@@ -63,7 +63,8 @@ jobs:
           cache: pnpm
 
       # Rust 1.100 moved build scripts' OUT_DIR one level deeper; ort-sys
-      # 2.0.0-rc.12 derives target/debug from it and panics on Windows.
+      # 2.0.0-rc.12 derives target/debug from it and panics on Windows. Pinned
+      # with release.yml; unpin both once ort (via transcribe-rs) is bumped.
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master
         with:
