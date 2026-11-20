@@ -181,6 +181,10 @@ body:has(.overlay-root) {
   background: rgba(15, 15, 15, 0.9);
 }
 
+.overlay-pill.notice {
+  background: rgba(15, 15, 15, 0.9);
+}
+
 /* Rotates in 12 discrete steps so the brightest tick "chases" around the
    wheel rather than smoothly spinning. */
 .overlay-spinner {

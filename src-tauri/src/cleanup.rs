@@ -112,6 +112,24 @@ const CLEANUP_TIMEOUT_PER_CHAR_MS: u64 = 5;
 /// justify more generation time — it only lengthens dead air on a true hang.
 const CLEANUP_TIMEOUT_MAX_MS: u64 = 20_000;
 
+/// Output-token cap and wall-clock ceiling for one provider request. Cleanup
+/// rewrites a short dictation; other text tasks (meeting summaries) read far
+/// more and write far more, so they bring their own budget.
+#[derive(Debug, Clone, Copy)]
+pub struct RequestBudget {
+    pub max_tokens: u32,
+    pub timeout: Duration,
+}
+
+impl RequestBudget {
+    pub fn cleanup(transcript: &str) -> Self {
+        Self {
+            max_tokens: MAX_TOKENS,
+            timeout: cleanup_timeout(transcript),
+        }
+    }
+}
+
 fn cleanup_timeout(transcript: &str) -> Duration {
     let extra = (transcript.chars().count() as u64).saturating_mul(CLEANUP_TIMEOUT_PER_CHAR_MS);
     let total = CLEANUP_TIMEOUT_BASE_MS.saturating_add(extra);
@@ -349,7 +367,7 @@ impl Transport for ReqwestTransport {
 }
 
 /// Returns the cleaned transcript (trimmed, no trailing space) alongside
-/// token usage. Bounded by `cleanup_timeout`; the caller falls back to the raw
+/// token usage. Bounded by `budget.timeout`; cleanup falls back to the raw
 /// transcript past that. The paste pipeline adds its own trailing space at
 /// the paste call site so each history stage stays in a canonical form.
 pub async fn run(
@@ -357,19 +375,21 @@ pub async fn run(
     credential: Credential<'_>,
     model: &str,
     prompt: &str,
+    budget: RequestBudget,
 ) -> Result<(String, Usage), CleanupError> {
-    run_with_transport(
+    run_budgeted(
         transcript,
         credential,
         model,
         prompt,
         &ReqwestTransport,
-        cleanup_timeout(transcript),
+        budget,
     )
     .await
 }
 
 /// Testable variant of `run` with injectable transport and configurable timeout.
+#[cfg(test)]
 pub(crate) async fn run_with_transport<T: Transport>(
     transcript: &str,
     credential: Credential<'_>,
@@ -378,14 +398,32 @@ pub(crate) async fn run_with_transport<T: Transport>(
     transport: &T,
     timeout: Duration,
 ) -> Result<(String, Usage), CleanupError> {
-    match tokio::time::timeout(
+    let budget = RequestBudget {
+        max_tokens: MAX_TOKENS,
         timeout,
-        call_with_transport(transcript, credential, model, prompt, transport),
-    )
-    .await
-    {
+    };
+    run_budgeted(transcript, credential, model, prompt, transport, budget).await
+}
+
+async fn run_budgeted<T: Transport>(
+    transcript: &str,
+    credential: Credential<'_>,
+    model: &str,
+    prompt: &str,
+    transport: &T,
+    budget: RequestBudget,
+) -> Result<(String, Usage), CleanupError> {
+    let call = call_with_transport(
+        transcript,
+        credential,
+        model,
+        prompt,
+        transport,
+        budget.max_tokens,
+    );
+    match tokio::time::timeout(budget.timeout, call).await {
         Ok(result) => result,
-        Err(_) => Err(CleanupError::Timeout(timeout)),
+        Err(_) => Err(CleanupError::Timeout(budget.timeout)),
     }
 }
 
@@ -393,17 +431,12 @@ pub async fn run_openai(
     transcript: &str,
     target: OpenAiTarget<'_>,
     prompt: &str,
+    budget: RequestBudget,
 ) -> Result<(String, Usage), CleanupError> {
-    run_openai_with_transport(
-        transcript,
-        target,
-        prompt,
-        &ReqwestTransport,
-        cleanup_timeout(transcript),
-    )
-    .await
+    run_openai_budgeted(transcript, target, prompt, &ReqwestTransport, budget).await
 }
 
+#[cfg(test)]
 pub(crate) async fn run_openai_with_transport<T: Transport>(
     transcript: &str,
     target: OpenAiTarget<'_>,
@@ -411,14 +444,24 @@ pub(crate) async fn run_openai_with_transport<T: Transport>(
     transport: &T,
     timeout: Duration,
 ) -> Result<(String, Usage), CleanupError> {
-    match tokio::time::timeout(
+    let budget = RequestBudget {
+        max_tokens: MAX_TOKENS,
         timeout,
-        call_openai_with_transport(transcript, target, prompt, transport),
-    )
-    .await
-    {
+    };
+    run_openai_budgeted(transcript, target, prompt, transport, budget).await
+}
+
+async fn run_openai_budgeted<T: Transport>(
+    transcript: &str,
+    target: OpenAiTarget<'_>,
+    prompt: &str,
+    transport: &T,
+    budget: RequestBudget,
+) -> Result<(String, Usage), CleanupError> {
+    let call = call_openai_with_transport(transcript, target, prompt, transport, budget.max_tokens);
+    match tokio::time::timeout(budget.timeout, call).await {
         Ok(result) => result,
-        Err(_) => Err(CleanupError::Timeout(timeout)),
+        Err(_) => Err(CleanupError::Timeout(budget.timeout)),
     }
 }
 
@@ -588,11 +631,11 @@ fn extra_body_params(provider: AiProviderId, model: &str) -> Vec<(&'static str, 
 /// while other OpenAI-compatible servers (including self-hosted Custom ones)
 /// still expect that classic pair. Without a stop sequence the close tag comes
 /// back in the text, where `extract_output` strips it.
-fn output_limit_params(provider: AiProviderId) -> Vec<(&'static str, Value)> {
+fn output_limit_params(provider: AiProviderId, max_tokens: u32) -> Vec<(&'static str, Value)> {
     match provider {
-        AiProviderId::OpenAi => vec![("max_completion_tokens", serde_json::json!(MAX_TOKENS))],
+        AiProviderId::OpenAi => vec![("max_completion_tokens", serde_json::json!(max_tokens))],
         _ => vec![
-            ("max_tokens", serde_json::json!(MAX_TOKENS)),
+            ("max_tokens", serde_json::json!(max_tokens)),
             ("stop", serde_json::json!([OUTPUT_CLOSE_TAG])),
         ],
     }
@@ -603,6 +646,7 @@ async fn call_openai_with_transport<T: Transport>(
     target: OpenAiTarget<'_>,
     prompt: &str,
     transport: &T,
+    max_tokens: u32,
 ) -> Result<(String, Usage), CleanupError> {
     let headers = build_openai_headers(target.api_key);
     let mut body = serde_json::json!({
@@ -612,7 +656,7 @@ async fn call_openai_with_transport<T: Transport>(
             {"role": "user", "content": wrap_transcript(transcript)}
         ]
     });
-    for (key, value) in output_limit_params(target.provider) {
+    for (key, value) in output_limit_params(target.provider, max_tokens) {
         body[key] = value;
     }
     if let Some(effort) = reasoning_effort_for(target.provider, target.model) {
@@ -753,6 +797,7 @@ async fn call_with_transport<T: Transport>(
     model: &str,
     prompt: &str,
     transport: &T,
+    max_tokens: u32,
 ) -> Result<(String, Usage), CleanupError> {
     let system = build_system(&credential, prompt);
     let mut messages = vec![serde_json::json!({
@@ -767,7 +812,7 @@ async fn call_with_transport<T: Transport>(
     }
     let body = serde_json::json!({
         "model": model,
-        "max_tokens": MAX_TOKENS,
+        "max_tokens": max_tokens,
         "system": system,
         "stop_sequences": [OUTPUT_CLOSE_TAG],
         "messages": messages

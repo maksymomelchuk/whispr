@@ -324,13 +324,15 @@ fn arm_handsfree_guard(app: &AppHandle, state: &AppState, recorder: &Recorder) {
 
 fn maybe_pause_media(state: &AppState) {
     *state.did_pause_media.lock().unwrap() = false;
-    if *state.pause_media_on_record.lock().unwrap() {
+    // Muting output mid-meeting would silence the call being recorded.
+    let meeting_recording = state.active_meeting.lock().unwrap().is_some();
+    if *state.pause_media_on_record.lock().unwrap() && !meeting_recording {
         *state.did_pause_media.lock().unwrap() = true;
         tauri::async_runtime::spawn_blocking(media::mute_output);
     }
 }
 
-fn maybe_resume_media(state: &AppState) {
+pub(crate) fn maybe_resume_media(state: &AppState) {
     let mut flag = state.did_pause_media.lock().unwrap();
     if !*flag {
         return;
@@ -1149,9 +1151,9 @@ fn fire_recover_latest(app: &AppHandle, state: &AppState) {
     });
 }
 
-/// PasteLatest and RecoverLatest are suppressed while a PTT session is active
-/// so a stray double-tap during recording can't fire a stale paste at the same
-/// target.
+/// PasteLatest, RecoverLatest and MeetingToggle are suppressed while a PTT
+/// session is active: a stray press during recording can't fire a stale paste
+/// at the same target, and the overlay is busy showing the dictation.
 fn dispatch_binding(
     app: &AppHandle,
     state: &AppState,
@@ -1173,6 +1175,12 @@ fn dispatch_binding(
                 return;
             }
             fire_recover_latest(app, state);
+        }
+        HotkeyAction::MeetingToggle => {
+            if *state.ptt_active.lock().unwrap() {
+                return;
+            }
+            crate::meeting::hotkey::toggle(app.clone(), state.clone());
         }
     }
 }

@@ -35,11 +35,14 @@ mod elevenlabs_session;
 mod engine;
 mod groq_session;
 mod local_engine;
+mod meeting;
 mod openai_transcribe_session;
 mod preview_throttle;
 pub(crate) mod recorder;
 mod session;
 mod soniox_session;
+#[cfg(target_os = "macos")]
+mod system_audio;
 
 // cleanup is cross-platform HTTP (reqwest + serde_json, no OS APIs).
 pub mod cleanup;
@@ -223,6 +226,15 @@ pub fn run() {
                 });
             }
 
+            match meeting::commands::meeting_store(app.handle()) {
+                Ok(store) => {
+                    if let Err(e) = store.fail_interrupted() {
+                        eprintln!("Failed to flag interrupted meetings: {e}");
+                    }
+                }
+                Err(e) => eprintln!("Failed to open meeting store: {e}"),
+            }
+
             if let Err(e) = tray::setup(app.handle()) {
                 eprintln!("Failed to create tray icon: {e}");
             }
@@ -318,6 +330,13 @@ pub fn run() {
             commands::get_local_model_path,
             commands::set_local_whisper_idle_timeout,
             commands::check_speech_provider_key,
+            meeting::commands::start_meeting,
+            meeting::commands::stop_meeting,
+            meeting::commands::retry_meeting,
+            meeting::commands::list_meetings,
+            meeting::commands::get_meeting,
+            meeting::commands::delete_meeting,
+            meeting::commands::set_meeting_summary,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

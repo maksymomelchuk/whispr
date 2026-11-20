@@ -77,6 +77,21 @@ describe("OverlayApp", () => {
     expect(container.querySelector(".overlay-spinner")).not.toBeInTheDocument();
   });
 
+  it("overlay-notice shows the meeting message instead of the timer", async () => {
+    const { container, getByText } = await renderAndSettle();
+    fire("overlay-notice", { text: "Meeting recording", is_error: false });
+    expect(getByText("Meeting recording")).toBeInTheDocument();
+    expect(getByText("Meeting")).toBeInTheDocument();
+    expect(container.querySelector(".overlay-wave")).not.toBeInTheDocument();
+  });
+
+  it("an error notice shows the error icon with its message", async () => {
+    const { container, getByText } = await renderAndSettle();
+    fire("overlay-notice", { text: "Meeting: no key", is_error: true });
+    expect(getByText("Meeting: no key")).toBeInTheDocument();
+    expect(container.querySelector(".overlay-error-icon")).toBeInTheDocument();
+  });
+
   it("ptt-pressed after ptt-cancelled resets to recording", async () => {
     const { container } = await renderAndSettle();
     fire("ptt-cancelled");

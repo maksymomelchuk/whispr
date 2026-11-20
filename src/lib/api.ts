@@ -13,6 +13,9 @@ import type {
   LocalModelStatus,
   LocalWhisperIdleTimeout,
   LocalWhisperModel,
+  Meeting,
+  MeetingMeta,
+  MeetingSummarySettings,
   Mode,
   NamedCorrectionSet,
   Settings,
@@ -265,3 +268,21 @@ export const getAppIcon = (bundleId: string) =>
 
 export const checkSpeechProviderKey = (providerId: string) =>
   invoke<ApiKeyValidation>("check_speech_provider_key", { providerId });
+
+export const startMeeting = () => invoke<MeetingMeta>("start_meeting");
+
+export const stopMeeting = () => invoke<void>("stop_meeting");
+
+export const retryMeeting = (id: string) =>
+  invoke<void>("retry_meeting", { id });
+
+export const listMeetings = () => invoke<MeetingMeta[]>("list_meetings");
+
+export const getMeeting = (id: string) =>
+  invoke<Meeting>("get_meeting", { id });
+
+export const deleteMeeting = (id: string) =>
+  invoke<void>("delete_meeting", { id });
+
+export const setMeetingSummary = (summary: MeetingSummarySettings) =>
+  invoke<void>("set_meeting_summary", { summary });

@@ -19,7 +19,14 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
+import {
+  AiProviderModelPicker,
+  configuredAiProviders,
+  defaultModelFor,
+  type AiProviderModel,
+} from "@/components/AiProviderModelPicker";
 import { EmptyRowCard } from "@/components/EmptyRowCard";
+import { FieldColumn, FieldLabel } from "@/components/FieldColumn";
 import { PageShell } from "@/components/PageShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,7 +58,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 
 import { Chip } from "../components/Chip";
 import { RowCard } from "../components/RowCard";
@@ -236,84 +242,6 @@ const LANGUAGES: { code: string; name: string; flag: string }[] = [
   { code: "he", name: "Hebrew", flag: "🇮🇱" },
 ];
 
-const CLEANUP_PROVIDER_OPTIONS: { value: AiProviderId; label: string }[] = [
-  { value: "anthropic", label: "Anthropic" },
-  { value: "openai", label: "OpenAI" },
-  { value: "google", label: "Google Gemini" },
-  { value: "groq", label: "Groq" },
-  { value: "deepseek", label: "DeepSeek" },
-  { value: "cerebras", label: "Cerebras" },
-  { value: "openrouter", label: "OpenRouter" },
-  { value: "custom", label: "Custom" },
-];
-
-type CleanupModelOption = {
-  value: string;
-  label: string;
-  recommended?: boolean;
-};
-
-const CLEANUP_MODEL_OPTIONS: Record<
-  Exclude<AiProviderId, "custom">,
-  CleanupModelOption[]
-> = {
-  anthropic: [
-    { value: "claude-haiku-5-5", label: "Claude Haiku 5.5", recommended: true },
-    { value: "claude-sonnet-5-5", label: "Claude Sonnet 5.5" },
-    { value: "claude-opus-5-5", label: "Claude Opus 5.5" },
-    { value: "claude-fable-5-2", label: "Claude Fable 5.2" },
-  ],
-  openai: [
-    { value: "gpt-6-luna", label: "GPT-6 Luna", recommended: true },
-    { value: "gpt-5.4-mini", label: "GPT-5.4 mini" },
-    { value: "gpt-5.4-nano", label: "GPT-5.4 nano" },
-    { value: "gpt-6.2-sol", label: "GPT-6.2 Sol" },
-    { value: "gpt-6.2-astra", label: "GPT-6.2 Astra" },
-  ],
-  google: [
-    {
-      value: "gemini-3.5-flash-lite",
-      label: "Gemini 3.5 Flash-Lite",
-      recommended: true,
-    },
-    { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash" },
-    { value: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite" },
-  ],
-  groq: [
-    {
-      value: "openai/gpt-oss-120b",
-      label: "GPT-OSS 120B",
-      recommended: true,
-    },
-    { value: "openai/gpt-oss-20b", label: "GPT-OSS 20B" },
-    { value: "qwen/qwen3.8-27b", label: "Qwen3.8 27B" },
-  ],
-  deepseek: [
-    {
-      value: "deepseek-flash",
-      label: "DeepSeek V4.1 Flash",
-      recommended: true,
-    },
-    { value: "deepseek-v4-pro", label: "DeepSeek V4 Pro" },
-  ],
-  cerebras: [
-    { value: "gpt-oss-120b", label: "GPT-OSS 120B", recommended: true },
-    { value: "qwen-3.8-27b", label: "Qwen3.8 27B" },
-  ],
-  openrouter: [
-    {
-      value: "anthropic/claude-haiku-5.5",
-      label: "Claude Haiku 5.5",
-      recommended: true,
-    },
-    { value: "openai/gpt-6-luna", label: "GPT-6 Luna" },
-    { value: "google/gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite" },
-    { value: "google/gemini-3.5-flash", label: "Gemini 3.5 Flash" },
-    { value: "deepseek/deepseek-v4.1-flash", label: "DeepSeek V4.1 Flash" },
-    { value: "qwen/qwen3.8-27b", label: "Qwen3.8 27B" },
-  ],
-};
-
 function langLabel(code: string): string {
   const entry = LANGUAGES.find((l) => l.code === code);
   return entry ? `${entry.flag} ${entry.name}` : code.toUpperCase();
@@ -467,42 +395,6 @@ function ModeRow({
         </Tooltip>
       </div>
     </RowCard>
-  );
-}
-
-function FieldLabel({
-  htmlFor,
-  children,
-}: {
-  htmlFor?: string;
-  children: ReactNode;
-}) {
-  return (
-    <Label
-      htmlFor={htmlFor}
-      className="text-[11px] font-medium tracking-[0.2px] text-muted-foreground"
-    >
-      {children}
-    </Label>
-  );
-}
-
-function FieldColumn({
-  label,
-  htmlFor,
-  className,
-  children,
-}: {
-  label: ReactNode;
-  htmlFor?: string;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className={cn("flex flex-col gap-1.5", className)}>
-      <FieldLabel htmlFor={htmlFor}>{label}</FieldLabel>
-      {children}
-    </div>
   );
 }
 
@@ -686,17 +578,11 @@ export function ModeEditor({
         : d.correction_set_ids.filter((id) => id !== setId),
     }));
 
-  const setCleanupProvider = (provider: AiProviderId) => {
-    const defaultModel =
-      provider === "custom" ? "" : CLEANUP_MODEL_OPTIONS[provider][0].value;
+  const setCleanupSelection = ({ provider, model }: AiProviderModel) =>
     setDraft((d) => ({
       ...d,
-      ai_cleanup: { ...d.ai_cleanup, provider, model: defaultModel },
+      ai_cleanup: { ...d.ai_cleanup, provider, model },
     }));
-  };
-
-  const setCleanupModel = (model: string) =>
-    setDraft((d) => ({ ...d, ai_cleanup: { ...d.ai_cleanup, model } }));
 
   const setPasteRawOnFailure = (paste_raw_on_failure: boolean) =>
     setDraft((d) => ({
@@ -1137,60 +1023,15 @@ export function ModeEditor({
           />
           {draft.ai_cleanup.enabled && (
             <>
-              <div className="grid grid-cols-2 gap-x-5 gap-y-4">
-                <FieldColumn label="Provider">
-                  <Select
-                    value={draft.ai_cleanup.provider}
-                    onValueChange={(v) => setCleanupProvider(v as AiProviderId)}
-                  >
-                    <SelectTrigger size="sm" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CLEANUP_PROVIDER_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                          {!(configuredProviders ?? []).includes(opt.value) &&
-                            " (needs setup)"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </FieldColumn>
-                {cleanupProvider !== "custom" ? (
-                  <FieldColumn label="Model">
-                    <Select
-                      value={draft.ai_cleanup.model}
-                      onValueChange={setCleanupModel}
-                    >
-                      <SelectTrigger size="sm" className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CLEANUP_MODEL_OPTIONS[cleanupProvider].map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                            {opt.recommended && (
-                              <span className="ml-1.5 text-muted-foreground">
-                                (recommended)
-                              </span>
-                            )}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FieldColumn>
-                ) : (
-                  <FieldColumn label="Model">
-                    <p className="text-[13px] text-muted-foreground">
-                      {customProviderModel || "(blank: single-model server)"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Configured on the Custom card under Cleanup.
-                    </p>
-                  </FieldColumn>
-                )}
-              </div>
+              <AiProviderModelPicker
+                selection={{
+                  provider: draft.ai_cleanup.provider,
+                  model: draft.ai_cleanup.model,
+                }}
+                onChange={setCleanupSelection}
+                configuredProviders={configuredProviders ?? []}
+                customProviderModel={customProviderModel}
+              />
               <Collapsible
                 open={promptOpen}
                 onOpenChange={setPromptOpen}
@@ -1302,7 +1143,7 @@ export function ModesPage() {
         enabled: false,
         prompt_override: null,
         provider: "anthropic",
-        model: CLEANUP_MODEL_OPTIONS.anthropic[0].value,
+        model: defaultModelFor("anthropic"),
         paste_raw_on_failure: true,
         context_capture_enabled: false,
       },
@@ -1436,21 +1277,7 @@ export function ModesPage() {
               onPersist={handlePersist}
               availableTermSets={settings.term_sets ?? []}
               correctionSets={settings.correction_sets ?? []}
-              configuredProviders={(() => {
-                const anthropicConfigured =
-                  settings.ai_cleanup_key_configured ||
-                  settings.ai_cleanup_oauth_token_configured;
-                return [
-                  ...settings.configured_providers,
-                  ...(anthropicConfigured &&
-                  !settings.configured_providers.includes("anthropic")
-                    ? (["anthropic"] as AiProviderId[])
-                    : []),
-                  ...(settings.custom_provider_configured
-                    ? (["custom"] as AiProviderId[])
-                    : []),
-                ];
-              })()}
+              configuredProviders={configuredAiProviders(settings)}
               customProviderModel={settings.custom_provider_model}
             />
           )}

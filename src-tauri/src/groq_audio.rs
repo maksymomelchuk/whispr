@@ -88,7 +88,7 @@ pub fn encode_to_flac_16k_mono(
     encode_mono_16k(&resampled)
 }
 
-fn downmix_to_mono(interleaved: &[i16], channels: u16) -> Vec<i16> {
+pub(crate) fn downmix_to_mono(interleaved: &[i16], channels: u16) -> Vec<i16> {
     if channels == 1 {
         return interleaved.to_vec();
     }

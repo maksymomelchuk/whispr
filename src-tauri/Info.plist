@@ -4,6 +4,8 @@
 <dict>
     <key>NSMicrophoneUsageDescription</key>
     <string>Whispr records audio from your microphone to transcribe it via Deepgram.</string>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>Whispr records your call's audio so meeting notes include what the other participants said.</string>
     <key>NSInputMonitoringUsageDescription</key>
     <string>Whispr monitors the global push-to-talk shortcut so dictation works in any app.</string>
     <key>LSUIElement</key>

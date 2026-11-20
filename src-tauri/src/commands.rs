@@ -60,6 +60,7 @@ pub struct SettingsView {
     pub start_at_login: bool,
     pub show_live_preview: bool,
     pub local_whisper_idle_timeout: LocalWhisperIdleTimeout,
+    pub meeting_summary: crate::meeting::summary::MeetingSummarySettings,
 }
 
 impl From<Settings> for SettingsView {
@@ -142,6 +143,7 @@ impl From<Settings> for SettingsView {
             start_at_login: s.start_at_login,
             show_live_preview: s.show_live_preview,
             local_whisper_idle_timeout: s.local_whisper.idle_timeout,
+            meeting_summary: s.meeting_summary,
         }
     }
 }

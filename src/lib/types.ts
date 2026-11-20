@@ -7,7 +7,8 @@ export interface Shortcut {
 export type HotkeyAction =
   | { type: "Ptt"; mode_id: string }
   | { type: "PasteLatest" }
-  | { type: "RecoverLatest" };
+  | { type: "RecoverLatest" }
+  | { type: "MeetingToggle" };
 
 export interface HotkeyBinding {
   shortcut: Shortcut;
@@ -24,6 +25,14 @@ export function pasteLatestBinding(shortcut: Shortcut): HotkeyBinding {
 
 export function recoverLatestBinding(shortcut: Shortcut): HotkeyBinding {
   return { shortcut, action: { type: "RecoverLatest" } };
+}
+
+export function meetingToggleBinding(shortcut: Shortcut): HotkeyBinding {
+  return { shortcut, action: { type: "MeetingToggle" } };
+}
+
+export function isMeetingToggleBinding(b: HotkeyBinding): boolean {
+  return b.action.type === "MeetingToggle";
 }
 
 export function isPasteLatestBinding(b: HotkeyBinding): boolean {
@@ -292,6 +301,7 @@ export interface Settings {
   start_at_login: boolean;
   show_live_preview: boolean;
   local_whisper_idle_timeout: LocalWhisperIdleTimeout;
+  meeting_summary: MeetingSummarySettings;
 }
 
 export interface LocalModelStatus {
@@ -399,4 +409,38 @@ export interface CleanupStats {
   week: PeriodCounter;
   month: PeriodCounter;
   overall: TotalCounter;
+}
+
+export interface MeetingSummarySettings {
+  provider: AiProviderId;
+  model: string;
+}
+
+export type MeetingStatus =
+  | { kind: "recording" }
+  | { kind: "transcribing" }
+  | { kind: "summarizing" }
+  | { kind: "ready" }
+  | { kind: "failed"; message: string };
+
+export interface MeetingMeta {
+  id: string;
+  started_at: number;
+  duration_ms: number;
+  status: MeetingStatus;
+  summary_model: string | null;
+  system_audio_error: string | null;
+}
+
+export interface MeetingSegment {
+  start_ms: number;
+  end_ms: number;
+  speaker: string;
+  text: string;
+}
+
+export interface Meeting {
+  meta: MeetingMeta;
+  segments: MeetingSegment[];
+  notes: string | null;
 }

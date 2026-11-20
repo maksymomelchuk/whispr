@@ -51,12 +51,42 @@ pub async fn invoke(
     context: Option<&cleanup::ContextBlocks>,
     transcript: &str,
 ) -> Result<(String, cleanup::Usage), cleanup::CleanupError> {
-    use cleanup::AiProviderId;
     let prompt = cleanup::effective_prompt(prompt_override, tone_directive, glossary, context);
+    let task = TextTask {
+        model,
+        system_prompt: &prompt,
+        text: transcript,
+        budget: cleanup::RequestBudget::cleanup(transcript),
+    };
+    invoke_text_task(cleanup_settings, provider, task).await
+}
+
+/// One system-prompted rewrite of `text` by a configured AI Provider.
+pub struct TextTask<'a> {
+    pub model: &'a str,
+    pub system_prompt: &'a str,
+    pub text: &'a str,
+    pub budget: cleanup::RequestBudget,
+}
+
+/// Runs a text task through the same credential and transport routing as
+/// cleanup, including the Anthropic OAuth credential.
+pub async fn invoke_text_task(
+    cleanup_settings: &config::AiCleanupSettings,
+    provider: cleanup::AiProviderId,
+    task: TextTask<'_>,
+) -> Result<(String, cleanup::Usage), cleanup::CleanupError> {
+    use cleanup::AiProviderId;
+    let TextTask {
+        model,
+        system_prompt,
+        text,
+        budget,
+    } = task;
     match provider {
         AiProviderId::Anthropic => {
             let credential = resolve_anthropic_credential(cleanup_settings)?;
-            cleanup::run(transcript, credential, model, &prompt).await
+            cleanup::run(text, credential, model, system_prompt, budget).await
         }
         AiProviderId::Custom => {
             let (api_key, chat_url, custom_model) = resolve_custom_endpoint(cleanup_settings)?;
@@ -66,7 +96,7 @@ pub async fn invoke(
                 model: &custom_model,
                 provider,
             };
-            cleanup::run_openai(transcript, target, &prompt).await
+            cleanup::run_openai(text, target, system_prompt, budget).await
         }
         _ => {
             let api_key = resolve_provider_key(cleanup_settings, provider)?;
@@ -76,7 +106,7 @@ pub async fn invoke(
                 model,
                 provider,
             };
-            cleanup::run_openai(transcript, target, &prompt).await
+            cleanup::run_openai(text, target, system_prompt, budget).await
         }
     }
 }
