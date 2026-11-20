@@ -1,6 +1,9 @@
+use super::echo::flag_echoes;
+use super::speakers::SpeakerNames;
 use super::track::Track;
 use super::transcript::Segment;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -76,6 +79,13 @@ pub struct MeetingMeta {
     /// share one clock when merged.
     #[serde(default)]
     pub system_offset_ms: u64,
+    /// Names for call-side speaker labels, detected while writing the notes
+    /// or set by hand. Transcript lines keep the raw label.
+    #[serde(default)]
+    pub speaker_names: SpeakerNames,
+    /// Names the notes use for more than one speaker; see `SummaryOutput`.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub ambiguous_speaker_names: BTreeSet<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -161,7 +171,9 @@ impl MeetingStore {
         };
         Ok(Meeting {
             meta: self.load_meta(id)?,
-            segments,
+            // Re-flagged on every load so transcripts saved before echo
+            // detection existed get it too.
+            segments: flag_echoes(segments),
             notes: read_optional(&dir.join(NOTES_FILE))?,
         })
     }
@@ -242,6 +254,8 @@ mod tests {
             summary_model: None,
             system_audio_error: None,
             system_offset_ms: 0,
+            speaker_names: SpeakerNames::new(),
+            ambiguous_speaker_names: BTreeSet::new(),
         }
     }
 
@@ -330,6 +344,7 @@ mod tests {
             end_ms: 900,
             speaker: "You".into(),
             text: "Hello".into(),
+            echo: false,
         };
         store.save_segments("m", &[segment]).unwrap();
         store.save_notes("m", "## Summary").unwrap();
@@ -338,5 +353,35 @@ mod tests {
 
         assert_eq!(meeting.segments.len(), 1);
         assert_eq!(meeting.notes.as_deref(), Some("## Summary"));
+    }
+
+    fn line(speaker: &str, text: &str) -> Segment {
+        Segment {
+            start_ms: 0,
+            end_ms: 900,
+            speaker: speaker.into(),
+            text: text.into(),
+            echo: false,
+        }
+    }
+
+    #[test]
+    fn loading_flags_echoes_in_transcripts_saved_without_them() {
+        let root = tempfile::tempdir().unwrap();
+        let store = MeetingStore::new(root.path().to_path_buf());
+        store.create(&meta("m", 1, MeetingStatus::Ready)).unwrap();
+        store
+            .save_segments("m", &[line("Them", "Ship it."), line("You", "Ship it.")])
+            .unwrap();
+
+        let echoes: Vec<bool> = store
+            .load("m")
+            .unwrap()
+            .segments
+            .iter()
+            .map(|s| s.echo)
+            .collect();
+
+        assert_eq!(echoes, vec![false, true]);
     }
 }

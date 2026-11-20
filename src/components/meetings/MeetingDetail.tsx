@@ -6,9 +6,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useMeetingsSubscription } from "@/hooks/useMeetings";
 import { deleteMeeting, getMeeting, retryMeeting } from "@/lib/api";
-import type { Meeting, MeetingSegment } from "@/lib/types";
+import type { Meeting } from "@/lib/types";
 
-import { formatMeetingStart, formatSegmentTime } from "./meetingFormat";
+import { formatMeetingStart } from "./meetingFormat";
+import { MeetingTranscript } from "./MeetingTranscript";
 
 type View = "notes" | "transcript";
 
@@ -21,27 +22,6 @@ function useMeeting(id: string) {
   }, [id]);
   useMeetingsSubscription(refresh);
   return meeting;
-}
-
-function Transcript({ segments }: { segments: MeetingSegment[] }) {
-  return (
-    <ol className="flex flex-col gap-2 text-sm">
-      {segments.map((segment) => (
-        <li
-          key={`${segment.start_ms}-${segment.speaker}`}
-          className="flex gap-3"
-        >
-          <span className="w-12 shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
-            {formatSegmentTime(segment.start_ms)}
-          </span>
-          <span>
-            <span className="font-semibold">{segment.speaker}: </span>
-            {segment.text}
-          </span>
-        </li>
-      ))}
-    </ol>
-  );
 }
 
 function StatusMessage({ meeting }: { meeting: Meeting }) {
@@ -131,7 +111,7 @@ export function MeetingDetail({
           {meeting.notes}
         </div>
       )}
-      {view === "transcript" && <Transcript segments={meeting.segments} />}
+      {view === "transcript" && <MeetingTranscript meeting={meeting} />}
     </section>
   );
 }

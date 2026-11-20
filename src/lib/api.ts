@@ -284,5 +284,8 @@ export const getMeeting = (id: string) =>
 export const deleteMeeting = (id: string) =>
   invoke<void>("delete_meeting", { id });
 
+export const renameMeetingSpeaker = (id: string, label: string, name: string) =>
+  invoke<void>("rename_meeting_speaker", { id, label, name });
+
 export const setMeetingSummary = (summary: MeetingSummarySettings) =>
   invoke<void>("set_meeting_summary", { summary });

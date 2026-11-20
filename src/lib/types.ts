@@ -430,6 +430,8 @@ export interface MeetingMeta {
   status: MeetingStatus;
   summary_model: string | null;
   system_audio_error: string | null;
+  /** Transcript speaker label (e.g. "Speaker 1") → the person's name. */
+  speaker_names: Record<string, string>;
 }
 
 export interface MeetingSegment {
@@ -437,6 +439,8 @@ export interface MeetingSegment {
   end_ms: number;
   speaker: string;
   text: string;
+  /** The mic picking up the call audio, not the user speaking. */
+  echo: boolean;
 }
 
 export interface Meeting {
