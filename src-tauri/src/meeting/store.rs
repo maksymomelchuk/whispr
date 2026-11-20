@@ -1,5 +1,7 @@
+use super::echo::flag_echoes;
+use super::speakers::{clean_name, rename_in_notes, SpeakerNames};
 use super::track::Track;
-use super::transcript::Segment;
+use super::transcript::{Segment, MIC_SPEAKER_LABEL};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::ErrorKind;
@@ -76,6 +78,10 @@ pub struct MeetingMeta {
     /// share one clock when merged.
     #[serde(default)]
     pub system_offset_ms: u64,
+    /// Names for call-side speaker labels, detected while writing the notes
+    /// or set by hand. Transcript lines keep the raw label.
+    #[serde(default)]
+    pub speaker_names: SpeakerNames,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -161,9 +167,46 @@ impl MeetingStore {
         };
         Ok(Meeting {
             meta: self.load_meta(id)?,
-            segments,
+            // Re-flagged on every load so transcripts saved before echo
+            // detection existed get it too.
+            segments: flag_echoes(segments),
             notes: read_optional(&dir.join(NOTES_FILE))?,
         })
+    }
+
+    /// Names a call-side speaker, or restores its label when `name` is blank,
+    /// and carries the change into the notes.
+    pub fn rename_speaker(&self, id: &str, label: &str, name: &str) -> Result<(), String> {
+        let meeting = self.load(id)?;
+        let known_remote_label = label != MIC_SPEAKER_LABEL
+            && meeting
+                .segments
+                .iter()
+                .any(|segment| segment.speaker == label);
+        if !known_remote_label {
+            return Err(format!("{label:?} is not a call speaker in meeting {id}"));
+        }
+        let mut meta = meeting.meta;
+        let previous = meta
+            .speaker_names
+            .get(label)
+            .cloned()
+            .unwrap_or_else(|| label.to_string());
+        let renamed = match clean_name(name) {
+            Some(cleaned) => cleaned,
+            None if name.trim().is_empty() => label.to_string(),
+            None => return Err(format!("Speaker name is too long: {name:?}")),
+        };
+        if renamed == label {
+            meta.speaker_names.remove(label);
+        } else {
+            meta.speaker_names
+                .insert(label.to_string(), renamed.clone());
+        }
+        if let Some(notes) = meeting.notes {
+            self.save_notes(id, &rename_in_notes(&notes, &previous, &renamed))?;
+        }
+        self.save_meta(&meta)
     }
 
     pub fn save_segments(&self, id: &str, segments: &[Segment]) -> Result<(), String> {
@@ -242,6 +285,7 @@ mod tests {
             summary_model: None,
             system_audio_error: None,
             system_offset_ms: 0,
+            speaker_names: SpeakerNames::new(),
         }
     }
 
@@ -330,6 +374,7 @@ mod tests {
             end_ms: 900,
             speaker: "You".into(),
             text: "Hello".into(),
+            echo: false,
         };
         store.save_segments("m", &[segment]).unwrap();
         store.save_notes("m", "## Summary").unwrap();
@@ -338,5 +383,87 @@ mod tests {
 
         assert_eq!(meeting.segments.len(), 1);
         assert_eq!(meeting.notes.as_deref(), Some("## Summary"));
+    }
+
+    fn line(speaker: &str, text: &str) -> Segment {
+        Segment {
+            start_ms: 0,
+            end_ms: 900,
+            speaker: speaker.into(),
+            text: text.into(),
+            echo: false,
+        }
+    }
+
+    fn ready_meeting_with_speaker_two(store: &MeetingStore) {
+        store.create(&meta("m", 1, MeetingStatus::Ready)).unwrap();
+        store
+            .save_segments("m", &[line("Speaker 2", "Olena here.")])
+            .unwrap();
+        store
+            .save_notes("m", "- [ ] Speaker 2 — share the draft")
+            .unwrap();
+    }
+
+    #[test]
+    fn renaming_a_speaker_stores_the_name_and_updates_the_notes() {
+        let root = tempfile::tempdir().unwrap();
+        let store = MeetingStore::new(root.path().to_path_buf());
+        ready_meeting_with_speaker_two(&store);
+
+        store.rename_speaker("m", "Speaker 2", " Olena ").unwrap();
+
+        let meeting = store.load("m").unwrap();
+        assert_eq!(meeting.meta.speaker_names["Speaker 2"], "Olena");
+        assert_eq!(
+            meeting.notes.as_deref(),
+            Some("- [ ] Olena — share the draft")
+        );
+    }
+
+    #[test]
+    fn blank_rename_restores_the_label_everywhere() {
+        let root = tempfile::tempdir().unwrap();
+        let store = MeetingStore::new(root.path().to_path_buf());
+        ready_meeting_with_speaker_two(&store);
+        store.rename_speaker("m", "Speaker 2", "Olena").unwrap();
+
+        store.rename_speaker("m", "Speaker 2", "").unwrap();
+
+        let meeting = store.load("m").unwrap();
+        assert!(meeting.meta.speaker_names.is_empty());
+        assert_eq!(
+            meeting.notes.as_deref(),
+            Some("- [ ] Speaker 2 — share the draft")
+        );
+    }
+
+    #[test]
+    fn the_user_cannot_be_renamed() {
+        let root = tempfile::tempdir().unwrap();
+        let store = MeetingStore::new(root.path().to_path_buf());
+        ready_meeting_with_speaker_two(&store);
+
+        assert!(store.rename_speaker("m", "You", "Maksym").is_err());
+    }
+
+    #[test]
+    fn loading_flags_echoes_in_transcripts_saved_without_them() {
+        let root = tempfile::tempdir().unwrap();
+        let store = MeetingStore::new(root.path().to_path_buf());
+        store.create(&meta("m", 1, MeetingStatus::Ready)).unwrap();
+        store
+            .save_segments("m", &[line("Them", "Ship it."), line("You", "Ship it.")])
+            .unwrap();
+
+        let echoes: Vec<bool> = store
+            .load("m")
+            .unwrap()
+            .segments
+            .iter()
+            .map(|s| s.echo)
+            .collect();
+
+        assert_eq!(echoes, vec![false, true]);
     }
 }

@@ -73,6 +73,7 @@ pub async fn start(app: &AppHandle, state: &AppState) -> Result<MeetingMeta, Str
         summary_model: None,
         system_audio_error: None,
         system_offset_ms: 0,
+        speaker_names: Default::default(),
     };
     store.create(&meta)?;
     let started = match capture::start(&store, &meta.id, settings.input_device).await {
@@ -165,6 +166,19 @@ pub fn list_meetings(app: AppHandle) -> Result<Vec<MeetingMeta>, String> {
 pub fn get_meeting(app: AppHandle, id: String) -> Result<Meeting, String> {
     validate_meeting_id(&id)?;
     meeting_store(&app)?.load(&id)
+}
+
+#[tauri::command]
+pub fn rename_meeting_speaker(
+    app: AppHandle,
+    id: String,
+    label: String,
+    name: String,
+) -> Result<(), String> {
+    validate_meeting_id(&id)?;
+    meeting_store(&app)?.rename_speaker(&id, &label, &name)?;
+    notify_updated(&app);
+    Ok(())
 }
 
 #[tauri::command]

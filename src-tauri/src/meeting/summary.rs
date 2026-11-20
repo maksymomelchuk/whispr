@@ -1,3 +1,5 @@
+use super::speakers::{split_summary_output, SummaryOutput};
+use super::transcript::{render_without_echoes, Segment};
 use crate::cleanup::{AiProviderId, RequestBudget};
 use crate::cleanup_invoke::{invoke_text_task, TextTask};
 use crate::config::AiCleanupSettings;
@@ -46,24 +48,31 @@ Write the notes in Markdown, using exactly these sections in this order, and "No
 ## Decisions
 ## Action items
 (each as "- [ ] Owner — task (due: date)")
-## Open questions"#;
+## Open questions
+
+Participants are sometimes named during the call: someone introduces themselves ("Olena here", "I'm Daniel") or is addressed by name ("Thanks, Daniel" usually answers the speaker who just spoke). When the transcript leaves no real doubt which "Them" or "Speaker N" label a name belongs to, call that person by name in the notes. If you are unsure, if two labels could match the same name, or if the name may belong to someone not on the call, keep the label. Never rename "You".
+
+After the notes, still inside <output>, end with exactly one line mapping each label you named to the name, as JSON:
+<speakers>{"Speaker 1": "Daniel"}</speakers>
+Write <speakers>{}</speakers> when you named no one."#;
 
 pub async fn summarize(
     cleanup_settings: &AiCleanupSettings,
     summary_settings: &MeetingSummarySettings,
-    transcript: &str,
-) -> Result<String, String> {
+    segments: &[Segment],
+) -> Result<SummaryOutput, String> {
+    let transcript = render_without_echoes(segments);
     let task = TextTask {
         model: &summary_settings.model,
         system_prompt: SYSTEM_PROMPT,
-        text: transcript,
+        text: &transcript,
         budget: RequestBudget {
             max_tokens: SUMMARY_MAX_OUTPUT_TOKENS,
             timeout: SUMMARY_TIMEOUT,
         },
     };
-    let (notes, _usage) = invoke_text_task(cleanup_settings, summary_settings.provider, task)
+    let (reply, _usage) = invoke_text_task(cleanup_settings, summary_settings.provider, task)
         .await
         .map_err(|e| format!("Writing the meeting notes failed: {e}"))?;
-    Ok(notes)
+    Ok(split_summary_output(&reply, segments))
 }

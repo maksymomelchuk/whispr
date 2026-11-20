@@ -1,9 +1,10 @@
+use super::echo::flag_echoes;
 use super::soniox_async::{SonioxAsyncClient, TranscriptionRequest, SONIOX_API_BASE_URL};
 use super::store::{write_private, MeetingStatus, MeetingStore};
 use super::summary;
 use super::summary::MeetingSummarySettings;
 use super::track::{pcm_bytes_to_samples, Track, TRACK_SAMPLE_RATE};
-use super::transcript::{build_segments, render, Segment, Token, TrackTokens};
+use super::transcript::{build_segments, Segment, Token, TrackTokens};
 use crate::cleanup_invoke::is_credential_configured;
 use crate::config::{AiCleanupSettings, Settings};
 use std::collections::BTreeSet;
@@ -85,16 +86,12 @@ async fn process(
     store.save_segments(id, &segments)?;
     store.update_status(id, MeetingStatus::Summarizing)?;
     on_update();
-    let notes = summary::summarize(
-        &config.cleanup_settings,
-        &config.summary,
-        &render(&segments),
-    )
-    .await?;
-    store.save_notes(id, &notes)?;
+    let summary = summary::summarize(&config.cleanup_settings, &config.summary, &segments).await?;
+    store.save_notes(id, &summary.notes)?;
     let mut meta = store.load_meta(id)?;
     meta.status = MeetingStatus::Ready;
     meta.summary_model = Some(config.summary.model.clone());
+    meta.speaker_names = summary.speaker_names;
     store.save_meta(&meta)
 }
 
@@ -110,7 +107,7 @@ async fn transcribe_meeting(
     );
     let (mic, system) = (mic?, system?);
     let system_offset_ms = store.load_meta(id)?.system_offset_ms;
-    let segments = build_segments(
+    let segments = flag_echoes(build_segments(
         TrackTokens {
             tokens: &mic,
             track: Track::Mic,
@@ -121,7 +118,7 @@ async fn transcribe_meeting(
             track: Track::System,
             offset_ms: system_offset_ms,
         },
-    );
+    ));
     if segments.is_empty() {
         return Err("No speech was detected in this recording.".to_string());
     }

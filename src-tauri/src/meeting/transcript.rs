@@ -27,6 +27,10 @@ pub struct Segment {
     pub end_ms: u64,
     pub speaker: String,
     pub text: String,
+    /// The mic picking up the call audio rather than the user speaking. Kept
+    /// on disk so the UI can show it on request; left out of the notes.
+    #[serde(default)]
+    pub echo: bool,
 }
 
 /// One track's tokens, positioned on the meeting clock: `offset_ms` is how
@@ -58,6 +62,7 @@ fn label_tokens(track_tokens: TrackTokens<'_>) -> Vec<Segment> {
             end_ms: token.end_ms + track_tokens.offset_ms,
             speaker: labeler.label(token.speaker.as_deref()),
             text: token.text.clone(),
+            echo: false,
         })
         .collect()
 }
@@ -115,6 +120,13 @@ impl SpeakerLabeler {
             _ => SINGLE_REMOTE_SPEAKER_LABEL.to_string(),
         }
     }
+}
+
+/// The transcript the notes are written from: echo lines would make the
+/// model credit the user with what someone else said.
+pub fn render_without_echoes(segments: &[Segment]) -> String {
+    let spoken: Vec<Segment> = segments.iter().filter(|s| !s.echo).cloned().collect();
+    render(&spoken)
 }
 
 pub fn render(segments: &[Segment]) -> String {
@@ -245,6 +257,7 @@ mod tests {
             end_ms: 3_726_000,
             speaker: "You".into(),
             text: "Late".into(),
+            echo: false,
         }];
 
         assert_eq!(render(&segments), "[1:02:05] You: Late");
