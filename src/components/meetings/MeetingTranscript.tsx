@@ -57,6 +57,7 @@ export function MeetingTranscript({ meeting }: { meeting: Meeting }) {
         meetingId={meta.id}
         labels={remoteSpeakerLabels(segments)}
         speakerNames={meta.speaker_names}
+        renamable={meta.status.kind === "ready"}
       />
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative min-w-48 flex-1">

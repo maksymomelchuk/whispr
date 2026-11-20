@@ -7,6 +7,32 @@ const ECHO_TIME_TOLERANCE_MS: u64 = 1_500;
 /// The mic hears the call through the room, so its copy is often misheard;
 /// most words matching is enough to call it an echo.
 const ECHO_MIN_MATCHED_WORD_SHARE: f64 = 0.6;
+/// An echo is heard while the call line plays; the user's own reply to it
+/// starts once the line is over, so the mic line must sit inside the call span.
+const ECHO_SPAN_SLACK_MS: u64 = 1_000;
+/// Normalized (apostrophes dropped). A mic line that adds one of these to the
+/// call's words says the opposite, so it is the user speaking, not an echo.
+const NEGATION_WORDS: [&str; 19] = [
+    "not",
+    "no",
+    "never",
+    "dont",
+    "doesnt",
+    "didnt",
+    "isnt",
+    "arent",
+    "wasnt",
+    "werent",
+    "cant",
+    "cannot",
+    "wont",
+    "shouldnt",
+    "wouldnt",
+    "couldnt",
+    "не",
+    "ні",
+    "ніколи",
+];
 
 /// Flags a "You" line as an echo when most of its words were said on the call
 /// audio at the same time — the mic picking up the speakers, not the user.
@@ -49,22 +75,39 @@ impl CallLine {
 
 fn is_echo_of_call(mic_line: &Segment, call_lines: &[CallLine]) -> bool {
     let mic_words = normalized_words(&mic_line.text);
-    if mic_words.is_empty() {
+    let overlapping: Vec<&CallLine> = call_lines
+        .iter()
+        .filter(|line| line.overlaps(mic_line))
+        .collect();
+    if mic_words.is_empty() || !within_call_span(mic_line, &overlapping) {
         return false;
     }
     let mut call_word_counts: HashMap<&str, usize> = HashMap::new();
-    for word in call_lines
-        .iter()
-        .filter(|line| line.overlaps(mic_line))
-        .flat_map(|line| &line.words)
-    {
+    for word in overlapping.iter().flat_map(|line| &line.words) {
         *call_word_counts.entry(word).or_default() += 1;
     }
-    let matched = mic_words
+    let unmatched: Vec<&String> = mic_words
         .iter()
-        .filter(|word| take_word(&mut call_word_counts, word))
-        .count();
-    matched as f64 / mic_words.len() as f64 >= ECHO_MIN_MATCHED_WORD_SHARE
+        .filter(|word| !take_word(&mut call_word_counts, word))
+        .collect();
+    let matched_share = 1.0 - unmatched.len() as f64 / mic_words.len() as f64;
+    let adds_negation = unmatched
+        .iter()
+        .any(|word| NEGATION_WORDS.contains(&word.as_str()));
+    matched_share >= ECHO_MIN_MATCHED_WORD_SHARE && !adds_negation
+}
+
+fn within_call_span(mic_line: &Segment, overlapping: &[&CallLine]) -> bool {
+    let Some(span_start) = overlapping.iter().map(|line| line.start_ms).min() else {
+        return false;
+    };
+    let span_end = overlapping
+        .iter()
+        .map(|line| line.end_ms)
+        .max()
+        .unwrap_or(span_start);
+    mic_line.start_ms + ECHO_SPAN_SLACK_MS >= span_start
+        && mic_line.end_ms <= span_end + ECHO_SPAN_SLACK_MS
 }
 
 fn take_word(counts: &mut HashMap<&str, usize>, word: &str) -> bool {
@@ -186,5 +229,25 @@ mod tests {
         ]);
 
         assert!(flags[1]);
+    }
+
+    #[test]
+    fn overlapping_disagreement_is_not_an_echo() {
+        let flags = echo_flags(vec![
+            line("Them", 0, 3_000, "We should ship on Friday."),
+            line("You", 200, 3_100, "We should not ship on Friday."),
+        ]);
+
+        assert!(!flags[1]);
+    }
+
+    #[test]
+    fn reply_that_starts_after_the_call_line_ends_is_not_an_echo() {
+        let flags = echo_flags(vec![
+            line("Them", 0, 2_000, "Let's ship on Friday."),
+            line("You", 3_200, 5_000, "Let's ship on Monday."),
+        ]);
+
+        assert!(!flags[1]);
     }
 }

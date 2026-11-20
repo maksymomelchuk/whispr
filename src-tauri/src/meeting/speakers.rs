@@ -49,14 +49,31 @@ fn remote_labels(segments: &[Segment]) -> BTreeSet<&str> {
         .collect()
 }
 
-/// Only labels that exist on the call side can be named; "You" stays You.
+/// Only labels that exist on the call side can be named; "You" stays You. A
+/// name given to two labels, or equal to another label, can't be told apart in
+/// the notes, so it is dropped.
 fn accepted_names(names: SpeakerNames, remote_labels: &BTreeSet<&str>) -> SpeakerNames {
-    names
+    let candidates: Vec<(String, String)> = names
         .into_iter()
         .filter(|(label, _)| remote_labels.contains(label.as_str()))
         .filter_map(|(label, name)| clean_name(&name).map(|name| (label, name)))
         .filter(|(label, name)| label != name)
+        .collect();
+    candidates
+        .iter()
+        .filter(|(label, name)| {
+            let shared = candidates
+                .iter()
+                .any(|(other, other_name)| other != label && same_name(other_name, name));
+            let is_a_label = remote_labels.iter().any(|other| same_name(other, name));
+            !shared && !is_a_label && !same_name(name, MIC_SPEAKER_LABEL)
+        })
+        .cloned()
         .collect()
+}
+
+pub fn same_name(first: &str, second: &str) -> bool {
+    first.to_lowercase() == second.to_lowercase()
 }
 
 pub fn clean_name(name: &str) -> Option<String> {
@@ -77,17 +94,20 @@ pub fn rename_in_notes(notes: &str, previous: &str, renamed: &str) -> String {
 
 fn replace_whole_words(text: &str, from: &str, to: &str) -> String {
     let mut result = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(index) = rest.find(from) {
-        let before = rest[..index].chars().next_back();
-        let after = rest[index + from.len()..].chars().next();
-        result.push_str(&rest[..index]);
+    let mut copied_up_to = 0;
+    for (start, _) in text.match_indices(from) {
+        let end = start + from.len();
+        let before = text[..start].chars().next_back();
+        let after = text[end..].chars().next();
         let whole_word =
             !before.is_some_and(char::is_alphanumeric) && !after.is_some_and(char::is_alphanumeric);
-        result.push_str(if whole_word { to } else { from });
-        rest = &rest[index + from.len()..];
+        if whole_word {
+            result.push_str(&text[copied_up_to..start]);
+            result.push_str(to);
+            copied_up_to = end;
+        }
     }
-    result.push_str(rest);
+    result.push_str(&text[copied_up_to..]);
     result
 }
 
@@ -173,5 +193,21 @@ mod tests {
         let notes = "Them asked us to tell them the date.";
 
         assert_eq!(rename_in_notes(notes, "Them", "Olena"), notes);
+    }
+
+    #[test]
+    fn a_name_inside_a_longer_word_is_left_alone() {
+        let renamed = rename_in_notes("TomTom navigation, said Tom.", "Tom", "Daniel");
+
+        assert_eq!(renamed, "TomTom navigation, said Daniel.");
+    }
+
+    #[test]
+    fn a_name_given_to_two_speakers_is_dropped() {
+        let reply = r#"<speakers>{"Speaker 1": "Sam", "Speaker 2": "sam"}</speakers>"#;
+
+        let names = split_summary_output(reply, &two_remote_speakers()).speaker_names;
+
+        assert!(names.is_empty());
     }
 }

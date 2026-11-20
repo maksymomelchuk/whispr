@@ -1,8 +1,9 @@
 use super::echo::flag_echoes;
-use super::speakers::{clean_name, rename_in_notes, SpeakerNames};
+use super::speakers::{clean_name, rename_in_notes, same_name, SpeakerNames};
 use super::track::Track;
 use super::transcript::{Segment, MIC_SPEAKER_LABEL};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -174,37 +175,43 @@ impl MeetingStore {
         })
     }
 
+    /// Notes are restored if the metadata write fails, so the two files never
+    /// disagree about a speaker's name.
     pub fn rename_speaker(&self, id: &str, label: &str, name: &str) -> Result<(), String> {
         let meeting = self.load(id)?;
-        let known_remote_label = label != MIC_SPEAKER_LABEL
-            && meeting
-                .segments
-                .iter()
-                .any(|segment| segment.speaker == label);
-        if !known_remote_label {
-            return Err(format!("{label:?} is not a call speaker in meeting {id}"));
+        if meeting.meta.status != MeetingStatus::Ready {
+            return Err(format!(
+                "Speakers can be renamed once meeting {id} has finished processing"
+            ));
         }
+        let renamed = validated_rename(&meeting, label, name)?;
         let mut meta = meeting.meta;
         let previous = meta
             .speaker_names
             .get(label)
             .cloned()
             .unwrap_or_else(|| label.to_string());
-        let renamed = match clean_name(name) {
-            Some(cleaned) => cleaned,
-            None if name.trim().is_empty() => label.to_string(),
-            None => return Err(format!("Speaker name is too long: {name:?}")),
-        };
         if renamed == label {
             meta.speaker_names.remove(label);
         } else {
             meta.speaker_names
                 .insert(label.to_string(), renamed.clone());
         }
-        if let Some(notes) = meeting.notes {
-            self.save_notes(id, &rename_in_notes(&notes, &previous, &renamed))?;
-        }
+        let Some(notes) = meeting.notes else {
+            return self.save_meta(&meta);
+        };
+        self.save_notes(id, &rename_in_notes(&notes, &previous, &renamed))?;
         self.save_meta(&meta)
+            .map_err(|error| self.restore_notes(id, &notes, error))
+    }
+
+    fn restore_notes(&self, id: &str, notes: &str, error: String) -> String {
+        match self.save_notes(id, notes) {
+            Ok(()) => error,
+            Err(restore_error) => {
+                format!("{error}; restoring the notes of {id} also failed: {restore_error}")
+            }
+        }
     }
 
     pub fn save_segments(&self, id: &str, segments: &[Segment]) -> Result<(), String> {
@@ -233,6 +240,39 @@ impl MeetingStore {
         }
         Ok(())
     }
+}
+
+/// The name `label` will show after the rename: the label itself when `name`
+/// is blank. Names already used by another speaker are refused, because the
+/// notes could no longer tell the two apart.
+fn validated_rename(meeting: &Meeting, label: &str, name: &str) -> Result<String, String> {
+    let remote_labels: BTreeSet<&str> = meeting
+        .segments
+        .iter()
+        .map(|segment| segment.speaker.as_str())
+        .filter(|speaker| *speaker != MIC_SPEAKER_LABEL)
+        .collect();
+    if !remote_labels.contains(label) {
+        return Err(format!("{label:?} is not a call speaker in this meeting"));
+    }
+    let renamed = match clean_name(name) {
+        Some(cleaned) => cleaned,
+        None if name.trim().is_empty() => return Ok(label.to_string()),
+        None => return Err(format!("Speaker name is too long: {name:?}")),
+    };
+    let names = &meeting.meta.speaker_names;
+    let taken = same_name(&renamed, MIC_SPEAKER_LABEL)
+        || remote_labels
+            .iter()
+            .filter(|other| **other != label)
+            .any(|other| {
+                same_name(other, &renamed)
+                    || names.get(*other).is_some_and(|n| same_name(n, &renamed))
+            });
+    if taken {
+        return Err(format!("{renamed:?} is already another speaker's name"));
+    }
+    Ok(renamed)
 }
 
 fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, String> {
@@ -463,5 +503,33 @@ mod tests {
             .collect();
 
         assert_eq!(echoes, vec![false, true]);
+    }
+
+    #[test]
+    fn a_name_already_used_by_another_speaker_is_refused() {
+        let root = tempfile::tempdir().unwrap();
+        let store = MeetingStore::new(root.path().to_path_buf());
+        ready_meeting_with_speaker_two(&store);
+        store
+            .save_segments(
+                "m",
+                &[line("Speaker 1", "Hi."), line("Speaker 2", "Olena here.")],
+            )
+            .unwrap();
+        store.rename_speaker("m", "Speaker 2", "Olena").unwrap();
+
+        assert!(store.rename_speaker("m", "Speaker 1", "olena").is_err());
+    }
+
+    #[test]
+    fn speakers_cannot_be_renamed_before_the_notes_are_written() {
+        let root = tempfile::tempdir().unwrap();
+        let store = MeetingStore::new(root.path().to_path_buf());
+        ready_meeting_with_speaker_two(&store);
+        store
+            .update_status("m", MeetingStatus::Summarizing)
+            .unwrap();
+
+        assert!(store.rename_speaker("m", "Speaker 2", "Olena").is_err());
     }
 }

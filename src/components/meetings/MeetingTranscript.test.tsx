@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -15,13 +15,16 @@ function segment(speaker: string, text: string, echo = false): MeetingSegment {
   return { start_ms: 0, end_ms: 1000, speaker, text, echo };
 }
 
-function meeting(speakerNames: Record<string, string> = {}): Meeting {
+function meeting(
+  speakerNames: Record<string, string> = {},
+  status: Meeting["meta"]["status"] = { kind: "ready" },
+): Meeting {
   return {
     meta: {
       id: "meeting-1",
       started_at: 0,
       duration_ms: 0,
-      status: { kind: "ready" },
+      status,
       summary_model: null,
       system_audio_error: null,
       speaker_names: speakerNames,
@@ -87,5 +90,27 @@ describe("MeetingTranscript", () => {
       "Speaker 1",
       "Daniel",
     );
+  });
+
+  it("speakers can't be renamed while the notes are still being written", () => {
+    render(
+      <MeetingTranscript meeting={meeting({}, { kind: "summarizing" })} />,
+    );
+
+    expect(
+      (screen.getByTitle("Rename Speaker 1") as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it("Enter that confirms an IME candidate doesn't save the name", async () => {
+    vi.mocked(renameMeetingSpeaker).mockClear();
+    render(<MeetingTranscript meeting={meeting()} />);
+    await userEvent.click(screen.getByTitle("Rename Speaker 1"));
+    const input = screen.getByLabelText("Name for Speaker 1");
+
+    fireEvent.change(input, { target: { value: "Олена" } });
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+
+    expect(renameMeetingSpeaker).not.toHaveBeenCalled();
   });
 });

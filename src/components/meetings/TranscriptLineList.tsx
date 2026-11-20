@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -16,18 +16,21 @@ const BOTTOM_GAP_PX = 24;
  * so only the transcript scrolls and the header above it stays in view. */
 function useFillWindowHeight(element: HTMLElement | null): number {
   const [height, setHeight] = useState(MIN_LIST_HEIGHT_PX);
-  useLayoutEffect(() => {
+  const fit = useCallback(() => {
     if (!element) return;
-    const fit = () => {
-      const top = element.getBoundingClientRect().top;
-      setHeight(
-        Math.max(MIN_LIST_HEIGHT_PX, window.innerHeight - top - BOTTOM_GAP_PX),
-      );
-    };
-    fit();
+    const top = element.getBoundingClientRect().top;
+    setHeight(
+      Math.max(MIN_LIST_HEIGHT_PX, window.innerHeight - top - BOTTOM_GAP_PX),
+    );
+  }, [element]);
+  // Controls above the list (e.g. the search result count) move its top edge
+  // without remounting it, so re-fit after every render; an unchanged height
+  // makes React skip the update.
+  useLayoutEffect(fit);
+  useEffect(() => {
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
-  }, [element]);
+  }, [fit]);
   return height;
 }
 
@@ -47,8 +50,15 @@ export function TranscriptLineList({
     null,
   );
   const maxHeight = useFillWindowHeight(scrollElement);
+  // Measured heights are cached per key; positional keys would hand a row's
+  // height to whichever line lands in its slot after filtering.
+  const lineKey = useCallback(
+    (position: number) => lines[position].index,
+    [lines],
+  );
   const virtualizer = useVirtualizer({
     count: lines.length,
+    getItemKey: lineKey,
     getScrollElement: () => scrollElement,
     estimateSize: () => ESTIMATED_LINE_HEIGHT_PX,
     overscan: OVERSCAN_LINES,

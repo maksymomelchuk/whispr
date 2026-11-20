@@ -11,12 +11,16 @@ interface TranscriptSpeakersProps {
   meetingId: string;
   labels: string[];
   speakerNames: Record<string, string>;
+  /** Renames are refused until the notes are written, or the summary's names
+   * would overwrite them. */
+  renamable: boolean;
 }
 
 export function TranscriptSpeakers({
   meetingId,
   labels,
   speakerNames,
+  renamable,
 }: TranscriptSpeakersProps) {
   if (labels.length === 0) return null;
   return (
@@ -28,6 +32,7 @@ export function TranscriptSpeakers({
           meetingId={meetingId}
           label={label}
           name={speakerName(label, speakerNames)}
+          renamable={renamable}
         />
       ))}
     </div>
@@ -38,10 +43,12 @@ function SpeakerChip({
   meetingId,
   label,
   name,
+  renamable,
 }: {
   meetingId: string;
   label: string;
   name: string;
+  renamable: boolean;
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -54,6 +61,7 @@ function SpeakerChip({
       );
     };
     const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.nativeEvent.isComposing) return;
       if (event.key === "Enter") save(event.currentTarget.value);
       if (event.key === "Escape") setEditing(false);
     };
@@ -74,8 +82,9 @@ function SpeakerChip({
     <button
       type="button"
       onClick={() => setEditing(true)}
+      disabled={!renamable}
       title={`Rename ${label}`}
-      className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 hover:bg-muted"
+      className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 hover:bg-muted disabled:pointer-events-none disabled:opacity-60"
     >
       <span className="font-medium">{name}</span>
       {name !== label && (
