@@ -44,7 +44,7 @@ export function MeetingTranscript({ meeting }: { meeting: Meeting }) {
   return (
     <div className="flex flex-col gap-3">
       {shouldSuggestHeadphones(segments) && (
-        <Alert>
+        <Alert className="flex items-center gap-2 [&>svg~*]:pl-0">
           <HeadphonesIcon />
           <AlertDescription>
             Use headphones for cleaner transcripts — your mic picked up the call{" "}

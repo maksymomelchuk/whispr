@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -8,6 +8,28 @@ import type { TranscriptLine } from "./transcriptLines";
 
 const ESTIMATED_LINE_HEIGHT_PX = 44;
 const OVERSCAN_LINES = 12;
+const MIN_LIST_HEIGHT_PX = 256;
+/** Matches the page's bottom padding so the list ends where the page does. */
+const BOTTOM_GAP_PX = 24;
+
+/** Stretches the list from where it starts down to the window's bottom edge,
+ * so only the transcript scrolls and the header above it stays in view. */
+function useFillWindowHeight(element: HTMLElement | null): number {
+  const [height, setHeight] = useState(MIN_LIST_HEIGHT_PX);
+  useLayoutEffect(() => {
+    if (!element) return;
+    const fit = () => {
+      const top = element.getBoundingClientRect().top;
+      setHeight(
+        Math.max(MIN_LIST_HEIGHT_PX, window.innerHeight - top - BOTTOM_GAP_PX),
+      );
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [element]);
+  return height;
+}
 
 interface TranscriptLineListProps {
   lines: TranscriptLine[];
@@ -21,10 +43,13 @@ export function TranscriptLineList({
   focusedIndex,
   onTimestampClick,
 }: TranscriptLineListProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(
+    null,
+  );
+  const maxHeight = useFillWindowHeight(scrollElement);
   const virtualizer = useVirtualizer({
     count: lines.length,
-    getScrollElement: () => scrollRef.current,
+    getScrollElement: () => scrollElement,
     estimateSize: () => ESTIMATED_LINE_HEIGHT_PX,
     overscan: OVERSCAN_LINES,
   });
@@ -37,9 +62,9 @@ export function TranscriptLineList({
 
   return (
     <div
-      ref={scrollRef}
-      data-testid="transcript-scroll"
-      className="max-h-[calc(100svh-20rem)] min-h-64 overflow-y-auto rounded-md border"
+      ref={setScrollElement}
+      style={{ maxHeight }}
+      className="overflow-y-auto rounded-md border"
     >
       <ol
         className="relative w-full text-sm"
