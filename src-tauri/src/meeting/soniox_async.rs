@@ -12,6 +12,9 @@ const POLL_INTERVAL: Duration = Duration::from_secs(2);
 /// Soniox caps files at 300 minutes; even that finishes well within this.
 const MAX_TRANSCRIPTION_WAIT: Duration = Duration::from_secs(45 * 60);
 const ERROR_BODY_SNIPPET_CHARS: usize = 300;
+/// Uploading a 90-minute FLAC (~80 MB) on a slow uplink takes minutes.
+const UPLOAD_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const STATUS_COMPLETED: &str = "completed";
 const STATUS_ERROR: &str = "error";
 
@@ -93,6 +96,7 @@ impl SonioxAsyncClient {
         let response = self
             .http
             .post(self.url("/v1/files"))
+            .timeout(UPLOAD_TIMEOUT)
             .bearer_auth(&self.api_key)
             .multipart(Form::new().part("file", part))
             .send()
@@ -109,6 +113,7 @@ impl SonioxAsyncClient {
         let response = self
             .http
             .post(self.url("/v1/transcriptions"))
+            .timeout(REQUEST_TIMEOUT)
             .bearer_auth(&self.api_key)
             .json(&transcription_body(file_id, request))
             .send()
@@ -144,6 +149,7 @@ impl SonioxAsyncClient {
         let response = self
             .http
             .get(self.url(path))
+            .timeout(REQUEST_TIMEOUT)
             .bearer_auth(&self.api_key)
             .send()
             .await
@@ -155,6 +161,7 @@ impl SonioxAsyncClient {
         let result = self
             .http
             .delete(self.url(path))
+            .timeout(REQUEST_TIMEOUT)
             .bearer_auth(&self.api_key)
             .send()
             .await;

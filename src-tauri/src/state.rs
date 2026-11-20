@@ -48,6 +48,11 @@ pub struct LoadedModel {
 pub struct AppState {
     pub hotkey_bindings: Arc<Mutex<Vec<HotkeyBinding>>>,
     pub active_meeting: Arc<Mutex<Option<ActiveMeeting>>>,
+    /// Held from Start until capture is live, so two quick Start presses can't
+    /// both begin recording.
+    pub meeting_starting: Arc<AtomicBool>,
+    /// Meeting ids with a transcribe/summarize job running; one job per meeting.
+    pub meetings_processing: Arc<Mutex<std::collections::HashSet<String>>>,
     /// The shortcut that activated the current PTT session. Cleared when PTT ends.
     /// Kept separate so release detection uses only the active binding's keys.
     pub active_shortcut: Arc<Mutex<Option<Shortcut>>>,

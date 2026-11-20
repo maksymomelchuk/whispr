@@ -332,7 +332,7 @@ fn maybe_pause_media(state: &AppState) {
     }
 }
 
-fn maybe_resume_media(state: &AppState) {
+pub(crate) fn maybe_resume_media(state: &AppState) {
     let mut flag = state.did_pause_media.lock().unwrap();
     if !*flag {
         return;

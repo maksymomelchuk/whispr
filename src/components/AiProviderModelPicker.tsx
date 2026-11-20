@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 import {
   Select,
   SelectContent,
@@ -99,16 +101,16 @@ export function defaultModelFor(provider: AiProviderId): string {
   return provider === "custom" ? "" : CLEANUP_MODEL_OPTIONS[provider][0].value;
 }
 
+/** Providers a request can actually use. Anthropic counts only through the
+ * credential its active auth mode selects, matching the backend's check. */
 export function configuredAiProviders(settings: Settings): AiProviderId[] {
   const anthropicConfigured =
-    settings.ai_cleanup_key_configured ||
-    settings.ai_cleanup_oauth_token_configured;
+    settings.ai_cleanup_auth_mode === "oauth"
+      ? settings.ai_cleanup_oauth_token_configured
+      : settings.ai_cleanup_key_configured;
   return [
-    ...settings.configured_providers,
-    ...(anthropicConfigured &&
-    !settings.configured_providers.includes("anthropic")
-      ? (["anthropic"] as AiProviderId[])
-      : []),
+    ...(anthropicConfigured ? (["anthropic"] as AiProviderId[]) : []),
+    ...settings.configured_providers.filter((id) => id !== "anthropic"),
     ...(settings.custom_provider_configured
       ? (["custom"] as AiProviderId[])
       : []),
@@ -128,17 +130,19 @@ export function AiProviderModelPicker({
   configuredProviders,
   customProviderModel,
 }: AiProviderModelPickerProps) {
+  const providerFieldId = useId();
+  const modelFieldId = useId();
   const selectProvider = (provider: AiProviderId) =>
     onChange({ provider, model: defaultModelFor(provider) });
 
   return (
     <div className="grid grid-cols-2 gap-x-5 gap-y-4">
-      <FieldColumn label="Provider">
+      <FieldColumn label="Provider" htmlFor={providerFieldId}>
         <Select
           value={selection.provider}
           onValueChange={(v) => selectProvider(v as AiProviderId)}
         >
-          <SelectTrigger size="sm" className="w-full">
+          <SelectTrigger id={providerFieldId} size="sm" className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -152,12 +156,12 @@ export function AiProviderModelPicker({
         </Select>
       </FieldColumn>
       {selection.provider !== "custom" ? (
-        <FieldColumn label="Model">
+        <FieldColumn label="Model" htmlFor={modelFieldId}>
           <Select
             value={selection.model}
             onValueChange={(model) => onChange({ ...selection, model })}
           >
-            <SelectTrigger size="sm" className="w-full">
+            <SelectTrigger id={modelFieldId} size="sm" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

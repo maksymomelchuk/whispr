@@ -7,17 +7,24 @@ import type { MeetingMeta } from "@/lib/types";
 
 export const MEETINGS_UPDATED_EVENT = "meetings-updated";
 
-export function useMeetingsUpdated(onUpdate: () => void) {
+/** Calls `onUpdate` once the update listener is registered (the initial
+ * read) and again on every `meetings-updated` event. Reading only after
+ * registration means a change between the read and the subscription can't be
+ * missed. */
+export function useMeetingsSubscription(onUpdate: () => void) {
   useEffect(() => {
-    // Race-safe: cleanup may run before listen() resolves (StrictMode).
     let cancelled = false;
     let unlisten: (() => void) | undefined;
     listen(MEETINGS_UPDATED_EVENT, onUpdate)
       .then((un) => {
-        if (cancelled) un();
-        else unlisten = un;
+        if (cancelled) return un();
+        unlisten = un;
+        onUpdate();
       })
-      .catch((err) => console.error("listen(meetings-updated) failed", err));
+      .catch((err) => {
+        console.error("listen(meetings-updated) failed", err);
+        if (!cancelled) onUpdate();
+      });
     return () => {
       cancelled = true;
       unlisten?.();
@@ -34,8 +41,7 @@ export function useMeetings() {
       .catch((err) => toast.error(`Failed to load meetings: ${String(err)}`));
   }, []);
 
-  useEffect(refresh, [refresh]);
-  useMeetingsUpdated(refresh);
+  useMeetingsSubscription(refresh);
 
   return { meetings, refresh };
 }

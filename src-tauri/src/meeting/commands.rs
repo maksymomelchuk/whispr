@@ -1,9 +1,12 @@
 use super::capture;
 use super::processing::{self, ProcessingConfig};
-use super::store::{Meeting, MeetingMeta, MeetingStatus, MeetingStore};
+use super::store::{
+    new_meeting_id, validate_meeting_id, Meeting, MeetingMeta, MeetingStatus, MeetingStore,
+};
 use super::summary::MeetingSummarySettings;
 use crate::config;
 use crate::state::AppState;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 pub const MEETINGS_UPDATED_EVENT: &str = "meetings-updated";
@@ -21,28 +24,49 @@ fn notify_updated(app: &AppHandle) {
     let _ = app.emit(MEETINGS_UPDATED_EVENT, ());
 }
 
+/// Releases the Start reservation however `start_meeting` exits.
+struct StartReservation<'a>(&'a AtomicBool);
+
+impl Drop for StartReservation<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
+fn reserve_start(state: &AppState) -> Result<StartReservation<'_>, String> {
+    let already_starting = state
+        .meeting_starting
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err();
+    if already_starting || state.active_meeting.lock().unwrap().is_some() {
+        if !already_starting {
+            state.meeting_starting.store(false, Ordering::Release);
+        }
+        return Err("A meeting is already recording".to_string());
+    }
+    Ok(StartReservation(&state.meeting_starting))
+}
+
 #[tauri::command]
 pub async fn start_meeting(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<MeetingMeta, String> {
-    if state.active_meeting.lock().unwrap().is_some() {
-        return Err("A meeting is already recording".to_string());
-    }
+    let _reservation = reserve_start(&state)?;
     let settings = config::load(&app);
     ProcessingConfig::from_settings(&settings)?;
     let store = meeting_store(&app)?;
     let mut meta = MeetingMeta {
-        id: format!("meeting-{}", crate::history::now_unix_seconds()),
+        id: new_meeting_id(),
         started_at: crate::history::now_unix_seconds(),
         duration_ms: 0,
         status: MeetingStatus::Recording,
         summary_model: None,
         system_audio_error: None,
+        system_offset_ms: 0,
     };
     store.create(&meta)?;
-    let started = capture::start(&store, &meta.id, settings.input_device).await;
-    let started = match started {
+    let started = match capture::start(&store, &meta.id, settings.input_device).await {
         Ok(started) => started,
         Err(error) => {
             store.delete(&meta.id)?;
@@ -50,8 +74,12 @@ pub async fn start_meeting(
         }
     };
     meta.system_audio_error = started.system_audio_error;
+    meta.system_offset_ms = started.system_offset_ms;
     store.save_meta(&meta)?;
     *state.active_meeting.lock().unwrap() = Some(started.meeting);
+    // A dictation that began before Start may have muted output; the call
+    // must stay audible while it's recorded.
+    crate::ptt::maybe_resume_media(&state);
     notify_updated(&app);
     Ok(meta)
 }
@@ -65,10 +93,18 @@ pub async fn stop_meeting(app: AppHandle, state: State<'_, AppState>) -> Result<
         .take()
         .ok_or("No meeting is recording")?;
     let id = active.id.clone();
-    let duration = tauri::async_runtime::spawn_blocking(move || active.stop())
-        .await
-        .map_err(|e| format!("stopping the recording failed: {e}"))??;
     let store = meeting_store(&app)?;
+    let stopped = tauri::async_runtime::spawn_blocking(move || active.stop())
+        .await
+        .map_err(|e| format!("stopping the recording failed: {e}"))
+        .and_then(|result| result);
+    let duration = match stopped {
+        Ok(duration) => duration,
+        Err(error) => {
+            mark_failed(&app, &store, &id, error.clone());
+            return Err(error);
+        }
+    };
     let mut meta = store.load_meta(&id)?;
     meta.duration_ms = duration.as_millis() as u64;
     store.save_meta(&meta)?;
@@ -78,10 +114,20 @@ pub async fn stop_meeting(app: AppHandle, state: State<'_, AppState>) -> Result<
 
 #[tauri::command]
 pub fn retry_meeting(app: AppHandle, id: String) -> Result<(), String> {
+    validate_meeting_id(&id)?;
     let store = meeting_store(&app)?;
-    store.load_meta(&id)?;
+    if !store.load_meta(&id)?.status.is_failed() {
+        return Err("Only a failed meeting can be retried".to_string());
+    }
     spawn_processing(app, store, id);
     Ok(())
+}
+
+fn mark_failed(app: &AppHandle, store: &MeetingStore, id: &str, error: String) {
+    if let Err(save_error) = store.update_status(id, MeetingStatus::Failed(error)) {
+        eprintln!("[meeting] recording failure for {id} failed: {save_error}");
+    }
+    notify_updated(app);
 }
 
 /// Reports a missing key as a Failed status rather than an error, because
@@ -89,17 +135,16 @@ pub fn retry_meeting(app: AppHandle, id: String) -> Result<(), String> {
 fn spawn_processing(app: AppHandle, store: MeetingStore, id: String) {
     let config = match ProcessingConfig::from_settings(&config::load(&app)) {
         Ok(config) => config,
-        Err(error) => {
-            if let Err(save_error) = store.update_status(&id, MeetingStatus::Failed(error)) {
-                eprintln!("[meeting] recording failure for {id} failed: {save_error}");
-            }
-            notify_updated(&app);
-            return;
-        }
+        Err(error) => return mark_failed(&app, &store, &id, error),
     };
+    let processing = app.state::<AppState>().meetings_processing.clone();
+    if !processing.lock().unwrap().insert(id.clone()) {
+        return;
+    }
     tauri::async_runtime::spawn(async move {
         let notifier = app.clone();
-        processing::run(store, id, config, move || notify_updated(&notifier)).await;
+        processing::run(store, id.clone(), config, move || notify_updated(&notifier)).await;
+        processing.lock().unwrap().remove(&id);
     });
 }
 
@@ -110,6 +155,7 @@ pub fn list_meetings(app: AppHandle) -> Result<Vec<MeetingMeta>, String> {
 
 #[tauri::command]
 pub fn get_meeting(app: AppHandle, id: String) -> Result<Meeting, String> {
+    validate_meeting_id(&id)?;
     meeting_store(&app)?.load(&id)
 }
 
@@ -119,6 +165,10 @@ pub fn delete_meeting(
     state: State<'_, AppState>,
     id: String,
 ) -> Result<(), String> {
+    validate_meeting_id(&id)?;
+    if state.meetings_processing.lock().unwrap().contains(&id) {
+        return Err("Wait for this meeting to finish processing before deleting it".to_string());
+    }
     let recording_id = state
         .active_meeting
         .lock()

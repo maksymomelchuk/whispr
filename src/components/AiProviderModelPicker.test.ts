@@ -45,13 +45,24 @@ const BASE_SETTINGS: Settings = {
 };
 
 describe("configuredAiProviders", () => {
-  it("counts Anthropic as configured when only the OAuth token is set", () => {
-    const settings = {
+  it("counts Anthropic as configured through the OAuth token in OAuth mode", () => {
+    const settings: Settings = {
       ...BASE_SETTINGS,
+      ai_cleanup_auth_mode: "oauth",
       ai_cleanup_oauth_token_configured: true,
     };
 
     expect(configuredAiProviders(settings)).toEqual(["anthropic"]);
+  });
+
+  it("ignores the credential of the inactive Anthropic auth mode", () => {
+    const settings: Settings = {
+      ...BASE_SETTINGS,
+      ai_cleanup_auth_mode: "api_key",
+      ai_cleanup_oauth_token_configured: true,
+    };
+
+    expect(configuredAiProviders(settings)).toEqual([]);
   });
 
   it("includes the Custom provider once it has a base URL", () => {

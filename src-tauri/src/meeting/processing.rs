@@ -2,14 +2,13 @@ use super::soniox_async::{SonioxAsyncClient, TranscriptionRequest, SONIOX_API_BA
 use super::store::{write_private, MeetingStatus, MeetingStore};
 use super::summary;
 use super::summary::MeetingSummarySettings;
-use super::track::{pcm_bytes_to_samples, Track};
-use super::transcript::{merge_tracks, render, segments_from_tokens, Segment};
+use super::track::{pcm_bytes_to_samples, Track, TRACK_SAMPLE_RATE};
+use super::transcript::{build_segments, render, Segment, Token, TrackTokens};
 use crate::cleanup_invoke::is_credential_configured;
 use crate::config::{AiCleanupSettings, Settings};
 use std::collections::BTreeSet;
 use std::fs;
 
-const PCM_SAMPLE_RATE: u32 = 16_000;
 const PCM_CHANNELS: u16 = 1;
 /// Soniox context is a recognition hint, not a glossary; past a few dozen
 /// terms extra entries add little.
@@ -109,7 +108,20 @@ async fn transcribe_meeting(
         transcribe_track(store, id, Track::Mic, &client, &config.terms),
         transcribe_track(store, id, Track::System, &client, &config.terms),
     );
-    let segments = merge_tracks(mic?, system?);
+    let (mic, system) = (mic?, system?);
+    let system_offset_ms = store.load_meta(id)?.system_offset_ms;
+    let segments = build_segments(
+        TrackTokens {
+            tokens: &mic,
+            track: Track::Mic,
+            offset_ms: 0,
+        },
+        TrackTokens {
+            tokens: &system,
+            track: Track::System,
+            offset_ms: system_offset_ms,
+        },
+    );
     if segments.is_empty() {
         return Err("No speech was detected in this recording.".to_string());
     }
@@ -122,7 +134,7 @@ async fn transcribe_track(
     track: Track,
     client: &SonioxAsyncClient,
     terms: &[String],
-) -> Result<Vec<Segment>, String> {
+) -> Result<Vec<Token>, String> {
     let Some(flac) = track_flac(store.clone(), id.to_string(), track).await? else {
         return Ok(Vec::new());
     };
@@ -130,8 +142,7 @@ async fn transcribe_track(
         diarize: track == Track::System,
         terms: terms.to_vec(),
     };
-    let tokens = client.transcribe(flac, &request).await?;
-    Ok(segments_from_tokens(&tokens, track))
+    client.transcribe(flac, &request).await
 }
 
 /// The FLAC for a track, encoding it from the raw PCM on first use. The PCM is
@@ -150,15 +161,17 @@ async fn track_flac(
                 .map_err(|e| format!("read {flac_path:?}: {e}"));
         }
         let pcm_path = store.pcm_path(&id, track);
-        let Ok(pcm) = fs::read(&pcm_path) else {
-            return Ok(None);
+        let pcm = match fs::read(&pcm_path) {
+            Ok(pcm) => pcm,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(format!("read {pcm_path:?}: {e}")),
         };
         if pcm.is_empty() {
             return Ok(None);
         }
         let samples = pcm_bytes_to_samples(&pcm);
         let flac =
-            crate::groq_audio::encode_to_flac_16k_mono(&samples, PCM_SAMPLE_RATE, PCM_CHANNELS)?;
+            crate::groq_audio::encode_to_flac_16k_mono(&samples, TRACK_SAMPLE_RATE, PCM_CHANNELS)?;
         write_private(&flac_path, &flac)?;
         fs::remove_file(&pcm_path).map_err(|e| format!("remove {pcm_path:?}: {e}"))?;
         Ok(Some(flac))

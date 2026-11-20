@@ -5,8 +5,9 @@ use std::collections::BTreeSet;
 pub const MIC_SPEAKER_LABEL: &str = "You";
 pub const SINGLE_REMOTE_SPEAKER_LABEL: &str = "Them";
 /// A silence this long starts a new line even when the speaker is unchanged,
-/// so lines from the two tracks interleave at a readable granularity.
+/// so lines stay readable during long monologues.
 const SEGMENT_BREAK_GAP_MS: u64 = 2_000;
+const SENTENCE_ENDINGS: [char; 4] = ['.', '?', '!', '…'];
 const MS_PER_SECOND: u64 = 1_000;
 const SECONDS_PER_MINUTE: u64 = 60;
 const SECONDS_PER_HOUR: u64 = 3_600;
@@ -28,37 +29,65 @@ pub struct Segment {
     pub text: String,
 }
 
-pub fn segments_from_tokens(tokens: &[Token], track: Track) -> Vec<Segment> {
-    let labeler = SpeakerLabeler::new(tokens, track);
-    let mut segments: Vec<Segment> = Vec::new();
-    for token in tokens {
-        let speaker = labeler.label(token.speaker.as_deref());
-        match segments.last_mut() {
-            Some(current) if continues(current, &speaker, token) => {
-                current.text.push_str(&token.text);
-                current.end_ms = token.end_ms;
-            }
-            _ => segments.push(Segment {
-                start_ms: token.start_ms,
-                end_ms: token.end_ms,
-                speaker,
-                text: token.text.clone(),
-            }),
-        }
-    }
-    segments
-        .into_iter()
-        .map(|segment| Segment {
-            text: segment.text.trim().to_string(),
-            ..segment
+/// One track's tokens, positioned on the meeting clock: `offset_ms` is how
+/// long after the mic this track started recording.
+pub struct TrackTokens<'a> {
+    pub tokens: &'a [Token],
+    pub track: Track,
+    pub offset_ms: u64,
+}
+
+/// Groups each track into sentence-sized lines, then interleaves the lines by
+/// start time. Sentence granularity lets a reply from the call land between
+/// the mic sentences it answered, without splitting words when the two tracks
+/// overlap (e.g. the mic echoing the speakers).
+pub fn build_segments(mic: TrackTokens<'_>, system: TrackTokens<'_>) -> Vec<Segment> {
+    let mut lines = group_into_lines(label_tokens(mic));
+    lines.extend(group_into_lines(label_tokens(system)));
+    lines.sort_by_key(|line| line.start_ms);
+    lines
+}
+
+fn label_tokens(track_tokens: TrackTokens<'_>) -> Vec<Segment> {
+    let labeler = SpeakerLabeler::new(track_tokens.tokens, track_tokens.track);
+    track_tokens
+        .tokens
+        .iter()
+        .map(|token| Segment {
+            start_ms: token.start_ms + track_tokens.offset_ms,
+            end_ms: token.end_ms + track_tokens.offset_ms,
+            speaker: labeler.label(token.speaker.as_deref()),
+            text: token.text.clone(),
         })
-        .filter(|segment| !segment.text.is_empty())
         .collect()
 }
 
-fn continues(current: &Segment, speaker: &str, token: &Token) -> bool {
-    current.speaker == speaker
-        && token.start_ms.saturating_sub(current.end_ms) < SEGMENT_BREAK_GAP_MS
+fn group_into_lines(labelled: Vec<Segment>) -> Vec<Segment> {
+    let mut lines: Vec<Segment> = Vec::new();
+    for token in labelled {
+        match lines.last_mut() {
+            Some(line) if continues(line, &token) => {
+                line.text.push_str(&token.text);
+                line.end_ms = token.end_ms;
+            }
+            _ => lines.push(token),
+        }
+    }
+    lines
+        .into_iter()
+        .map(|line| Segment {
+            text: line.text.trim().to_string(),
+            ..line
+        })
+        .filter(|line| !line.text.is_empty())
+        .collect()
+}
+
+fn continues(line: &Segment, token: &Segment) -> bool {
+    let sentence_ended = line.text.trim_end().ends_with(SENTENCE_ENDINGS);
+    line.speaker == token.speaker
+        && !sentence_ended
+        && token.start_ms.saturating_sub(line.end_ms) < SEGMENT_BREAK_GAP_MS
 }
 
 /// Everything on the mic is "You". On the system track a lone remote voice is
@@ -86,12 +115,6 @@ impl SpeakerLabeler {
             _ => SINGLE_REMOTE_SPEAKER_LABEL.to_string(),
         }
     }
-}
-
-pub fn merge_tracks(mic: Vec<Segment>, system: Vec<Segment>) -> Vec<Segment> {
-    let mut merged: Vec<Segment> = mic.into_iter().chain(system).collect();
-    merged.sort_by_key(|segment| segment.start_ms);
-    merged
 }
 
 pub fn render(segments: &[Segment]) -> String {
@@ -126,11 +149,27 @@ mod tests {
         }
     }
 
+    fn mic(tokens: &[Token]) -> TrackTokens<'_> {
+        TrackTokens {
+            tokens,
+            track: Track::Mic,
+            offset_ms: 0,
+        }
+    }
+
+    fn system(tokens: &[Token], offset_ms: u64) -> TrackTokens<'_> {
+        TrackTokens {
+            tokens,
+            track: Track::System,
+            offset_ms,
+        }
+    }
+
     #[test]
     fn mic_tokens_become_one_line_attributed_to_you() {
-        let tokens = [token("Hello", 0, None), token(" there", 300, None)];
+        let tokens = [token("Hel", 0, None), token("lo there", 300, None)];
 
-        let segments = segments_from_tokens(&tokens, Track::Mic);
+        let segments = build_segments(mic(&tokens), system(&[], 0));
 
         assert_eq!(segments.len(), 1);
         assert_eq!(segments[0].speaker, "You");
@@ -138,10 +177,20 @@ mod tests {
     }
 
     #[test]
+    fn overlapping_tracks_never_split_words() {
+        let mic_tokens = [token("Ag", 100, None), token("reed.", 300, None)];
+        let system_tokens = [token("Ag", 0, Some("1")), token("reed.", 200, Some("1"))];
+
+        let rendered = render(&build_segments(mic(&mic_tokens), system(&system_tokens, 0)));
+
+        assert_eq!(rendered, "[00:00] Them: Agreed.\n[00:00] You: Agreed.");
+    }
+
+    #[test]
     fn long_pause_starts_a_new_line_for_the_same_speaker() {
         let tokens = [token("First.", 0, None), token(" Second.", 5_000, None)];
 
-        let segments = segments_from_tokens(&tokens, Track::Mic);
+        let segments = build_segments(mic(&tokens), system(&[], 0));
 
         assert_eq!(segments.len(), 2);
     }
@@ -150,7 +199,7 @@ mod tests {
     fn single_remote_voice_is_labelled_them() {
         let tokens = [token("Hi", 0, Some("1")), token(" all", 300, Some("1"))];
 
-        let segments = segments_from_tokens(&tokens, Track::System);
+        let segments = build_segments(mic(&[]), system(&tokens, 0));
 
         assert_eq!(segments[0].speaker, "Them");
     }
@@ -159,7 +208,7 @@ mod tests {
     fn several_remote_voices_keep_diarizer_numbers() {
         let tokens = [token("Hi", 0, Some("1")), token(" Hey", 300, Some("2"))];
 
-        let speakers: Vec<String> = segments_from_tokens(&tokens, Track::System)
+        let speakers: Vec<String> = build_segments(mic(&[]), system(&tokens, 0))
             .into_iter()
             .map(|s| s.speaker)
             .collect();
@@ -168,13 +217,25 @@ mod tests {
     }
 
     #[test]
-    fn merged_tracks_are_ordered_by_start_time() {
-        let mic = segments_from_tokens(&[token("Second", 2_000, None)], Track::Mic);
-        let system = segments_from_tokens(&[token("First", 0, Some("1"))], Track::System);
+    fn a_reply_from_the_call_splits_the_mic_turn_it_answers() {
+        let mic_tokens = [token("Option A.", 0, None), token(" Agreed.", 1_500, None)];
+        let system_tokens = [token("Use option B.", 600, Some("1"))];
 
-        let rendered = render(&merge_tracks(mic, system));
+        let rendered = render(&build_segments(mic(&mic_tokens), system(&system_tokens, 0)));
 
-        assert_eq!(rendered, "[00:00] Them: First\n[00:02] You: Second");
+        assert_eq!(
+            rendered,
+            "[00:00] You: Option A.\n[00:00] Them: Use option B.\n[00:01] You: Agreed."
+        );
+    }
+
+    #[test]
+    fn system_offset_shifts_call_audio_onto_the_meeting_clock() {
+        let system_tokens = [token("Late start", 0, Some("1"))];
+
+        let segments = build_segments(mic(&[]), system(&system_tokens, 3_000));
+
+        assert_eq!(segments[0].start_ms, 3_000);
     }
 
     #[test]

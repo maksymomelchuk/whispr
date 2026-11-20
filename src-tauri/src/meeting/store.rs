@@ -2,13 +2,41 @@ use super::track::Track;
 use super::transcript::Segment;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const META_FILE: &str = "meta.json";
 const TRANSCRIPT_FILE: &str = "transcript.json";
 const NOTES_FILE: &str = "notes.md";
 pub const INTERRUPTED_MESSAGE: &str =
     "Whispr quit before this meeting finished processing. Retry to process the saved audio.";
+const MEETING_ID_PREFIX: &str = "meeting-";
+const TEMP_FILE_SUFFIX: &str = ".tmp";
+
+static MEETING_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+pub fn new_meeting_id() -> String {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let sequence = MEETING_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("{MEETING_ID_PREFIX}{millis}-{sequence}")
+}
+
+/// Ids arrive from the webview and become directory names, so anything other
+/// than the generated shape (e.g. `..`) is rejected before touching the disk.
+pub fn validate_meeting_id(id: &str) -> Result<(), String> {
+    let well_formed = id.strip_prefix(MEETING_ID_PREFIX).is_some_and(|rest| {
+        !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit() || c == '-')
+    });
+    if !well_formed {
+        return Err(format!("Invalid meeting id: {id:?}"));
+    }
+    Ok(())
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "message", rename_all = "snake_case")]
@@ -21,6 +49,10 @@ pub enum MeetingStatus {
 }
 
 impl MeetingStatus {
+    pub fn is_failed(&self) -> bool {
+        matches!(self, Self::Failed(_))
+    }
+
     fn is_in_progress(&self) -> bool {
         matches!(
             self,
@@ -40,6 +72,10 @@ pub struct MeetingMeta {
     /// Why the remote side wasn't recorded, when only the mic track exists.
     #[serde(default)]
     pub system_audio_error: Option<String>,
+    /// How long after the mic the call-audio track started, so both tracks
+    /// share one clock when merged.
+    #[serde(default)]
+    pub system_offset_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -104,7 +140,11 @@ impl MeetingStore {
         };
         let mut metas: Vec<MeetingMeta> = entries
             .flatten()
-            .filter_map(|entry| read_json(&entry.path().join(META_FILE)).ok())
+            .filter_map(|entry| {
+                read_json(&entry.path().join(META_FILE))
+                    .inspect_err(|e| eprintln!("[meeting] skipping unreadable meeting: {e}"))
+                    .ok()
+            })
             .collect();
         metas.sort_by(|a, b| b.started_at.cmp(&a.started_at));
         metas
@@ -112,10 +152,17 @@ impl MeetingStore {
 
     pub fn load(&self, id: &str) -> Result<Meeting, String> {
         let dir = self.meeting_dir(id);
+        let transcript = read_optional(&dir.join(TRANSCRIPT_FILE))?;
+        let segments = match transcript {
+            Some(json) => {
+                serde_json::from_str(&json).map_err(|e| format!("parse transcript of {id}: {e}"))?
+            }
+            None => Vec::new(),
+        };
         Ok(Meeting {
             meta: self.load_meta(id)?,
-            segments: read_json(&dir.join(TRANSCRIPT_FILE)).unwrap_or_default(),
-            notes: fs::read_to_string(dir.join(NOTES_FILE)).ok(),
+            segments,
+            notes: read_optional(&dir.join(NOTES_FILE))?,
         })
     }
 
@@ -152,11 +199,25 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, String> {
     serde_json::from_str(&contents).map_err(|e| format!("parse {path:?}: {e}"))
 }
 
-/// Meeting audio and transcripts are as sensitive as the call itself.
+/// Missing is a normal state (not transcribed yet); any other failure is not.
+fn read_optional(path: &Path) -> Result<Option<String>, String> {
+    match fs::read_to_string(path) {
+        Ok(contents) => Ok(Some(contents)),
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("read {path:?}: {e}")),
+    }
+}
+
+/// Written to a temp file and renamed into place, so a crash mid-write never
+/// leaves a truncated file where a good one was. Owner-only, because meeting
+/// audio and transcripts are as sensitive as the call itself.
 pub fn write_private(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    fs::write(path, bytes).map_err(|e| format!("write {path:?}: {e}"))?;
-    restrict_to_owner(path);
-    Ok(())
+    let mut temp_name = path.as_os_str().to_owned();
+    temp_name.push(TEMP_FILE_SUFFIX);
+    let temp_path = PathBuf::from(temp_name);
+    fs::write(&temp_path, bytes).map_err(|e| format!("write {temp_path:?}: {e}"))?;
+    restrict_to_owner(&temp_path);
+    fs::rename(&temp_path, path).map_err(|e| format!("rename {temp_path:?} to {path:?}: {e}"))
 }
 
 fn restrict_to_owner(path: &Path) {
@@ -180,7 +241,46 @@ mod tests {
             status,
             summary_model: None,
             system_audio_error: None,
+            system_offset_ms: 0,
         }
+    }
+
+    #[test]
+    fn generated_meeting_ids_are_unique_and_valid() {
+        let first = new_meeting_id();
+        let second = new_meeting_id();
+
+        assert_ne!(first, second);
+        assert!(validate_meeting_id(&first).is_ok());
+    }
+
+    #[test]
+    fn ids_that_could_escape_the_store_are_rejected() {
+        for id in [
+            "..",
+            "meeting-../x",
+            "meeting-",
+            "../meeting-1",
+            "meeting-1/2",
+        ] {
+            assert!(validate_meeting_id(id).is_err(), "{id}");
+        }
+    }
+
+    #[test]
+    fn corrupt_transcript_is_an_error_not_an_empty_meeting() {
+        let root = tempfile::tempdir().unwrap();
+        let store = MeetingStore::new(root.path().to_path_buf());
+        store
+            .create(&meta("meeting-1", 1, MeetingStatus::Ready))
+            .unwrap();
+        fs::write(
+            store.meeting_dir("meeting-1").join(TRANSCRIPT_FILE),
+            "{oops",
+        )
+        .unwrap();
+
+        assert!(store.load("meeting-1").is_err());
     }
 
     #[test]

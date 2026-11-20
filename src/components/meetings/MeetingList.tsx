@@ -27,6 +27,7 @@ export function MeetingList({
           <button
             type="button"
             onClick={() => onSelect(meeting.id)}
+            aria-pressed={meeting.id === selectedId}
             className={cn(
               "flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-accent",
               meeting.id === selectedId && "bg-accent",

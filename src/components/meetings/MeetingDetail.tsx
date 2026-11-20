@@ -1,10 +1,10 @@
 import { CopyIcon, TrashIcon } from "@phosphor-icons/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { useMeetingsUpdated } from "@/hooks/useMeetings";
+import { useMeetingsSubscription } from "@/hooks/useMeetings";
 import { deleteMeeting, getMeeting, retryMeeting } from "@/lib/api";
 import type { Meeting, MeetingSegment } from "@/lib/types";
 
@@ -19,8 +19,7 @@ function useMeeting(id: string) {
       .then(setMeeting)
       .catch((err) => toast.error(`Failed to load meeting: ${String(err)}`));
   }, [id]);
-  useEffect(refresh, [refresh]);
-  useMeetingsUpdated(refresh);
+  useMeetingsSubscription(refresh);
   return meeting;
 }
 

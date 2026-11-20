@@ -22,6 +22,8 @@ pub struct StartedCapture {
     pub meeting: ActiveMeeting,
     /// Set when only the mic is recording because the call audio couldn't be.
     pub system_audio_error: Option<String>,
+    /// How long after the mic stream went live the call-audio stream did.
+    pub system_offset_ms: u64,
 }
 
 pub async fn start(
@@ -33,8 +35,10 @@ pub async fn start(
     let mic_writer = start_mic_track(&mic_recorder, input_device, store.pcm_path(id, Track::Mic))
         .await
         .map_err(|e| format!("Microphone recording failed: {e}"))?;
+    let mic_live_at = Instant::now();
     let mut writers = vec![mic_writer];
     let system = start_system_track(store.pcm_path(id, Track::System));
+    let system_offset_ms = mic_live_at.elapsed().as_millis() as u64;
     let system_audio_error = system.as_ref().err().cloned();
     #[cfg(target_os = "macos")]
     let system_capture = system.ok().map(|(capture, writer)| {
@@ -44,13 +48,14 @@ pub async fn start(
     Ok(StartedCapture {
         meeting: ActiveMeeting {
             id: id.to_string(),
-            started: Instant::now(),
+            started: mic_live_at,
             mic_recorder,
             #[cfg(target_os = "macos")]
             system_capture,
             writers,
         },
         system_audio_error,
+        system_offset_ms,
     })
 }
 
