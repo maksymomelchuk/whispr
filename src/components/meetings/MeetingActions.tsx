@@ -16,7 +16,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { deleteMeeting } from "@/lib/api";
 
 function IconAction({
   label,
@@ -93,20 +92,16 @@ function DeleteConfirmDialog({
 }
 
 export function DeleteMeetingButton({
-  id,
   title,
-  onDeleted,
+  onDelete,
 }: {
-  id: string;
   title: string;
-  onDeleted: () => void;
+  onDelete: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   const remove = () => {
     setConfirming(false);
-    deleteMeeting(id)
-      .then(onDeleted)
-      .catch((err) => toast.error(`Failed to delete meeting: ${String(err)}`));
+    onDelete();
   };
   return (
     <>

@@ -68,10 +68,10 @@ function InProgressBody({ meeting }: { meeting: Meeting }) {
 
 function FinishedDetail({
   meeting,
-  onDeleted,
+  onDelete,
 }: {
   meeting: Meeting;
-  onDeleted: () => void;
+  onDelete: (id: string) => void;
 }) {
   const [view, setView] = useState<View>("notes");
   return (
@@ -91,9 +91,8 @@ function FinishedDetail({
           ))}
           <CopyNotesButton notes={meeting.notes} />
           <DeleteMeetingButton
-            id={meeting.meta.id}
             title={meetingTitle(meeting.title, meeting.meta.started_at)}
-            onDeleted={onDeleted}
+            onDelete={() => onDelete(meeting.meta.id)}
           />
         </div>
       </header>
@@ -114,10 +113,10 @@ const IN_PROGRESS_STATUSES = new Set<MeetingStatus["kind"]>([
 
 export function MeetingDetail({
   id,
-  onDeleted,
+  onDelete,
 }: {
   id: string;
-  onDeleted: () => void;
+  onDelete: (id: string) => void;
 }) {
   const meeting = useMeeting(id);
   if (!meeting) return null;
@@ -132,7 +131,7 @@ export function MeetingDetail({
           <InProgressBody meeting={meeting} />
         </>
       ) : (
-        <FinishedDetail meeting={meeting} onDeleted={onDeleted} />
+        <FinishedDetail meeting={meeting} onDelete={onDelete} />
       )}
     </section>
   );

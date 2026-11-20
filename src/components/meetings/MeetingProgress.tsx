@@ -1,4 +1,4 @@
-import { CheckIcon, CircleNotchIcon } from "@phosphor-icons/react";
+import { CheckIcon } from "@phosphor-icons/react";
 
 import type { MeetingMeta } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -36,6 +36,20 @@ export function RecordingPlaceholder({ meeting }: { meeting: MeetingMeta }) {
   );
 }
 
+// A bordered square spins exactly about its centre; the icon glyph we tried
+// first visibly wobbled up and down under the same rotation.
+function Spinner({ className }: { className: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "block shrink-0 animate-spin rounded-full border-muted-foreground/25 border-t-muted-foreground",
+        className,
+      )}
+    />
+  );
+}
+
 type StepState = "done" | "active" | "pending";
 
 function ProgressStep({ label, state }: { label: string; state: StepState }) {
@@ -50,9 +64,7 @@ function ProgressStep({ label, state }: { label: string; state: StepState }) {
       {state === "done" && (
         <CheckIcon weight="bold" className="size-3.5 text-primary" />
       )}
-      {state === "active" && (
-        <CircleNotchIcon className="size-3.5 animate-spin" />
-      )}
+      {state === "active" && <Spinner className="size-3.5 border-2" />}
       {state === "pending" && (
         <span className="size-1.5 rounded-full bg-muted-foreground/40" />
       )}
@@ -66,7 +78,7 @@ export function ProcessingProgress({ meeting }: { meeting: MeetingMeta }) {
   const transcribing = meeting.status.kind === "transcribing";
   return (
     <div className={PANEL_CLASS} role="status">
-      <CircleNotchIcon className="size-7 animate-spin text-muted-foreground" />
+      <Spinner className="size-7 border-[3px]" />
       <div className="flex items-center gap-2">
         <ProgressStep
           label="Transcribe"
