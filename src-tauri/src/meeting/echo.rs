@@ -10,8 +10,10 @@ const ECHO_MIN_MATCHED_WORD_SHARE: f64 = 0.6;
 /// An echo is heard while the call line plays; the user's own reply to it
 /// starts once the line is over, so the mic line must sit inside the call span.
 const ECHO_SPAN_SLACK_MS: u64 = 1_000;
-/// Normalized (apostrophes dropped). A mic line that adds one of these to the
-/// call's words says the opposite, so it is the user speaking, not an echo.
+/// Normalized (apostrophes dropped). A mic line that adds or drops one of these
+/// against the call says the opposite, so it is the user speaking, not an echo.
+/// Erring this way only leaves a rare echo visible; the other way would drop
+/// the user's disagreement from the notes.
 const NEGATION_WORDS: [&str; 19] = [
     "not",
     "no",
@@ -94,7 +96,10 @@ fn is_echo_of_call(mic_line: &Segment, call_lines: &[CallLine]) -> bool {
     let adds_negation = unmatched
         .iter()
         .any(|word| NEGATION_WORDS.contains(&word.as_str()));
-    matched_share >= ECHO_MIN_MATCHED_WORD_SHARE && !adds_negation
+    let drops_negation = NEGATION_WORDS
+        .iter()
+        .any(|negation| call_word_counts.get(negation).is_some_and(|left| *left > 0));
+    matched_share >= ECHO_MIN_MATCHED_WORD_SHARE && !adds_negation && !drops_negation
 }
 
 fn within_call_span(mic_line: &Segment, overlapping: &[&CallLine]) -> bool {
@@ -246,6 +251,16 @@ mod tests {
         let flags = echo_flags(vec![
             line("Them", 0, 2_000, "Let's ship on Friday."),
             line("You", 3_200, 5_000, "Let's ship on Monday."),
+        ]);
+
+        assert!(!flags[1]);
+    }
+
+    #[test]
+    fn overlapping_line_that_drops_the_calls_negation_is_not_an_echo() {
+        let flags = echo_flags(vec![
+            line("Them", 0, 3_000, "We should not ship on Friday."),
+            line("You", 200, 3_100, "We should ship on Friday."),
         ]);
 
         assert!(!flags[1]);
