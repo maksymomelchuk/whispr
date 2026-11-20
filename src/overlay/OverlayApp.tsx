@@ -5,7 +5,15 @@ import { formatClock } from "@/lib/formatDuration";
 
 import "./OverlayApp.css";
 
-type Mode = "recording" | "transcribing" | "cleaning" | "error" | "cancelled";
+type Mode =
+  | "recording"
+  | "transcribing"
+  | "cleaning"
+  | "error"
+  | "cancelled"
+  | "notice";
+
+type OverlayNotice = { text: string; is_error: boolean };
 
 type TargetApp = {
   bundleId: string;
@@ -127,6 +135,7 @@ const Waveform = ({
 export function OverlayApp() {
   const [mode, setMode] = useState<Mode>("recording");
   const [partial, setPartial] = useState<string>("");
+  const [notice, setNotice] = useState<string>("");
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [ready, setReady] = useState(false);
@@ -180,6 +189,7 @@ export function OverlayApp() {
       setElapsedSec(0);
       setMode("recording");
       setPartial("");
+      setNotice("");
       setTarget(null);
       applyLevel(0);
     };
@@ -219,6 +229,11 @@ export function OverlayApp() {
       listen<string>("transcript-partial", (e) => {
         setPartial(e.payload ?? "");
       }),
+      listen<OverlayNotice>("overlay-notice", (e) => {
+        resetSession();
+        setNotice(e.payload.text);
+        setMode(e.payload.is_error ? "error" : "notice");
+      }),
     ])
       .then((handles) => {
         if (cancelled) handles.forEach((u) => u());
@@ -232,12 +247,15 @@ export function OverlayApp() {
   }, []);
 
   const trimmedPartial = partial.trim();
-  const showPreview = mode === "recording" && trimmedPartial.length > 0;
+  const showNotice = notice.length > 0;
+  const showPreview =
+    showNotice || (mode === "recording" && trimmedPartial.length > 0);
   const displayText = useMemo(() => {
+    if (showNotice) return notice;
     if (!showPreview) return "";
     if (trimmedPartial.length <= PREVIEW_WINDOW) return trimmedPartial;
     return "…" + trimmedPartial.slice(-PREVIEW_WINDOW);
-  }, [showPreview, trimmedPartial]);
+  }, [showNotice, notice, showPreview, trimmedPartial]);
 
   return (
     <div className="overlay-root">
@@ -260,10 +278,15 @@ export function OverlayApp() {
               )}
             </div>
             <span className="overlay-timer">
-              {mode === "cancelled" ? "Cancelled" : formatClock(elapsedSec)}
+              {showNotice
+                ? "Meeting"
+                : mode === "cancelled"
+                  ? "Cancelled"
+                  : formatClock(elapsedSec)}
             </span>
           </div>
           {mode === "recording" && <Waveform levelRef={waveRef} />}
+          {mode === "notice" && <Sparkle />}
           {mode === "transcribing" && <Spinner />}
           {mode === "cleaning" && <Sparkle />}
           {mode === "error" && <ErrorIcon />}

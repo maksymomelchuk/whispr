@@ -44,6 +44,7 @@ pub enum HotkeyAction {
     Ptt { mode_id: ModeId },
     PasteLatest,
     RecoverLatest,
+    MeetingToggle,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -72,6 +73,24 @@ impl HotkeyBinding {
             shortcut,
             action: HotkeyAction::RecoverLatest,
         }
+    }
+
+    pub fn meeting_toggle(shortcut: Shortcut) -> Self {
+        Self {
+            shortcut,
+            action: HotkeyAction::MeetingToggle,
+        }
+    }
+}
+
+/// ⌃⌥M: unbound by default macOS and common apps, and clear of the Right-Alt
+/// push-to-talk default. The event tap only listens, so the combo still
+/// reaches the focused app — it must be one that does nothing there.
+pub fn default_meeting_toggle_shortcut() -> Shortcut {
+    Shortcut {
+        key: "KeyM".to_string(),
+        modifiers: vec!["Control".to_string(), "Alt".to_string()],
+        is_double_tap: false,
     }
 }
 
@@ -132,6 +151,7 @@ pub fn check_action_constraints(bindings: &[HotkeyBinding]) -> Result<(), String
     let mut seen_modes: HashSet<&str> = HashSet::new();
     let mut paste_latest_count = 0;
     let mut recover_latest_count = 0;
+    let mut meeting_toggle_count = 0;
     for b in bindings {
         match &b.action {
             HotkeyAction::Ptt { mode_id } => {
@@ -156,6 +176,14 @@ pub fn check_action_constraints(bindings: &[HotkeyBinding]) -> Result<(), String
                     return Err(
                         "Recover Latest already has a hotkey. Only one Recover Latest binding is allowed."
                             .to_string(),
+                    );
+                }
+            }
+            HotkeyAction::MeetingToggle => {
+                meeting_toggle_count += 1;
+                if meeting_toggle_count > 1 {
+                    return Err(
+                        "Start/stop meeting already has a hotkey. Only one is allowed.".to_string(),
                     );
                 }
             }
@@ -469,6 +497,8 @@ pub struct Settings {
     pub learned_inconsistent_from: Vec<String>,
     #[serde(default)]
     pub meeting_summary: MeetingSummarySettings,
+    #[serde(default)]
+    pub meeting_hotkey_seeded: bool,
 }
 
 impl Default for Settings {
@@ -510,6 +540,7 @@ impl Default for Settings {
             learned_entries: vec![],
             learned_inconsistent_from: vec![],
             meeting_summary: MeetingSummarySettings::default(),
+            meeting_hotkey_seeded: false,
         }
     }
 }
@@ -708,7 +739,9 @@ fn migrate(s: &mut Settings) -> bool {
         let before = s.hotkey_bindings.len();
         s.hotkey_bindings.retain(|b| match &b.action {
             HotkeyAction::Ptt { mode_id } => mode_ids.contains(mode_id.as_str()),
-            HotkeyAction::PasteLatest | HotkeyAction::RecoverLatest => true,
+            HotkeyAction::PasteLatest
+            | HotkeyAction::RecoverLatest
+            | HotkeyAction::MeetingToggle => true,
         });
         if s.hotkey_bindings.len() != before {
             changed = true;
@@ -721,6 +754,7 @@ fn migrate(s: &mut Settings) -> bool {
         let mut seen_modes: HashSet<String> = HashSet::new();
         let mut seen_paste_latest = false;
         let mut seen_recover_latest = false;
+        let mut seen_meeting_toggle = false;
         s.hotkey_bindings.retain(|b| match &b.action {
             HotkeyAction::Ptt { mode_id } => seen_modes.insert(mode_id.clone()),
             HotkeyAction::PasteLatest => {
@@ -739,13 +773,38 @@ fn migrate(s: &mut Settings) -> bool {
                     true
                 }
             }
+            HotkeyAction::MeetingToggle => !std::mem::replace(&mut seen_meeting_toggle, true),
         });
         if s.hotkey_bindings.len() != before {
             changed = true;
         }
     }
 
+    if seed_meeting_toggle_hotkey(s) {
+        changed = true;
+    }
+
     changed
+}
+
+/// Adds the default meeting hotkey once. The flag keeps a binding the user
+/// removed from coming back, and a combo already in use is left alone.
+fn seed_meeting_toggle_hotkey(s: &mut Settings) -> bool {
+    if s.meeting_hotkey_seeded {
+        return false;
+    }
+    s.meeting_hotkey_seeded = true;
+    let shortcut = default_meeting_toggle_shortcut();
+    let combo_taken = s.hotkey_bindings.iter().any(|b| b.shortcut == shortcut);
+    let already_bound = s
+        .hotkey_bindings
+        .iter()
+        .any(|b| b.action == HotkeyAction::MeetingToggle);
+    if !combo_taken && !already_bound {
+        s.hotkey_bindings
+            .push(HotkeyBinding::meeting_toggle(shortcut));
+    }
+    true
 }
 
 /// Parse `json` into a `Settings` value and apply any pending migrations.
@@ -1414,7 +1473,7 @@ mod tests {
         assert!(s.hotkey_bindings.is_empty());
         let changed = migrate(&mut s);
         assert!(changed);
-        assert_eq!(s.hotkey_bindings.len(), 1);
+        assert_eq!(ptt_binding_count(&s), 1);
         assert_eq!(s.hotkey_bindings[0].shortcut.key, "MetaRight");
         assert_eq!(
             s.hotkey_bindings[0].action,
@@ -1439,14 +1498,14 @@ mod tests {
         }"#;
         let mut s: Settings = serde_json::from_str(json).unwrap();
         migrate(&mut s);
-        assert_eq!(s.hotkey_bindings.len(), 1);
+        assert_eq!(ptt_binding_count(&s), 1);
 
         let changed = migrate(&mut s);
         assert!(
             !changed,
             "migrate on already-migrated settings must return false"
         );
-        assert_eq!(s.hotkey_bindings.len(), 1);
+        assert_eq!(ptt_binding_count(&s), 1);
     }
 
     #[test]
@@ -1473,7 +1532,7 @@ mod tests {
         ));
         let changed = migrate(&mut s);
         assert!(changed);
-        assert_eq!(s.hotkey_bindings.len(), 1);
+        assert_eq!(ptt_binding_count(&s), 1);
         assert_eq!(
             s.hotkey_bindings[0].action,
             HotkeyAction::Ptt {
@@ -1710,7 +1769,7 @@ mod tests {
         ];
         let changed = migrate(&mut s);
         assert!(changed);
-        assert_eq!(s.hotkey_bindings.len(), 1);
+        assert_eq!(ptt_binding_count(&s), 1);
         assert!(!s.hotkey_bindings[0].shortcut.is_double_tap);
     }
 
@@ -1761,7 +1820,7 @@ mod tests {
             ]
         }"#;
         let s = from_json(json).unwrap();
-        assert_eq!(s.hotkey_bindings.len(), 1);
+        assert_eq!(ptt_binding_count(&s), 1);
         assert_eq!(
             s.hotkey_bindings[0].action,
             HotkeyAction::Ptt {
@@ -2035,5 +2094,63 @@ mod tests {
             s.local_whisper.idle_timeout,
             LocalWhisperIdleTimeout::FifteenMinutes
         );
+    }
+
+    fn ptt_binding_count(s: &Settings) -> usize {
+        s.hotkey_bindings
+            .iter()
+            .filter(|b| matches!(b.action, HotkeyAction::Ptt { .. }))
+            .count()
+    }
+
+    fn meeting_bindings(s: &Settings) -> Vec<&HotkeyBinding> {
+        s.hotkey_bindings
+            .iter()
+            .filter(|b| b.action == HotkeyAction::MeetingToggle)
+            .collect()
+    }
+
+    #[test]
+    fn first_load_adds_the_default_meeting_hotkey() {
+        let s = from_json("{}").unwrap();
+
+        let bindings = meeting_bindings(&s);
+        assert_eq!(bindings.len(), 1);
+        assert_eq!(bindings[0].shortcut, default_meeting_toggle_shortcut());
+    }
+
+    #[test]
+    fn a_removed_meeting_hotkey_is_not_added_back() {
+        let mut s = from_json("{}").unwrap();
+        s.hotkey_bindings
+            .retain(|b| b.action != HotkeyAction::MeetingToggle);
+
+        let reloaded = from_json(&serde_json::to_string(&s).unwrap()).unwrap();
+
+        assert!(meeting_bindings(&reloaded).is_empty());
+    }
+
+    #[test]
+    fn default_meeting_hotkey_skips_a_combo_already_in_use() {
+        let mut s = from_json("{}").unwrap();
+        s.hotkey_bindings.clear();
+        s.meeting_hotkey_seeded = false;
+        s.hotkey_bindings.push(HotkeyBinding::paste_latest(
+            default_meeting_toggle_shortcut(),
+        ));
+
+        let reloaded = from_json(&serde_json::to_string(&s).unwrap()).unwrap();
+
+        assert!(meeting_bindings(&reloaded).is_empty());
+    }
+
+    #[test]
+    fn check_action_constraints_rejects_two_meeting_hotkeys() {
+        let bindings = vec![
+            HotkeyBinding::meeting_toggle(default_meeting_toggle_shortcut()),
+            HotkeyBinding::meeting_toggle(Shortcut::default()),
+        ];
+
+        assert!(check_action_constraints(&bindings).is_err());
     }
 }

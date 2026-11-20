@@ -7,7 +7,8 @@ export interface Shortcut {
 export type HotkeyAction =
   | { type: "Ptt"; mode_id: string }
   | { type: "PasteLatest" }
-  | { type: "RecoverLatest" };
+  | { type: "RecoverLatest" }
+  | { type: "MeetingToggle" };
 
 export interface HotkeyBinding {
   shortcut: Shortcut;
@@ -24,6 +25,14 @@ export function pasteLatestBinding(shortcut: Shortcut): HotkeyBinding {
 
 export function recoverLatestBinding(shortcut: Shortcut): HotkeyBinding {
   return { shortcut, action: { type: "RecoverLatest" } };
+}
+
+export function meetingToggleBinding(shortcut: Shortcut): HotkeyBinding {
+  return { shortcut, action: { type: "MeetingToggle" } };
+}
+
+export function isMeetingToggleBinding(b: HotkeyBinding): boolean {
+  return b.action.type === "MeetingToggle";
 }
 
 export function isPasteLatestBinding(b: HotkeyBinding): boolean {

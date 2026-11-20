@@ -32,8 +32,10 @@ import {
 } from "../lib/shortcut";
 import type { HotkeyBinding, Mode, Shortcut } from "../lib/types";
 import {
+  isMeetingToggleBinding,
   isPasteLatestBinding,
   isRecoverLatestBinding,
+  meetingToggleBinding,
   pasteLatestBinding,
   pttBinding,
   pttModeId,
@@ -44,13 +46,20 @@ const CONFLICT_MESSAGE =
   "Two bindings use the same shortcut. Remove the conflict before saving.";
 
 const DEFAULT_SHORTCUT: Shortcut = { key: "AltRight", modifiers: [] };
+const DEFAULT_MEETING_TOGGLE_SHORTCUT: Shortcut = {
+  key: "KeyM",
+  modifiers: ["Control", "Alt"],
+};
 const PASTE_LATEST_TARGET_ID = "__paste_latest__";
 const RECOVER_LATEST_TARGET_ID = "__recover_latest__";
+const MEETING_TOGGLE_TARGET_ID = "__meeting_toggle__";
 
-type RecorderTargetKind =
-  | { kind: "mode"; modeId: string }
+type SingleActionTarget =
   | { kind: "paste_latest" }
-  | { kind: "recover_latest" };
+  | { kind: "recover_latest" }
+  | { kind: "meeting_toggle" };
+
+type RecorderTargetKind = { kind: "mode"; modeId: string } | SingleActionTarget;
 
 interface RecorderTarget {
   target: RecorderTargetKind;
@@ -61,6 +70,7 @@ interface RecorderTarget {
 function targetId(target: RecorderTargetKind): string {
   if (target.kind === "mode") return target.modeId;
   if (target.kind === "paste_latest") return PASTE_LATEST_TARGET_ID;
+  if (target.kind === "meeting_toggle") return MEETING_TOGGLE_TARGET_ID;
   return RECOVER_LATEST_TARGET_ID;
 }
 
@@ -73,6 +83,9 @@ function makeBindingForTarget(
   }
   if (target.kind === "recover_latest") {
     return recoverLatestBinding(shortcut);
+  }
+  if (target.kind === "meeting_toggle") {
+    return meetingToggleBinding(shortcut);
   }
   return pasteLatestBinding(shortcut);
 }
@@ -339,13 +352,27 @@ export function HotkeysPage() {
     .map((b, i) => ({ binding: b, index: i }))
     .filter(({ binding }) => isRecoverLatestBinding(binding));
 
+  const meetingToggleBindings = bindings
+    .map((b, i) => ({ binding: b, index: i }))
+    .filter(({ binding }) => isMeetingToggleBinding(binding));
+
   const rowFlashId = (targetIdValue: string, shortcut: Shortcut) =>
     `${targetIdValue}|${shortcutKey(shortcut)}`;
+
+  const singleActionProps = {
+    recorderTarget,
+    setRecorderTarget,
+    bindings,
+    onSave: handleRecordSave,
+    onRemove: handleRemove,
+    isFlashing,
+    rowFlashId,
+  };
 
   return (
     <PageShell
       title="Hotkeys"
-      description="Bind push-to-talk shortcuts to profiles and the paste and recover actions."
+      description="Bind push-to-talk shortcuts to profiles, plus the paste, recover and meeting actions."
     >
       {error && (
         <Alert variant="destructive" className="font-medium">
@@ -452,34 +479,45 @@ export function HotkeysPage() {
 
       <Separator />
 
-      <PasteLatestSection
+      <SingleActionSection
+        title="Paste Latest Transcription"
+        target={{ kind: "paste_latest" }}
+        targetIdValue={PASTE_LATEST_TARGET_ID}
+        defaultShortcut={DEFAULT_SHORTCUT}
         rows={pasteLatestBindings}
-        recorderTarget={recorderTarget}
-        setRecorderTarget={setRecorderTarget}
-        bindings={bindings}
-        onSave={handleRecordSave}
-        onRemove={handleRemove}
-        isFlashing={isFlashing}
-        rowFlashId={rowFlashId}
+        {...singleActionProps}
       />
 
       <Separator />
 
-      <RecoverLatestSection
+      <SingleActionSection
+        title="Recover Latest Transcription"
+        target={{ kind: "recover_latest" }}
+        targetIdValue={RECOVER_LATEST_TARGET_ID}
+        defaultShortcut={DEFAULT_SHORTCUT}
         rows={recoverLatestBindings}
-        recorderTarget={recorderTarget}
-        setRecorderTarget={setRecorderTarget}
-        bindings={bindings}
-        onSave={handleRecordSave}
-        onRemove={handleRemove}
-        isFlashing={isFlashing}
-        rowFlashId={rowFlashId}
+        {...singleActionProps}
+      />
+
+      <Separator />
+
+      <SingleActionSection
+        title="Start / Stop Meeting"
+        target={{ kind: "meeting_toggle" }}
+        targetIdValue={MEETING_TOGGLE_TARGET_ID}
+        defaultShortcut={DEFAULT_MEETING_TOGGLE_SHORTCUT}
+        rows={meetingToggleBindings}
+        {...singleActionProps}
       />
     </PageShell>
   );
 }
 
-interface PasteLatestSectionProps {
+interface SingleActionSectionProps {
+  title: string;
+  target: SingleActionTarget;
+  targetIdValue: string;
+  defaultShortcut: Shortcut;
   rows: { binding: HotkeyBinding; index: number }[];
   recorderTarget: RecorderTarget | null;
   setRecorderTarget: (target: RecorderTarget | null) => void;
@@ -490,7 +528,11 @@ interface PasteLatestSectionProps {
   rowFlashId: (targetId: string, shortcut: Shortcut) => string;
 }
 
-function PasteLatestSection({
+function SingleActionSection({
+  title,
+  target,
+  targetIdValue,
+  defaultShortcut,
   rows,
   recorderTarget,
   setRecorderTarget,
@@ -499,8 +541,8 @@ function PasteLatestSection({
   onRemove,
   isFlashing,
   rowFlashId,
-}: PasteLatestSectionProps) {
-  const isRecordingHere = recorderTarget?.target.kind === "paste_latest";
+}: SingleActionSectionProps) {
+  const isRecordingHere = recorderTarget?.target.kind === target.kind;
   const recordingExistingIndex =
     isRecordingHere && recorderTarget?.bindingIndex !== null
       ? recorderTarget?.bindingIndex
@@ -509,15 +551,11 @@ function PasteLatestSection({
     isRecordingHere && recorderTarget?.bindingIndex === null;
 
   const startRecording = (bindingIndex: number | null, current: Shortcut) =>
-    setRecorderTarget({
-      target: { kind: "paste_latest" },
-      bindingIndex,
-      current,
-    });
+    setRecorderTarget({ target, bindingIndex, current });
 
   return (
     <section className="flex flex-col gap-2.5">
-      <SectionHeader title="Paste Latest Transcription" />
+      <SectionHeader title={title} />
 
       {rows.length === 0 ? (
         recordingNewBinding ? (
@@ -527,7 +565,7 @@ function PasteLatestSection({
             onCancel={() => setRecorderTarget(null)}
           />
         ) : (
-          <EmptyModeCard onAdd={() => startRecording(null, DEFAULT_SHORTCUT)} />
+          <EmptyModeCard onAdd={() => startRecording(null, defaultShortcut)} />
         )
       ) : (
         <div className="flex flex-col gap-2">
@@ -543,91 +581,7 @@ function PasteLatestSection({
               );
             }
             const flashing = isFlashing(
-              rowFlashId(PASTE_LATEST_TARGET_ID, binding.shortcut),
-            );
-            return (
-              <BindingRow
-                key={bindingIndex}
-                binding={binding}
-                conflict={hasConflict(bindings, bindingIndex)}
-                armed={false}
-                flashing={flashing}
-                onEdit={() => startRecording(bindingIndex, binding.shortcut)}
-                onRemove={() => onRemove(bindingIndex)}
-              />
-            );
-          })}
-        </div>
-      )}
-    </section>
-  );
-}
-
-interface RecoverLatestSectionProps {
-  rows: { binding: HotkeyBinding; index: number }[];
-  recorderTarget: RecorderTarget | null;
-  setRecorderTarget: (target: RecorderTarget | null) => void;
-  bindings: HotkeyBinding[];
-  onSave: (shortcut: Shortcut) => void;
-  onRemove: (index: number) => void;
-  isFlashing: (id: string) => boolean;
-  rowFlashId: (targetId: string, shortcut: Shortcut) => string;
-}
-
-function RecoverLatestSection({
-  rows,
-  recorderTarget,
-  setRecorderTarget,
-  bindings,
-  onSave,
-  onRemove,
-  isFlashing,
-  rowFlashId,
-}: RecoverLatestSectionProps) {
-  const isRecordingHere = recorderTarget?.target.kind === "recover_latest";
-  const recordingExistingIndex =
-    isRecordingHere && recorderTarget?.bindingIndex !== null
-      ? recorderTarget?.bindingIndex
-      : null;
-  const recordingNewBinding =
-    isRecordingHere && recorderTarget?.bindingIndex === null;
-
-  const startRecording = (bindingIndex: number | null, current: Shortcut) =>
-    setRecorderTarget({
-      target: { kind: "recover_latest" },
-      bindingIndex,
-      current,
-    });
-
-  return (
-    <section className="flex flex-col gap-2.5">
-      <SectionHeader title="Recover Latest Transcription" />
-
-      {rows.length === 0 ? (
-        recordingNewBinding ? (
-          <RecordingRow
-            initial={recorderTarget!.current}
-            onSave={onSave}
-            onCancel={() => setRecorderTarget(null)}
-          />
-        ) : (
-          <EmptyModeCard onAdd={() => startRecording(null, DEFAULT_SHORTCUT)} />
-        )
-      ) : (
-        <div className="flex flex-col gap-2">
-          {rows.map(({ binding, index: bindingIndex }) => {
-            if (recordingExistingIndex === bindingIndex) {
-              return (
-                <RecordingRow
-                  key={bindingIndex}
-                  initial={recorderTarget!.current}
-                  onSave={onSave}
-                  onCancel={() => setRecorderTarget(null)}
-                />
-              );
-            }
-            const flashing = isFlashing(
-              rowFlashId(RECOVER_LATEST_TARGET_ID, binding.shortcut),
+              rowFlashId(targetIdValue, binding.shortcut),
             );
             return (
               <BindingRow

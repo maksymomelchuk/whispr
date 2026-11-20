@@ -7,11 +7,12 @@ import {
   configuredAiProviders,
   type AiProviderModel,
 } from "@/components/AiProviderModelPicker";
+import { ShortcutKeycaps } from "@/components/Keycap";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useSettings } from "@/context/SettingsContext";
 import { setMeetingSummary, startMeeting, stopMeeting } from "@/lib/api";
-import type { MeetingMeta } from "@/lib/types";
+import { isMeetingToggleBinding, type MeetingMeta } from "@/lib/types";
 
 import { formatMeetingDuration } from "./meetingFormat";
 
@@ -46,6 +47,17 @@ function MissingSetupAlert() {
         Meeting notes need {missing.join(" and ")}.
       </AlertDescription>
     </Alert>
+  );
+}
+
+function MeetingShortcutHint() {
+  const { settings } = useSettings();
+  const binding = settings.hotkey_bindings.find(isMeetingToggleBinding);
+  if (!binding) return null;
+  return (
+    <span className="flex items-center gap-2 text-xs text-muted-foreground">
+      or press <ShortcutKeycaps shortcut={binding.shortcut} /> anywhere
+    </span>
   );
 }
 
@@ -106,6 +118,7 @@ export function MeetingRecorderCard({
               {formatMeetingDuration(elapsedMs)}
             </span>
           )}
+          <MeetingShortcutHint />
         </div>
       </div>
       <SummaryProviderPicker />

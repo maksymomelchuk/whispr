@@ -52,10 +52,19 @@ pub async fn start_meeting(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<MeetingMeta, String> {
-    let _reservation = reserve_start(&state)?;
-    let settings = config::load(&app);
+    start(&app, &state).await
+}
+
+#[tauri::command]
+pub async fn stop_meeting(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    stop(app, &state).await
+}
+
+pub async fn start(app: &AppHandle, state: &AppState) -> Result<MeetingMeta, String> {
+    let _reservation = reserve_start(state)?;
+    let settings = config::load(app);
     ProcessingConfig::from_settings(&settings)?;
-    let store = meeting_store(&app)?;
+    let store = meeting_store(app)?;
     let mut meta = MeetingMeta {
         id: new_meeting_id(),
         started_at: crate::history::now_unix_seconds(),
@@ -79,13 +88,12 @@ pub async fn start_meeting(
     *state.active_meeting.lock().unwrap() = Some(started.meeting);
     // A dictation that began before Start may have muted output; the call
     // must stay audible while it's recorded.
-    crate::ptt::maybe_resume_media(&state);
-    notify_updated(&app);
+    crate::ptt::maybe_resume_media(state);
+    notify_updated(app);
     Ok(meta)
 }
 
-#[tauri::command]
-pub async fn stop_meeting(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn stop(app: AppHandle, state: &AppState) -> Result<(), String> {
     let active = state
         .active_meeting
         .lock()
