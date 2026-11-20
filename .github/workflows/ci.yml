@@ -122,6 +122,9 @@ jobs:
         working-directory: src-tauri
         shell: bash
         run: |
+          # ort-sys copies the ONNX Runtime DLLs into target/<profile>/examples
+          # without creating it, so a cold (cache-miss) Windows build panics.
+          mkdir -p target/debug/examples target/release/examples
           for attempt in 1 2 3; do
             cargo test && exit 0
             echo "cargo test failed (attempt $attempt/3); retrying in 20s" >&2
