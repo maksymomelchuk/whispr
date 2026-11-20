@@ -39,7 +39,11 @@ export function NotesModelPicker() {
             Change
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-[500px]">
+        <PopoverContent
+          align="end"
+          className="w-[500px]"
+          aria-label="Notes provider and model"
+        >
           <AiProviderModelPicker
             selection={settings.meeting_summary}
             onChange={change}

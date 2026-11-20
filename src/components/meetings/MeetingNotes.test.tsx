@@ -20,14 +20,30 @@ describe("MeetingNotes", () => {
     expect(screen.queryByText(/##/)).not.toBeInTheDocument();
   });
 
-  it("renders action items as checkboxes reflecting their done state", () => {
+  it("tells screen readers whether each action item is done", () => {
     render(<MeetingNotes notes={NOTES} hasTitle />);
 
-    const checkboxes = screen.getAllByRole("checkbox");
-    expect(checkboxes.map((box) => box.getAttribute("aria-checked"))).toEqual([
-      "false",
-      "true",
+    const items = screen
+      .getAllByRole("listitem")
+      .map((li) => li.textContent?.replace(/\s+/g, " "));
+    expect(items).toEqual([
+      "To do: Daniel — write the release notes",
+      "Done: Check Ukrainian transcription",
     ]);
+  });
+
+  it("keeps formatted task text together beside its checkbox", () => {
+    const { container } = render(
+      <MeetingNotes
+        notes={"- [ ] Review **release notes** by Friday"}
+        hasTitle={false}
+      />,
+    );
+
+    const content =
+      container.querySelector(".task-checkbox")?.parentElement
+        ?.lastElementChild;
+    expect(content?.textContent?.trim()).toBe("Review release notes by Friday");
   });
 
   it("drops the title heading when it is already shown as the meeting title", () => {

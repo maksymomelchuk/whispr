@@ -1,5 +1,10 @@
 import { CheckIcon } from "@phosphor-icons/react";
-import type { ComponentProps } from "react";
+import {
+  Children,
+  isValidElement,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -7,19 +12,36 @@ import { cn } from "@/lib/utils";
 
 const LEADING_TITLE_HEADING = /^\s*# [^\n]*\n?/;
 
+// Read-only, so the box is decoration and the state is spoken as text that
+// sits next to the task it belongs to.
 function TaskCheckbox({ checked }: ComponentProps<"input">) {
   return (
-    <span
-      role="checkbox"
-      aria-checked={Boolean(checked)}
-      aria-readonly="true"
-      className={cn(
-        "mr-2 inline-flex size-4 shrink-0 translate-y-[3px] items-center justify-center rounded-[4px] border border-input bg-background align-top",
-        checked && "border-primary bg-primary text-primary-foreground",
-      )}
-    >
-      {checked && <CheckIcon weight="bold" className="size-3" />}
-    </span>
+    <>
+      <span
+        aria-hidden="true"
+        data-checked={Boolean(checked)}
+        className={cn(
+          "task-checkbox mr-2 inline-flex size-4 shrink-0 translate-y-[3px] items-center justify-center rounded-[4px] border border-input bg-background",
+          checked && "border-primary bg-primary text-primary-foreground",
+        )}
+      >
+        {checked && <CheckIcon weight="bold" className="size-3" />}
+      </span>
+      <span className="sr-only">{checked ? "Done: " : "To do: "}</span>
+    </>
+  );
+}
+
+function TaskItem({ children }: { children: ReactNode }) {
+  const [first, ...rest] = Children.toArray(children);
+  if (!isValidElement(first) || first.type !== TaskCheckbox) {
+    return <li className="pl-0.5">{children}</li>;
+  }
+  return (
+    <li className="flex items-start">
+      {first}
+      <div className="min-w-0">{rest}</div>
+    </li>
   );
 }
 
@@ -53,15 +75,12 @@ const NOTES_COMPONENTS: Components = {
       {children}
     </ol>
   ),
-  li: ({ className, children }) => (
-    <li
-      className={
-        className?.includes("task-list-item") ? "flex items-start" : "pl-0.5"
-      }
-    >
-      {children}
-    </li>
-  ),
+  li: ({ className, children }) =>
+    className?.includes("task-list-item") ? (
+      <TaskItem>{children}</TaskItem>
+    ) : (
+      <li className="pl-0.5">{children}</li>
+    ),
   input: TaskCheckbox,
   strong: ({ children }) => (
     <strong className="font-semibold">{children}</strong>

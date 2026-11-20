@@ -77,9 +77,9 @@ export function ProcessingProgress({ meeting }: { meeting: MeetingMeta }) {
   const elapsedMs = useElapsedMs(meetingStoppedAtMs(meeting));
   const transcribing = meeting.status.kind === "transcribing";
   return (
-    <div className={PANEL_CLASS} role="status">
+    <div className={PANEL_CLASS}>
       <Spinner className="size-7 border-[3px]" />
-      <div className="flex items-center gap-2">
+      <div role="status" className="flex items-center gap-2">
         <ProgressStep
           label="Transcribe"
           state={transcribing ? "active" : "done"}
