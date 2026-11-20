@@ -111,11 +111,14 @@ jobs:
         run: cargo fmt --check
 
       # Retry to ride out transient 403s from the pyke CDN that ort-sys pulls
-      # prebuilt ONNX Runtime binaries from.
+      # prebuilt ONNX Runtime binaries from. ort-sys links its DLLs into
+      # examples/ and deps/ too and panics if they don't exist yet, which
+      # happens once the Windows runner allows symlinks.
       - name: Test Rust
         working-directory: src-tauri
         shell: bash
         run: |
+          mkdir -p target/debug/examples target/debug/deps
           for attempt in 1 2 3; do
             cargo test && exit 0
             echo "cargo test failed (attempt $attempt/3); retrying in 20s" >&2
