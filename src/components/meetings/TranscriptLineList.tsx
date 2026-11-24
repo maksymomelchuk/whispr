@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -8,31 +8,9 @@ import type { TranscriptLine } from "./transcriptLines";
 
 const ESTIMATED_LINE_HEIGHT_PX = 44;
 const OVERSCAN_LINES = 12;
-const MIN_LIST_HEIGHT_PX = 256;
-/** Matches the page's bottom padding so the list ends where the page does. */
-const BOTTOM_GAP_PX = 24;
-
-/** Stretches the list from where it starts down to the window's bottom edge,
- * so only the transcript scrolls and the header above it stays in view. */
-function useFillWindowHeight(element: HTMLElement | null): number {
-  const [height, setHeight] = useState(MIN_LIST_HEIGHT_PX);
-  const fit = useCallback(() => {
-    if (!element) return;
-    const top = element.getBoundingClientRect().top;
-    setHeight(
-      Math.max(MIN_LIST_HEIGHT_PX, window.innerHeight - top - BOTTOM_GAP_PX),
-    );
-  }, [element]);
-  // Controls above the list (e.g. the search result count) move its top edge
-  // without remounting it, so re-fit after every render; an unchanged height
-  // makes React skip the update.
-  useLayoutEffect(fit);
-  useEffect(() => {
-    window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
-  }, [fit]);
-  return height;
-}
+// When the speakers and search controls above leave too little room, the
+// detail pane scrolls instead of squeezing the list to a sliver.
+const MIN_LIST_HEIGHT_CLASS = "min-h-64";
 
 interface TranscriptLineListProps {
   lines: TranscriptLine[];
@@ -49,7 +27,6 @@ export function TranscriptLineList({
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(
     null,
   );
-  const maxHeight = useFillWindowHeight(scrollElement);
   // Measured heights are cached per key; positional keys would hand a row's
   // height to whichever line lands in its slot after filtering.
   const lineKey = useCallback(
@@ -81,8 +58,10 @@ export function TranscriptLineList({
   return (
     <div
       ref={setScrollElement}
-      style={{ maxHeight }}
-      className="overflow-y-auto rounded-md border"
+      className={cn(
+        "flex-1 overflow-y-auto rounded-md border",
+        MIN_LIST_HEIGHT_CLASS,
+      )}
     >
       <ol
         className="relative w-full text-sm"

@@ -92,6 +92,7 @@ pub async fn start(app: &AppHandle, state: &AppState) -> Result<MeetingMeta, Str
     // A dictation that began before Start may have muted output; the call
     // must stay audible while it's recorded.
     crate::ptt::maybe_resume_media(state);
+    crate::overlay::pin_meeting(app, meta.started_at);
     notify_updated(app);
     Ok(meta)
 }
@@ -103,6 +104,7 @@ pub async fn stop(app: AppHandle, state: &AppState) -> Result<(), String> {
         .unwrap()
         .take()
         .ok_or("No meeting is recording")?;
+    crate::overlay::unpin_meeting(&app);
     let id = active.id.clone();
     let store = meeting_store(&app)?;
     let stopped = tauri::async_runtime::spawn_blocking(move || active.stop())
@@ -168,6 +170,14 @@ pub fn list_meetings(app: AppHandle) -> Result<Vec<MeetingListItem>, String> {
 pub fn get_meeting(app: AppHandle, id: String) -> Result<Meeting, String> {
     validate_meeting_id(&id)?;
     meeting_store(&app)?.load(&id)
+}
+
+#[tauri::command]
+pub fn rename_meeting(app: AppHandle, id: String, title: String) -> Result<(), String> {
+    validate_meeting_id(&id)?;
+    meeting_store(&app)?.retitle(&id, &title)?;
+    notify_updated(&app);
+    Ok(())
 }
 
 #[tauri::command]

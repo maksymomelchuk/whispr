@@ -78,7 +78,6 @@ export function ProcessingProgress({ meeting }: { meeting: MeetingMeta }) {
   const transcribing = meeting.status.kind === "transcribing";
   return (
     <div className={PANEL_CLASS}>
-      <Spinner className="size-7 border-[3px]" />
       <div role="status" className="flex items-center gap-2">
         <ProgressStep
           label="Transcribe"

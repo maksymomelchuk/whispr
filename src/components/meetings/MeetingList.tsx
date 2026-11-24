@@ -22,7 +22,7 @@ export function MeetingList({
   onSelect,
 }: MeetingListProps) {
   return (
-    <ul className="flex flex-col gap-1">
+    <ul className="relative flex min-h-0 flex-col gap-1 overflow-y-auto pr-1">
       {meetings.map((meeting) => (
         <li key={meeting.id}>
           <button

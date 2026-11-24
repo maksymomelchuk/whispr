@@ -26,6 +26,7 @@ export function MeetingsPage() {
     <PageShell
       title="Meetings"
       description="Record a call, then get a transcript and notes with decisions and action items."
+      className="h-full"
     >
       <MeetingRecorderCard recording={recording} />
       {meetings.length === 0 ? (
@@ -35,7 +36,7 @@ export function MeetingsPage() {
           hint="Start a meeting when your call begins and stop it when it ends."
         />
       ) : (
-        <div className="grid gap-6 md:grid-cols-[220px_1fr]">
+        <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr] grid-rows-[minmax(0,1fr)] gap-6">
           <MeetingList
             meetings={meetings}
             selectedId={shownId}

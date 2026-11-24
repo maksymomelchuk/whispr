@@ -11,7 +11,8 @@ type Mode =
   | "cleaning"
   | "error"
   | "cancelled"
-  | "notice";
+  | "notice"
+  | "meeting";
 
 type NoticeKind = "meeting_started" | "meeting_stopped" | "error";
 
@@ -161,6 +162,43 @@ function NoticePill({
   );
 }
 
+const MS_PER_SECOND = 1000;
+
+function MeetingPill({
+  startedAtSeconds,
+  ready,
+}: {
+  startedAtSeconds: number;
+  ready: boolean;
+}) {
+  const [elapsedSec, setElapsedSec] = useState(0);
+  useEffect(() => {
+    const tick = () => {
+      const next = Math.max(
+        0,
+        Math.floor(Date.now() / MS_PER_SECOND - startedAtSeconds),
+      );
+      setElapsedSec((prev) => (prev === next ? prev : next));
+    };
+    tick();
+    const id = window.setInterval(tick, TIMER_TICK_MS);
+    return () => window.clearInterval(id);
+  }, [startedAtSeconds]);
+
+  return (
+    <div className="overlay-root">
+      <div className={`overlay-pill notice${ready ? " ready" : ""}`}>
+        <div className="overlay-notice">
+          <RecordDot />
+          <span className="overlay-notice-text">
+            Recording meeting · {formatClock(elapsedSec)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const BAR_COUNT = 5;
 const BAR_MIN_HEIGHT = 4;
 const BAR_MAX_HEIGHT = 16;
@@ -187,6 +225,7 @@ export function OverlayApp() {
   const [notice, setNotice] = useState<string>("");
   const [noticeKind, setNoticeKind] = useState<NoticeKind>("meeting_started");
   const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [meetingStartedAt, setMeetingStartedAt] = useState<number | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [ready, setReady] = useState(false);
   const [target, setTarget] = useState<TargetApp | null>(null);
@@ -285,6 +324,11 @@ export function OverlayApp() {
         setNoticeKind(e.payload.kind);
         setMode(e.payload.kind === "error" ? "error" : "notice");
       }),
+      listen<number>("overlay-meeting", (e) => {
+        resetSession();
+        setMeetingStartedAt(e.payload);
+        setMode("meeting");
+      }),
     ])
       .then((handles) => {
         if (cancelled) handles.forEach((u) => u());
@@ -307,6 +351,10 @@ export function OverlayApp() {
     if (trimmedPartial.length <= PREVIEW_WINDOW) return trimmedPartial;
     return "…" + trimmedPartial.slice(-PREVIEW_WINDOW);
   }, [showNotice, notice, showPreview, trimmedPartial]);
+
+  if (mode === "meeting" && meetingStartedAt !== null) {
+    return <MeetingPill startedAtSeconds={meetingStartedAt} ready={ready} />;
+  }
 
   if (mode === "notice") {
     return <NoticePill text={notice} kind={noticeKind} ready={ready} />;

@@ -42,7 +42,7 @@ export function MeetingTranscript({ meeting }: { meeting: Meeting }) {
   };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       {shouldSuggestHeadphones(segments) && (
         <Alert className="flex items-center gap-2 [&>svg~*]:pl-0">
           <HeadphonesIcon />

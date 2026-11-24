@@ -1,9 +1,17 @@
+use std::sync::Mutex;
 use tauri::{
     AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
 
 const OVERLAY_LABEL: &str = "overlay";
 const OVERLAY_RESET_EVENT: &str = "overlay-reset";
+const OVERLAY_MEETING_EVENT: &str = "overlay-meeting";
+
+/// Start time (unix seconds) of the meeting being recorded. While set, the
+/// pill rests on a recording indicator instead of hiding, so a forgotten
+/// recording can't run unnoticed; dictation and notices still take over the
+/// pill temporarily and fall back to it on hide.
+static PINNED_MEETING_STARTED_AT: Mutex<Option<i64>> = Mutex::new(None);
 /// Logical points (multiplied by monitor scale for physical pixels). The
 /// inner pill collapses via CSS, so the slack here stays click-through.
 const OVERLAY_WIDTH: f64 = 640.0;
@@ -134,10 +142,26 @@ fn raise_above_taskbar(window: &WebviewWindow) {
 fn raise_above_taskbar(_window: &WebviewWindow) {}
 
 pub fn hide(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window(OVERLAY_LABEL) {
-        // Reset before hiding so the next show() paints a clean pill instead
-        // of one frame of stale preview while ptt-pressed is still in flight.
-        let _ = app.emit(OVERLAY_RESET_EVENT, ());
-        let _ = window.hide();
+    let Some(window) = app.get_webview_window(OVERLAY_LABEL) else {
+        return;
+    };
+    // Reset before hiding so the next show() paints a clean pill instead
+    // of one frame of stale preview while ptt-pressed is still in flight.
+    let _ = app.emit(OVERLAY_RESET_EVENT, ());
+    if let Some(started_at) = *PINNED_MEETING_STARTED_AT.lock().unwrap() {
+        let _ = app.emit(OVERLAY_MEETING_EVENT, started_at);
+        return;
     }
+    let _ = window.hide();
+}
+
+pub fn pin_meeting(app: &AppHandle, started_at: i64) {
+    *PINNED_MEETING_STARTED_AT.lock().unwrap() = Some(started_at);
+    show(app);
+    let _ = app.emit(OVERLAY_MEETING_EVENT, started_at);
+}
+
+pub fn unpin_meeting(app: &AppHandle) {
+    *PINNED_MEETING_STARTED_AT.lock().unwrap() = None;
+    hide(app);
 }
