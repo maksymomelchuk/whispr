@@ -89,6 +89,20 @@ describe("OverlayApp", () => {
     expect(container.querySelector(".overlay-wave")).not.toBeInTheDocument();
   });
 
+  it("a pinned meeting shows a recording pill with elapsed time", async () => {
+    const startedAtSeconds = Math.floor(Date.now() / 1000) - 75;
+    const { getByText } = await renderAndSettle();
+    fire("overlay-meeting", startedAtSeconds);
+    expect(getByText("Recording meeting · 1:15")).toBeInTheDocument();
+  });
+
+  it("dictation takes over the pinned meeting pill", async () => {
+    const { container } = await renderAndSettle();
+    fire("overlay-meeting", Math.floor(Date.now() / 1000));
+    fire("ptt-pressed");
+    expect(container.querySelector(".overlay-wave")).toBeInTheDocument();
+  });
+
   it("a meeting-stopped notice shows a check instead of the record dot", async () => {
     const { container, getByText } = await renderAndSettle();
     fire("overlay-notice", { text: "Writing notes…", kind: "meeting_stopped" });

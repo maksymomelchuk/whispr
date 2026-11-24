@@ -1,4 +1,9 @@
-import { RecordIcon, StopIcon, WarningIcon } from "@phosphor-icons/react";
+import {
+  InfoIcon,
+  RecordIcon,
+  StopIcon,
+  WarningIcon,
+} from "@phosphor-icons/react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -112,6 +117,30 @@ function RecordingControls({
   );
 }
 
+function ConsentNote() {
+  return (
+    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      Records your mic and everything your Mac plays. Nobody on the call is
+      notified, so let them know you're taking notes.
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label="About recording without headphones"
+            className="rounded-sm hover:text-foreground"
+          >
+            <InfoIcon className="size-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-[260px] leading-snug">
+          Without headphones your mic also picks up the other side. Those echo
+          lines are detected and left out of the notes.
+        </TooltipContent>
+      </Tooltip>
+    </p>
+  );
+}
+
 function useMeetingToggle() {
   const [busy, setBusy] = useState(false);
   const run = (action: () => Promise<unknown>) => async () => {
@@ -137,7 +166,7 @@ export function MeetingRecorderCard({
   const showSetupAlert = !recording && missingSteps.length > 0;
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card/40 p-4">
+    <div className="flex flex-col gap-2">
       {showSetupAlert && <MissingSetupAlert steps={missingSteps} />}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -163,11 +192,7 @@ export function MeetingRecorderCard({
           Recording your mic only: {recording.system_audio_error}
         </p>
       )}
-      <p className="text-xs text-muted-foreground">
-        Records your microphone and everything your Mac plays (the other side of
-        the call). Nobody on the call is notified, so let them know you're
-        taking notes. Without headphones your mic also picks up the other side.
-      </p>
+      <ConsentNote />
     </div>
   );
 }

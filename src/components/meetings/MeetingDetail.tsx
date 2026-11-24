@@ -12,6 +12,7 @@ import { formatMeetingStart, meetingTitle } from "./meetingFormat";
 import { MeetingNotes } from "./MeetingNotes";
 import { ProcessingProgress, RecordingPlaceholder } from "./MeetingProgress";
 import { MeetingTranscript } from "./MeetingTranscript";
+import { RenamableTitle } from "./RenamableTitle";
 
 type View = "notes" | "transcript";
 
@@ -43,13 +44,22 @@ function FailedMessage({ meeting }: { meeting: Meeting }) {
   );
 }
 
+// The title is the notes' leading heading, so it can only be edited once
+// the notes exist.
+function isRenamable(meeting: Meeting): boolean {
+  return meeting.meta.status.kind === "ready" && meeting.notes !== null;
+}
+
 function DetailHeading({ meeting }: { meeting: Meeting }) {
-  const { started_at } = meeting.meta;
+  const { id, started_at } = meeting.meta;
+  const title = meetingTitle(meeting.title, started_at);
   return (
-    <div className="flex min-w-0 flex-col">
-      <h2 className="text-lg font-semibold">
-        {meetingTitle(meeting.title, started_at)}
-      </h2>
+    <div className="flex min-w-0 flex-1 flex-col">
+      {isRenamable(meeting) ? (
+        <RenamableTitle meetingId={id} title={title} />
+      ) : (
+        <h2 className="text-lg font-semibold">{title}</h2>
+      )}
       {meeting.title && (
         <span className="text-xs text-muted-foreground">
           {formatMeetingStart(started_at)}
@@ -96,11 +106,16 @@ function FinishedDetail({
           />
         </div>
       </header>
-      <FailedMessage meeting={meeting} />
-      {view === "notes" && meeting.notes && (
-        <MeetingNotes notes={meeting.notes} hasTitle={meeting.title !== null} />
-      )}
-      {view === "transcript" && <MeetingTranscript meeting={meeting} />}
+      <div className="relative flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-3">
+        <FailedMessage meeting={meeting} />
+        {view === "notes" && meeting.notes && (
+          <MeetingNotes
+            notes={meeting.notes}
+            hasTitle={meeting.title !== null}
+          />
+        )}
+        {view === "transcript" && <MeetingTranscript meeting={meeting} />}
+      </div>
     </>
   );
 }
@@ -122,7 +137,7 @@ export function MeetingDetail({
   if (!meeting) return null;
 
   return (
-    <section className="flex min-w-0 flex-col gap-4">
+    <section className="flex min-h-0 min-w-0 flex-col gap-4">
       {IN_PROGRESS_STATUSES.has(meeting.meta.status.kind) ? (
         <>
           <header>

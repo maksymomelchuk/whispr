@@ -458,7 +458,7 @@ function ShellInner() {
 
           <main
             className={
-              "flex-1 overflow-y-auto bg-background " +
+              "relative flex-1 overflow-y-auto bg-background " +
               (isHome ? "" : "scrollbar-gutter-stable")
             }
           >

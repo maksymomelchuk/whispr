@@ -1,9 +1,26 @@
+use std::sync::Mutex;
 use tauri::{
     AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
 
 const OVERLAY_LABEL: &str = "overlay";
 const OVERLAY_RESET_EVENT: &str = "overlay-reset";
+const OVERLAY_MEETING_EVENT: &str = "overlay-meeting";
+
+/// While a meeting is pinned the pill rests on a recording indicator instead
+/// of hiding, so a forgotten recording can't run unnoticed. Dictation and
+/// notices are transient: they take over the pill and fall back to the
+/// meeting indicator when they end, and pinning or unpinning never disturbs
+/// one that is on screen.
+struct OverlayState {
+    pinned_meeting_started_at: Option<i64>,
+    transient_shown: bool,
+}
+
+static STATE: Mutex<OverlayState> = Mutex::new(OverlayState {
+    pinned_meeting_started_at: None,
+    transient_shown: false,
+});
 /// Logical points (multiplied by monitor scale for physical pixels). The
 /// inner pill collapses via CSS, so the slack here stays click-through.
 const OVERLAY_WIDTH: f64 = 640.0;
@@ -97,11 +114,16 @@ fn reposition(window: &WebviewWindow) {
 }
 
 pub fn show(app: &AppHandle) {
+    STATE.lock().unwrap().transient_shown = true;
     if let Some(window) = app.get_webview_window(OVERLAY_LABEL) {
-        reposition(&window);
-        let _ = window.show();
-        raise_above_taskbar(&window);
+        present(&window);
     }
+}
+
+fn present(window: &WebviewWindow) {
+    reposition(window);
+    let _ = window.show();
+    raise_above_taskbar(window);
 }
 
 /// The Windows taskbar is also topmost; z-order within the topmost band goes to
@@ -134,10 +156,68 @@ fn raise_above_taskbar(window: &WebviewWindow) {
 fn raise_above_taskbar(_window: &WebviewWindow) {}
 
 pub fn hide(app: &AppHandle) {
+    let pinned = {
+        let mut state = STATE.lock().unwrap();
+        state.transient_shown = false;
+        state.pinned_meeting_started_at
+    };
+    // Reset before hiding so the next show() paints a clean pill instead
+    // of one frame of stale preview while ptt-pressed is still in flight.
+    let _ = app.emit(OVERLAY_RESET_EVENT, ());
+    match pinned {
+        Some(started_at) => {
+            let _ = app.emit(OVERLAY_MEETING_EVENT, started_at);
+        }
+        None => hide_window(app),
+    }
+}
+
+pub fn pin_meeting(app: &AppHandle, started_at: i64) {
+    let transient_shown = {
+        let mut state = STATE.lock().unwrap();
+        state.pinned_meeting_started_at = Some(started_at);
+        state.transient_shown
+    };
+    if transient_shown {
+        return;
+    }
     if let Some(window) = app.get_webview_window(OVERLAY_LABEL) {
-        // Reset before hiding so the next show() paints a clean pill instead
-        // of one frame of stale preview while ptt-pressed is still in flight.
-        let _ = app.emit(OVERLAY_RESET_EVENT, ());
-        let _ = window.hide();
+        present(&window);
+    }
+    let _ = app.emit(OVERLAY_MEETING_EVENT, started_at);
+}
+
+pub fn unpin_meeting(app: &AppHandle) {
+    let transient_shown = {
+        let mut state = STATE.lock().unwrap();
+        state.pinned_meeting_started_at = None;
+        state.transient_shown
+    };
+    if transient_shown {
+        return;
+    }
+    let _ = app.emit(OVERLAY_RESET_EVENT, ());
+    hide_window(app);
+}
+
+/// The state is re-read after hiding rather than locked across it: window
+/// calls hop to the main thread, which may itself be waiting on the lock. A
+/// show or pin that landed while we were hiding re-presents the window.
+fn hide_window(app: &AppHandle) {
+    let Some(window) = app.get_webview_window(OVERLAY_LABEL) else {
+        return;
+    };
+    let _ = window.hide();
+    let (transient_shown, pinned) = {
+        let state = STATE.lock().unwrap();
+        (state.transient_shown, state.pinned_meeting_started_at)
+    };
+    if transient_shown {
+        present(&window);
+        return;
+    }
+    if let Some(started_at) = pinned {
+        present(&window);
+        let _ = app.emit(OVERLAY_MEETING_EVENT, started_at);
     }
 }

@@ -4,6 +4,7 @@ mod echo;
 pub mod hotkey;
 mod processing;
 mod rename;
+mod retitle;
 mod soniox_async;
 mod speakers;
 mod store;
